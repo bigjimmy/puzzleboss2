@@ -93,7 +93,7 @@ else {
     }
     echo '</tr></table>';
     echo '<br>';
-    echo '<a href="addround.php">Add New Round</a>';
+    echo '<a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>';
     echo '<br><h3>Legend:</h3>';
     echo '<table>';
     echo "<tr bgcolor='Gainsboro'><td>.</td><td>Meta Puzzle</td></tr>";

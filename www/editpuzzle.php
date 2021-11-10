@@ -94,8 +94,6 @@ function updateroundpart($id, $part, $value) {
     }
 }
 
-
-
 if (isset( $_GET['submit'] ) ) {
     
     if (!isset($_GET['uid'])){

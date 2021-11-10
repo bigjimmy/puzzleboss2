@@ -1,7 +1,10 @@
 <?php
 global $apiroot;
 global $noremoteusertestmode;
+global $newpuzzleuri;
 $apiroot = "http://localhost:5000";
+$phproot = "http://localhost:8080/puzzleboss/www/";
+$newpuzzleuri = $phproot . "addpuzzle.php";
 $noremoteusertestmode = "true"; //set this if we're testing without apache auth in front
 
 function readapi($apicall) {
