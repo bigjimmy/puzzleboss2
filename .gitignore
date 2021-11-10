@@ -1,0 +1,6 @@
+.dbeaver/
+.dbeaver
+.DS_Store
+.project
+.pydevproject
+puzzleboss.yaml

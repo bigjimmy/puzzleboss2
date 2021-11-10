@@ -1,0 +1,16 @@
+#!/bin/bash
+
+for i in `seq 1 100`; 
+do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc'"$i"'","fullname":"user test"}'; 
+done
+
+curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc", "fullname":"Benjamin OConnor"}'
+
+for i in `seq 1 20`; 
+do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/rounds -d '{"name":"Round'"$i"'"}'; 
+done
+
+for r in `seq 1 20`; 
+do for p in `seq 1 15`; 
+do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/puzzles -d '{"name":"R'"$r"'Puzz'"$p"'", "round_id":"'"$r"'", "puzzle_uri":"http://www.google.com"}'; 
+done; done

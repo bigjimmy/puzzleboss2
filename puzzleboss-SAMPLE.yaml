@@ -1,0 +1,11 @@
+APP:
+    LOGLEVEL: 3
+    BIN_URI: https://your-url.com/puzzleboss/bin
+    PUZZCORD_CMD: ./puzzcord.sh
+
+MYSQL:
+    USERNAME: puzzleboss
+    PASSWORD: YOURPASSWORD
+    HOST: 127.0.0.1
+    PORT: 3306
+    DATABASE: puzzleboss
