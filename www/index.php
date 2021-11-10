@@ -9,28 +9,12 @@ if (isset( $_GET['submit'] ) ) {
     echo "submission not implemented here.<br>";
 }
 else {
-    
-    if (!isset($_SERVER['REMOTE_USER'])) {
-        //TODO: Remove this auth bypass when on actual apache server
-        $username = "benoc";
-        
-        //echo '<br>No Authenticated User Found!<br>';
-        //echo '</body></html>';
-        //exit (2);
-    }
-    else {
-        $username = $_SERVER['REMOTE_USER'];
-    }
-    
-    $uid = getuid($username);
-    
-    if ($uid==0) {
-        echo '<br>No Authenticated User Found!<br>';
-        echo '</body></html>';
-        exit (2);
-        
-    }
-    
+    // Check for authenticated user
+    $uid = getauthenticateduser();
+    $solverobj = json_decode(readapi('/solvers/' . $uid))->solver;
+    $username = $solverobj->name;
+    echo "You are: " . $username . "<br>";
+           
     $mypuzzle = json_decode(readapi('/solvers/' . $uid . '/puzz'))->solver->puzz;
     $url = "/rounds";
     $resp = readapi($url);
@@ -69,7 +53,7 @@ else {
                 //    $styleinsert .= ' style="text-decoration:line-through" ';
                 //}
                 echo '<tr ' . $styleinsert . '>';
-                echo '<td><a href="editpuzzle.php?pid=' . $val->puzzle->id . '" target="_new">';
+                echo '<td><a href="editpuzzle.php?pid=' . $val->puzzle->id . '&assumedid=' . $username . '" target="_blank">';
                 switch ($val->puzzle->status) {
                     case "New":
                         echo ".";
@@ -98,7 +82,7 @@ else {
                 echo '<td><a href="' . $val->puzzle->drive_uri . '">D</a></td>';
                 echo '<td><a href="' . $val->puzzle->chat_channel_link  . '">C</a><td>';
                 echo '<td style="font-family:monospace;font-style:bold">' . $val->puzzle->answer .'</td>';
-                echo '<td><a href="editpuzzle.php?pid=' . $val->puzzle->id . '" target="_new">+</a></td>';
+                echo '<td><a href="editpuzzle.php?pid=' . $val->puzzle->id . '&assumedid=' . $username . '" target="_blank">+</a></td>';
 
                 echo '</tr>';
             }

@@ -167,28 +167,17 @@ if (isset( $_GET['submit'] ) ) {
 
     
 echo '<hr><br><h1>Per-Puzzle Change Interface</h1><br>';
-    
+
+// Make sure puzzle id is supplied
 if (!isset($_GET['pid'])) {
     echo '<br>No Puzzle ID provided to script!<br>';
     echo '</body></html>';
     exit (2);
 }
-
 $puzzid = $_GET['pid'];
-if (!isset($_SERVER['REMOTE_USER'])) {
-    //TODO: Remove this auth bypass when on actual apache server
-    $username = "benoc";
-    
-    //echo '<br>No Authenticated User Found!<br>';
-    //echo '</body></html>';
-    //exit (2);
-}
-else {
-    $username = $_SERVER['REMOTE_USER'];
-}
 
-$userid = getuid($username);
-
+// Check for authenticated user
+$userid = getauthenticateduser();
 
 $userobj = json_decode(readapi('/solvers/' . $userid));
 $puzzleobj = json_decode(readapi('/puzzles/' . $puzzid));

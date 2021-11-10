@@ -57,28 +57,35 @@ else {
     
     $solvers = json_decode($resp)->solvers;
     $id = "";
-    $name = "";
+    $username = "";
     
-    if (isset( $_SERVER['REMOTE_USER'])) {
-        $name = $_SERVER['REMOTE_USER'];
-        foreach($solvers as $solver){
-            if ( $solver->name == $name ){
-                $id = $solver->id;
-            }
+    // Check for authenticated user
+    if (!isset($_SERVER['REMOTE_USER'])) {
+        if ($noremoteusertestmode == 'true') {
+            $username = "testuser";
         }
+        if (isset($_GET['assumedid'])) {
+            $username = $_GET['assumedid'];
+        }
+        if ($username == ""){
+            echo '<br>authenticated REMOTE_USER not provided<br>';
+            echo '</body></html>';
+            exit (2);
+        }
+    }
+    else {
+        $username = $_SERVER['REMOTE_USER'];
+    }
+    $id = getuid($username);
+    
+    if ($id==0) {
+        echo '<br>No solver found for user ' . $username . '. Check Solvers Database<br>';
+        echo '</body></html>';
+        exit (2);
         
     }
-    else if (isset( $_GET['SECRET_ID'])) {
-        $id = $_GET['SECRET_ID'];
-        foreach($solvers as $solver){
-            if ( $solver->id == $id ){
-                $name = $solver->name;
-            }
-        }
-        
-    }
     
-    echo "changing solver settings for username: " . $name . " id: " . $id . "<br>";
+    echo "changing solver settings for username: " . $username . " user-id: " . $id . "<br>";
     echo "What puzzle is this user working on?<br>";
     
     $url = "/rounds";
