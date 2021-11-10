@@ -439,7 +439,7 @@ def create_puzzle():
         return {"error" : errmsg}, 500
 
     # Now add the temporary initial drive_id
-    drive_uri = "%s/doc.pl?pid=%s" % (config['APP']['BIN_URI'], myid)
+    drive_uri = "%s/doc.php?pid=%s" % (config['APP']['BIN_URI'], myid)
     try:
         conn = mysql.connection
         cursor = conn.cursor()

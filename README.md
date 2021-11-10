@@ -1,0 +1,39 @@
+#Puzzleboss 2000
+---
+
+**Description**: Puzzle solving team backend and interface developed by ATTORNEY for mystery hunts.
+
+**Owner**: Benjamin O'Connor (benoc@alum.mit.edu)
+
+## Setup:
+
+
+- git clone onto server
+- Server-side prerequisites:
+    - php
+    - python >= 3.8
+    - Apache (see below for config)
+    - MySQL (see below for schema load and config instructions)
+    
+- copy puzzleboss-SAMPLE.yaml into puzzleboss.yaml and edit appropriately:
+    - LOGLEVELs: 0 = FATAL, 1=CRIT, 2=WARN, 3=INFO, 4=DEBUG, 5=TRACE
+    - BIN_URI: URI root for web-accessible tools, forms, pages (where www subdir will be reachable publically)
+    - The rest should be self explanatory
+
+- Apache config:
+    - www subdir should be a web docroot or alias
+    - www subdir should have PHP execution enabled
+    - puzzleboss root dir should NOT be accessible via apache
+    - Apache needs to proxy into running pbrest.py daemon
+    - User authentication should be configured in apache somehow (we just need the REMOTE_USER header to be set)
+    
+- MySQL database:
+    - Create database for puzzleboss to use (enter name in appropriate puzzleboss.yaml variable)
+    - Create user with password for puzzleboss to use, and grant all permissions on above database
+    - Import puzzleboss.sql (in scripts subdir) using mysql with the username and database created in above two steps
+    
+- REST Api Service:
+    - Start up pbrest.py (continually running, preferably as background daemon): Will run on localhost:5000. Is safe to run on multiple servers at once for scale.
+    
+
+
