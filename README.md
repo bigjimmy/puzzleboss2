@@ -35,5 +35,7 @@
 - REST Api Service:
     - Start up pbrest.py (continually running, preferably as background daemon): Will run on localhost:5000. Is safe to run on multiple servers at once for scale.
     
+Note: For development/testing, if running frontend without REMOTE_USER setting, it will still work using secret GET params and/or the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php.  
+    
 
 
