@@ -487,6 +487,11 @@ def create_round():
         debug_log(1, errmsg)
         return {"error" : errmsg}, 500
     
+    if not roundname or roundname == "":
+        errmsg = "Round with empty name disallowed"
+        debug_log(2, errmsg)
+        return {"error" : errmsg}, 500
+    
     chat_status = chat_announce_round(roundname)
     debug_log(4, "return from announcing round in chat is - %s" % str(chat_status))
     
