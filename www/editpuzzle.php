@@ -16,7 +16,7 @@ function startuseronpuzzle($id, $puzz) {
         {
             "puzz": "$puzz"
         }
-        DATA;
+DATA;
     
     $resp = postapi($api, $data);
     $responseobj = json_decode($resp);
@@ -44,7 +44,7 @@ function updatepuzzlepart($id, $part, $value) {
         {
             "$part": "$value"
         }
-        DATA;
+DATA;
     
     $resp = postapi($api, $data);
     $responseobj = json_decode($resp);
@@ -72,7 +72,7 @@ function updateroundpart($id, $part, $value) {
         {
             "$part": "$value"
         }
-        DATA;
+DATA;
     
     $resp = postapi($api, $data);
     $responseobj = json_decode($resp);
