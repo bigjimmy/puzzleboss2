@@ -4,6 +4,7 @@ from flask_mysqldb import MySQL
 import MySQLdb
 from pblib import *
 from pbdiscordlib import *
+from pandas.core.dtypes.generic import ABCIntervalIndex
 
 app = Flask(__name__)
 app.config['MYSQL_HOST'] = config['MYSQL']['HOST']
@@ -150,6 +151,8 @@ def get_one_round(id):
         debug_log(0, errmsg)
         return {"error" : errmsg }, 500
     
+    puzzlesstruct = get_puzzles_from_list(rv[6]);
+    
     debug_log(4, "fetched round %s" % id)
     return {
             "status" : "ok",
@@ -160,7 +163,7 @@ def get_one_round(id):
                        "drive_uri" : rv[3],
                        "drive_id" : rv[4],
                        "meta_id" : rv[5],
-                       "puzzles" : rv[6]
+                       "puzzles" : puzzlesstruct,
                        }
             }, 200
 
@@ -181,13 +184,19 @@ def get_round_part(id, part):
         errmsg = "Exception in fetching %s part for round %s from database" % (part, id)
         debug_log(0, errmsg)
         return {"error" : errmsg }, 500
+
+    answer = rv
+
+    if part == "puzzles":
+        puzlist = get_puzzles_from_list(rv);
+        answer = puzlist
     
     debug_log(4, "fetched round part %s for %s" % (part, id))
     return {
             "status" : "ok",
             "round" : {
                         "id" : id,
-                        part : rv}
+                        part : answer}
             }, 200
 
 @app.route('/solvers', methods=['GET'])
@@ -788,6 +797,21 @@ def update_puzzle_part_in_db(id, part, value):
     debug_log(4, "puzzle %s %s updated in database" % (id, part))
     
     return(0)
+
+def get_puzzles_from_list(list):
+    debug_log(4, "start, called with: %s" % list)
+    if not list:
+        return([]);
+    
+    puzlist = list.split(',')
+    conn = mysql.connection
+    puzarray = []
+    for mypuz in puzlist:
+        debug_log(4, "fetching puzzle info for pid: %s" % mypuz)
+        puzarray.append(get_one_puzzle(mypuz)[0]['puzzle'])
+    
+    debug_log(4, "puzzle list assembled is: %s" % puzarray)    
+    return(puzarray)
     
 if __name__ == '__main__':
     app.run()

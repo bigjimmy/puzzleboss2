@@ -100,13 +100,13 @@ else {
     foreach($rounds as $round){
         echo '<td>';
         $puzzlesresp = json_decode(readapi("/rounds/" . $round->id . "/puzzles"));
-        $puzzlearray = explode(',',$puzzlesresp->round->puzzles);
+        $puzzlearray = $puzzlesresp->round->puzzles;
         
         echo '<table>';
-        foreach($puzzlearray as $puzzleid) {
+        foreach($puzzlearray as $puzzle) {
+            $puzzleid = $puzzle->id;
             if ($puzzleid !="") {
-                $val = json_decode(readapi("/puzzles/" . $puzzleid . "/name"));
-                $puzzlename = $val->puzzle->name;
+                $puzzlename = $puzzle->name;
                 echo '<tr><td><input type="radio" id="' . $puzzleid . '" name="puzz" value="' . $puzzleid . '"></td>';
                 echo '<td>' . $puzzlename . '</td></tr>';
             }

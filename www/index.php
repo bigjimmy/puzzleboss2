@@ -28,64 +28,63 @@ else {
         echo '<td>';
         $puzzlesresp = json_decode(readapi("/rounds/" . $round->id . "/puzzles"));
         $metapuzzle = json_decode(readapi("/rounds/" . $round->id . "/meta_id"))->round->meta_id;
-        $puzzlearray = explode(',',$puzzlesresp->round->puzzles);
+        $puzzlearray = $puzzlesresp->round->puzzles;
         
         echo '<table>';
-        foreach($puzzlearray as $puzzleid) {
-            if ($puzzleid !="") {
-                $val = json_decode(readapi("/puzzles/" . $puzzleid));
-                $puzzlename = $val->puzzle->name;
-                $styleinsert = "";
-                if ($puzzleid == $metapuzzle && $val->puzzle->status != "Critical") {
-                    $styleinsert .= " bgcolor='Gainsboro' ";
-                }
-                if ($puzzlename == $mypuzzle) {
-                    $styleinsert .= ' style="text-decoration:underline overline wavy" ';
-                }
-                if ($val->puzzle->status == "New" && $puzzleid != $metapuzzle) {
-                    $styleinsert .= " bgcolor='aquamarine' ";
-                }
-                if ($val->puzzle->status == "Critical") {
-                    $styleinsert .= " bgcolor='HotPink' ";
-                }
-                // Not sure what to do here for style for solved/unnecc puzzles
-                //if ($val->puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
-                //    $styleinsert .= ' style="text-decoration:line-through" ';
-                //}
-                echo '<tr ' . $styleinsert . '>';
-                echo '<td><a href="editpuzzle.php?pid=' . $val->puzzle->id . '&assumedid=' . $username . '" target="_blank">';
-                switch ($val->puzzle->status) {
-                    case "New":
-                        echo ".";
-                        break;
-                    case "Being worked":
-                        echo "O";
-                        break;
-                    case "Needs eyes":
-                        echo "E";
-                        break;
-                    case "WTF":
-                        echo "?";
-                        break;
-                    case "Critical":
-                        echo "!";
-                        break;
-                    case "Solved":
-                        echo "*";
-                        break;
-                    case "Unnecessary":
-                        echo "X";
-                        break;
-                }
-                echo '</a></td>';
-                echo '<td><a href="' . $val->puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
-                echo '<td><a href="' . $val->puzzle->drive_uri . '">D</a></td>';
-                echo '<td><a href="' . $val->puzzle->chat_channel_link  . '">C</a><td>';
-                echo '<td style="font-family:monospace;font-style:bold">' . $val->puzzle->answer .'</td>';
-                echo '<td><a href="editpuzzle.php?pid=' . $val->puzzle->id . '&assumedid=' . $username . '" target="_blank">+</a></td>';
-
-                echo '</tr>';
+        foreach($puzzlearray as $puzzle) {
+            $puzzleid = $puzzle->id;
+            $puzzlename = $puzzle->name;
+            $styleinsert = "";
+            if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+                $styleinsert .= " bgcolor='Gainsboro' ";
             }
+            if ($puzzlename == $mypuzzle) {
+                $styleinsert .= ' style="text-decoration:underline overline wavy" ';
+            }
+            if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+                $styleinsert .= " bgcolor='aquamarine' ";
+            }
+            if ($puzzle->status == "Critical") {
+                $styleinsert .= " bgcolor='HotPink' ";
+            }
+            // Not sure what to do here for style for solved/unnecc puzzles
+            //if ($puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
+            //    $styleinsert .= ' style="text-decoration:line-through" ';
+            //}
+            echo '<tr ' . $styleinsert . '>';
+            echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
+            switch ($puzzle->status) {
+                case "New":
+                    echo ".";
+                    break;
+                case "Being worked":
+                    echo "O";
+                    break;
+                case "Needs eyes":
+                    echo "E";
+                    break;
+                case "WTF":
+                    echo "?";
+                    break;
+                case "Critical":
+                    echo "!";
+                    break;
+                case "Solved":
+                    echo "*";
+                    break;
+                case "Unnecessary":
+                    echo "X";
+                    break;
+            }
+            echo '</a></td>';
+            echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
+            echo '<td><a href="' . $puzzle->drive_uri . '">D</a></td>';
+            echo '<td><a href="' . $puzzle->chat_channel_link  . '">C</a><td>';
+            echo '<td style="font-family:monospace;font-style:bold">' . $puzzle->answer .'</td>';
+            echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">+</a></td>';
+
+            echo '</tr>';
+        
         }
         echo '</table>';
         echo '</td>';
