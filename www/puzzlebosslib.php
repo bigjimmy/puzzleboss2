@@ -2,6 +2,8 @@
 global $apiroot;
 global $noremoteusertestmode;
 global $newpuzzleuri;
+
+//TODO: Load this from the yaml config
 $apiroot = "http://localhost:5000";
 $phproot = "http://localhost:8080/puzzleboss/www/";
 $newpuzzleuri = $phproot . "addpuzzle.php";
