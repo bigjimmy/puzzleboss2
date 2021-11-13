@@ -2,7 +2,10 @@ from flask import Flask, request
 from flask_restful import Api
 from flask_mysqldb import MySQL
 import MySQLdb
-from pblib import *
+import sys
+import pblib
+from pblib import debug_log, sanitize_string, config
+from pbgooglelib import *
 from pbdiscordlib import *
 from pandas.core.dtypes.generic import ABCIntervalIndex
 
@@ -400,11 +403,13 @@ def create_puzzle():
         return {"error" : errmsg}, 500
     
     # Get round drive link and name
-    round_drive_uri = get_round_part(roundid, "drive_uri")[0]['round']['drive_uri']
-    round_name = get_round_part(roundid, "name")[0]['round']['name']
-    
-    # Make new channel so we can get channel id and link
-    chat_channel = chat_create_channel_for_puzzle(puzname, round_name, puzuri, round_drive_uri)
+    round_drive_uri = get_round_part(roundid, 'drive_uri')[0]['round']['drive_uri']
+    round_name = get_round_part(roundid, 'name')[0]['round']['name']
+    round_drive_id = round_drive_uri.split('/')[-1]
+
+    # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
+    drive_uri = "%s/doc.php?pname=%s" % (config['APP']['BIN_URI'], puzname)
+    chat_channel = chat_create_channel_for_puzzle(puzname, round_name, puzuri, drive_uri)
     debug_log(4, "return from creating chat channel is - %s" % str(chat_channel))
     try:
         chat_id = chat_channel[0]
@@ -414,15 +419,25 @@ def create_puzzle():
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
     debug_log(4, "chat channel for puzzle %s is made" % puzname)
+
+    # Create google sheet
+    drive_id = create_puzzle_sheet(round_drive_id, { 
+                                                    "name" : puzname, 
+                                                    "roundname" : round_name,
+                                                    "puzzle_uri" : puzuri,
+                                                    "chat_uri" : chat_link
+                                                    })
+    drive_uri = "https://docs.google.com/spreadsheets/d/%s/edit#gid=1" % drive_id
+    drive_link = '<a href="%s">%s</a>' % (drive_uri, puzname)
     
     # Actually insert into the database
     try:
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute('''INSERT INTO puzzle 
-                       (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name) 
-                       VALUES (%s, %s, %s, %s, %s, %s)''', 
-                       (puzname, puzuri, roundid, chat_id, chat_link, puzname.lower()))
+                       (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, drive_link) 
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''', 
+                       (puzname, puzuri, roundid, chat_id, chat_link, puzname.lower(), drive_id, drive_uri, drive_link))
         conn.commit()
     except MySQLdb._exceptions.IntegrityError:
         errmsg = "MySQL integrity failure. Does another puzzle with the same name %s exist?" % puzname
@@ -446,17 +461,6 @@ def create_puzzle():
         errmsg = "Exception checking database for puzzle after insert"
         debug_log(0, errmsg)
         return {"error" : errmsg}, 500
-
-    # Now add the temporary initial drive_id
-    drive_uri = "%s/doc.php?pid=%s" % (config['APP']['BIN_URI'], myid)
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute('''UPDATE puzzle SET drive_uri = %s WHERE id = %s''', (drive_uri, myid)) 
-        conn.commit()
-    except :
-        errmsg = "Exception setting initial drive_id for puzzle %s. Continuing." % puzname
-        debug_log(1, errmsg)
     
     # Announce new puzzle in chat
     chat_announce_new(puzname)
@@ -492,6 +496,23 @@ def create_round():
         debug_log(2, errmsg)
         return {"error" : errmsg}, 500
     
+    # Check for duplicate
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute('''SELECT id FROM round WHERE name=%s''', [roundname])
+        rv = cursor.fetchall()
+    except:
+        errmsg = "Exception checking database for duplicate round before insert"
+        debug_log(0, errmsg)
+        return {"error" : errmsg}, 500
+    
+    if rv != ():
+        errmsg = "Duplicate round name %s detected" % roundname
+        debug_log(2, errmsg)
+        return {"error" : errmsg}, 500
+
+    
     chat_status = chat_announce_round(roundname)
     debug_log(4, "return from announcing round in chat is - %s" % str(chat_status))
     
@@ -500,22 +521,23 @@ def create_round():
         debug_log(0, errmsg)
         return {"error" : errmsg}, 500
     
+    debug_log(4, "Making call to create google drive folder for round")
+    round_drive_id = create_round_folder(roundname)
+    round_drive_uri = "https://drive.google.com/drive/u/1/folders/%s" % round_drive_id
     # Actually insert into the database
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute('''INSERT INTO round SET name = %s''', [roundname])
+        cursor.execute('''INSERT INTO round (name, drive_uri) VALUES (%s, %s)''', (roundname, round_drive_uri))
         conn.commit()
-    except MySQLdb._exceptions.IntegrityError:
-        errmsg = "MySQL integrity failure. Does another round with the same name %s exist?" % roundname
-        debug_log(1, errmsg)
-        return {"error" : errmsg }, 500
     except:
         errmsg = "Exception in insertion of round %s into database" % roundname
         debug_log(0, errmsg)
         return {"error" : errmsg }, 500
 
-    debug_log(3, "round %s added to database!" % roundname)
+    debug_log(3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri))
+    
+    
         
     return { "status" : "ok",
              "round" : { "name" : roundname }
@@ -819,4 +841,9 @@ def get_puzzles_from_list(list):
     return(puzarray)
     
 if __name__ == '__main__':
+    if initdrive() != 0:
+        debug_log(0, "Startup google drive initialization failed.")
+        sys.exit(255)
+    else:
+        debug_log(3, "Authenticated to google drive. Existing drive folder %s found with id %s." % (config['GOOGLE']['HUNT_FOLDER_NAME'], pblib.huntfolderid))
     app.run()

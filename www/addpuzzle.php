@@ -26,6 +26,7 @@ if (isset( $_GET['submit'] ) ) {
 }
 DATA;
     
+    echo "<br> Submitting API request to add puzzle.  May take a few seconds.<br>";
     $resp = postapi($apiurl, $data);
     $responseobj = json_decode($resp);
     

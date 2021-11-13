@@ -6,6 +6,8 @@ import bleach
 with open('puzzleboss.yaml') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
+huntfolderid = "undefined"
+
 def debug_log(sev, message):
     # Levels:
     # 0 = emergency

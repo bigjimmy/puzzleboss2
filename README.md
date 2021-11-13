@@ -7,7 +7,6 @@
 
 ## Setup:
 
-
 - git clone onto server
 - Server-side prerequisites:
     - php
@@ -32,7 +31,13 @@
     - Create user with password for puzzleboss to use, and grant all permissions on above database
     - Import puzzleboss.sql (in scripts subdir) using mysql with the username and database created in above two steps
     
-- REST Api Service:
+- Google Sheets Setup:
+    - Set up the app authentication as documented by google, to get a `credentials.json` file. Place it in top level directory.
+    - Run gdriveinit.py and follow instructions to authenticate with google and automatically generate `token.json`
+    - Pick name of folder for app to create (or an existing one that will be used) for google docs and place it in puzzleboss.yaml
+    - All google sheets related ops can be disabled (e.g. for dev testing) via variable in puzzleboss.yaml
+
+- Running the REST Api Service:
     - Start up pbrest.py (continually running, preferably as background daemon): Will run on localhost:5000. Is safe to run on multiple servers at once for scale.
     
 Note: For development/testing, if running frontend without REMOTE_USER setting, it will still work using secret GET params and/or the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php.  

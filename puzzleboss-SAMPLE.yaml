@@ -3,6 +3,10 @@ APP:
     BIN_URI: https://your-url.com/puzzleboss/bin
     PUZZCORD_CMD: ./puzzcord.sh
 
+GOOGLE:
+    HUNT_FOLDER_NAME: "My Hunt Folder 2022"
+    SKIP_GOOGLE_API: "false"
+
 MYSQL:
     USERNAME: puzzleboss
     PASSWORD: YOURPASSWORD

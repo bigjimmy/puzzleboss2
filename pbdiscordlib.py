@@ -1,10 +1,10 @@
 from pblib import *
 
-def chat_create_channel_for_puzzle(puzname, roundname, puzuri, gdf):    
-    debug_log(4, "start, called with (puzname, roundname, puzuri, gdf): %s %s %s %s" % (puzname, roundname, puzuri, gdf))
+def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):    
+    debug_log(4, "start, called with (puzname, roundname, puzuri, puzdocuri): %s %s %s %s" % (puzname, roundname, puzuri, puzdocuri))
     
     topic = "\nPuzzle: %s \nRound: %s\n" % (puzname, roundname)
-    topic += "Puzzle URL: %s \nGoogle Docs Folder: %s\n" % (puzuri, gdf)
+    topic += "Puzzle URL: %s \nSheet: %s\n" % (puzuri, puzdocuri)
     
     retval = call_puzzcord("%s %s" % (puzname, topic))
     debug_log(4, "retval from call_puzzcord is %s" % retval)

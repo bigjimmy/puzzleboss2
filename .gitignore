@@ -4,3 +4,5 @@
 .project
 .pydevproject
 puzzleboss.yaml
+credentials.json
+token.json
