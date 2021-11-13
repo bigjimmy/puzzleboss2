@@ -19,9 +19,8 @@ def initdrive():
     
     if config['GOOGLE']['SKIP_GOOGLE_API'] == "true":
         debug_log(3, "google docs auth and init skipped by config.")
-    return(0)
+        return(0)
     
-
     global service
     global creds
     global SCOPES
@@ -94,7 +93,7 @@ def create_round_folder(foldername):
     
     file = service.files().create(body=file_metadata, fields='id').execute()
     
-    debug_log(4, "folder id returned: %s", file.get('id'))
+    debug_log(4, "folder id returned: %s" % file.get('id'))
     return(file.get('id'))
                                     
 def create_puzzle_sheet(parentfolder, puzzledict):

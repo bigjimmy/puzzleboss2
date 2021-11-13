@@ -34,6 +34,7 @@
 - Google Sheets Setup:
     - Set up the app authentication as documented by google, to get a `credentials.json` file. Place it in top level directory.
     - Run gdriveinit.py and follow instructions to authenticate with google and automatically generate `token.json`
+    - You may need to run the above two steps on a workstation with a modern web browser
     - Pick name of folder for app to create (or an existing one that will be used) for google docs and place it in puzzleboss.yaml
     - All google sheets related ops can be disabled (e.g. for dev testing) via variable in puzzleboss.yaml
 
