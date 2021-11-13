@@ -33,7 +33,9 @@ if (isset( $_GET['pname'] ) ) {
 }
 
 else {
-    echo '<br>Error: No puzzlename parameter (pname) specified.<br>';
+    echo '</head><body><br>Error: No puzzlename parameter (pname) specified.<br>';
+    echo '</body></html>';
+    exit (2);
 }
 echo "</head><body><br>Redirecting to doc sheet for puzzle" . $name . " id " . $puzzleid . "<br>";
 ?>
