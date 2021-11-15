@@ -17,9 +17,6 @@ parameters:
         id: round_update
         type: object
         properties:
-           round:
-             type: object
-             properties:
               name:
                   type: string
                   description: Round name

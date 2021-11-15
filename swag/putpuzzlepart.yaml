@@ -17,9 +17,6 @@ parameters:
         id: puzzle_update
         type: object
         properties:
-           puzzle:
-             type: object
-             properties:
               name:
                   type: string
                   description: Puzzle name

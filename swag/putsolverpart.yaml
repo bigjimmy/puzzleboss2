@@ -17,9 +17,6 @@ parameters:
         id: solver_update
         type: object
         properties:
-           solver:
-             type: object
-             properties:
               name:
                   type: string
                   description: Solver name
