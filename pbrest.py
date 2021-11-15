@@ -8,6 +8,8 @@ from pblib import debug_log, sanitize_string, config
 from pbgooglelib import *
 from pbdiscordlib import *
 from pandas.core.dtypes.generic import ABCIntervalIndex
+import flasgger
+from flasgger.utils import swag_from
 
 app = Flask(__name__)
 app.config['MYSQL_HOST'] = config['MYSQL']['HOST']
@@ -16,10 +18,12 @@ app.config['MYSQL_PASSWORD'] = config['MYSQL']['PASSWORD']
 app.config['MYSQL_DB'] = config['MYSQL']['DATABASE']
 mysql = MySQL(app)
 api = Api(app)
+swagger = flasgger.Swagger(app)
 
 # GET/READ Operations
 
-@app.route('/puzzles', methods=['GET'])
+@app.route('/puzzles', endpoint='puzzles', methods=['GET'])
+@swag_from('swag/getpuzzles.yaml', endpoint='puzzles', methods=['GET'])
 def get_all_puzzles():
     debug_log(4, "start")
     result = {}
@@ -43,7 +47,8 @@ def get_all_puzzles():
     debug_log(4, "listed all puzzles")
     return result, 200
 
-@app.route('/puzzles/<id>', methods=['GET'])
+@app.route('/puzzles/<id>', endpoint='puzzle_id', methods=['GET'])
+@swag_from('swag/getpuzzleid.yaml', endpoint='puzzle_id', methods=['GET'])
 def get_one_puzzle(id):
     debug_log(4, "start. id: %s" % id)
     try:
@@ -86,7 +91,8 @@ def get_one_puzzle(id):
                         }
             }, 200
 
-@app.route('/puzzles/<id>/<part>', methods=['GET'])
+@app.route('/puzzles/<id>/<part>', endpoint='puzzle_part', methods=['GET'])
+@swag_from('swag/getpuzzlepart.yaml', endpoint='puzzle_part', methods=['GET'])
 def get_puzzle_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
@@ -113,7 +119,9 @@ def get_puzzle_part(id, part):
                         }
             }, 200
 
-@app.route('/rounds', methods=['GET'])
+@app.route('/rounds', endpoint='rounds', methods=['GET'])
+@swag_from('swag/getrounds.yaml', endpoint='rounds', methods=['GET'])
+
 def get_all_rounds():
     result = {}
     debug_log(4, "start")
@@ -137,7 +145,9 @@ def get_all_rounds():
     debug_log(4, "listed all rounds")
     return result, 200
 
-@app.route('/rounds/<id>', methods=['GET'])
+@app.route('/rounds/<id>', endpoint='round_id', methods=['GET'])
+@swag_from('swag/getroundid.yaml', endpoint='round_id', methods=['GET'])
+
 def get_one_round(id):
     debug_log(4, "start. id: %s" % id)
     try:
@@ -170,7 +180,9 @@ def get_one_round(id):
                        }
             }, 200
 
-@app.route('/rounds/<id>/<part>', methods=['GET'])
+@app.route('/rounds/<id>/<part>', endpoint='round_part', methods=['GET'])
+@swag_from('swag/getroundpart.yaml', endpoint='round_part', methods=['GET'])
+
 def get_round_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
