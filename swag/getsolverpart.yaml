@@ -5,17 +5,17 @@ parameters:
       required: true
     - in: path
       name: part
-      description: The single part to look up (e.g. name, answer)
+      description: The single part to look up (e.g. name, fullname, puzz)
       type: string
       required: true
 responses:
     200:
-      description: A single puzzle part from one puzzle
+      description: A single round part from one solver
       schema:
-          id: puzzle
+          id: solver
           type: object
           properties:
-           puzzle:
+           solver:
              type: object
              properties:
                part:

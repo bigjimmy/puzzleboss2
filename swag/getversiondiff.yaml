@@ -1,0 +1,36 @@
+parameters:
+    - in: path
+      name: fromver
+      description: Starting version for comparison
+      type: integer
+      required: true
+    - in: path
+      name: tover
+      description: Ending version for comparison
+      type: integer
+      required: true
+responses:
+    200:
+      description: Lists out modules and parts changed between versions
+      schema:
+          id: versions
+          type: object
+          properties:
+           versions:
+             type: array
+             items: 
+                 type: object
+                 properties:
+                   version:
+                       type: integer
+                       description: Version ID
+                   module:
+                       type: string
+                       description: Module that changed (e.g. puzzles, rounds, solvers)
+                   part:
+                       type: string
+                       description: Part of module that changed (if applicable)
+                   id:
+                       type: integer
+                       description: ID of object that changed (e.g. puzzle id, solver id)
+                    

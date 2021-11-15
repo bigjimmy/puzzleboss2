@@ -108,7 +108,6 @@ CREATE TABLE `puzzle` (
   `ismeta` tinyint DEFAULT 0 NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
-  UNIQUE KEY `drive_id_UNIQUE` (`drive_id`),
   KEY `fk_puzzles_rounds1_idx` (`round_id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -377,9 +376,7 @@ CREATE TABLE `round` (
   `drive_id` varchar(100) DEFAULT NULL,
   `meta_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `name_UNIQUE` (`name`),
-  UNIQUE KEY `drive_uri_UNIQUE` (`drive_uri`),
-  UNIQUE KEY `drive_id_UNIQUE` (`drive_id`)
+  UNIQUE KEY `name_UNIQUE` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!50003 SET @saved_cs_client      = @@character_set_client */ ;

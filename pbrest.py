@@ -214,7 +214,9 @@ def get_round_part(id, part):
                         part : answer}
             }, 200
 
-@app.route('/solvers', methods=['GET'])
+@app.route('/solvers', endpoint='solvers', methods=['GET'])
+@swag_from('swag/getsolvers.yaml', endpoint='solvers', methods=['GET'])
+
 def get_all_solvers():
     result = {}
     debug_log(4, "start")
@@ -239,7 +241,8 @@ def get_all_solvers():
     return result, 200
 
 
-@app.route('/solvers/<id>', methods=['GET'])
+@app.route('/solvers/<id>', endpoint='solver_id', methods=['GET'])
+@swag_from('swag/getsolverid.yaml', endpoint='solver_id', methods=['GET'])
 def get_one_solver(id):
     debug_log(4, "start. id: %s" % id)
     try:
@@ -270,7 +273,8 @@ def get_one_solver(id):
                        }
             }, 200
 
-@app.route('/solvers/<id>/<part>', methods=['GET'])
+@app.route('/solvers/<id>/<part>', endpoint='solver_part', methods=['GET'])
+@swag_from('swag/getsolverpart.yaml', endpoint='solver_part', methods=['GET'])
 def get_solver_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
@@ -296,7 +300,8 @@ def get_solver_part(id, part):
                         part : rv}
             }, 200
 
-@app.route('/version', methods=['GET'])
+@app.route('/version', endpoint='version', methods=['GET'])
+@swag_from('swag/getversion.yaml', endpoint='version', methods=['GET'])
 def get_current_version():
     debug_log(4, "start")
     try:
@@ -315,11 +320,12 @@ def get_current_version():
             "version" : rv 
             }, 200
 
-@app.route('/version/<fromver>/<tover>', methods=['GET'])
+@app.route('/version/<fromver>/<tover>', endpoint='version_diff', methods=['GET'])
+@swag_from('swag/getversiondiff.yaml', endpoint='version_diff', methods=['GET'])
 def get_diff(fromver, tover):
-    debug_log(4, "start. fromver: %s, tover: %s" % fromver, tover)
+    debug_log(4, "start. fromver: %s, tover: %s" % (fromver, tover))
     
-    if fromver > tover:
+    if (fromver > tover):
         errmsg = "Version numbers being compared must be in order."
         debug_log(1, errmsg)
         return {"error" : errmsg}
@@ -350,7 +356,9 @@ def get_diff(fromver, tover):
             }
     
 
-@app.route('/version/diff', methods=['GET'])
+@app.route('/version/diff', endpoint='version_fulldiff', methods=['GET'])
+@swag_from('swag/getversionfulldiff.yaml', endpoint='version_fulldiff', methods=['GET'])
+
 def get_full_diff():
     debug_log(4, "start")
     try:
@@ -380,7 +388,8 @@ def get_full_diff():
 
 # POST/WRITE Operations
 
-@app.route('/puzzles', methods=['POST'])
+@app.route('/puzzles', endpoint='post_puzzles', methods=['POST'])
+@swag_from('swag/putpuzzle.yaml', endpoint='post_puzzles', methods=['POST'])
 def create_puzzle():
     debug_log(4, "start")
     try:
@@ -487,7 +496,8 @@ def create_puzzle():
                          }
              }, 200
 
-@app.route('/rounds', methods=['POST'])
+@app.route('/rounds', endpoint='post_rounds', methods=['POST'])
+@swag_from('swag/putround.yaml', endpoint='post_rounds', methods=['POST'])
 def create_round():
     debug_log(4, "start")
     try:
@@ -536,16 +546,17 @@ def create_round():
     debug_log(4, "Making call to create google drive folder for round")
     round_drive_id = create_round_folder(roundname)
     round_drive_uri = "https://drive.google.com/drive/u/1/folders/%s" % round_drive_id
+    debug_log(5, "Round drive URI created: %s" % round_drive_uri)
     # Actually insert into the database
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute('''INSERT INTO round (name, drive_uri) VALUES (%s, %s)''', (roundname, round_drive_uri))
-        conn.commit()
-    except:
-        errmsg = "Exception in insertion of round %s into database" % roundname
-        debug_log(0, errmsg)
-        return {"error" : errmsg }, 500
+    # try:
+    conn = mysql.connection
+    cursor = conn.cursor()
+    cursor.execute('''INSERT INTO round (name, drive_uri) VALUES (%s, %s)''', (roundname, round_drive_uri))
+    conn.commit()
+    # except:
+    #     errmsg = "Exception in insertion of round %s into database" % roundname
+    #     debug_log(0, errmsg)
+    #     return {"error" : errmsg }, 500
 
     debug_log(3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri))
     
@@ -555,7 +566,9 @@ def create_round():
              "round" : { "name" : roundname }
             }, 200
     
-@app.route('/rounds/<id>/<part>', methods=['POST'])
+@app.route('/rounds/<id>/<part>', endpoint='post_round_part', methods=['POST'])
+@swag_from('swag/putroundpart.yaml', endpoint='post_round_part', methods=['POST'])
+
 def update_round_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
@@ -589,7 +602,8 @@ def update_round_part(id, part):
              "round" : { "id" : id,
                          part : value}
              }, 200
-@app.route('/solvers', methods=['POST'])
+@app.route('/solvers', endpoint='post_solver', methods=['POST'])
+@swag_from('swag/putsolver.yaml', endpoint='post_solver', methods=['POST'])
 def create_solver():
     debug_log(4, "start")
     try:         
@@ -627,7 +641,8 @@ def create_solver():
              "solver" : { "name" : name, "fullname" : fullname }
             }, 200
 
-@app.route('/solvers/<id>/<part>', methods=['POST'])
+@app.route('/solvers/<id>/<part>', endpoint='post_solver_part', methods=['POST'])
+@swag_from('swag/putsolverpart.yaml', endpoint='post_solver_part', methods=['POST'])
 def update_solver_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
@@ -726,7 +741,8 @@ def update_solver_part(id, part):
                          part : value}
              }, 200
         
-@app.route('/puzzles/<id>/<part>', methods=['POST'])
+@app.route('/puzzles/<id>/<part>', endpoint='post_puzzle_part', methods=['POST'])
+@swag_from('swag/putpuzzlepart.yaml', endpoint='post_puzzle_part', methods=['POST'])
 def update_puzzle_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:

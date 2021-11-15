@@ -42,6 +42,10 @@
 - Running the REST Api Service:
     - Start up pbrest.py (continually running, preferably as background daemon): Will run on localhost:5000. Is safe to run on multiple servers at once for scale.
     
+- Swagger API Doc:
+    - Is accessible at localhost:5000/apidocs (or appropriate proxied URL if behind a proxy)
+    - NOTE: if behind a proxy (e.g. in production), "try it out" functionality of swagger will not work
+    
 Note: For development/testing, if running frontend without REMOTE_USER setting, it will still work using secret GET params and/or the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php.  
     
 
