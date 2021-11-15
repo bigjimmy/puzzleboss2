@@ -1,7 +1,10 @@
 APP:
     LOGLEVEL: 3
     BIN_URI: https://your-url.com/puzzleboss/bin
-    PUZZCORD_CMD: ./puzzcord.sh
+    
+PUZZCORD:
+    PUZZCORD_HOST: whateverhostpuzzcordison
+    PUZZCORD_PORT: 2134
 
 GOOGLE:
     HUNT_FOLDER_NAME: "My Hunt Folder 2022"
