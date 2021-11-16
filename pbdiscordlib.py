@@ -38,7 +38,7 @@ def call_puzzcord(command):
     
     #TODO: Implement piping the command to server and port for puzzcord 
          
-    debug_log(4, "calling out to shell: %s" % fullcmd)
-    
+    debug_log(4, "TODO: send to puzzcord here: %s" % command)
+        
     #TODO: implement actual shell call to puzzcord and return the output
     return(0)
