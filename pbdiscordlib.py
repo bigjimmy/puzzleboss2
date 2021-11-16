@@ -36,8 +36,8 @@ def chat_announce_solved(puzzlename):
 def call_puzzcord(command):
     debug_log(4, "start, called with (command): %s" % command)
     
-    fullcmd = config['APP']['PUZZCORD_CMD'] + " " + command
-    
+    #TODO: Implement piping the command to server and port for puzzcord 
+         
     debug_log(4, "calling out to shell: %s" % fullcmd)
     
     #TODO: implement actual shell call to puzzcord and return the output
