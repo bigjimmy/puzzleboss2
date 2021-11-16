@@ -23,8 +23,8 @@
     - www subdir should be a web docroot or alias
     - www subdir should have PHP execution enabled
     - puzzleboss root dir should NOT be accessible via apache
-    - Apache needs to proxy into running pbrest.py daemon
     - User authentication should be configured in apache somehow (we just need the REMOTE_USER header to be set)
+    - Optionally proxy into swagger apidocs
     
 - MySQL database:
     - Create database for puzzleboss to use (enter name in appropriate puzzleboss.yaml variable)
@@ -40,10 +40,11 @@
     - All google sheets related ops can be disabled (e.g. for dev testing) via variable in puzzleboss.yaml
 
 - Running the REST Api Service:
-    - Start up pbrest.py (continually running, preferably as background daemon): Will run on localhost:5000. Is safe to run on multiple servers at once for scale.
+    - Start up pbrest.py: Will run on localhost:5000. 
+    - For actual multi-client use, install gunicorn and use the wsgi.py app object provided. Is safe to run on multiple servers at once for scale.
     
 - Swagger API Doc:
-    - Is accessible at localhost:5000/apidocs (or appropriate proxied URL if behind a proxy)
+    - Is accessible at localhost:5000/apidocs (or appropriate proxied URL if behind a proxy) by just running pbapi.py.
     - NOTE: if behind a proxy (e.g. in production), "try it out" functionality of swagger will not work
     
 Note: For development/testing, if running frontend without REMOTE_USER setting, it will still work using secret GET params and/or the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php.  

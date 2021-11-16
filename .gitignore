@@ -6,4 +6,6 @@
 puzzleboss.yaml
 credentials.json
 token.json
+puzzleboss2env/
 scripts/solvertable*
+__pycache__/
