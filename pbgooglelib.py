@@ -3,8 +3,11 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+import google_auth_httplib2
+import httplib2
 import pblib
 from pblib import debug_log, sanitize_string, config
+from builtins import Exception
 
 service = None
 creds = None
@@ -75,6 +78,28 @@ def initdrive():
         debug_log(4, "Folder named %s found to already exist with id %s" % (foldername, matchingfolders[0]['id']))
         pblib.huntfolderid = matchingfolders[0]['id']
     return(0)
+
+def get_revisions(myfileid):
+    # will return full list of revisions for a google fileid not made by current user. THREAD SAFE
+    
+    debug_log(4, "start with fileid: %s" % myfileid)
+    revisions = []
+    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    try:
+        retval = service.revisions().list(fileId=myfileid, fields='*').execute(http=threadsafe_http)
+    except Exception as e:
+        debug_log(1, "Unknown Error fetching revisions for %s: %s" % (myfileid, e))
+        return (revisions)
+
+    if type(retval) == str:
+        debug_log(1, "Problem fetching revisions for %s: %s" % (myfileid, retval))
+        return (revisions)
+    for revision in retval['revisions']:
+        # exclude revisions done by this bot
+        debug_log(5, "Revision found: %s" % revision)
+        if not (revision['lastModifyingUser']['me']):
+            revisions.append(revision)
+    return revisions
 
 def create_round_folder(foldername):
     debug_log(4, "start with foldername: %s" % foldername)
@@ -221,6 +246,14 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     
     debug_log(4, "Sheets api batchupdate request id: %s body %s" % (file.get('id'), body))
     response = sheetsservice.spreadsheets().batchUpdate(spreadsheetId=file.get('id'), body=body).execute()
-    print (response)
+    permission = {
+                    'role' : 'writer',
+                    'type' : 'domain',
+                    'domain' : config['GOOGLE']['DOMAINNAME']
+    
+                  }
+    debug_log(5, "Response from sheetservice.spreadsheets.batchUpdate: %s" % response)
+    permresp = service.permissions().create(fileId=file.get('id'), body=permission).execute()
+    debug_log(5, "Response from service.permissions.create: %s" % permresp)
     return(file.get('id'))    
     

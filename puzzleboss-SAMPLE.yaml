@@ -9,6 +9,7 @@ PUZZCORD:
 GOOGLE:
     HUNT_FOLDER_NAME: "My Hunt Folder 2022"
     SKIP_GOOGLE_API: "false"
+    DOMAINNAME: your-url.com
 
 MYSQL:
     USERNAME: puzzleboss
@@ -16,3 +17,9 @@ MYSQL:
     HOST: 127.0.0.1
     PORT: 3306
     DATABASE: puzzleboss
+
+BIGJIMMYBOT:
+    APIURI: http://localhost:5000
+    THREADCOUNT: 5
+    LOOPPAUSETIME: 5
+    

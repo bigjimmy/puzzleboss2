@@ -32,7 +32,7 @@ def get_all_puzzles():
         cursor = conn.cursor()
         cursor.execute('''SELECT id,name from puzzle''')
         rv = cursor.fetchall()
-    except:
+    except IndexError:
         errmsg = "Exception in fetching all puzzles from database"
         debug_log(0, errmsg)
         return {"error" : errmsg }, 500
@@ -66,7 +66,7 @@ def get_one_puzzle(id):
         return {"error" : errmsg }, 500
     
     debug_log(5, "fetched puzzle %s: %s" % (id, rv))
-    
+    lastact = get_last_activity_for_puzzle(id) 
     return {
             "status": "ok", 
             "puzzle" : {
@@ -86,8 +86,8 @@ def get_one_puzzle(id):
                         "puzzle_uri" : rv[13],
                         "solvers" : rv[14],
                         "cursolvers" : rv[15],
-                        "xyzloc" : rv[16]
-                        
+                        "xyzloc" : rv[16],
+                        "lastact" : lastact                       
                         }
             }, 200
 
@@ -95,20 +95,23 @@ def get_one_puzzle(id):
 @swag_from('swag/getpuzzlepart.yaml', endpoint='puzzle_part', methods=['GET'])
 def get_puzzle_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        sql = "SELECT %s from puzzle_view where id = %s" % (part, id)
-        cursor.execute(sql)
-        rv = cursor.fetchone()[0]
-    except TypeError:
-        errmsg = "Puzzle %s not found in database" % id
-        debug_log(1, errmsg)
-        return {"error" : errmsg }, 500
-    except:
-        errmsg = "Exception in fetching %s part for puzzle %s from database" % (part, id)
-        debug_log(0, errmsg)
-        return {"error" : errmsg }, 500
+    if part == "lastact":
+        rv = get_last_activity_for_puzzle(id)
+    else:
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            sql = "SELECT %s from puzzle_view where id = %s" % (part, id)
+            cursor.execute(sql)
+            rv = cursor.fetchone()[0]
+        except TypeError:
+            errmsg = "Puzzle %s not found in database" % id
+            debug_log(1, errmsg)
+            return {"error" : errmsg }, 500
+        except:
+            errmsg = "Exception in fetching %s part for puzzle %s from database" % (part, id)
+            debug_log(0, errmsg)
+            return {"error" : errmsg }, 500
     
     debug_log(4, "fetched puzzle part %s for %s" % (part, id))
     return {
@@ -469,8 +472,6 @@ def create_puzzle():
         debug_log(0, errmsg)
         return {"error" : errmsg }, 500
     
-    debug_log(3, "puzzle %s added to database!" % puzname)
-
     # We need to figure out what the ID is that the puzzle got assigned
     try:
         conn = mysql.connection
@@ -486,6 +487,8 @@ def create_puzzle():
     # Announce new puzzle in chat
     chat_announce_new(puzname)
     
+    debug_log(3, "puzzle %s added to system fully (chat room, spreadsheet, database, etc.)!" % puzname)
+
     return { "status" : "ok", 
              "puzzle" : {
                          "id": myid,
@@ -766,7 +769,10 @@ def update_puzzle_part(id, part):
         debug_log(1, errmsg)
         return {"error" : errmsg}, 500
     
-    if part == "status":
+    if part == "lastact":
+        set_new_activity_for_puzzle(id, value)
+    
+    elif part == "status":
         debug_log(4, "part to update is status")
         if value == "Solved":
             if mypuzzle['puzzle']['status'] == "Solved":
@@ -797,7 +803,9 @@ def update_puzzle_part(id, part):
             chat_announce_solved(mypuzzle['puzzle']['name'])
             value = value.upper()
    
-    update_puzzle_part_in_db(id, part, value)
+    if part != "lastact":
+        update_puzzle_part_in_db(id, part, value)
+        
     debug_log(3, "puzzle name %s, id %s, part %s has been set to %s" % (mypuzzle['puzzle']['name'], id, part, value))
     
     return { "status" : "ok",
@@ -867,7 +875,54 @@ def get_puzzles_from_list(list):
     
     debug_log(4, "puzzle list assembled is: %s" % puzarray)    
     return(puzarray)
+
+def get_last_activity_for_puzzle(id):
+    debug_log(4, "start, called with: %s" % id)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute('''SELECT * from activity where puzzle_id = %s ORDER BY time ASC LIMIT 1''', [id])
+        arv = cursor.fetchall()[0]
+    except IndexError:
+        errmsg = "No Activity for Puzzle %s found in database yet" % id
+        debug_log(4, errmsg)
+        return None
+
+    return {
+            "actid" : arv[0],
+            "timestamp" : arv[1],
+            "solver_id" : arv[2],
+            "puzzle_id" : arv[3],
+            "source" : arv[4],
+            "type" : arv[5]
+            }
+
+def set_new_activity_for_puzzle(id, actstruct):
+    debug_log(4, "start, called for puzzle id %s with: %s" % (id, actstruct))
+              
+    try:
+        solver_id = actstruct['solver_id']
+        puzzle_id = id
+        source = actstruct['source']
+        type = actstruct['type']
+    except:
+        errmsg = "Failure parsing activity dict. Needs solver_id, source, type. dict passed in is: %s" % actstruct
+        return(255)
     
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        sql = ("INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, '%s', '%s')" % (puzzle_id, solver_id, source, type))
+        cursor.execute(sql)
+        conn.commit()
+    except TypeError:
+        errmsg = "Exception in logging change to puzzle %s in activity table for solver %s in database" % (value, id)
+        debug_log(0, errmsg)
+        return(255)
+    
+    debug_log(3, "Updated activity for puzzle id %s" % (puzzle_id))
+    return(0)
+
 if __name__ == '__main__':
     if initdrive() != 0:
         debug_log(0, "Startup google drive initialization failed.")
