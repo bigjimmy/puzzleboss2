@@ -147,7 +147,8 @@ def check_puzzle_from_queue(threadname, q, fromtime):
 
                         if solverinfo['puzz'] != mypuzzle['id']:
                             # This potential solver is not currently on this puzzle. Interesting.
-                            lastsolveracttime = datetime.datetime.strptime(solverinfo['lastact']['timestamp'], '%a, %d %b %Y %H:%M:%S %Z')                      
+                            lastsolveracttime = datetime.datetime.strptime(solverinfo['lastact']['timestamp'], '%a, %d %b %Y %H:%M:%S %Z')
+                            debug_log(4, "[Thread: %s] Last solver activity for %s was at %s" % (threadname, solverinfo['name'], lastsolveracttime))
                             if config['BIGJIMMYBOT']['AUTOASSIGN'] == "true":
                                 if revisiontime > lastsolveracttime:
                                     debug_log(3, "[Thread: %s] Assigning solver %s to puzzle %s." % (threadname, mysolverid, mypuzzle['id']))
