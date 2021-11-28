@@ -21,6 +21,6 @@ MYSQL:
 BIGJIMMYBOT:
     APIURI: http://localhost:5000
     THREADCOUNT: 5
-    LOOPPAUSETIME: 5
+    PUZZLEPAUSETIME: 1
     AUTOASSIGN: "true"
     

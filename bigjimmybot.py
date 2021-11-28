@@ -159,6 +159,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                               (threadname, databody, mysolverid, assignmentresponse.text))
         else:
             queueLock.release()
+    time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
     return 0
 
 
@@ -240,4 +241,3 @@ if __name__ == "__main__":
             % fromtime,
         )
         exitFlag = 0
-        time.sleep(config["BIGJIMMYBOT"]["LOOPPAUSETIME"])
