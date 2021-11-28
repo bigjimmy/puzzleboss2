@@ -257,6 +257,7 @@ def get_one_solver(id):
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
+    lastact = get_last_activity_for_solver(id)
     debug_log(4, "fetched solver %s" % id)
     return {
         "status": "ok",
@@ -268,6 +269,7 @@ def get_one_solver(id):
             "fullname": rv[4],
             "chat_uid": rv[5],
             "chat_name": rv[6],
+            "lastact" : lastact
         },
     }, 200
 
