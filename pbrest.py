@@ -221,7 +221,7 @@ def get_all_solvers():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT id,name from solver""")
+        cursor.execute("""SELECT id,name from solver_view""")
         rv = cursor.fetchall()
     except:
         errmsg = "Exception in fetching all solvers from database"
@@ -653,7 +653,7 @@ def create_solver():
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO solver (name, fullname) VALUES (%s, %s)""", (name, fullname)
+            """INSERT INTO solver_view (name, fullname) VALUES (%s, %s)""", (name, fullname)
         )
         conn.commit()
     except MySQLdb._exceptions.IntegrityError:
@@ -884,7 +884,7 @@ def unassign_solver_by_name(name):
     # We have to look up the solver id for the given name first.
     conn = mysql.connection
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM solver WHERE name = '%s'" % name)
+    cursor.execute("SELECT id FROM solver_view WHERE name = '%s'" % name)
     id = cursor.fetchall()[0][0]
     sql = "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (NULL, %s)" % id
     cursor = conn.cursor()
