@@ -272,7 +272,8 @@ def get_one_solver(id):
                        "puzz" : rv[3],
                        "fullname" : rv[4],
                        "chat_uid" : rv[5],
-                       "chat_name" : rv[6]
+                       "chat_name" : rv[6],
+                       "lastact" :  get_last_activity_for_solver(id)
                        }
             }, 200
 
@@ -280,21 +281,25 @@ def get_one_solver(id):
 @swag_from('swag/getsolverpart.yaml', endpoint='solver_part', methods=['GET'])
 def get_solver_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        sql = "SELECT %s from solver_view where id = %s" % (part, id)
-        cursor.execute(sql)
-        rv = cursor.fetchone()[0]
-    except TypeError:
-        errmsg = "Solver %s not found in database" % id
-        debug_log(1, errmsg)
-        return {"error" : errmsg }, 500
-    except:
-        errmsg = "Exception in fetching %s part for solver %s from database" % (part, id)
-        debug_log(0, errmsg)
-        return {"error" : errmsg }, 500
     
+    if part == "lastact":
+        rv = get_last_activity_for_solver(id)
+    else:    
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            sql = "SELECT %s from solver_view where id = %s" % (part, id)
+            cursor.execute(sql)
+            rv = cursor.fetchone()[0]
+        except TypeError:
+            errmsg = "Solver %s not found in database" % id
+            debug_log(1, errmsg)
+            return {"error" : errmsg }, 500
+        except:
+            errmsg = "Exception in fetching %s part for solver %s from database" % (part, id)
+            debug_log(0, errmsg)
+            return {"error" : errmsg }, 500
+        
     debug_log(4, "fetched round part %s for %s" % (part, id))
     return {
             "status" : "ok",
@@ -896,7 +901,28 @@ def get_last_activity_for_puzzle(id):
             "source" : arv[4],
             "type" : arv[5]
             }
+    
+def get_last_activity_for_solver(id):
+    debug_log(4, "start, called with: %s" % id)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute('''SELECT * from activity where solver_id = %s ORDER BY time ASC LIMIT 1''', [id])
+        arv = cursor.fetchall()[0]
+    except IndexError:
+        errmsg = "No Activity for solver %s found in database yet" % id
+        debug_log(4, errmsg)
+        return None
 
+    return {
+            "actid" : arv[0],
+            "timestamp" : arv[1],
+            "solver_id" : arv[2],
+            "puzzle_id" : arv[3],
+            "source" : arv[4],
+            "type" : arv[5]
+            }
+    
 def set_new_activity_for_puzzle(id, actstruct):
     debug_log(4, "start, called for puzzle id %s with: %s" % (id, actstruct))
               

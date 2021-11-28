@@ -6,6 +6,7 @@ from google.oauth2.credentials import Credentials
 import google_auth_httplib2
 import httplib2
 import pblib
+import datetime
 from pblib import debug_log, sanitize_string, config
 from builtins import Exception
 
@@ -255,5 +256,20 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     debug_log(5, "Response from sheetservice.spreadsheets.batchUpdate: %s" % response)
     permresp = service.permissions().create(fileId=file.get('id'), body=permission).execute()
     debug_log(5, "Response from service.permissions.create: %s" % permresp)
-    return(file.get('id'))    
+    return(file.get('id'))
+
+def force_sheet_edit(driveid, mytimestamp = datetime.datetime.utcnow()):
+    debug_log(4, "start with driveid: %s" % driveid)
+    threadsafe_sheethttp = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    
+    # Setup sheets service for this
+    sheetsservice = build('sheets', 'v4', credentials=creds)
+    datarange="A7"
+    datainputoption="USER_ENTERED"
+    data = { "values" : [["last bigjimmybot probe: %s" % mytimestamp]]}
+    response = sheetsservice.spreadsheets().values().update(spreadsheetId=driveid, range=datarange, valueInputOption=datainputoption, body=data).execute(http=threadsafe_sheethttp)
+    debug_log(4, "response to sheet edit attempt: %s" % response)
+    return(0)
+    
+
     
