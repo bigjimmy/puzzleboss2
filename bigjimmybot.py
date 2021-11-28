@@ -39,6 +39,9 @@ def check_puzzle_from_queue(threadname, q, fromtime):
         if not workQueue.empty():
             mypuzzle = q.get()
             queueLock.release()
+            
+            #puzzle-pull wait time per thread to avoid API limits
+            time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
 
             debug_log(
                 4,
@@ -159,7 +162,6 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                               (threadname, databody, mysolverid, assignmentresponse.text))
         else:
             queueLock.release()
-    time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
     return 0
 
 
