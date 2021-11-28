@@ -1,7 +1,7 @@
 parameters:
     - in: path
       name: id
-      type: integeer
+      type: integer
       required: true
 responses:
     200:
@@ -65,8 +65,3 @@ responses:
               xyzloc:
                   type: string
                   description: Location where puzzle is being worked on
-              
-                  
-                  
-                  
-                  
