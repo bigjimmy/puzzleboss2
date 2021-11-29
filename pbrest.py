@@ -955,7 +955,7 @@ def get_last_activity_for_puzzle(id):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT * from activity where puzzle_id = %s ORDER BY time ASC LIMIT 1""",
+            """SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1""",
             [id],
         )
         arv = cursor.fetchall()[0]
@@ -978,7 +978,7 @@ def get_last_activity_for_solver(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute('''SELECT * from activity where solver_id = %s ORDER BY time ASC LIMIT 1''', [id])
+        cursor.execute('''SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1''', [id])
         arv = cursor.fetchall()[0]
     except IndexError:
         errmsg = "No Activity for solver %s found in database yet" % id

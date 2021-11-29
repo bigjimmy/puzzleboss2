@@ -50,7 +50,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             )
 
             # Feeble attempt to inject a new revision to split up grouping periodically
-            force_sheet_edit(mypuzzle['drive_id'])
+            #force_sheet_edit(mypuzzle['drive_id'])
 
             # Lots of annoying time string conversions here between mysql and google
             lastpuzzleacttime = datetime.datetime.fromordinal(1)
@@ -69,11 +69,12 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                     # This is a new revision since last loop, give or take a few minutes.
                     debug_log(
                         4,
-                        "[Thread: %s] relatively recent revision found by %s on %s"
+                        "[Thread: %s] relatively recent revision found by %s on %s at %s"
                         % (
                             threadname,
                             revision["lastModifyingUser"]["emailAddress"],
                             mypuzzle["name"],
+                            revision["modifiedTime"]
                         ),
                     )
                     debug_log(
