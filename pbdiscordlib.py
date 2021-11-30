@@ -1,4 +1,6 @@
 from pblib import *
+import socket
+import sys
 
 
 def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
@@ -13,8 +15,6 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
 
     retval = call_puzzcord("%s %s" % (puzname, topic))
     debug_log(4, "retval from call_puzzcord is %s" % retval)
-
-    # TODO: parse retval here to pull out channelid / link for return tuple
 
     return ("0xtestchannelid", "http://mychannelidlink")
 
@@ -48,10 +48,12 @@ def chat_announce_solved(puzzlename):
 
 def call_puzzcord(command):
     debug_log(4, "start, called with (command): %s" % command)
+    sock = socket.create_connection((config['PUZZCORD']['PUZZCORD_HOST'], config['PUZZCORD']['PUZZCORD_PORT']), timeout=2)
+    response = "error"
+    try:
+        sock.sendall(bytes(command+'\0','ascii'))
+        response = sock.recv(1024).decode('ascii')           
+    finally:
+        sock.close()
 
-    # TODO: Implement piping the command to server and port for puzzcord
-
-    debug_log(4, "TODO: send to puzzcord here: %s" % command)
-
-    # TODO: implement actual shell call to puzzcord and return the output
-    return 0
+    return response
