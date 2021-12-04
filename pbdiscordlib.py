@@ -1,6 +1,7 @@
 from pblib import *
 import socket
 import sys
+import json
 
 
 def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
@@ -50,7 +51,8 @@ def call_puzzcord(command):
     sock = socket.create_connection((config['PUZZCORD']['PUZZCORD_HOST'], config['PUZZCORD']['PUZZCORD_PORT']), timeout=2)
     response = "error"
     try:
-        sock.sendall(bytes(command+'\0','ascii'))
+        sock.sendall(bytes(command,'ascii'))
+        sock.shutdown(socket.SHUT_WR)
         response = sock.recv(1024).decode('ascii')           
     finally:
         sock.close()
