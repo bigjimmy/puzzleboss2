@@ -13,11 +13,10 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
     topic = "\nPuzzle: %s \nRound: %s\n" % (puzname, roundname)
     topic += "Puzzle URL: %s \nSheet: %s\n" % (puzuri, puzdocuri)
 
-    retval = call_puzzcord("%s %s" % (puzname, topic))
+    retval = call_puzzcord("create_json %s %s" % (puzname, topic))
     debug_log(4, "retval from call_puzzcord is %s" % retval)
-
-    return ("0xtestchannelid", "http://mychannelidlink")
-
+    newchaninfo = json.loads(retval)
+    return (newchaninfo['id'], newchaninfo['url'])
 
 def chat_announce_round(roundname):
     debug_log(4, "start, called with (roundname): %s" % (roundname))
