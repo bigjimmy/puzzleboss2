@@ -19,6 +19,7 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
     newchaninfo = json.loads(retval)
     return (newchaninfo['id'], newchaninfo['url'])
 
+
 def chat_announce_round(roundname):
     debug_log(4, "start, called with (roundname): %s" % (roundname))
     return call_puzzcord("%s %s" % ("_round", roundname))
@@ -50,10 +51,20 @@ def call_puzzcord(command):
     debug_log(4, "start, called with (command): %s" % command)
     sock = socket.create_connection((config['PUZZCORD']['PUZZCORD_HOST'], config['PUZZCORD']['PUZZCORD_PORT']), timeout=2)
     response = "error"
+    # Send command to puzzcord
     try:
         sock.sendall(bytes(command,'ascii'))
         sock.shutdown(socket.SHUT_WR)
-        response = sock.recv(1024).decode('ascii')           
+    except socket.error:
+        debug_log(0, "Sending command to puzzcord FAILED. Is puzzcord client down?")
+        sock.close()
+        return "error"
+    # Await and record response from puzzcord
+    try:
+        response = sock.recv(1024).decode('ascii')
+        debug_log(4, "response from puzzcord call: %s" % response)
+    except socket.timeout:
+        debug_log(4, "done waiting for puzzcord return message.")
     finally:
         sock.close()
 
