@@ -838,6 +838,7 @@ def update_puzzle_part(id, part):
                     % (id, mypuzzle["puzzle"]["name"]),
                 )
                 clear_puzzle_solvers(id)
+                update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
         elif (
             value == "Needs eyes"
@@ -845,9 +846,11 @@ def update_puzzle_part(id, part):
             or value == "Unnecessary"
             or value == "WTF"
         ):
+            update_puzzle_part_in_db(id, part, value)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
 
     elif part == "xyzloc":
+        update_puzzle_part_in_db(id, part, value)
         chat_say_something(
             mypuzzle["puzzle"]["chat_channel_id"],
             "**ATTENTION:** %s is being worked on at %s"
@@ -866,9 +869,11 @@ def update_puzzle_part(id, part):
             clear_puzzle_solvers(id)
             chat_announce_solved(mypuzzle["puzzle"]["name"])
             value = value.upper()
-
-    if part != "lastact":
-        update_puzzle_part_in_db(id, part, value)
+            
+    else:
+        errmsg = "Invalid part name %s" % part
+        debug_log(2, errmsg)
+        return {"error": errmsg}, 500
 
     debug_log(
         3,
