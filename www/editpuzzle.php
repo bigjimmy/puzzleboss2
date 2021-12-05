@@ -192,7 +192,7 @@ echo '<td><b>Cur. Solvers</b></td><td>' . $puzzleobj->puzzle->cursolvers . '</td
 echo '<td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td><tr>';
 echo '<td><b>Comments</b></td><td>' . $puzzleobj->puzzle->comments . '</td><tr>';
 echo '</table>';
-$roundobj = json_decode(readapi('/rounds/' . $puzzleobj->puzzle->round_id));
+$roundmeta = json_decode(readapi('/rounds/' . $puzzleobj->puzzle->round_id . '/meta_id'))->round->meta_id;
 
 //Solver Assignment
 if ($userobj->solver->puzz != $puzname){
@@ -273,7 +273,7 @@ echo '</form></td></tr>';
 
 echo '</table>';
 //Meta Assignment
-if ($roundobj->round->meta_id != $puzzid){
+if ($roundmeta != $puzzid){
     echo '<br>This is not the meta for round ' . $puzzleobj->puzzle->roundname . '.  Should it be?';
     echo '<form action="editpuzzle.php" method="get">';
     echo '<input type="hidden" name="ismeta" value="yes">';
