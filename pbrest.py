@@ -571,7 +571,7 @@ def create_round():
     chat_status = chat_announce_round(roundname)
     debug_log(4, "return from announcing round in chat is - %s" % str(chat_status))
 
-    if chat_status != 0:
+    if chat_status == None:
         errmsg = "Error in announcing new round in chat"
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
