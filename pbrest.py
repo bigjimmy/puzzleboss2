@@ -861,6 +861,7 @@ def update_puzzle_part(id, part):
         if data != "":
             # Mark puzzle as solved automatically when answer is filled in
             update_puzzle_part_in_db(id, "status", "Solved")
+            update_puzzle_part_in_db(id, part, value)
             debug_log(
                 3,
                 "Puzzle id %s name %s has been Solved!!!"
