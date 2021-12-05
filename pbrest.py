@@ -838,7 +838,7 @@ def update_puzzle_part(id, part):
                     % (id, mypuzzle["puzzle"]["name"]),
                 )
                 clear_puzzle_solvers(id)
-                update_puzzle_part_in_db(id, part, value)
+                update_puzzle_part_in_db(id, part, value.upper())
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
         elif (
             value == "Needs eyes"
