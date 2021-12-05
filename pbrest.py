@@ -838,7 +838,7 @@ def update_puzzle_part(id, part):
                     % (id, mypuzzle["puzzle"]["name"]),
                 )
                 clear_puzzle_solvers(id)
-                update_puzzle_part_in_db(id, part, value.upper())
+                update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
         elif (
             value == "Needs eyes"
@@ -861,6 +861,7 @@ def update_puzzle_part(id, part):
         if data != "":
             # Mark puzzle as solved automatically when answer is filled in
             update_puzzle_part_in_db(id, "status", "Solved")
+            value = value.upper()
             update_puzzle_part_in_db(id, part, value)
             debug_log(
                 3,
@@ -869,8 +870,6 @@ def update_puzzle_part(id, part):
             )
             clear_puzzle_solvers(id)
             chat_announce_solved(mypuzzle["puzzle"]["name"])
-            value = value.upper()
-            
     else:
         errmsg = "Invalid part name %s" % part
         debug_log(2, errmsg)
