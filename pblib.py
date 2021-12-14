@@ -22,7 +22,8 @@ def debug_log(sev, message):
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         print(
             "[%s] [SEV%s] %s: %s"
-            % (timestamp, sev, inspect.currentframe().f_back.f_code.co_name, message)
+            % (timestamp, sev, inspect.currentframe().f_back.f_code.co_name, message),
+            flush=True
         )
     return
 
