@@ -23,4 +23,8 @@ BIGJIMMYBOT:
     THREADCOUNT: 5
     PUZZLEPAUSETIME: 1
     AUTOASSIGN: "true"
+
+LDAP:
+    HOST: ldaphostname.example.org
+    DOMAIN: "dc=your-url,dc=com"
     

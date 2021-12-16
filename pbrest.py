@@ -951,6 +951,29 @@ def new_account():
     return {"status": "ok", "code": code}, 200
 
 
+@app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
+@swag_from("swag/getfinishaccount.yaml", endpoint="get_finish_account", methods=["GET"])
+def finish_account():
+    debug_log(4, "start. code %s" % code)
+
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(
+            """SELECT username, fullname, email, password FROM newuser WHERE code = %s""", [code] 
+            )
+        rv = cursor.fetchone()[0]
+    except TypeError:
+        errmsg = "Code %s is not valid."
+        debug_log(2, errmsg)
+        return {"error" : errmsg}, 500
+
+    debug_log(4, "valid code. username: %s fullname: %s email: %s password: REDACTED" % 
+              (rv['username'], rv['fullname'], rv['email']))
+
+    return {"status": "ok"}, 200
+        
+
 ############### END REST calls section
 
 
