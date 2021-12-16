@@ -953,7 +953,7 @@ def new_account():
 
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
 @swag_from("swag/getfinishaccount.yaml", endpoint="get_finish_account", methods=["GET"])
-def finish_account():
+def finish_account(code):
     debug_log(4, "start. code %s" % code)
 
     try:
