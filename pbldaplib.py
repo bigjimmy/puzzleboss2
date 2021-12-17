@@ -1,9 +1,11 @@
 import ldap
-from ldap import modlist
 import json
 import requests
 import pblib
+import pbgooglelib
 from pblib import *
+from pbgooglelib import *
+from ldap import modlist
 
 def verify_email_for_user(email, username):
     debug_log(4, "start, called with (email, username): %s, %s" % (email, username))
@@ -59,10 +61,12 @@ def add_or_update_user(username, firstname, lastname, email, password):
         newuserattrs['mail'] = mailaddr.encode('utf-8')
         newuserattrs['o'] = config['LDAP']['LDAPO'].encode('utf-8')
         
+        # Add to LDAP
         ldif = ldap.modlist.addModlist(newuserattrs)
         ldapconn.add_s(userdn, ldif)
         debug_log(3, "Added %s to ldap" % username)
         
+        # Add to solver DB
         postbody = { 
                     "fullname" : "%s %s" % (firstname, lastname),
                     "name" : username
@@ -75,14 +79,29 @@ def add_or_update_user(username, firstname, lastname, email, password):
             debug_log(0, errmsg)
             return (errmsg)
         
-        #TODO:  Add solver to google
+        googaddresponse = add_user_to_google(username, firstname, lastname, password)
+        debug_log(3, "Attempt to add %s to google domain. Response: %s" % (username, googaddresponse))
+
+        if googaddresponse != "OK":
+            errmsg = "Failure in adding user to google: %s" % googaddresponse
+            debug_log(0, errmsg)
+            return (errmsg)
     
     if operation == "update":
+        debug_log(3, "Updating password (google and LDAP) for user %s" % username)
+        
+        # Change password at google
+        googchangeresponse = change_google_user_password(username, password)
+        
+        if googaddresponse != "OK":
+            errmsg = "Failure in changing password at google for %s" % googaddresponse
+            debug_log(0, errmsg)
+            return (errmsg)
+        
+        # Change password in ldap
         ldapconn.modify_s(userdn, 
                           [(ldap.MOD_REPLACE, 'userPassword', password.encode('utf-8'))]
                           )
-        
-        #TODO: update google password?
 
     ldapconn.unbind_s()    
     return ("OK")

@@ -17,6 +17,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/drive.appdata",
     "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/admin.directory.user",
 ]
 
 
@@ -336,4 +337,46 @@ def force_sheet_edit(driveid, mytimestamp = datetime.datetime.utcnow()):
     response = sheetsservice.spreadsheets().values().update(spreadsheetId=driveid, range=datarange, valueInputOption=datainputoption, body=data).execute(http=threadsafe_sheethttp)
     debug_log(4, "response to sheet edit attempt: %s" % response)
     return(0)
+
+def add_user_to_google(username, firstname, lastname, password):
+    debug_log(4, "start with (username, firstname, lastname, password): %s %s %s REDACTED" % (username, firstname, lastname))
+    userservice = build('admin', 'directory_v1', credentials=creds)
+
+    userbody = { "name" : { 
+                            "familyName" : lastname,
+                            "givenName" : firstname 
+                          },
+                 "password" : password,
+                 "primaryEmail" : "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
+                }
+    
+    debug_log(5, "Attempting to add user with post body: %s" % json.dumps(userbody))    
+    addresponse = service.users().insert(body=userbody).execute()
+    
+    if not addresponse:
+        errmsg = "Error in adding user!"
+        debug_log(1, errmsg)
+        return errmsg   
+    
+    return("OK")
+
+def change_google_user_password(username, password):
+    debug_log(4, "start with (username, password): %s REDACTED" % username)
+    userservice = build('admin', 'directory_v1', credentials=creds)
+    email = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
+    userbody = { "password" : password, "primaryEmail" : email }
+    
+    debug_log(5, "Attempting to change user pass with post body: %s" % json.dumps(userbody))
+    changeresponse = service.users().update(userKey=email, body=userbody),execute()
+    
+    if not changeresponse:
+        errmsg = "Error in changing password for user!"
+        debug_log(1, errmsg)
+        return errmsg
+    
+    return("OK")   
+
+    
+        
+
     

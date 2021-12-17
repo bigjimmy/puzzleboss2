@@ -985,7 +985,16 @@ def finish_account(code):
     retcode = add_or_update_user(username, firstname, lastname, email, password)
     
     if retcode == "OK":
+        # Delete code and preliminary entry now
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(
+            """DELETE FROM newuser WHERE code = %s""", 
+            [code]
+        )
+        conn.commit()
         return {"status": "ok"}, 200
+        
     else:
         return {"error": retcode}, 500
     
