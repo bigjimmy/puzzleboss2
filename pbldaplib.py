@@ -67,8 +67,13 @@ def add_or_update_user(username, firstname, lastname, email, password):
                     "fullname" : "%s %s" % (firstname, lastname),
                     "name" : username
                     }
-        solveraddresponse = requests.post("%s/solvers/" % config['BIGJIMMYBOT']['APIURI'], json = postbody)
+        solveraddresponse = requests.post("%s/solvers" % config['BIGJIMMYBOT']['APIURI'], json = postbody)
         debug_log(3, "Attempt to add %s to solvers db. Response: %s" % (username, solveraddresponse.text))
+        
+        if not solveraddresponse.ok():
+            errmsg = "Failure adding user to solver DB. Contact admin."
+            debug_log(0, errmsg)
+            return (errmsg)
         
         #TODO:  Add solver to google
     
