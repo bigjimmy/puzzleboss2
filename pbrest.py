@@ -962,18 +962,33 @@ def finish_account(code):
         cursor.execute(
             """SELECT username, fullname, email, password FROM newuser WHERE code = %s""", [code] 
             )
-        rv = cursor.fetchone()[0]
+        rv = cursor.fetchone()
+    
+        debug_log(5, "query return: %s" % str(rv))
+
+        username = rv[0]
+        fullname= rv[1]
+        email = rv[2]
+        password = rv[3]
+    
     except TypeError:
-        errmsg = "Code %s is not valid."
+        errmsg = "Code %s is not valid." % code
         debug_log(2, errmsg)
         return {"error" : errmsg}, 500
 
-    debug_log(4, "valid code. username: %s fullname: %s email: %s password: REDACTED" % 
-              (rv['username'], rv['fullname'], rv['email']))
-
-    return {"status": "ok"}, 200
-        
-
+    debug_log(4, "valid code. username: %s fullname: %s email: %s password: REDACTED" %
+              (username, fullname, email))
+    
+    firstname = fullname.split()[0]
+    lastname = fullname.split()[1]
+    
+    retcode = add_or_update_user(username, firstname, lastname, email, password)
+    
+    if retcode == "OK":
+        return {"status": "ok"}, 200
+    else:
+        return {"error": retcode}, 500
+    
 ############### END REST calls section
 
 

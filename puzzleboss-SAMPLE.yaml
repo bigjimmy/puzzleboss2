@@ -25,6 +25,9 @@ BIGJIMMYBOT:
     AUTOASSIGN: "true"
 
 LDAP:
-    HOST: ldaphostname.example.org
-    DOMAIN: "dc=your-url,dc=com"
+    HOST: ldaphostname.your-url.com
+    DOMAIN: "ou=people,dc=your-url,dc=com"
+    ADMINDN: "cn=admin,dc=your-url,dc=com"
+    ADMINPW: "password"
+    LDAPO: "Your Team"
     
