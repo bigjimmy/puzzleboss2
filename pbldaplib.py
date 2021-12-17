@@ -1,4 +1,5 @@
 import ldap
+from ldap import modlist
 import json
 import requests
 import pblib
@@ -41,21 +42,24 @@ def add_or_update_user(username, firstname, lastname, email, password):
     debug_log(4, "admin bound to ldap with dn: %s" % config['LDAP']['ADMINDN'])
     
     userdn = "uid=%s,%s" % (username, config['LDAP']['DOMAIN'])
+    
+    fullname = "%s %s" % (firstname, lastname)
+    mailaddr = "%s@%s" % (username, config['GOOGLE']['DOMAINNAME'])
 
     if operation == "new":
         newuserattrs = {}
-        newuserattrs['objectclass'] = ['inetOrgPerson']
-        newuserattrs['uid'] = username
-        newuserattrs['sn'] = lastname
-        newuserattrs['givenName'] = firstname
-        newuserattrs['cn'] = "%s %s" % (firstname, lastname)
-        newuserattrs['displayName'] = "%s %s" % (firstname, lastname)
-        newuserattrs['userPassword'] = password
-        newuserattrs['email'] = email
-        newuserattrs['mail'] = "%s@%s" % (username, config['GOOGLE']['DOMAINNAME'])
-        newuserattrs['o'] = config['LDAP']['LDAPO']
+        newuserattrs['objectclass'] = ['inetOrgPerson'.encode('utf-8')]
+        newuserattrs['uid'] = username.encode('utf-8')
+        newuserattrs['sn'] = lastname.encode('utf-8')
+        newuserattrs['givenName'] = firstname.encode('utf-8')
+        newuserattrs['cn'] = fullname.encode('utf-8')
+        newuserattrs['displayName'] = fullname.encode('utf-8')
+        newuserattrs['userPassword'] = password.encode('utf-8')
+        newuserattrs['email'] = email.encode('utf-8')
+        newuserattrs['mail'] = mailaddr.encode('utf-8')
+        newuserattrs['o'] = config['LDAP']['LDAPO'].encode('utf-8')
         
-        ldif = ldap.modlist.addModlist(attrs)
+        ldif = ldap.modlist.addModlist(newuserattrs)
         ldapconn.add_s(userdn, ldif)
         debug_log(3, "Added %s to ldap" % username)
         
