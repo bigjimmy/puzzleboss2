@@ -1,4 +1,5 @@
 import os.path
+import googleapiclient
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -7,19 +8,49 @@ import google_auth_httplib2
 import httplib2
 import pblib
 import datetime
+import json
 from pblib import *
 from builtins import Exception
 
 service = None
 creds = None
+admincreds = None
+
 SCOPES = [
     "https://www.googleapis.com/auth/drive.metadata.readonly",
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/drive.appdata",
     "https://www.googleapis.com/auth/drive.file",
-    "https://www.googleapis.com/auth/admin.directory.user",
 ]
 
+ADMINSCOPES = [
+    "https://www.googleapis.com/auth/admin.directory.user"
+]
+
+def initadmin():
+    debug_log(4, "start")
+
+    global admincreds
+    global ADMINSCOPES
+
+    # The file token.json stores the user's access and refresh tokens, and is
+    # created automatically when the authorization flow completes for the first
+    # time.
+    if os.path.exists("admintoken.json"):
+        debug_log(4, "Credentials found in admintoken.json.")
+        admincreds = Credentials.from_authorized_user_file("admintoken.json", ADMINSCOPES)
+    # If there are no (valid) credentials available, let the user log in.
+    if not admincreds or not admincreds.valid:
+        if admincreds and admincreds.expired and admincreds.refresh_token:
+            debug_log(3, "Refreshing credentials.")
+            admincreds.refresh(Request())
+        else:
+            errmsg = "Admin Credentials missing.  Run googleadmininit.py on console."
+            debug_log(0, errmsg)
+            return {"error": errmsg}
+
+        with open("admintoken.json", "w") as token:
+            token.write(admincreds.to_json())
 
 def initdrive():
     debug_log(4, "start")
@@ -340,7 +371,10 @@ def force_sheet_edit(driveid, mytimestamp = datetime.datetime.utcnow()):
 
 def add_user_to_google(username, firstname, lastname, password):
     debug_log(4, "start with (username, firstname, lastname, password): %s %s %s REDACTED" % (username, firstname, lastname))
-    userservice = build('admin', 'directory_v1', credentials=creds)
+    msg = "" 
+    initadmin()
+
+    userservice = build('admin', 'directory_v1', credentials=admincreds)
 
     userbody = { "name" : { 
                             "familyName" : lastname,
@@ -351,28 +385,52 @@ def add_user_to_google(username, firstname, lastname, password):
                 }
     
     debug_log(5, "Attempting to add user with post body: %s" % json.dumps(userbody))    
-    addresponse = service.users().insert(body=userbody).execute()
-    
+    try:
+        addresponse = userservice.users().insert(body=userbody).execute()
+    except googleapiclient.errors.HttpError as e:
+        msg = json.loads(e.content)['error']['message']
+        addresponse = None
+
     if not addresponse:
-        errmsg = "Error in adding user!"
+        errmsg = "Error in adding user: %s" % msg
         debug_log(1, errmsg)
         return errmsg   
     
+    debug_log(4, "Created new google user %s" % username)
     return("OK")
+
+def delete_google_user(username):
+    debug_log(4, "start with username %s" % username)
+    initadmin()
+
+    userservice = build('admin', 'directory_v1', credentials=admincreds)
+    email = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
+
+    changeresponse = userservice.users().delete(userKey=email).execute()
+    return ("OK")
 
 def change_google_user_password(username, password):
     debug_log(4, "start with (username, password): %s REDACTED" % username)
-    userservice = build('admin', 'directory_v1', credentials=creds)
+    msg = "" 
+    initadmin()
+
+    userservice = build('admin', 'directory_v1', credentials=admincreds)
     email = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
     userbody = { "password" : password, "primaryEmail" : email }
     
     debug_log(5, "Attempting to change user pass with post body: %s" % json.dumps(userbody))
-    changeresponse = service.users().update(userKey=email, body=userbody),execute()
+    try:
+        changeresponse = userservice.users().update(userKey=email, body=userbody).execute()
+    except  googleapiclient.errors.HttpError as e:
+        msg = json.loads(e.content)['error']['message']
+        changeresponse = None
     
     if not changeresponse:
-        errmsg = "Error in changing password for user!"
+        errmsg = "Error in changing password: %s" % msg
         debug_log(1, errmsg)
         return errmsg
+
+    debug_log(4, "Changed password for user %s" % username)
     
     return("OK")   
 
