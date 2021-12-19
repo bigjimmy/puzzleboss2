@@ -52,15 +52,15 @@ def email_user_verification(email, code, fullname, username):
                         Thank you.
                         - Puzzleboss 2000
                         
-                        (replies to this email will not reach anybody)
+                        (replies to this email will most likely not reach anybody)
                         """ % (email, config['LDAP']['LDAPO'], username, fullname, config['APP']['ACCT_URI'], code)
                             
     debug_log(4, "Email to be sent: %s" % messagecontent)
     
     try:
         msg = EmailMessage()
-        msg['Subject'] = "Finish your %s account sign-up or reset" % config['LDAP']['LDAPO']
-        msg['From'] = "puzzleboss@%s" % config['GOOGLE']['DOMAINNAME']
+        msg['Subject'] = "Finish %s account sign-up." % config['LDAP']['LDAPO']
+        msg['From'] = "%s" % config['APP']['REGEMAIL']
         msg['To'] = email
         msg.set_content(messagecontent)
         s = smtplib.SMTP(config['APP']['MAILRELAY'])

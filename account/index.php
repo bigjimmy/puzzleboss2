@@ -47,13 +47,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fullname = $_POST['fullname'];
         $email = $_POST['email'];
         $password = $_POST['password'];
+        $reset = $_POST['reset'];
         
         $data = <<<DATA
         {
             "username": "$username",
             "password": "$password",
             "fullname": "$fullname",
-            "email": "$email"
+            "email": "$email",
+            "reset": "$reset",
         }
 DATA;
         print "<h2>Submitting new user request to puzzleboss...</h2>";
@@ -87,6 +89,7 @@ DATA;
     
     } else {
     // no code, but user data. present the page to submit user for verification
+    print "<h1>Verify provided information before submitting request</h1>";
     print "<br>";
     
     if ($_POST['password'] != $_POST['password2']) {
@@ -118,6 +121,11 @@ DATA;
     $fullname = $_POST['fullname'];
     $email = $_POST['email'];
     $password = $_POST['password'];
+    if ( array_key_exists("reset", $_POST) ) {
+        $reset = $_POST['reset'];
+    } else {
+        $reset = "false";
+    }
     
     $data = <<<DATA
         <table>
@@ -125,8 +133,8 @@ DATA;
         <tr><td>Fullname:</td><td>$fullname</td></tr>
         <tr><td>Email:</td><td>$email</td></tr>
         </table><br><hr><br>
-        Verify the above information.  If correct, submit new user request to the system.<br>
-        Verification code and instructions to finish creating user will be sent to<br>
+        Verify the above information.  If correct, submit account request to the system by pressing the "submit" button.<br>
+        Verification code and instructions to finish the process will be sent to<br>
         the email address provided.
         <form action = "." method = "POST">
         <input type="hidden" name="username" value="$username">
@@ -134,6 +142,7 @@ DATA;
         <input type="hidden" name="password" value="$password">
         <input type="hidden" name="email" value="$email">
         <input type="hidden" name="userok" value="yes">
+        <input type="hidden" name="reset" value="$reset">
         <input type="submit" name="submit" value="submit">
         </form>
 DATA;
@@ -179,11 +188,13 @@ DATA;
 } 
 
 ?>
+<h1>Puzzleboss 2000 New Account Registration (or password reset)</h1>
 <form action = "<?php $_PHP_SELF ?>" method = "POST">
 	Username (alphanumeric only, max 10 chars): <input type = "text" name = "username" maxlength="10" required size="15" /><br>
 	Full Name (alpha only Firstname Lastname): <input type = "text" name = "fullname" required /><br>
 	Email (working email address required for verification):  <input type = "text" name = "email" required /><br>
 	Password (8-16 chars): <input type = "password" name="password" required minlength="8" maxlength="16" /><br>
 	Password (repeat): <input type = "password" name="password2" required minlength="8" maxlength="16" /><br>
+	Check box if this is a password reset <input type = "checkbox" id = "reset" name="reset" value="reset"><br>
 	<input type="submit" name="submit" value="Submit">
 </form>
