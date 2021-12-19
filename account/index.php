@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 DATA;
         print "<h2>Submitting new user request to puzzleboss...</h2>";
         print "<br>";
-        $resp =  postapi('/account/', $data);
+        $resp =  postapi('/account', $data);
         $responseobj = json_decode($resp);
         echo '<br>';
         if (!$responseobj){
@@ -147,15 +147,10 @@ DATA;
     print "<h2>Verifying.... code " . $_GET['code'] . "</h2>";
 
     $code = $_GET['code'];
-    $data = <<<DATA
-        {
-            "code": "$code",
-        }
-DATA;
     
     print "<h2>Submitting new user finalization request to puzzleboss...</h2>";
     print "<br>";
-    $resp =  postapi('/finishaccount/', $data);
+    $resp =  readapi('/finishaccount/' . $code);
     $responseobj = json_decode($resp);
     echo '<br>';
     if (!$responseobj){

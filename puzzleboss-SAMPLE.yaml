@@ -2,6 +2,7 @@ APP:
     LOGLEVEL: 3
     BIN_URI: https://your-url.com/puzzleboss
     EMAILRELAY: your-email-server
+    ACCT_URI: https://your-url.com/account
     
 PUZZCORD:
     PUZZCORD_HOST: whateverhostpuzzcordison
