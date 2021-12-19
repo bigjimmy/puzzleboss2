@@ -2,6 +2,8 @@ import yaml
 import inspect
 import datetime
 import bleach
+import smtplib
+from email.message import EmailMessage
 
 with open("puzzleboss.yaml") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
@@ -32,3 +34,40 @@ def sanitize_string(mystring):
     outstring = "".join(e for e in mystring if e.isalnum())
     return outstring
 
+
+def email_user_verification(email, code, fullname, username):
+    debug_log(4, "start for email: %s" % email);
+    
+    messagecontent = """Hello %s!
+                        Someone using this email address has attempted to register or reset an account at
+                        %s
+                        username: %s
+                        name: %s
+                        
+                        If this was you, please follow the link below or type the provided URL 
+                        into a browser to complete account creation or reset process.
+                        
+                        %s/account/index.php?%s
+                        
+                        Thank you.
+                        - Puzzleboss 2000
+                        
+                        (replies to this email will not reach anybody)
+                        """ % (email, config['LDAP']['LDAPO'], username, fullname, config['APP']['BIN_URI'], code)
+    
+    debug_log(4, "Email to be sent: %s" % messagecontent)
+    
+    msg['Subject'] = "Finish your %s account sign-up or reset" % config['LDAP']['LDAPO']
+    msg['From'] = "puzzleboss@%s" % config['GOOGLE']['DOMAINNAME']
+    msg['To'] = email
+    msg.set_content(messagecontent)
+    
+    s = smtplib.SMTP(config['APP']['MAILRELAY'])
+    s.send_message(msg)
+    s.quit()
+    
+    return "OK"
+
+    
+    
+    

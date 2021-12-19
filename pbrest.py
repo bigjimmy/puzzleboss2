@@ -946,10 +946,12 @@ def new_account():
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    debug_log(3, "unverified new user %s added to database with verification code %s" % (username, code))
+    if email_user_verification(email, code, fullname, username) == "OK":
+        debug_log(3, "unverified new user %s added to database with verification code %s. email sent." % (username, code))
+        return {"status": "ok", "code": code}, 200
 
-    return {"status": "ok", "code": code}, 200
-
+    else:
+        return {"error": "some error emailing code to user"}, 500
 
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
 @swag_from("swag/getfinishaccount.yaml", endpoint="get_finish_account", methods=["GET"])
