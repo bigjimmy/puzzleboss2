@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "password": "$password",
             "fullname": "$fullname",
             "email": "$email",
-            "reset": "$reset",
+            "reset": "$reset"
         }
 DATA;
         print "<h2>Submitting new user request to puzzleboss...</h2>";
@@ -190,11 +190,19 @@ DATA;
 ?>
 <h1>Puzzleboss 2000 New Account Registration (or password reset)</h1>
 <form action = "<?php $_PHP_SELF ?>" method = "POST">
-	Username (alphanumeric only, max 10 chars): <input type = "text" name = "username" maxlength="10" required size="15" /><br>
-	Full Name (alpha only Firstname Lastname): <input type = "text" name = "fullname" required /><br>
-	Email (working email address required for verification):  <input type = "text" name = "email" required /><br>
-	Password (8-16 chars): <input type = "password" name="password" required minlength="8" maxlength="16" /><br>
-	Password (repeat): <input type = "password" name="password2" required minlength="8" maxlength="16" /><br>
-	Check box if this is a password reset <input type = "checkbox" id = "reset" name="reset" value="reset"><br>
-	<input type="submit" name="submit" value="Submit">
+<table style = "text-align:right">
+        <tr><td>Username (alphanumeric only, max 10 chars):</td>
+        <td> <input type = "text" name = "username" maxlength="10" required /></td></tr>
+        <tr><td>Full Name (alpha only Firstname Lastname):</td>
+        <td><input type = "text" name = "fullname" required /></td></tr>
+        <tr><td>Email (working email address required for verification):</td>
+        <td><input type = "text" name = "email" required /></td></tr>
+        <tr><td>Password (8-16 chars):</td>
+        <td><input type = "password" name="password" required minlength="8" maxlength="16" /></td></tr>
+        <tr><td>Password (repeat):</td>
+        <td><input type = "password" name="password2" required minlength="8" maxlength="16" /></td></tr>
+        <tr><td>Check box if this is a password reset:</td>
+        <td><input type = "checkbox" id = "reset" name="reset" value="reset"></td></tr>
+</table>
+<input type="submit" name="submit" value="Submit">
 </form>
