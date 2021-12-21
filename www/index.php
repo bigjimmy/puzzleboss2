@@ -1,5 +1,5 @@
 <html><head>
-<meta http-equiv="refresh" content=10>
+<meta http-equiv="refresh" content=30>
 <title>Puzzleboss Interface</title></head></html>
 <body>
 <?php 
