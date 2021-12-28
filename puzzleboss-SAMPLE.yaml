@@ -8,6 +8,7 @@ APP:
 PUZZCORD:
     PUZZCORD_HOST: whateverhostpuzzcordison
     PUZZCORD_PORT: 2134
+    SKIP_PUZZCORD: "false"
 
 GOOGLE:
     HUNT_FOLDER_NAME: "My Hunt Folder 2022"

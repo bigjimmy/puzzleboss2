@@ -871,6 +871,14 @@ def update_puzzle_part(id, part):
             )
             clear_puzzle_solvers(id)
             chat_announce_solved(mypuzzle["puzzle"]["name"])
+    elif part == "comments":
+        update_puzzle_part_in_db(id, part, value)
+        chat_say_something(
+            mypuzzle["puzzle"]["chat_channel_id"],
+            "**ATTENTION** new comment for puzzle %s: %s"
+            % (mypuzzle["puzzle"]["name"], value),
+        )
+
     else:
         errmsg = "Invalid part name %s" % part
         debug_log(2, errmsg)

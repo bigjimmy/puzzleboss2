@@ -16,6 +16,10 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
 
     retval = call_puzzcord("create_json %s %s" % (puzname, topic))
     debug_log(4, "retval from call_puzzcord is %s" % retval)
+    
+    if config['PUZZCORD']['SKIP_PUZZCORD'] == "true":
+        retval = {'id':'0xtestchannelid', 'url':'http://testdiscordurl.com'}
+    
     newchaninfo = json.loads(retval)
     return (newchaninfo['id'], newchaninfo['url'])
 
@@ -49,6 +53,9 @@ def chat_announce_solved(puzzlename):
 
 def call_puzzcord(command):
     debug_log(4, "start, called with (command): %s" % command)
+    if config['PUZZCORD']['SKIP_PUZZCORD'] == "true":
+        return "OK"
+    
     sock = socket.create_connection((config['PUZZCORD']['PUZZCORD_HOST'], config['PUZZCORD']['PUZZCORD_PORT']), timeout=2)
     response = "error"
     # Send command to puzzcord
