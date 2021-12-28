@@ -101,6 +101,7 @@ else {
     echo "<tr><td>O</td><td>Puzzle Being Worked On</td></tr>";
     echo "<tr><td>*</td><td>Solved Puzzle</td></tr>";
     echo "<tr><td>W</td><td>WTF Puzzle</td></tr>";
+    echo "<tr><td>E</td><td>Puzzle Needs Eyes</td></tr>";
     echo "<tr><td>U</td><td>Puzzle Not Needed</td></tr>";
     echo '<tr style="text-decoration:underline overline wavy"><td>&nbsp</td><td>My Current Puzzle</td></tr>';
     
