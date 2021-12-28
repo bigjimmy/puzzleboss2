@@ -79,7 +79,7 @@ else {
             echo '</a></td>';
             echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
             echo '<td><a href="' . $puzzle->drive_uri . '">D</a></td>';
-            echo '<td><a href="' . $puzzle->chat_channel_link  . '">C</a><td>';
+            echo '<td><a href="' . $puzzle->chat_channel_link  . '">C</a></td>';
             echo '<td style="font-family:monospace;font-style:bold">' . $puzzle->answer .'</td>';
             echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">+</a></td>';
 
