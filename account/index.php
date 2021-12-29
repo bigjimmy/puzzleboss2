@@ -191,16 +191,16 @@ DATA;
 <h1>Puzzleboss 2000 New Account Registration (or password reset)</h1>
 <form action = "<?php $_PHP_SELF ?>" method = "POST">
 <table style = "text-align:right">
-        <tr><td>Username (alphanumeric only, max 10 chars):</td>
-        <td> <input type = "text" name = "username" maxlength="10" required /></td></tr>
+        <tr><td>Username (alphanumeric only, max 20 chars):</td>
+        <td> <input type = "text" name = "username" maxlength="20" required /></td></tr>
         <tr><td>Full Name (alpha only Firstname Lastname):</td>
         <td><input type = "text" name = "fullname" required /></td></tr>
         <tr><td>Email (working email address required for verification):</td>
         <td><input type = "text" name = "email" required /></td></tr>
-        <tr><td>Password (8-16 chars):</td>
-        <td><input type = "password" name="password" required minlength="8" maxlength="16" /></td></tr>
+        <tr><td>Password (8-24 chars):</td>
+        <td><input type = "password" name="password" required minlength="8" maxlength="24" /></td></tr>
         <tr><td>Password (repeat):</td>
-        <td><input type = "password" name="password2" required minlength="8" maxlength="16" /></td></tr>
+        <td><input type = "password" name="password2" required minlength="8" maxlength="24" /></td></tr>
         <tr><td>Check box if this is a password reset:</td>
         <td><input type = "checkbox" id = "reset" name="reset" value="reset"></td></tr>
 </table>
