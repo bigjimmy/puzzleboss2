@@ -46,8 +46,13 @@
 - Swagger API Doc:
     - Is accessible at localhost:5000/apidocs (or appropriate proxied URL if behind a proxy) by just running pbapi.py.
     - NOTE: if behind a proxy (e.g. in production), "try it out" functionality of swagger will not work
-    
-Note: For development/testing, if running frontend without REMOTE_USER setting, it will still work using secret GET params and/or the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php.  
+
+## Development/Testing Notes:
+- For running php frontend without REMOTE_USER setting, Use secret GET params (assumeduser) and the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php.
+
+- For running without a working puzzcord (discord bot) set the `SKIP_PUZZCORD` config variable to `"true"` in puzzleboss.yaml.
+
+- For running without a google drive, set the `SKIP_GOOGLE_API` config variable to `"true"` in puzzleboss.yaml.
     
 
 
