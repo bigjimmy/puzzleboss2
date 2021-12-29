@@ -124,12 +124,13 @@ if (isset( $_GET['submit'] ) ) {
     }
     
     if (isset($_GET['ismeta'])){
-        $whatdo = "ismeta";
+        if ($_GET['ismeta'] == "yes"){
+            $whatdo = "ismeta";
+        } else {
+            $whatdo = "isnotmeta";
+        }
     }
     
-    if (isset($_GET['isnotmeta'])){
-        $whatdo = "isnotmeta";
-    }
     
     if (isset($_GET['partupdate'])){
         $whatdo = "partupdate";
@@ -181,18 +182,25 @@ $userobj = json_decode(readapi('/solvers/' . $userid));
 $puzzleobj = json_decode(readapi('/puzzles/' . $puzzid));
 $puzname = $puzzleobj->puzzle->name;
 $username = $userobj->solver->name;
-echo 'You Are: ' . $username;
-echo '<br><br><table border=2><tr>';
-echo '<td><b>Puzzle Name</b></td><td>' . $puzname . '</td></tr>';
-echo '<td><b>Round</b></td><td>' . $puzzleobj->puzzle->roundname . '</td></tr>';
-echo '<td><b>Status</b></td><td>' . $puzzleobj->puzzle->status . '</td></tr>';
-echo '<td><b>Answer</b></td><td>' . $puzzleobj->puzzle->answer . '</td></tr>';
-echo '<td><b>Location</b></td><td>' . $puzzleobj->puzzle->xyzloc . '</td></tr>';
-echo '<td><b>Cur. Solvers</b></td><td>' . $puzzleobj->puzzle->cursolvers . '</td></tr>';
-echo '<td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td><tr>';
-echo '<td><b>Comments</b></td><td>' . $puzzleobj->puzzle->comments . '</td><tr>';
-echo '</table>';
 $roundmeta = json_decode(readapi('/rounds/' . $puzzleobj->puzzle->round_id . '/meta_id'))->round->meta_id;
+
+echo 'You Are: ' . $username;
+echo '<br><br><table border=2>';
+echo '<tr><td><b>Puzzle Name</b></td><td>' . $puzname . '</td></tr>';
+echo '<tr><td><b>Round</b></td><td>' . $puzzleobj->puzzle->roundname . '</td></tr>';
+echo '<tr><td><b>Status</b></td><td>' . $puzzleobj->puzzle->status . '</td></tr>';
+echo '<tr><td><b>Answer</b></td><td>' . $puzzleobj->puzzle->answer . '</td></tr>';
+echo '<tr><td><b>Location</b></td><td>' . $puzzleobj->puzzle->xyzloc . '</td></tr>';
+echo '<tr><td><b>Cur. Solvers</b></td><td>' . $puzzleobj->puzzle->cursolvers . '</td></tr>';
+echo '<tr><td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td></tr>';
+echo '<tr><td><b>Comments</b></td><td>' . $puzzleobj->puzzle->comments . '</td></tr>';
+echo '<tr><td><b>Meta For Round</b></td><td>';
+if ($roundmeta == $puzzid){
+    echo "yes";
+} else {
+    echo "no";
+}
+echo '</td></tr></table>';
 
 //Solver Assignment
 if ($userobj->solver->puzz != $puzname){
@@ -270,29 +278,23 @@ echo '</option>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
+//Meta Assignment
+echo '<tr><td>Meta For Round</td><td><form action="editpuzzle.php" method="get">';
+echo '<select id="ismeta" name="ismeta"/>';
+if ($roundmeta != $puzzid){
+    echo '<option selected value="no">No</option>';
+    echo '<option value="yes">Yes</option>';
+} else {
+    echo '<option selected value="yes">Yes</option>';
+    echo '<option value="no">No</option>';
+}
+echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+echo '<input type="hidden" name="uid" value="' . $userid . '">';
+echo '<input type="hidden" name="rid" value="' . $puzzleobj->puzzle->round_id . '"></td>';
+echo '<td><input type="submit" name="submit" value="submit"></td>';
+echo '</form>';
 
 echo '</table>';
-//Meta Assignment
-if ($roundmeta != $puzzid){
-    echo '<br>This is not the meta for round ' . $puzzleobj->puzzle->roundname . '.  Should it be?';
-    echo '<form action="editpuzzle.php" method="get">';
-    echo '<input type="hidden" name="ismeta" value="yes">';
-    echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
-    echo '<input type="hidden" name="uid" value="' . $userid . '">';
-    echo '<input type="hidden" name="rid" value="' . $puzzleobj->puzzle->round_id . '">';
-    echo '<input type="submit" name="submit" value="yes">';
-    echo '</form>';
-    
-} else {
-    echo '<br>This is the meta for round ' . $puzzleobj->puzzle->roundname . '. Would you like it to not be?';
-    echo '<form action="editpuzzle.php" method="get">';
-    echo '<input type="hidden" name="isnotmeta" value="yes">';
-    echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
-    echo '<input type="hidden" name="uid" value="' . $userid . '">';
-    echo '<input type="hidden" name="rid" value="' . $puzzleobj->puzzle->round_id . '">';
-    echo '<input type="submit" name="submit" value="yes">';
-    echo '</form>';
-}
 
 
 
