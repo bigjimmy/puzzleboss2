@@ -859,7 +859,7 @@ def update_puzzle_part(id, part):
         )
 
     elif part == "answer":
-        if data != "":
+        if data != "" and data != None:
             # Mark puzzle as solved automatically when answer is filled in
             update_puzzle_part_in_db(id, "status", "Solved")
             value = value.upper()
@@ -871,6 +871,9 @@ def update_puzzle_part(id, part):
             )
             clear_puzzle_solvers(id)
             chat_announce_solved(mypuzzle["puzzle"]["name"])
+           
+        
+        
     elif part == "comments":
         update_puzzle_part_in_db(id, part, value)
         chat_say_something(

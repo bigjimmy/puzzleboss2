@@ -232,7 +232,7 @@ echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
 echo '<input type="hidden" name="part" value="answer">';
-echo '<input type="text" name="value" value="' . $puzzleobj->puzzle->answer . '"></td>';
+echo '<input type="text" required minlength="1" name="value" value="' . $puzzleobj->puzzle->answer . '"></td>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
@@ -244,7 +244,7 @@ echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
 echo '<input type="hidden" name="part" value="xyzloc">';
-echo '<input type="text" name="value" value="' . $puzzleobj->puzzle->xyzloc . '"></td>';
+echo '<input type="text" required minlength="1" name="value" value="' . $puzzleobj->puzzle->xyzloc . '"></td>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
@@ -255,7 +255,7 @@ echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
 echo '<input type="hidden" name="part" value="comments">';
-echo '<input type="text" name="value" value="' . $puzzleobj->puzzle->comments . '"></td>';
+echo '<input type="text" required minlength="1" name="value" value="' . $puzzleobj->puzzle->comments . '"></td>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
