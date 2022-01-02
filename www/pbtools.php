@@ -1,41 +1,59 @@
-<html><head><title>Puzzleboss-only Tools</title></head>
-<body>
-<?php 
+<?php
 
-require('puzzlebosslib.php');
-echo "<h1>Puzzleboss-only Admin Tools</h1>";
-
-echo "<hr><h3>New Puzzle Bookmarklet</h3>";
-$bookmarkuri = "javascript:location.href='". $newpuzzleuri . "?puzzurl=%27+encodeURIComponent(location.href)+%27&puzzid=%27+encodeURIComponent(document.title)";
-echo "<table border='2' cellpadding='3'><tr>";    
-echo "<td>For a bookmark for adding a new puzzle (while on a puzzle page), drag this link to your bookmarks:</td>";
-echo '<td><a href="' . $bookmarkuri . '">Puzzleboss New Puzzle</a></td></tr>';
-echo "<tr><td>Or alternatively, copy the following into a new bookmark:</td>";
-echo "<td><CODE>" . $bookmarkuri . "</CODE></td></tr>";
-echo "</table><br>";
-
-echo "<hr><h3>Solver Assignment</h3><br>";
-echo "<table border='2' cellpadding='3'><tr>";
-echo "<td>To manually edit a solver's current puzzle assignment (enter username):</td>";
-echo '<td valign="middle"><form action="editsolver.php" method="get">';
-echo '<input type="text" name="assumedid">';
-echo '<input type="submit" name="ok" value="Edit Solver">';
-echo '</form></td></tr></table>';
-
-echo "<hr><h3>Add New Round</h3><br>";
-echo "<table border='2' cellpadding='3'><tr>";
-echo "<td>To add a new round (enter round name):</td>";
-echo '<td valign="middle"><form action="addround.php" method="get">';
-echo '<input type="text" name="name">';
-echo '<input type="submit" name="submit" value="Add Round">';
-echo '</form></td></tr></table>';
-
-
+$bookmarkuri = 'javascript:location.href=`' .
+  'https://wind-up-birds.org/pb/addpuzzle.php '.
+  '?puzzurl=${encodeURIComponent(location.href)}' .
+  '&puzzid=${encodeURIComponent(document.title)}`';
 
 ?>
+<!doctype html>
+<html>
+<head><title>Puzzleboss-only Tools</title></head>
+<body>
 
+<h1>Puzzleboss-only Admin Tools</h1>
 
+<hr>
+<h3>New Puzzle Bookmarklet</h3>
+<table border="2" cellpadding="3">
+  <tr>
+    <td>For a bookmark for adding a new puzzle (while on a puzzle page), drag this link to your bookmarks:</td>
+    <td><a href="<?= $bookmarkuri ?>">Puzzleboss New Puzzle</a></td>
+  </tr>
+  <tr>
+    <td>Or alternatively, copy the following into a new bookmark:</td>
+    <td><code><?= $bookmarkuri ?></code></td>
+  </tr>
+</table>
+<br>
 
+<hr>
+<h3>Solver Assignment</h3><br>
+<table border="2" cellpadding="3">
+  <tr>
+    <td>To manually edit a solver's current puzzle assignment (enter username):</td>
+    <td valign="middle">
+      <form action="editsolver.php" method="get">
+        <input type="text" name="assumedid">
+        <input type="submit" name="ok" value="Edit Solver">
+      </form>
+    </td>
+  </tr>
+</table>
+
+<hr>
+<h3>Add New Round</h3><br>
+<table border="2" cellpadding="3">
+  <tr>
+    <td>To add a new round (enter round name):</td>
+    <td valign="middle">
+      <form action="addround.php" method="get">
+        <input type="text" name="name">
+        <input type="submit" name="submit" value="Add Round">
+      </form>
+    </td>
+  </tr>
+</table>
 
 </body>
 </html>
