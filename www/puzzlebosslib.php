@@ -40,15 +40,13 @@ function postapi($apicall, $data) {
 }
 
 function getuid($username) {
-    $resp = readapi('/solvers');
-    $uid = 0;
-    $userlist = $resp->solvers;
+    $userlist = readapi('/solvers')->solvers;
     foreach ($userlist as $user) {
         if ($user->name == $username) {
-            $uid = $user->id;
+            return $user->id;
         }
     }
-    return($uid);
+    return 0;
 }
 
 function getauthenticateduser() {
@@ -72,11 +70,9 @@ function getauthenticateduser() {
     }
     $uid = getuid($username);
     if ($uid==0) {
-        echo '<br>No solver found for user ' . $username . '. Check Solvers Database<br>';
-        echo '</body></html>';
-        exit (2);
-        
+        http_response_code(403);
+        die("No solver found for user $username. Check Solvers Database");
     }
-    return($uid);
+    return $uid;
 }
 ?>
