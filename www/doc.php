@@ -8,7 +8,7 @@ if (!isset($_GET['pname']) || empty($_GET['pname'])) {
 
 $name = $_GET['pname'];
 
-$puzzles = json_decode(readapi('/puzzles'));
+$puzzles = readapi('/puzzles');
 if (!$puzzles) {
     http_response_code(500);
     die('Error: api fetch of puzzle catalog failed!');
@@ -26,7 +26,7 @@ if (!$puzzle_id) {
     die('Error: api search for puzzle in catalog failed!');
 }
 
-$drive_uri = json_decode(readapi("/puzzles/$puzzle_id/drive_uri"))
+$drive_uri = readapi("/puzzles/$puzzle_id/drive_uri")
     ->puzzle
     ->drive_uri;
 

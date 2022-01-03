@@ -16,15 +16,14 @@ if (isset($_GET['submit'])) {
     
     
     $apiurl = "/puzzles";
-    $data = json_encode(array(
+    $data = array(
         'name' => $name,
         'round_id' => $round_id,
         'puzzle_uri' => $puzzle_uri,
-    ));
+    );
     
     echo "<br> Submitting API request to add puzzle.  May take a few seconds.<br>";
-    $resp = postapi($apiurl, $data);
-    $responseobj = json_decode($resp);
+    $responseobj = postapi($apiurl, $data);
     
     echo '<br>';
     if (is_string($responseobj)){
@@ -37,7 +36,7 @@ if (isset($_GET['submit'])) {
                 echo 'OK.  Puzzle created with ID of ' . $responseobj->puzzle->id;
             }
             else {
-                echo 'ERROR: Response from API is ' . var_dump($resp);
+                echo 'ERROR: Response from API is ' . var_dump($responseobj);
             }
         }
         if ($key == "error") {
@@ -56,8 +55,7 @@ if (isset($_GET['puzzid'])) {
     $puzzid = $_GET['puzzid'];
 }
 
-$resp = readapi("/rounds");
-$rounds = json_decode($resp)->rounds;
+$rounds = readapi("/rounds")->rounds;
 ?>
 
 Add a puzzle!

@@ -19,7 +19,7 @@ function readapi($apicall) {
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
     $resp = curl_exec($curl);
     curl_close($curl);
-    return ($resp);
+    return json_decode($resp);
 }
 
 function postapi($apicall, $data) {
@@ -34,47 +34,38 @@ function postapi($apicall, $data) {
     );
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
     
-    curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+    curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
     $resp = curl_exec($curl);
     curl_close($curl);
-    return ($resp);
+    return json_decode($resp);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ( array_key_exists("userok", $_POST) ) {
-    // user says it's ok let's get the code and display it
-        $username = $_POST['username'];
-        $fullname = $_POST['fullname'];
-        $email = $_POST['email'];
-        $password = $_POST['password'];
-        $reset = $_POST['reset'];
-        
-        $data = <<<DATA
-        {
-            "username": "$username",
-            "password": "$password",
-            "fullname": "$fullname",
-            "email": "$email",
-            "reset": "$reset"
-        }
-DATA;
+        // user says it's ok let's get the code and display it
+        $data = array(
+            'username' => $_POST['username'],
+            'password' => $_POST['password'],
+            'fullname' => $_POST['fullname'],
+            'email' => $_POST['email'],
+            'reset' => $_POST['reset'],
+        );
         print "<h2>Submitting new user request to puzzleboss...</h2>";
         print "<br>";
-        $resp =  postapi('/account', $data);
-        $responseobj = json_decode($resp);
+        $responseobj =  postapi('/account', $data);
         echo '<br>';
         if (!$responseobj){
-            echo 'ERROR: Response from API is: <br><br>' . $resp;
+            echo 'ERROR: Response from API is: <br><br>' . var_dump($responseobj);
             echo '</body></html>';
             exit(1);
         }
         foreach($responseobj as $key => $value){
             if ($key == "status") {
-                if ($responseobj -> status == "ok") {
+                if ($responseobj->status == "ok") {
                     echo 'OK.  Check your email from puzzleboss for further instructions.';
                 }
                 else {
-                    echo 'ERROR: Response from API is ' . var_dump($resp);
+                    echo 'ERROR: Response from API is ' . var_dump($responseobj);
                 }
             }
             if ($key == "error") {
@@ -159,11 +150,10 @@ DATA;
     
     print "<h2>Submitting new user finalization request to puzzleboss...</h2>";
     print "<br>";
-    $resp =  readapi('/finishaccount/' . $code);
-    $responseobj = json_decode($resp);
+    $responseobj = readapi('/finishaccount/' . $code);
     echo '<br>';
     if (!$responseobj){
-        echo 'ERROR: Response from API is: <br><br>' . $resp;
+        echo 'ERROR: Response from API is: <br><br>' . var_dump($responseobj);
         echo '</body></html>';
         exit(1);
     }
@@ -173,7 +163,7 @@ DATA;
                 echo 'OK.  User has been created.  All hunt tools accessible.';
             }
             else {
-                echo 'ERROR: Response from API is ' . var_dump($resp);
+                echo 'ERROR: Response from API is ' . var_dump($responseobj);
             }
         }
         if ($key == "error") {

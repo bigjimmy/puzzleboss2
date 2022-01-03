@@ -5,9 +5,7 @@
 <?php 
 require('puzzlebosslib.php');
 
-$url = "/rounds";
-$resp = readapi($url);
-$rounds = json_decode($resp)->rounds;
+$rounds = readapi('/rounds')->rounds;
 $totrounds = 0;
 $solvedrounds = 0;
 $unsolvedrounds = 0;
@@ -26,13 +24,13 @@ $workonarray = [];
 
 foreach($rounds as $round){
     $totrounds += 1;
-    $puzzlesresp = json_decode(readapi("/rounds/" . $round->id . "/puzzles"));
-    $metapuzzle = json_decode(readapi("/rounds/" . $round->id . "/meta_id"))->round->meta_id;
+    $puzzlesresp = readapi("/rounds/" . $round->id . "/puzzles");
+    $metapuzzle = readapi("/rounds/" . $round->id . "/meta_id")->round->meta_id;
     $puzzlearray = $puzzlesresp->round->puzzles;
     
     // Is round solved?
     if (isset($metapuzzle)){
-        $metapuzzlestatus = json_decode(readapi("/puzzles/" . $metapuzzle))->puzzle->status;
+        $metapuzzlestatus = readapi("/puzzles/" . $metapuzzle)->puzzle->status;
         if ($metapuzzlestatus == "Solved"){
             $solvedrounds += 1;
         } else {

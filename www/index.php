@@ -11,15 +11,13 @@ if (isset( $_GET['submit'] ) ) {
 else {
     // Check for authenticated user
     $uid = getauthenticateduser();
-    $solverobj = json_decode(readapi('/solvers/' . $uid))->solver;
+    $solverobj = readapi('/solvers/' . $uid)->solver;
     $username = $solverobj->name;
     echo "You are: " . $username . "<br>";
            
-    $mypuzzle = json_decode(readapi('/solvers/' . $uid . '/puzz'))->solver->puzz;
-    
-    $url = "/all";
-    $resp = readapi($url);
-    $fullhunt = json_decode($resp)->rounds;
+    $mypuzzle = readapi('/solvers/' . $uid . '/puzz')->solver->puzz;
+
+    $fullhunt = readapi('/all')->rounds;
     
     echo '<table border=4 style="vertical-align:top" ><tr>';
     foreach($fullhunt as $round){

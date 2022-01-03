@@ -18,7 +18,7 @@ function readapi($apicall) {
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
     $resp = curl_exec($curl);
     curl_close($curl);
-    return ($resp);
+    return json_decode($resp);
 }
 
 function postapi($apicall, $data) {
@@ -33,16 +33,16 @@ function postapi($apicall, $data) {
     );
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
     
-    curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+    curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
     $resp = curl_exec($curl);
     curl_close($curl);
-    return ($resp);
+    return json_decode($resp);
 }
 
 function getuid($username) {
     $resp = readapi('/solvers');
     $uid = 0;
-    $userlist = json_decode($resp)->solvers;
+    $userlist = $resp->solvers;
     foreach ($userlist as $user) {
         if ($user->name == $username) {
             $uid = $user->id;
