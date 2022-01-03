@@ -64,7 +64,7 @@ Name:<input type="text" name="name" required value="<?= $puzzid ?>" />
 <br>
 
 Round:<select id="round_id" name="round_id"/>
-<?
+<?php
 foreach ($rounds as $round) {
     echo '<option value="' . $round->id . '">' . $round->name . '</option>';
 }
