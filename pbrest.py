@@ -31,6 +31,49 @@ def get_all_all():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                a.id AS actid,
+                a.time AS timestamp,
+                a.puzzle_id,
+                a.solver_id,
+                a.source,
+                a.type
+            FROM activity a
+            INNER JOIN (
+                SELECT
+                    puzzle_id,
+                    MAX(time) AS time
+                FROM activity
+                WHERE puzzle_id IS NOT NULL
+                GROUP BY puzzle_id
+            ) latest
+            ON
+                a.puzzle_id = latest.puzzle_id
+                AND a.time = latest.time
+            ORDER BY a.puzzle_id, a.id
+        """)
+        activity = cursor.fetchall()
+    except:
+        errmsg = "Exception in querying activity"
+        debug_log(0, errmsg)
+        return {"error": errmsg}, 500
+
+    last_activity_for_puzzles = {}
+    for row in activity:
+        last_activity = {
+            "actid" : row[0],
+            "timestamp" : row[1],
+            "solver_id" : row[2],
+            "puzzle_id" : row[3],
+            "source" : row[4],
+            "type" : row[5],
+        }
+        last_activity_for_puzzles[last_activity["puzzle_id"]] = last_activity
+
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
         cursor.execute("""SELECT * from puzzle_view""")
         puzzle_view = cursor.fetchall()
     except:
@@ -58,7 +101,7 @@ def get_all_all():
             "solvers": row[14],
             "cursolvers": row[15],
             "xyzloc": row[16],
-            "lastact": get_last_activity_for_puzzle(row[0]),
+            "lastact": last_activity_for_puzzles.get(row[0]),
         }
         all_puzzles[puzzle["id"]] = puzzle
 
