@@ -11,7 +11,7 @@ $uid = getauthenticateduser();
 $solver = readapi("/solvers/$uid")->solver;
 $fullhunt = readapi('/all')->rounds;
 
-if (isset($_GET('data'))) {
+if (isset($_GET['data'])) {
     header('Content-Type: application/json; charset=utf-8');
     die(json_encode(array(
         'solver' => $solver,
