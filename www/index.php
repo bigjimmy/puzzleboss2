@@ -32,14 +32,14 @@ $mypuzzle = $solver->puzz;
 You are: <?= $username ?><br>
 <table border=4 style="vertical-align:top;">
     <tr>
-<?
+<?php
 foreach ($fullhunt as $round) {
     echo '<th>' . $round->name . '</th>';
 }
 ?>
     </tr>
     <tr style="vertical-align:top">
-<?
+<?php
 foreach ($fullhunt as $round) {
     echo '<td>';
     $puzzlearray = $round->puzzles;
