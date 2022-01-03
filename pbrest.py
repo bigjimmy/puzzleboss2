@@ -27,14 +27,80 @@ swagger = flasgger.Swagger(app)
 @app.route("/all", endpoint="all", methods=["GET"])
 #@swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
 def get_all_all():
-    puzzlestruct = []
     debug_log(4, "start")
-    rounds = get_all_rounds()[0]
-    for round in rounds['rounds']:
-        puzzlestruct.append(get_one_round(round['id'])[0]['round'])
-    
-    return {"rounds" : puzzlestruct}, 200
-        
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("""SELECT * from puzzle_view""")
+        puzzle_view = cursor.fetchall()
+    except:
+        errmsg = "Exception in querying puzzle_view"
+        debug_log(0, errmsg)
+        return {"error": errmsg}, 500
+
+    all_puzzles = {}
+    for row in puzzle_view:
+        puzzle = {
+            "id": row[0],
+            "name": row[1],
+            "drive_link": row[2],
+            "status": row[3],
+            "answer": row[4],
+            "roundname": row[5],
+            "round_id": row[6],
+            "comments": row[7],
+            "drive_uri": row[8],
+            "chat_channel_name": row[9],
+            "chat_channel_id": row[10],
+            "chat_channel_link": row[11],
+            "drive_id": row[12],
+            "puzzle_uri": row[13],
+            "solvers": row[14],
+            "cursolvers": row[15],
+            "xyzloc": row[16],
+            "lastact": get_last_activity_for_puzzle(row[0]),
+        }
+        all_puzzles[puzzle["id"]] = puzzle
+
+
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("""SELECT * from round_view""")
+        round_view = cursor.fetchall()
+    except:
+        errmsg = "Exception in querying round_view"
+        debug_log(0, errmsg)
+        return {"error": errmsg}, 500
+
+
+    def is_int(val):
+        try:
+            int(val)
+            return True
+        except:
+            return False
+
+
+    rounds = []
+    for row in round_view:
+        round_puzzles = [
+            all_puzzles[int(id)]
+            for id in row[6].split(',')
+            if is_int(id) and int(id) in all_puzzles
+        ]
+        round = {
+            "id": row[0],
+            "name": row[1],
+            "round_uri": row[2],
+            "drive_uri": row[3],
+            "drive_id": row[4],
+            "meta_id": row[5],
+            "puzzles": round_puzzles,
+        }
+        rounds.append(round)
+
+    return {"rounds": rounds}, 200
     
     
 @app.route("/puzzles", endpoint="puzzles", methods=["GET"])
