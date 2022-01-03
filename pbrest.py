@@ -24,6 +24,19 @@ swagger = flasgger.Swagger(app)
 
 # GET/READ Operations
 
+@app.route("/all", endpoint="all", methods=["GET"])
+#@swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
+def get_all_all():
+    puzzlestruct = []
+    debug_log(4, "start")
+    rounds = get_all_rounds()[0]
+    for round in rounds['rounds']:
+        puzzlestruct.append(get_one_round(round['id'])[0]['round'])
+    
+    return {"rounds" : puzzlestruct}, 200
+        
+    
+    
 @app.route("/puzzles", endpoint="puzzles", methods=["GET"])
 @swag_from("swag/getpuzzles.yaml", endpoint="puzzles", methods=["GET"])
 def get_all_puzzles():

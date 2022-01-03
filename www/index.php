@@ -16,19 +16,20 @@ else {
     echo "You are: " . $username . "<br>";
            
     $mypuzzle = json_decode(readapi('/solvers/' . $uid . '/puzz'))->solver->puzz;
-    $url = "/rounds";
+    
+    $url = "/all";
     $resp = readapi($url);
-    $rounds = json_decode($resp)->rounds;
+    $fullhunt = json_decode($resp)->rounds;
+    
     echo '<table border=4 style="vertical-align:top" ><tr>';
-    foreach($rounds as $round){
+    foreach($fullhunt as $round){
         echo '<th>' . $round->name . "</th>";
     }
     echo '</tr><tr style="vertical-align:top" >';
-    foreach($rounds as $round){
+    foreach($fullhunt as $round){
         echo '<td>';
-        $puzzlesresp = json_decode(readapi("/rounds/" . $round->id . "/puzzles"));
-        $metapuzzle = json_decode(readapi("/rounds/" . $round->id . "/meta_id"))->round->meta_id;
-        $puzzlearray = $puzzlesresp->round->puzzles;
+        $puzzlearray = $round->puzzles;
+        $metapuzzle = $round->meta_id;
         
         echo '<table>';
         foreach($puzzlearray as $puzzle) {
