@@ -1,43 +1,47 @@
-<html>
-<head>
-
-<title>Redirect to puzzle doc</title>
 <?php
-
 require('puzzlebosslib.php');
 
-$name = "";
-$puzzleid = "";
-if (isset( $_GET['pname'] ) ) {
-    $name = $_GET['pname'];
-    $apiurl = "/puzzles";
-    $resp = readapi($apiurl);
-    if (!$resp){
-        echo '</head>';
-        echo '<body><br>Error: api fetch of puzzle catalog failed!</br>';
-        echo '</body></html>';
-        exit (2);
-    }
-    foreach (json_decode($resp)->puzzles as $puzzle) {
-        if ($puzzle->name == $name)
-            $puzzleid = $puzzle->id;
-    }
-    if ($puzzleid == "") {
-        echo '</head>';
-        echo '<body><br>Error: api search for puzzle in catalog failed!</br>';
-        echo '</body></html>';
-        exit (2);
-    }
-    $drive_uri = json_decode(readapi("/puzzles/" . $puzzleid . "/drive_uri"))->puzzle->drive_uri;
-    echo '<meta http-equiv="refresh" content="0;URL=' . $drive_uri . '">';
+if (!isset($_GET['pname']) || empty($_GET['pname'])) {
+    http_response_code(500);
+    die('Error: No puzzlename parameter (pname) specified.');
 }
 
-else {
-    echo '</head><body><br>Error: No puzzlename parameter (pname) specified.<br>';
-    echo '</body></html>';
-    exit (2);
+$name = $_GET['pname'];
+
+$puzzles = readapi('/puzzles');
+if (!$puzzles) {
+    http_response_code(500);
+    die('Error: api fetch of puzzle catalog failed!');
 }
-echo "</head><body><br>Redirecting to doc sheet for puzzle" . $name . " id " . $puzzleid . "<br>";
+
+$puzzle_id = null;
+foreach ($puzzles->puzzles as $puzzle) {
+    if ($puzzle->name === $name) {
+        $puzzle_id = $puzzle->id;
+        break;
+    }
+}
+if (!$puzzle_id) {
+    http_response_code(500);
+    die('Error: api search for puzzle in catalog failed!');
+}
+
+$drive_uri = readapi("/puzzles/$puzzle_id/drive_uri")
+    ->puzzle
+    ->drive_uri;
+
+if (!$drive_uri) {
+    http_response_code(500);
+    die("Missing drive_uri for puzzle $puzzle_id!");
+}
+
+header("Location: $drive_uri");
 ?>
+<html>
+<head>
+<title>Redirect to puzzle doc</title>
+</head>
+<body>
+Click <a href="<?= $drive_uri ?>">here</a> to doc sheet for puzzle <?= $name ?>
 </body>
 </html>

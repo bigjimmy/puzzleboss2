@@ -27,14 +27,8 @@ if (isset( $_GET['submit'] ) ) {
     
     
     $api = "/solvers/" . $id . "/puzz";
-    $data = <<<DATA
-{
-  "puzz": "$puzz"
-}
-DATA;
-    
-    $resp = postapi($api, $data);
-    $responseobj = json_decode($resp);
+    $data = array('puzz' => $puzz);
+    $responseobj = postapi($api, $data);
     echo '<br>';
     foreach($responseobj as $key => $value){
         if ($key == "status") {
@@ -42,7 +36,7 @@ DATA;
                 echo 'OK.  Solver reassigned.';
             }
             else {
-                echo 'ERROR: Response from API is ' . var_dump($resp);
+                echo 'ERROR: Response from API is ' . var_dump($responseobj);
             }
         }
         if ($key == "error") {
@@ -51,11 +45,7 @@ DATA;
     }   
 }
 else {
-        
-    $url = "/solvers";
-    $resp = readapi($url);
-    
-    $solvers = json_decode($resp)->solvers;
+    $solvers = readapi('/solvers')->solvers;
     $id = "";
     $username = "";
     
@@ -87,10 +77,8 @@ else {
     
     echo "changing solver settings for username: " . $username . " user-id: " . $id . "<br>";
     echo "What puzzle is this user working on?<br>";
-    
-    $url = "/rounds";
-    $resp = readapi($url);
-    $rounds = json_decode($resp)->rounds;
+
+    $rounds = readapi('/rounds')->rounds;
     echo '<form action="editsolver.php" method="get">';
     echo '<table border=4 style="vertical-align:top" ><tr>';
     foreach($rounds as $round){
@@ -99,7 +87,7 @@ else {
     echo '</tr><tr style="vertical-align:top" >';
     foreach($rounds as $round){
         echo '<td>';
-        $puzzlesresp = json_decode(readapi("/rounds/" . $round->id . "/puzzles"));
+        $puzzlesresp = readapi("/rounds/" . $round->id . "/puzzles");
         $puzzlearray = $puzzlesresp->round->puzzles;
         
         echo '<table>';

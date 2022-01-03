@@ -12,14 +12,9 @@ require('puzzlebosslib.php');
 
 function startuseronpuzzle($id, $puzz) {
     $api = "/solvers/" . $id . "/puzz";
-    $data = <<<DATA
-        {
-            "puzz": "$puzz"
-        }
-DATA;
+    $data = array('puzz' => $puzz);
     
-    $resp = postapi($api, $data);
-    $responseobj = json_decode($resp);
+    $responseobj = postapi($api, $data);
     echo '<br>';
     foreach($responseobj as $key => $value){
         echo "<br><br>";
@@ -28,7 +23,7 @@ DATA;
                 echo 'OK.  Solver reassigned.';
             }
             else {
-                echo 'ERROR: Response from API is ' . var_dump($resp);
+                echo 'ERROR: Response from API is ' . var_dump($responseobj);
             }
                 
         }
@@ -40,14 +35,8 @@ DATA;
 
 function updatepuzzlepart($id, $part, $value) {
     $api = "/puzzles/" . $id . "/" . $part;
-    $data = <<<DATA
-        {
-            "$part": "$value"
-        }
-DATA;
-    
-    $resp = postapi($api, $data);
-    $responseobj = json_decode($resp);
+    $data = array($part => $value);
+    $responseobj = postapi($api, $data);
     echo '<br>';
     foreach($responseobj as $key => $value){
         echo "<br><br>";
@@ -56,7 +45,7 @@ DATA;
                 echo 'OK.  Puzzle Part Updated.';
             }
             else {
-                echo 'ERROR: Response from API is ' . var_dump($resp);
+                echo 'ERROR: Response from API is ' . var_dump($responseobj);
             }
             
         }
@@ -68,14 +57,8 @@ DATA;
 
 function updateroundpart($id, $part, $value) {
     $api = "/rounds/" . $id . "/" . $part;
-    $data = <<<DATA
-        {
-            "$part": "$value"
-        }
-DATA;
-    
-    $resp = postapi($api, $data);
-    $responseobj = json_decode($resp);
+    $data = array($part => $value);
+    $responseobj = postapi($api, $data);
     echo '<br>';
     foreach($responseobj as $key => $value){
         echo "<br><br>";
@@ -84,7 +67,7 @@ DATA;
                 echo 'OK.  Round Part Updated.';
             }
             else {
-                echo 'ERROR: Response from API is ' . var_dump($resp);
+                echo 'ERROR: Response from API is ' . var_dump($responseobj);
             }
             
         }
@@ -178,11 +161,11 @@ $puzzid = $_GET['pid'];
 // Check for authenticated user
 $userid = getauthenticateduser();
 
-$userobj = json_decode(readapi('/solvers/' . $userid));
-$puzzleobj = json_decode(readapi('/puzzles/' . $puzzid));
+$userobj = readapi('/solvers/' . $userid);
+$puzzleobj = readapi('/puzzles/' . $puzzid);
 $puzname = $puzzleobj->puzzle->name;
 $username = $userobj->solver->name;
-$roundmeta = json_decode(readapi('/rounds/' . $puzzleobj->puzzle->round_id . '/meta_id'))->round->meta_id;
+$roundmeta = readapi('/rounds/' . $puzzleobj->puzzle->round_id . '/meta_id')->round->meta_id;
 
 echo 'You Are: ' . $username;
 echo '<br><br><table border=2>';
