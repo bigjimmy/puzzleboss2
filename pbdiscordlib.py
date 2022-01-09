@@ -18,7 +18,8 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
     debug_log(4, "retval from call_puzzcord is %s" % retval)
     
     if config['PUZZCORD']['SKIP_PUZZCORD'] == "true":
-        retval = {'id':'0xtestchannelid', 'url':'http://testdiscordurl.com'}
+        debug_log(3, "SKIP_PUZZCORD true. stubbing channel id/uri")
+        retval = '{"id":"0xtestchannelid", "url":"http://testdiscordurl.com"}'
     
     newchaninfo = json.loads(retval)
     return (newchaninfo['id'], newchaninfo['url'])
