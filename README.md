@@ -29,7 +29,7 @@
 - MySQL database:
     - Create database for puzzleboss to use (enter name in appropriate puzzleboss.yaml variable)
     - Create user with password for puzzleboss to use, and grant all permissions on above database
-    - Import puzzleboss.sql (in scripts subdir) using mysql with the username and database created in above two steps
+    - Import puzzleboss.sql (in scripts subdir) using mysql with the username and database created in above two steps (e.g. `mysql -u puzzleboss puzzleboss < puzzleboss.sql`)
     - IMPORTANT:  above step will destroy previous database.  If you'd like to preserve solvers table, use the reset-hunt script.
     
 - Google Sheets Setup:
