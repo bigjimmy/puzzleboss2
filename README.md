@@ -48,7 +48,7 @@
     - NOTE: if behind a proxy (e.g. in production), "try it out" functionality of swagger will not work
 
 ## Development/Testing Notes:
-- For running php frontend without REMOTE_USER setting, Use secret GET params (assumeduser) and the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php.
+- For running php frontend without REMOTE_USER setting, Use secret GET params (assumeduser) and the `$noremoteusertestmode = "true";` setting in puzzlebosslib.php and manually insert a "testuser" user into the solvers table of the database.  
 
 - For running without a working puzzcord (discord bot) set the `SKIP_PUZZCORD` config variable to `"true"` in puzzleboss.yaml.
 
