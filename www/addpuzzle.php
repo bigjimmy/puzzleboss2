@@ -58,26 +58,52 @@ if (isset($_GET['puzzid'])) {
 }
 
 $rounds = readapi("/rounds")->rounds;
+$rounds = array_reverse($rounds); // Newer rounds first in the dropdown
 ?>
 
-Add a puzzle!
+<h1>Add a puzzle!</h1>
 <form action="addpuzzle.php" method="get">
-Name:<input type="text" name="name" required value="<?= $puzzid ?>" />
-<br>
-
-Round:<select id="round_id" name="round_id"/>
+    <table>
+        <tr>
+            <td><label for="name">Name:</label></td>
+            <td>
+                <input
+                    type="text"
+                    id="name"
+                    name="name"
+                    required
+                    value="<?= $puzzid ?>"
+                    size="40"
+                />
+            </td>
+        </tr>
+        <tr>
+            <td><label for="round_id">Round:</label></td>
+            <td>
+                <select id="round_id" name="round_id"/>
 <?php
 foreach ($rounds as $round) {
-    echo '<option value="' . $round->id . '">' . $round->name . '</option>';
+    echo '<option value="' . $round->id . '">' . $round->name . "</option>\n";
 }
 ?>
-</select><br>
-
-Puzzle URI:
-<input type="text" name="puzzle_uri" required value="<?= $puzzurl ?>" />
-<br>
-
-<input type="submit" name="submit" />
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td><label for="puzzle_uri">Puzzle URI:</label></td>
+            <td>
+                <input
+                    type="text"
+                    id="puzzle_uri"
+                    name="puzzle_uri"
+                    required
+                    value="<?= $puzzurl ?>"
+                    size="80"
+                />
+            </td>
+        </tr>
+    </table>
+    <input type="submit" name="submit" value="Add New Puzzle"/>
 </form>
 </body>
 </html>
