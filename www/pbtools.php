@@ -1,7 +1,8 @@
 <?php
 
 $bookmarkuri = 'javascript:location.href=`' .
-  'https://wind-up-birds.org/pb/addpuzzle.php '.
+  $pbroot . 
+  '/addpuzzle.php'.
   '?puzzurl=${encodeURIComponent(location.href)}' .
   '&puzzid=${encodeURIComponent(document.title)}`';
 

@@ -1,8 +1,10 @@
 <?php
 global $apiroot;
 global $noremoteusertestmode;
+global $pbroot;
 
 //TODO: Load this from the yaml config
+$pbroot = "https://wind-up-birds.org/pb/";
 $apiroot = "http://localhost:5000";
 $phproot = "http://localhost:8080/puzzleboss/www/";
 $noremoteusertestmode = "true"; //set this if we're testing without apache auth in front
