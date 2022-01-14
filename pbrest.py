@@ -968,6 +968,7 @@ def update_puzzle_part(id, part):
             or value == "Critical"
             or value == "Unnecessary"
             or value == "WTF"
+            or value == "Being worked"
         ):
             update_puzzle_part_in_db(id, part, value)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
