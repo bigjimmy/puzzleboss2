@@ -1,4 +1,5 @@
 <?php
+require('puzzlebosslib.php');
 
 $bookmarkuri = 'javascript:location.href=`' .
   $pbroot . 
