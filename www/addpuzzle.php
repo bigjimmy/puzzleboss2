@@ -26,6 +26,7 @@ if (isset($_GET['submit'])) {
     $responseobj = postapi($apiurl, $data);
     
     echo '<br>';
+    echo 'Response from API is ' . var_dump($resp);
     if (is_string($responseobj)){
         echo 'ERROR: Response from API is ' . var_dump($resp);
         echo '</body></html>';
