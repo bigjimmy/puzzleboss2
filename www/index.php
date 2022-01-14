@@ -127,7 +127,7 @@ foreach ($fullhunt as $round) {
     <tr class="status-Solved"><td>*</td><td>Solved Puzzle</td></tr>
     <tr class="status-WTF"><td>W</td><td>WTF Puzzle</td></tr>
     <tr class="status-Needseyes"><td>E</td><td>Puzzle Needs Eyes</td></tr>
-    <tr class="status-Unnecessary"><td>U</td><td>Puzzle Not Needed</td></tr>
+    <tr class="status-Unnecessary"><td>X</td><td>Puzzle Not Needed</td></tr>
     <tr class="mine" style="text-decoration:underline overline wavy;"><td>&nbsp</td><td>My Current Puzzle</td></tr>
 </table>
 </body>
