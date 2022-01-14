@@ -37,7 +37,7 @@ fi
 
 #Drop and Re-create database tables using the sql template
 echo "Destroying database and reloading saved schema"
-echo "truncate table puzzle; truncate table puzzle_solver; truncate table round; truncate table activity; truncate table clientindex; truncate table log; truncate table solver" | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER puzzleboss -p$PB_DATA_DB_PASS 
+echo "truncate table puzzle; truncate table puzzle_solver; truncate table round; truncate table activity; truncate table clientindex; truncate table log; truncate table solver" | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER $PB_DATA_DB_NAME -p$PB_DATA_DB_PASS 
 cat puzzleboss.sql | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER $PB_DATA_DB_NAME -p$PB_DATA_DB_PASS
 
 #Restore previously preserved tables
