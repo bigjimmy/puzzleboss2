@@ -67,13 +67,10 @@ foreach ($fullhunt as $round) {
         //if ($puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
         //    $styleinsert .= ' style="text-decoration:line-through" ';
         //}
-        $statusstring = preg_replace('/[^a-zA-Z0-9-_]/','', $puzzle->status);
-        $classlist = "status-" . $statusstring;
-        $classlist .= " type-" . (($puzzleid == $metapuzzle) ? "meta" : "feeder");
         if ($puzzlename == $mypuzzle) {
             $classlist .= " mine";
         }
-        echo '<tr ' . $styleinsert . ' class="' . $classlist . '">';
+        echo '<tr ' . $styleinsert . '>';
         echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
         switch ($puzzle->status) {
             case "New":
@@ -120,14 +117,14 @@ foreach ($fullhunt as $round) {
 <a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>
 <br><h3>Legend:</h3>
 <table>
-    <tr class="type-meta" bgcolor='Gainsboro'><td>.</td><td>Meta Puzzle</td></tr>
-    <tr class="status-New" bgcolor='aquamarine'><td>.</td><td>Open Puzzle</td></tr>
-    <tr class="status-Critical" bgcolor='HotPink'><td>!</td><td>Critical Puzzle</td></tr>
-    <tr class="status-Beingworked"><td>O</td><td>Puzzle Being Worked On</td></tr>
-    <tr class="status-Solved"><td>*</td><td>Solved Puzzle</td></tr>
-    <tr class="status-WTF"><td>W</td><td>WTF Puzzle</td></tr>
-    <tr class="status-Needseyes"><td>E</td><td>Puzzle Needs Eyes</td></tr>
-    <tr class="status-Unnecessary"><td>X</td><td>Puzzle Not Needed</td></tr>
-    <tr class="mine" style="text-decoration:underline overline wavy;"><td>&nbsp</td><td>My Current Puzzle</td></tr>
+    <tr bgcolor='Gainsboro'><td>.</td><td>Meta Puzzle</td></tr>
+    <tr bgcolor='aquamarine'><td>.</td><td>Open Puzzle</td></tr>
+    <tr bgcolor='HotPink'><td>!</td><td>Critical Puzzle</td></tr>
+    <tr><td>O</td><td>Puzzle Being Worked On</td></tr>
+    <tr><td>*</td><td>Solved Puzzle</td></tr>
+    <tr><td>W</td><td>WTF Puzzle</td></tr>
+    <tr><td>E</td><td>Puzzle Needs Eyes</td></tr>
+    <tr><td>X</td><td>Puzzle Not Needed</td></tr>
+    <tr style="text-decoration:underline overline wavy;"><td>&nbsp</td><td>My Current Puzzle</td></tr>
 </table>
 </body>
