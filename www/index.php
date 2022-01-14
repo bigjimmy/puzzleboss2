@@ -30,6 +30,7 @@ $mypuzzle = $solver->puzz;
 </head>
 <body>
 You are: <?= $username ?><br>
+<a href="status.php">Hunt Status Overview / Puzzle Suggester</a><br>
 <table border=4 style="vertical-align:top;">
     <tr>
 <?php
