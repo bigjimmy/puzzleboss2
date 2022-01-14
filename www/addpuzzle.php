@@ -54,6 +54,7 @@ if (isset($_GET['puzzurl'])) {
 }
 if (isset($_GET['puzzid'])) {
     $puzzid = $_GET['puzzid'];
+    $puzzid = str_replace(' | MIT Mystery Hunt 2022', '', $puzzid);
 }
 
 $rounds = readapi("/rounds")->rounds;
