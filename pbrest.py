@@ -2,6 +2,7 @@ import MySQLdb
 import sys
 import flasgger
 import pblib
+import traceback
 from flask import Flask, request
 from flask_restful import Api
 from flask_mysqldb import MySQL
@@ -888,8 +889,9 @@ def update_solver_part(id, part):
             )
             cursor.execute(sql)
             conn.commit()
-        except:
-            errmsg = "Exception in setting solver to %s for puzzle %s" % (id, value)
+        except Exception:
+            tb = traceback.format_exc()
+            errmsg = "Exception in setting solver to %s for puzzle %s. Traceback: %s" % (id, value, tb)
             debug_log(0, errmsg)
             return {"error": errmsg}, 500
 

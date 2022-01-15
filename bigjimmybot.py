@@ -210,7 +210,7 @@ if __name__ == "__main__":
         debug_log(4, "full puzzle structure loaded")
         fromtime = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
         debug_log(
-            3,
+            4,
             "Beginning iteration of bigjimmy bot across all puzzles (checking revs from time %s)"
             % fromtime,
         )
@@ -240,7 +240,7 @@ if __name__ == "__main__":
             t.join()
 
         debug_log(
-            3,
+            4,
             "Completed iteration of bigjimmy bot across all puzzles from time %s"
             % fromtime,
         )
