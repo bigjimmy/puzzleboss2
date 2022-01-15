@@ -246,59 +246,9 @@ CREATE TABLE `puzzle_solver` (
   `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `puzzle_id` int(11) DEFAULT NULL,
   `solver_id` int(11) NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `fk_puzzles_solvers_puzzles1_idx` (`puzzle_id`),
-  KEY `fk_puzzles_solvers_solvers1_idx` (`solver_id`)
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8 */ ;
-/*!50003 SET character_set_results = utf8 */ ;
-/*!50003 SET collation_connection  = utf8_unicode_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
-DELIMITER ;;
-/* APPEND LOG FOR OLD PUZZLE (IF IT EXISTS) ON SOLVER REASSIGNMENT */
-/*!50003 CREATE*/ /*!50003 TRIGGER `puzzle_solver_BINS` BEFORE INSERT ON `puzzle_solver` FOR EACH ROW BEGIN
-	Set @puzzname = (SELECT `name` FROM `puzzle` WHERE `puzzle`.`id`=NEW.puzzle_id);
-	Set @oldpuzzname = (SELECT `curpuzzle` FROM `solver_curpuzzle` WHERE `solver_id`=NEW.solver_id);
-	Set @oldpuzzleid = (SELECT `curpuzzle_id` FROM `solver_curpuzzle` WHERE `solver_id`=NEW.solver_id);
-	Set @solvername = (SELECT `name` FROM `solver` WHERE `solver`.`id`=NEW.solver_id);
-	IF @oldpuzzname IS NOT NULL THEN
-	   INSERT  INTO `log` (`user`,`module`,`name`,`part`, `id`) 
-            VALUES (@user,'puzzles',@oldpuzzname,'solvers',@oldpuzzleid);
-    END IF;
-END */;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8 */ ;
-/*!50003 SET character_set_results = utf8 */ ;
-/*!50003 SET collation_connection  = utf8_unicode_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = '' */ ;
-DELIMITER ;;
-/* APPEND LOG FOR THE SOLVER, AND NEW PUZZLE ON SOLVER REASSIGNMENT */
-/*!50003 CREATE*/ /*!50003 TRIGGER `puzzle_solver_AINS` AFTER INSERT ON `puzzle_solver` FOR EACH ROW BEGIN
-	Set @puzzname = (SELECT `name` FROM `puzzle` WHERE `puzzle`.`id`=NEW.puzzle_id);
-	Set @solvername = (SELECT `name` FROM `solver` WHERE `solver`.`id`=NEW.solver_id);
-	INSERT	INTO `log` (`user`,`module`,`name`,`part`, `id`) 
-			VALUES (@user,'puzzles',@puzzname,'solvers',NEW.puzzle_id);
-	INSERT	INTO `log` (`user`,`module`,`name`,`part`, `id`) 
-			VALUES (@user,'solvers',@solvername,'puzzles',NEW.solver_id);
-END */;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Temporary table structure for view `puzzle_solver_distinct`
