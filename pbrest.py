@@ -855,7 +855,7 @@ def update_solver_part(id, part):
 
         else:
             # Puzz is empty, so this is a de-assignment. Populate the db with empty string for it.
-            value = "NULL"
+            value = None
 
         # Now log it in the activity table
         try:
