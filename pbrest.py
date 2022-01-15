@@ -75,7 +75,7 @@ def get_all_all():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT * from puzzle_view""")
+        cursor.execute("SELECT * from puzzle_view")
         puzzle_view = cursor.fetchall()
     except:
         errmsg = "Exception in querying puzzle_view"
@@ -110,7 +110,7 @@ def get_all_all():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT * from round_view""")
+        cursor.execute("SELECT * from round_view")
         round_view = cursor.fetchall()
     except:
         errmsg = "Exception in querying round_view"
@@ -155,7 +155,7 @@ def get_all_puzzles():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT id,name from puzzle""")
+        cursor.execute("SELECT id, name from puzzle")
         rv = cursor.fetchall()
     except IndexError:
         errmsg = "Exception in fetching all puzzles from database"
@@ -180,7 +180,7 @@ def get_one_puzzle(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT * from puzzle_view where id = %s""", [id])
+        cursor.execute("SELECT * from puzzle_view where id = %s", [id])
         rv = cursor.fetchall()[0]
     except IndexError:
         errmsg = "Puzzle %s not found in database" % id
@@ -228,8 +228,7 @@ def get_puzzle_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            sql = "SELECT %s from puzzle_view where id = %s" % (part, id)
-            cursor.execute(sql)
+            cursor.execute(f"SELECT {part} from puzzle_view where id = %s", (id,))
             rv = cursor.fetchone()[0]
         except TypeError:
             errmsg = "Puzzle %s not found in database" % id
@@ -255,7 +254,7 @@ def get_all_rounds():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT id,name from round""")
+        cursor.execute("SELECT id, name from round")
         rv = cursor.fetchall()
     except:
         errmsg = "Exception in fetching all rounds from database"
@@ -280,7 +279,7 @@ def get_one_round(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT * from round_view where id = %s""", [id])
+        cursor.execute("SELECT * from round_view where id = %s", [id])
         rv = cursor.fetchall()[0]
     except IndexError:
         errmsg = "Round %s not found in database" % id
@@ -315,8 +314,7 @@ def get_round_part(id, part):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        sql = "SELECT %s from round_view where id = %s" % (part, id)
-        cursor.execute(sql)
+        cursor.execute(f"SELECT {part} from round_view where id = %s", (id,))
         rv = cursor.fetchone()[0]
     except TypeError:
         errmsg = "Round %s not found in database" % id
@@ -345,7 +343,7 @@ def get_all_solvers():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT id,name from solver_view""")
+        cursor.execute("SELECT id,name from solver_view")
         rv = cursor.fetchall()
     except:
         errmsg = "Exception in fetching all solvers from database"
@@ -370,7 +368,7 @@ def get_one_solver(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT * from solver_view where id = %s""", [id])
+        cursor.execute("SELECT * from solver_view where id = %s", (id,))
         rv = cursor.fetchall()[0]
     except IndexError:
         errmsg = "Solver %s not found in database" % id
@@ -407,8 +405,7 @@ def get_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            sql = "SELECT %s from solver_view where id = %s" % (part, id)
-            cursor.execute(sql)
+            cursor.execute(f"SELECT {part} from solver_view where id = %s", (id,))
             rv = cursor.fetchone()[0]
         except TypeError:
             errmsg = "Solver %s not found in database" % id
@@ -459,7 +456,7 @@ def get_diff(fromver, tover):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """ SELECT DISTINCT * FROM log WHERE log.version >= %s AND log.version <= %s """,
+            "SELECT DISTINCT * FROM log WHERE log.version >= %s AND log.version <= %s",
             (fromver, tover),
         )
         rv = cursor.fetchall()
@@ -494,7 +491,7 @@ def get_full_diff():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute(""" SELECT DISTINCT * FROM log """)
+        cursor.execute("SELECT DISTINCT * FROM log")
         rv = cursor.fetchall()
     except TypeError:
         errmsg = "Exception fetching all-time version diff from database"
@@ -543,7 +540,7 @@ def create_puzzle():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT id FROM puzzle WHERE name=%s""", [puzname])
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s", (puzname,))
         rv = cursor.fetchall()
     except:
         errmsg = "Exception checking database for duplicate puzzle before insert"
@@ -593,9 +590,11 @@ def create_puzzle():
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO puzzle
-                       (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, drive_link)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            """
+            INSERT INTO puzzle
+            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, drive_link)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
             (
                 puzname,
                 puzuri,
@@ -625,7 +624,7 @@ def create_puzzle():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT id FROM puzzle WHERE name=%s""", [puzname])
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s", (puzname,))
         rv = cursor.fetchall()
         myid = str(rv[0][0])
     except:
@@ -680,7 +679,7 @@ def create_round():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""SELECT id FROM round WHERE name=%s""", [roundname])
+        cursor.execute("SELECT id FROM round WHERE name = %s", (roundname,))
         rv = cursor.fetchall()
     except:
         errmsg = "Exception checking database for duplicate round before insert"
@@ -709,7 +708,7 @@ def create_round():
     conn = mysql.connection
     cursor = conn.cursor()
     cursor.execute(
-        """INSERT INTO round (name, drive_uri) VALUES (%s, %s)""",
+        "INSERT INTO round (name, drive_uri) VALUES (%s, %s)",
         (roundname, round_drive_uri),
     )
     conn.commit()
@@ -746,8 +745,7 @@ def update_round_part(id, part):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        sql = "UPDATE round SET %s = %s WHERE id = %s" % (part, value, id)
-        cursor.execute(sql)
+        cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
     except KeyError:
         errmsg = "Exception in modifying %s of round %s into database" % (part, id)
@@ -782,7 +780,8 @@ def create_solver():
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO solver (name, fullname) VALUES (%s, %s)""", (name, fullname)
+            "INSERT INTO solver (name, fullname) VALUES (%s, %s)",
+            (name, fullname)
         )
         conn.commit()
     except MySQLdb._exceptions.IntegrityError:
@@ -863,11 +862,14 @@ def update_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            sql = (
-                "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, '%s', '%s')"
-                % (value, id, "apache", "interact")
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'apache', 'interact')
+                """,
+                (value, id)
             )
-            cursor.execute(sql)
             conn.commit()
         except TypeError:
             errmsg = (
@@ -883,11 +885,10 @@ def update_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            sql = "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (%s, %s)" % (
-                value,
-                id,
+            cursor.execute(
+                "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (%s, %s)",
+                (value, id)
             )
-            cursor.execute(sql)
             conn.commit()
         except Exception:
             tb = traceback.format_exc()
@@ -903,8 +904,10 @@ def update_solver_part(id, part):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        sql = "UPDATE solver SET %s = '%s' WHERE id = %s" % (part, value, id)
-        cursor.execute(sql)
+        cursor.execute(
+            f"UPDATE solver SET {part} = %s WHERE id = %s",
+            (value, id)
+        )
         conn.commit()
     except:
         errmsg = "Exception in modifying %s of solver %s in database" % (part, id)
@@ -1076,8 +1079,12 @@ def new_account():
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """INSERT INTO newuser (username, fullname, email, password, code) 
-            VALUES (%s, %s, %s, %s, %s)""", (username, fullname, email, password, code)
+            """
+            INSERT INTO newuser
+            (username, fullname, email, password, code)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (username, fullname, email, password, code)
         )
         conn.commit()
     except TypeError:
@@ -1101,8 +1108,13 @@ def finish_account(code):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """SELECT username, fullname, email, password FROM newuser WHERE code = %s""", [code] 
-            )
+            """
+            SELECT username, fullname, email, password
+            FROM newuser
+            WHERE code = %s
+            """,
+            (code,)
+        )
         rv = cursor.fetchone()
     
         debug_log(5, "query return: %s" % str(rv))
@@ -1131,7 +1143,7 @@ def finish_account(code):
         cursor = conn.cursor()
         cursor.execute(
             """DELETE FROM newuser WHERE code = %s""", 
-            [code]
+            (code,)
         )
         conn.commit()
         return {"status": "ok"}, 200
@@ -1162,11 +1174,16 @@ def unassign_solver_by_name(name):
     # We have to look up the solver id for the given name first.
     conn = mysql.connection
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM solver_view WHERE name = '%s'" % name)
-    id = cursor.fetchall()[0][0]
-    sql = "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (NULL, %s)" % id
+    cursor.execute(
+        "SELECT id FROM solver_view WHERE name = %s LIMIT 1",
+        (name,)
+    )
+    id = cursor.fetchone()[0]
     cursor = conn.cursor()
-    cursor.execute(sql)
+    cursor.execute(
+        "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (NULL, %s)",
+        (id,)
+    )
     conn.commit()
 
     debug_log(3, "Solver id: %s, name: %s unassigned" % (id, name))
@@ -1196,8 +1213,10 @@ def update_puzzle_part_in_db(id, part, value):
     debug_log(4, "start, called with (id, part, value): %s, %s, %s" % (id, part, value))
     conn = mysql.connection
     cursor = conn.cursor()
-    sql = "UPDATE puzzle SET %s = '%s' WHERE id = %s" % (part, value, id)
-    cursor.execute(sql)
+    cursor.execute(
+        f"UPDATE puzzle SET {part} = %s WHERE id = %s",
+        (value, id)
+    )
     conn.commit()
 
     debug_log(4, "puzzle %s %s updated in database" % (id, part))
@@ -1227,7 +1246,7 @@ def get_last_activity_for_puzzle(id):
         cursor = conn.cursor()
         cursor.execute(
             """SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1""",
-            [id],
+            (id,),
         )
         arv = cursor.fetchall()[0]
     except IndexError:
@@ -1249,7 +1268,10 @@ def get_last_activity_for_solver(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute('''SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1''', [id])
+        cursor.execute(
+            "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
+            (id,)
+        )
         arv = cursor.fetchall()[0]
     except IndexError:
         errmsg = "No Activity for solver %s found in database yet" % id
@@ -1283,11 +1305,14 @@ def set_new_activity_for_puzzle(id, actstruct):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        sql = (
-            "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, '%s', '%s')"
-            % (puzzle_id, solver_id, source, type)
+        cursor.execute(
+            """
+            INSERT INTO activity
+            (puzzle_id, solver_id, source, type)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (puzzle_id, solver_id, source, type)
         )
-        cursor.execute(sql)
         conn.commit()
     except TypeError:
         errmsg = (
@@ -1305,7 +1330,7 @@ def delete_pb_solver(username):
 
     conn = mysql.connection
     cursor = conn.cursor()
-    cursor.execute('''DELETE from solver where name = %s''', [username])
+    cursor.execute("DELETE from solver where name = %s", (username,))
     conn.commit()
     return 0
 
