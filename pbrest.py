@@ -10,7 +10,6 @@ from pblib import *
 from pbgooglelib import *
 from pbdiscordlib import *
 from pandas.core.dtypes.generic import ABCIntervalIndex
-from pymysql.cursors import DictCursor
 from secrets import token_hex
 from flasgger.utils import swag_from
 from pbldaplib import *
@@ -20,7 +19,8 @@ app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
 app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
-mysql = MySQL(app, cursorclass=DictCursor)
+app.config["MYSQL_CURSORCLASS"] = "DictCursor"
+mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
 
