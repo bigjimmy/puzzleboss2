@@ -613,6 +613,8 @@ def update_round_part(id, part):
     try:
         data = request.get_json()
         value = data[part]
+        if value == 'NULL':
+            value = None
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
         errmsg = "failed due to invalid JSON POST structure or empty POST"
@@ -634,7 +636,7 @@ def update_round_part(id, part):
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    debug_log(3, "round %s %s updatedL %s" % (id, part, sql))
+    debug_log(3, "round %s %s updated to %s" % (id, part, value))
 
     return {"status": "ok", "round": {"id": id, part: value}}, 200
 
