@@ -102,11 +102,14 @@ def get_all_all():
 
     rounds = []
     for round in round_view:
-        round["puzzles"] = [
-            all_puzzles[int(id)]
-            for id in round["puzzles"].split(",")
-            if is_int(id) and int(id) in all_puzzles
-        ]
+        if "puzzles" in round and round["puzzles"]:
+            round["puzzles"] = [
+                all_puzzles[int(id)]
+                for id in round["puzzles"].split(",")
+                if is_int(id) and int(id) in all_puzzles
+            ]
+        else:
+            round["puzzles"] = []
         rounds.append(round)
 
     return {"rounds": rounds}, 200
