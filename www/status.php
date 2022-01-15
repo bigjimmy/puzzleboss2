@@ -22,11 +22,13 @@ $eyesarray = [];
 $newarray = [];
 $workonarray = [];
 
+$huntstruct = readapi("/all");
+$rounds = $huntstruct->rounds;
+
 foreach($rounds as $round){
     $totrounds += 1;
-    $puzzlesresp = readapi("/rounds/" . $round->id . "/puzzles");
-    $metapuzzle = readapi("/rounds/" . $round->id . "/meta_id")->round->meta_id;
-    $puzzlearray = $puzzlesresp->round->puzzles;
+    $metapuzzle = $round->meta_id;
+    $puzzlearray = $round->puzzles;
     
     // Is round solved?
     if (isset($metapuzzle)){
