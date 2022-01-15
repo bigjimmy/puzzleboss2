@@ -219,7 +219,7 @@ def get_one_round(id):
         return all_rounds
 
     rounds = all_rounds[0]["rounds"]
-    round = next(round for round in rounds if round["id"] == id, None)
+    round = next((round for round in rounds if round["id"] == id), None)
     if not round:
         errmsg = "Round %s not found in database" % id
         debug_log(1, errmsg)
