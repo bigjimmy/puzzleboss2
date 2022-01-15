@@ -25,7 +25,7 @@ def debug_log(sev, message):
         print(
             "[%s] [SEV%s] %s: %s"
             % (timestamp, sev, inspect.currentframe().f_back.f_code.co_name, message),
-            flush=True
+            flush=True,
         )
     return
 
@@ -36,8 +36,8 @@ def sanitize_string(mystring):
 
 
 def email_user_verification(email, code, fullname, username):
-    debug_log(4, "start for email: %s" % email);
-    
+    debug_log(4, "start for email: %s" % email)
+
     messagecontent = """Hello %s!
                         Someone using this email address has attempted to register or reset an account at
                         %s
@@ -53,17 +53,24 @@ def email_user_verification(email, code, fullname, username):
                         - Puzzleboss 2000
                         
                         (replies to this email will most likely not reach anybody)
-                        """ % (email, config['LDAP']['LDAPO'], username, fullname, config['APP']['ACCT_URI'], code)
-                            
+                        """ % (
+        email,
+        config["LDAP"]["LDAPO"],
+        username,
+        fullname,
+        config["APP"]["ACCT_URI"],
+        code,
+    )
+
     debug_log(4, "Email to be sent: %s" % messagecontent)
-    
+
     try:
         msg = EmailMessage()
-        msg['Subject'] = "Finish %s account sign-up." % config['LDAP']['LDAPO']
-        msg['From'] = "%s" % config['APP']['REGEMAIL']
-        msg['To'] = email
+        msg["Subject"] = "Finish %s account sign-up." % config["LDAP"]["LDAPO"]
+        msg["From"] = "%s" % config["APP"]["REGEMAIL"]
+        msg["To"] = email
         msg.set_content(messagecontent)
-        s = smtplib.SMTP(config['APP']['MAILRELAY'])
+        s = smtplib.SMTP(config["APP"]["MAILRELAY"])
         s.send_message(msg)
         s.quit()
 
@@ -71,9 +78,5 @@ def email_user_verification(email, code, fullname, username):
         errmsg = str(e)
         debug_log(2, "Exception sending email: %s" % errmsg)
         return errmsg
-    
-    return "OK"
 
-    
-    
-    
+    return "OK"

@@ -25,14 +25,16 @@ swagger = flasgger.Swagger(app)
 
 # GET/READ Operations
 
+
 @app.route("/all", endpoint="all", methods=["GET"])
-#@swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
+# @swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
 def get_all_all():
     debug_log(4, "start")
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 a.id AS actid,
                 a.time AS timestamp,
@@ -53,7 +55,8 @@ def get_all_all():
                 a.puzzle_id = latest.puzzle_id
                 AND a.time = latest.time
             ORDER BY a.puzzle_id, a.id
-        """)
+        """
+        )
         activity = cursor.fetchall()
     except:
         errmsg = "Exception in querying activity"
@@ -63,12 +66,12 @@ def get_all_all():
     last_activity_for_puzzles = {}
     for row in activity:
         last_activity = {
-            "actid" : row[0],
-            "timestamp" : row[1],
-            "solver_id" : row[2],
-            "puzzle_id" : row[3],
-            "source" : row[4],
-            "type" : row[5],
+            "actid": row[0],
+            "timestamp": row[1],
+            "solver_id": row[2],
+            "puzzle_id": row[3],
+            "source": row[4],
+            "type": row[5],
         }
         last_activity_for_puzzles[last_activity["puzzle_id"]] = last_activity
 
@@ -106,7 +109,6 @@ def get_all_all():
         }
         all_puzzles[puzzle["id"]] = puzzle
 
-
     try:
         conn = mysql.connection
         cursor = conn.cursor()
@@ -117,7 +119,6 @@ def get_all_all():
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-
     def is_int(val):
         try:
             int(val)
@@ -125,12 +126,11 @@ def get_all_all():
         except:
             return False
 
-
     rounds = []
     for row in round_view:
         round_puzzles = [
             all_puzzles[int(id)]
-            for id in row[6].split(',')
+            for id in row[6].split(",")
             if is_int(id) and int(id) in all_puzzles
         ]
         round = {
@@ -145,8 +145,8 @@ def get_all_all():
         rounds.append(round)
 
     return {"rounds": rounds}, 200
-    
-    
+
+
 @app.route("/puzzles", endpoint="puzzles", methods=["GET"])
 @swag_from("swag/getpuzzles.yaml", endpoint="puzzles", methods=["GET"])
 def get_all_puzzles():
@@ -391,9 +391,10 @@ def get_one_solver(id):
             "fullname": rv[4],
             "chat_uid": rv[5],
             "chat_name": rv[6],
-            "lastact" : lastact
+            "lastact": lastact,
         },
     }, 200
+
 
 @app.route("/solvers/<id>/<part>", endpoint="solver_part", methods=["GET"])
 @swag_from("swag/getsolverpart.yaml", endpoint="solver_part", methods=["GET"])
@@ -401,7 +402,7 @@ def get_solver_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     if part == "lastact":
         rv = get_last_activity_for_solver(id)
-    else:    
+    else:
         try:
             conn = mysql.connection
             cursor = conn.cursor()
@@ -410,19 +411,18 @@ def get_solver_part(id, part):
         except TypeError:
             errmsg = "Solver %s not found in database" % id
             debug_log(1, errmsg)
-            return {"error" : errmsg }, 500
+            return {"error": errmsg}, 500
         except:
-            errmsg = "Exception in fetching %s part for solver %s from database" % (part, id)
+            errmsg = "Exception in fetching %s part for solver %s from database" % (
+                part,
+                id,
+            )
             debug_log(0, errmsg)
-            return {"error" : errmsg }, 500
-        
+            return {"error": errmsg}, 500
+
     debug_log(4, "fetched round part %s for %s" % (part, id))
-    return {
-            "status" : "ok",
-            "solver" : {
-                        "id" : id,
-                        part : rv}
-            }, 200
+    return {"status": "ok", "solver": {"id": id, part: rv}}, 200
+
 
 @app.route("/version", endpoint="version", methods=["GET"])
 @swag_from("swag/getversion.yaml", endpoint="version", methods=["GET"])
@@ -780,8 +780,7 @@ def create_solver():
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO solver (name, fullname) VALUES (%s, %s)",
-            (name, fullname)
+            "INSERT INTO solver (name, fullname) VALUES (%s, %s)", (name, fullname)
         )
         conn.commit()
     except MySQLdb._exceptions.IntegrityError:
@@ -868,7 +867,7 @@ def update_solver_part(id, part):
                 (puzzle_id, solver_id, source, type)
                 VALUES (%s, %s, 'apache', 'interact')
                 """,
-                (value, id)
+                (value, id),
             )
             conn.commit()
         except TypeError:
@@ -887,12 +886,15 @@ def update_solver_part(id, part):
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (%s, %s)",
-                (value, id)
+                (value, id),
             )
             conn.commit()
         except Exception:
             tb = traceback.format_exc()
-            errmsg = "Exception in setting solver to %s for puzzle %s. Traceback: %s" % (id, value, tb)
+            errmsg = (
+                "Exception in setting solver to %s for puzzle %s. Traceback: %s"
+                % (id, value, tb)
+            )
             debug_log(0, errmsg)
             return {"error": errmsg}, 500
 
@@ -904,10 +906,7 @@ def update_solver_part(id, part):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute(
-            f"UPDATE solver SET {part} = %s WHERE id = %s",
-            (value, id)
-        )
+        cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
     except:
         errmsg = "Exception in modifying %s of solver %s in database" % (part, id)
@@ -985,7 +984,7 @@ def update_puzzle_part(id, part):
                 mypuzzle["puzzle"]["chat_channel_id"],
                 "**ATTENTION:** %s is being worked on at %s"
                 % (mypuzzle["puzzle"]["name"], value),
-                )
+            )
         else:
             debug_log(3, "puzzle xyzloc removed. skipping discord announcement")
 
@@ -1002,9 +1001,7 @@ def update_puzzle_part(id, part):
             )
             clear_puzzle_solvers(id)
             chat_announce_solved(mypuzzle["puzzle"]["name"])
-           
-        
-        
+
     elif part == "comments":
         update_puzzle_part_in_db(id, part, value)
         chat_say_something(
@@ -1034,11 +1031,11 @@ def new_account():
     try:
         data = request.get_json()
         debug_log(5, "request data is - %s" % str(data))
-        username = data['username']
-        fullname = data['fullname']
-        email = data['email']
-        password = data['password']
-        reset = data.get('reset')
+        username = data["username"]
+        fullname = data["fullname"]
+        email = data["email"]
+        password = data["password"]
+        reset = data.get("reset")
     except TypeError:
         errmsg = "failed due to invalid JSON POST structure or empty POST"
         debug_log(1, errmsg)
@@ -1048,32 +1045,38 @@ def new_account():
         debug_log(1, errmsg)
         return {"error": errmsg}, 500
 
-    allusers = get_all_solvers()[0]['solvers']
+    allusers = get_all_solvers()[0]["solvers"]
     userfound = False
     for solver in allusers:
-        if solver['name'] == username:
+        if solver["name"] == username:
             if reset == "reset":
                 userfound = True
                 debug_log(3, "Password reset attempt detected for user %s" % username)
             else:
-                errmsg = "Username %s already exists. Pick another, or add reset flag." % username
+                errmsg = (
+                    "Username %s already exists. Pick another, or add reset flag."
+                    % username
+                )
                 debug_log(2, errmsg)
                 return {"error": errmsg}, 500
-    
-    if reset == "reset": 
+
+    if reset == "reset":
         if not userfound:
             errmsg = "Username %s not found in system to reset." % username
             debug_log(2, errmsg)
             return {"error": errmsg}, 500
         if verify_email_for_user(email, username) != 1:
-            errmsg = "Username %s does not match email %s in the system." % (username, email)
+            errmsg = "Username %s does not match email %s in the system." % (
+                username,
+                email,
+            )
             debug_log(2, errmsg)
             return {"error": errmsg}, 500
 
     # Generate the code
     code = token_hex(4)
     debug_log(4, "code picked: %s" % code)
-    
+
     # Actually insert into the database
     try:
         conn = mysql.connection
@@ -1084,20 +1087,28 @@ def new_account():
             (username, fullname, email, password, code)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (username, fullname, email, password, code)
+            (username, fullname, email, password, code),
         )
         conn.commit()
     except TypeError:
-        errmsg = "Exception in insertion of unverified user request %s into database" % username
+        errmsg = (
+            "Exception in insertion of unverified user request %s into database"
+            % username
+        )
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
     if email_user_verification(email, code, fullname, username) == "OK":
-        debug_log(3, "unverified new user %s added to database with verification code %s. email sent." % (username, code))
+        debug_log(
+            3,
+            "unverified new user %s added to database with verification code %s. email sent."
+            % (username, code),
+        )
         return {"status": "ok", "code": code}, 200
 
     else:
         return {"error": "some error emailing code to user"}, 500
+
 
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
 @swag_from("swag/getfinishaccount.yaml", endpoint="get_finish_account", methods=["GET"])
@@ -1113,43 +1124,44 @@ def finish_account(code):
             FROM newuser
             WHERE code = %s
             """,
-            (code,)
+            (code,),
         )
         rv = cursor.fetchone()
-    
+
         debug_log(5, "query return: %s" % str(rv))
 
         username = rv[0]
-        fullname= rv[1]
+        fullname = rv[1]
         email = rv[2]
         password = rv[3]
-    
+
     except TypeError:
         errmsg = "Code %s is not valid." % code
         debug_log(2, errmsg)
-        return {"error" : errmsg}, 500
+        return {"error": errmsg}, 500
 
-    debug_log(4, "valid code. username: %s fullname: %s email: %s password: REDACTED" %
-              (username, fullname, email))
-    
+    debug_log(
+        4,
+        "valid code. username: %s fullname: %s email: %s password: REDACTED"
+        % (username, fullname, email),
+    )
+
     firstname = fullname.split()[0]
     lastname = fullname.split()[1]
-    
+
     retcode = add_or_update_user(username, firstname, lastname, email, password)
-    
+
     if retcode == "OK":
         # Delete code and preliminary entry now
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute(
-            """DELETE FROM newuser WHERE code = %s""", 
-            (code,)
-        )
+        cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
         return {"status": "ok"}, 200
-        
+
     else:
         return {"error": retcode}, 500
+
 
 @app.route("/deleteuser/<username>", endpoint="get_delete_account", methods=["GET"])
 @swag_from("swag/getdeleteaccount.yaml", endpoint="get_delete_account", methods=["GET"])
@@ -1162,11 +1174,13 @@ def delete_account(username):
     errmsg = delete_user(username)
 
     if errmsg != "OK":
-        return {"error" : errmsg}, 500
+        return {"error": errmsg}, 500
 
     return {"status": "ok"}, 200
-    
+
+
 ############### END REST calls section
+
 
 def unassign_solver_by_name(name):
     debug_log(4, "start, called with (name): %s" % name)
@@ -1174,15 +1188,11 @@ def unassign_solver_by_name(name):
     # We have to look up the solver id for the given name first.
     conn = mysql.connection
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT id FROM solver_view WHERE name = %s LIMIT 1",
-        (name,)
-    )
+    cursor.execute("SELECT id FROM solver_view WHERE name = %s LIMIT 1", (name,))
     id = cursor.fetchone()[0]
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (NULL, %s)",
-        (id,)
+        "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (NULL, %s)", (id,)
     )
     conn.commit()
 
@@ -1209,14 +1219,13 @@ def clear_puzzle_solvers(id):
         debug_log(4, "no solvers found on puzzle %s" % id)
 
     return 0
+
+
 def update_puzzle_part_in_db(id, part, value):
     debug_log(4, "start, called with (id, part, value): %s, %s, %s" % (id, part, value))
     conn = mysql.connection
     cursor = conn.cursor()
-    cursor.execute(
-        f"UPDATE puzzle SET {part} = %s WHERE id = %s",
-        (value, id)
-    )
+    cursor.execute(f"UPDATE puzzle SET {part} = %s WHERE id = %s", (value, id))
     conn.commit()
 
     debug_log(4, "puzzle %s %s updated in database" % (id, part))
@@ -1239,6 +1248,7 @@ def get_puzzles_from_list(list):
     debug_log(4, "puzzle list assembled is: %s" % puzarray)
     return puzarray
 
+
 def get_last_activity_for_puzzle(id):
     debug_log(4, "start, called with: %s" % id)
     try:
@@ -1255,13 +1265,14 @@ def get_last_activity_for_puzzle(id):
         return None
 
     return {
-            "actid" : arv[0],
-            "timestamp" : arv[1],
-            "solver_id" : arv[2],
-            "puzzle_id" : arv[3],
-            "source" : arv[4],
-            "type" : arv[5]
-            }
+        "actid": arv[0],
+        "timestamp": arv[1],
+        "solver_id": arv[2],
+        "puzzle_id": arv[3],
+        "source": arv[4],
+        "type": arv[5],
+    }
+
 
 def get_last_activity_for_solver(id):
     debug_log(4, "start, called with: %s" % id)
@@ -1270,7 +1281,7 @@ def get_last_activity_for_solver(id):
         cursor = conn.cursor()
         cursor.execute(
             "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
-            (id,)
+            (id,),
         )
         arv = cursor.fetchall()[0]
     except IndexError:
@@ -1279,13 +1290,14 @@ def get_last_activity_for_solver(id):
         return None
 
     return {
-            "actid" : arv[0],
-            "timestamp" : arv[1],
-            "solver_id" : arv[2],
-            "puzzle_id" : arv[3],
-            "source" : arv[4],
-            "type" : arv[5]
-            }
+        "actid": arv[0],
+        "timestamp": arv[1],
+        "solver_id": arv[2],
+        "puzzle_id": arv[3],
+        "source": arv[4],
+        "type": arv[5],
+    }
+
 
 def set_new_activity_for_puzzle(id, actstruct):
     debug_log(4, "start, called for puzzle id %s with: %s" % (id, actstruct))
@@ -1311,7 +1323,7 @@ def set_new_activity_for_puzzle(id, actstruct):
             (puzzle_id, solver_id, source, type)
             VALUES (%s, %s, %s, %s)
             """,
-            (puzzle_id, solver_id, source, type)
+            (puzzle_id, solver_id, source, type),
         )
         conn.commit()
     except TypeError:
@@ -1325,6 +1337,7 @@ def set_new_activity_for_puzzle(id, actstruct):
     debug_log(3, "Updated activity for puzzle id %s" % (puzzle_id))
     return 0
 
+
 def delete_pb_solver(username):
     debug_log(4, "start, called with username %s" % username)
 
@@ -1333,6 +1346,7 @@ def delete_pb_solver(username):
     cursor.execute("DELETE from solver where name = %s", (username,))
     conn.commit()
     return 0
+
 
 if __name__ == "__main__":
     if initdrive() != 0:

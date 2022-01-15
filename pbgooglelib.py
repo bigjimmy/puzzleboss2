@@ -23,9 +23,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
 ]
 
-ADMINSCOPES = [
-    "https://www.googleapis.com/auth/admin.directory.user"
-]
+ADMINSCOPES = ["https://www.googleapis.com/auth/admin.directory.user"]
+
 
 def initadmin():
     debug_log(4, "start")
@@ -38,7 +37,9 @@ def initadmin():
     # time.
     if os.path.exists("admintoken.json"):
         debug_log(4, "Credentials found in admintoken.json.")
-        admincreds = Credentials.from_authorized_user_file("admintoken.json", ADMINSCOPES)
+        admincreds = Credentials.from_authorized_user_file(
+            "admintoken.json", ADMINSCOPES
+        )
     # If there are no (valid) credentials available, let the user log in.
     if not admincreds or not admincreds.valid:
         if admincreds and admincreds.expired and admincreds.refresh_token:
@@ -51,6 +52,7 @@ def initadmin():
 
         with open("admintoken.json", "w") as token:
             token.write(admincreds.to_json())
+
 
 def initdrive():
     debug_log(4, "start")
@@ -354,87 +356,104 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         service.permissions().create(fileId=file.get("id"), body=permission).execute()
     )
     debug_log(5, "Response from service.permissions.create: %s" % permresp)
-    return file.get('id')
+    return file.get("id")
 
-def force_sheet_edit(driveid, mytimestamp = datetime.datetime.utcnow()):
+
+def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
     debug_log(4, "start with driveid: %s" % driveid)
-    threadsafe_sheethttp = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
-    
+    threadsafe_sheethttp = google_auth_httplib2.AuthorizedHttp(
+        creds, http=httplib2.Http()
+    )
+
     # Setup sheets service for this
-    sheetsservice = build('sheets', 'v4', credentials=creds)
-    datarange="A7"
-    datainputoption="USER_ENTERED"
-    data = { "values" : [["last bigjimmybot probe: %s" % mytimestamp]]}
-    response = sheetsservice.spreadsheets().values().update(spreadsheetId=driveid, range=datarange, valueInputOption=datainputoption, body=data).execute(http=threadsafe_sheethttp)
+    sheetsservice = build("sheets", "v4", credentials=creds)
+    datarange = "A7"
+    datainputoption = "USER_ENTERED"
+    data = {"values": [["last bigjimmybot probe: %s" % mytimestamp]]}
+    response = (
+        sheetsservice.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=driveid,
+            range=datarange,
+            valueInputOption=datainputoption,
+            body=data,
+        )
+        .execute(http=threadsafe_sheethttp)
+    )
     debug_log(4, "response to sheet edit attempt: %s" % response)
-    return(0)
+    return 0
+
 
 def add_user_to_google(username, firstname, lastname, password):
-    debug_log(4, "start with (username, firstname, lastname, password): %s %s %s REDACTED" % (username, firstname, lastname))
-    msg = "" 
+    debug_log(
+        4,
+        "start with (username, firstname, lastname, password): %s %s %s REDACTED"
+        % (username, firstname, lastname),
+    )
+    msg = ""
     initadmin()
 
-    userservice = build('admin', 'directory_v1', credentials=admincreds)
+    userservice = build("admin", "directory_v1", credentials=admincreds)
 
-    userbody = { "name" : { 
-                            "familyName" : lastname,
-                            "givenName" : firstname 
-                          },
-                 "password" : password,
-                 "primaryEmail" : "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
-                }
-    
-    debug_log(5, "Attempting to add user with post body: %s" % json.dumps(userbody))    
+    userbody = {
+        "name": {"familyName": lastname, "givenName": firstname},
+        "password": password,
+        "primaryEmail": "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"]),
+    }
+
+    debug_log(5, "Attempting to add user with post body: %s" % json.dumps(userbody))
     try:
         addresponse = userservice.users().insert(body=userbody).execute()
     except googleapiclient.errors.HttpError as e:
-        msg = json.loads(e.content)['error']['message']
+        msg = json.loads(e.content)["error"]["message"]
         addresponse = None
 
     if not addresponse:
         errmsg = "Error in adding user: %s" % msg
         debug_log(1, errmsg)
-        return errmsg   
-    
+        return errmsg
+
     debug_log(4, "Created new google user %s" % username)
-    return("OK")
+    return "OK"
+
 
 def delete_google_user(username):
     debug_log(4, "start with username %s" % username)
     initadmin()
 
-    userservice = build('admin', 'directory_v1', credentials=admincreds)
+    userservice = build("admin", "directory_v1", credentials=admincreds)
     email = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
 
     changeresponse = userservice.users().delete(userKey=email).execute()
-    return ("OK")
+    return "OK"
+
 
 def change_google_user_password(username, password):
     debug_log(4, "start with (username, password): %s REDACTED" % username)
-    msg = "" 
+    msg = ""
     initadmin()
 
-    userservice = build('admin', 'directory_v1', credentials=admincreds)
+    userservice = build("admin", "directory_v1", credentials=admincreds)
     email = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
-    userbody = { "password" : password, "primaryEmail" : email }
-    
-    debug_log(5, "Attempting to change user pass with post body: %s" % json.dumps(userbody))
+    userbody = {"password": password, "primaryEmail": email}
+
+    debug_log(
+        5, "Attempting to change user pass with post body: %s" % json.dumps(userbody)
+    )
     try:
-        changeresponse = userservice.users().update(userKey=email, body=userbody).execute()
-    except  googleapiclient.errors.HttpError as e:
-        msg = json.loads(e.content)['error']['message']
+        changeresponse = (
+            userservice.users().update(userKey=email, body=userbody).execute()
+        )
+    except googleapiclient.errors.HttpError as e:
+        msg = json.loads(e.content)["error"]["message"]
         changeresponse = None
-    
+
     if not changeresponse:
         errmsg = "Error in changing password: %s" % msg
         debug_log(1, errmsg)
         return errmsg
 
     debug_log(4, "Changed password for user %s" % username)
-    
-    return("OK")   
 
-    
-        
-
-    
+    return "OK"

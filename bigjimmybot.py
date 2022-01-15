@@ -39,8 +39,8 @@ def check_puzzle_from_queue(threadname, q, fromtime):
         if not workQueue.empty():
             mypuzzle = q.get()
             queueLock.release()
-            
-            #puzzle-pull wait time per thread to avoid API limits
+
+            # puzzle-pull wait time per thread to avoid API limits
             time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
 
             debug_log(
@@ -50,7 +50,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             )
 
             # Feeble attempt to inject a new revision to split up grouping periodically
-            #force_sheet_edit(mypuzzle['drive_id'])
+            # force_sheet_edit(mypuzzle['drive_id'])
 
             # Lots of annoying time string conversions here between mysql and google
             lastpuzzleacttime = datetime.datetime.fromordinal(1)
@@ -74,7 +74,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                             threadname,
                             revision["lastModifyingUser"]["emailAddress"],
                             mypuzzle["name"],
-                            revision["modifiedTime"]
+                            revision["modifiedTime"],
                         ),
                     )
                     debug_log(
@@ -94,14 +94,20 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                 revision["lastModifyingUser"]["emailAddress"],
                             ),
                         )
-                        
-                        mysolverid = solver_from_email(revision['lastModifyingUser']['emailAddress'])
 
-                        
+                        mysolverid = solver_from_email(
+                            revision["lastModifyingUser"]["emailAddress"]
+                        )
+
                         if mysolverid == 0:
-                            debug_log(1, "[Thread: %s] solver %s not found in solver db? This shouldn't happen. Skipping revision." % 
-                                      (threadname, revision['lastModifyingUser']['emailAddress']))
-
+                            debug_log(
+                                1,
+                                "[Thread: %s] solver %s not found in solver db? This shouldn't happen. Skipping revision."
+                                % (
+                                    threadname,
+                                    revision["lastModifyingUser"]["emailAddress"],
+                                ),
+                            )
 
                         if (
                             solver_from_email(
@@ -118,9 +124,14 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                 ),
                             )
                             continue
-                                                
+
                         # Fetch last activity (actually all info) for this solver PRIOR to this one. We'll use it in just a bit.
-                        solverinfo = json.loads(requests.get("%s/solvers/%s" % (config['BIGJIMMYBOT']['APIURI'], mysolverid)).text)['solver']
+                        solverinfo = json.loads(
+                            requests.get(
+                                "%s/solvers/%s"
+                                % (config["BIGJIMMYBOT"]["APIURI"], mysolverid)
+                            ).text
+                        )["solver"]
 
                         # Insert this activity into the activity DB for this puzzle/solver pair
                         databody = {
@@ -144,24 +155,48 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                             "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
                             % (threadname, databody, actupresponse.text),
                         )
-                        debug_log(4, "[Thread: %s] Solver %s has current puzzle of %s" % (threadname, mysolverid, solverinfo['puzz']))
+                        debug_log(
+                            4,
+                            "[Thread: %s] Solver %s has current puzzle of %s"
+                            % (threadname, mysolverid, solverinfo["puzz"]),
+                        )
 
-                        if solverinfo['puzz'] != mypuzzle['id']:
+                        if solverinfo["puzz"] != mypuzzle["id"]:
                             # This potential solver is not currently on this puzzle. Interesting.
-                            lastsolveracttime = datetime.datetime.strptime(solverinfo['lastact']['timestamp'], '%a, %d %b %Y %H:%M:%S %Z')
-                            debug_log(4, "[Thread: %s] Last solver activity for %s was at %s" % (threadname, solverinfo['name'], lastsolveracttime))
-                            if config['BIGJIMMYBOT']['AUTOASSIGN'] == "true":
+                            lastsolveracttime = datetime.datetime.strptime(
+                                solverinfo["lastact"]["timestamp"],
+                                "%a, %d %b %Y %H:%M:%S %Z",
+                            )
+                            debug_log(
+                                4,
+                                "[Thread: %s] Last solver activity for %s was at %s"
+                                % (threadname, solverinfo["name"], lastsolveracttime),
+                            )
+                            if config["BIGJIMMYBOT"]["AUTOASSIGN"] == "true":
                                 if revisiontime > lastsolveracttime:
-                                    debug_log(3, "[Thread: %s] Assigning solver %s to puzzle %s." % (threadname, mysolverid, mypuzzle['id']))
-                                    
-                                    databody = { 
-                                                "puzz" : "%s" % mypuzzle['id']
-                                                }
-                                    
-                                    assignmentresponse = requests.post("%s/solvers/%s/puzz" % 
-                                                     (config['BIGJIMMYBOT']['APIURI'], mysolverid), json = databody)
-                                    debug_log(4, "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s" % 
-                                              (threadname, databody, mysolverid, assignmentresponse.text))
+                                    debug_log(
+                                        3,
+                                        "[Thread: %s] Assigning solver %s to puzzle %s."
+                                        % (threadname, mysolverid, mypuzzle["id"]),
+                                    )
+
+                                    databody = {"puzz": "%s" % mypuzzle["id"]}
+
+                                    assignmentresponse = requests.post(
+                                        "%s/solvers/%s/puzz"
+                                        % (config["BIGJIMMYBOT"]["APIURI"], mysolverid),
+                                        json=databody,
+                                    )
+                                    debug_log(
+                                        4,
+                                        "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
+                                        % (
+                                            threadname,
+                                            databody,
+                                            mysolverid,
+                                            assignmentresponse.text,
+                                        ),
+                                    )
         else:
             queueLock.release()
     return 0
