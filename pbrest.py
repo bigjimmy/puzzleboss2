@@ -10,6 +10,7 @@ from pblib import *
 from pbgooglelib import *
 from pbdiscordlib import *
 from pandas.core.dtypes.generic import ABCIntervalIndex
+from pymysql.cursors import DictCursor
 from secrets import token_hex
 from flasgger.utils import swag_from
 from pbldaplib import *
@@ -19,7 +20,7 @@ app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
 app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
-mysql = MySQL(app)
+mysql = MySQL(app, cursorclass=DictCursor)
 api = Api(app)
 swagger = flasgger.Swagger(app)
 
@@ -64,15 +65,7 @@ def get_all_all():
         return {"error": errmsg}, 500
 
     last_activity_for_puzzles = {}
-    for row in activity:
-        last_activity = {
-            "actid": row[0],
-            "timestamp": row[1],
-            "solver_id": row[2],
-            "puzzle_id": row[3],
-            "source": row[4],
-            "type": row[5],
-        }
+    for last_activity in activity:
         last_activity_for_puzzles[last_activity["puzzle_id"]] = last_activity
 
     try:
@@ -86,27 +79,8 @@ def get_all_all():
         return {"error": errmsg}, 500
 
     all_puzzles = {}
-    for row in puzzle_view:
-        puzzle = {
-            "id": row[0],
-            "name": row[1],
-            "drive_link": row[2],
-            "status": row[3],
-            "answer": row[4],
-            "roundname": row[5],
-            "round_id": row[6],
-            "comments": row[7],
-            "drive_uri": row[8],
-            "chat_channel_name": row[9],
-            "chat_channel_id": row[10],
-            "chat_channel_link": row[11],
-            "drive_id": row[12],
-            "puzzle_uri": row[13],
-            "solvers": row[14],
-            "cursolvers": row[15],
-            "xyzloc": row[16],
-            "lastact": last_activity_for_puzzles.get(row[0]),
-        }
+    for puzzle in puzzle_view:
+        puzzle["lastact"] = last_activity_for_puzzles.get(row["id"])
         all_puzzles[puzzle["id"]] = puzzle
 
     try:
@@ -127,21 +101,12 @@ def get_all_all():
             return False
 
     rounds = []
-    for row in round_view:
-        round_puzzles = [
+    for round in round_view:
+        round["puzzles"] = [
             all_puzzles[int(id)]
-            for id in row[6].split(",")
+            for id in round["puzzles"].split(",")
             if is_int(id) and int(id) in all_puzzles
         ]
-        round = {
-            "id": row[0],
-            "name": row[1],
-            "round_uri": row[2],
-            "drive_uri": row[3],
-            "drive_id": row[4],
-            "meta_id": row[5],
-            "puzzles": round_puzzles,
-        }
         rounds.append(round)
 
     return {"rounds": rounds}, 200
@@ -151,26 +116,21 @@ def get_all_all():
 @swag_from("swag/getpuzzles.yaml", endpoint="puzzles", methods=["GET"])
 def get_all_puzzles():
     debug_log(4, "start")
-    result = {}
     try:
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SELECT id, name from puzzle")
-        rv = cursor.fetchall()
+        puzzlist = cursor.fetchall()
     except IndexError:
         errmsg = "Exception in fetching all puzzles from database"
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    result["status"] = "ok"
-
-    puzzlist = []
-    for puzz in rv:
-        puzzlist.append({"id": puzz[0], "name": puzz[1]})
-    result["puzzles"] = puzzlist
-
     debug_log(4, "listed all puzzles")
-    return result, 200
+    return {
+        "status": "ok",
+        "puzzles": puzzlist,
+    }, 200
 
 
 @app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
@@ -180,8 +140,8 @@ def get_one_puzzle(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT * from puzzle_view where id = %s", [id])
-        rv = cursor.fetchall()[0]
+        cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
+        puzzle = cursor.fetchone()
     except IndexError:
         errmsg = "Puzzle %s not found in database" % id
         debug_log(1, errmsg)
@@ -191,30 +151,11 @@ def get_one_puzzle(id):
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    debug_log(5, "fetched puzzle %s: %s" % (id, rv))
-    lastact = get_last_activity_for_puzzle(id)
+    debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
+    puzzle["lastact"] = get_last_activity_for_puzzle(id)
     return {
         "status": "ok",
-        "puzzle": {
-            "id": rv[0],
-            "name": rv[1],
-            "drive_link": rv[2],
-            "status": rv[3],
-            "answer": rv[4],
-            "roundname": rv[5],
-            "round_id": rv[6],
-            "comments": rv[7],
-            "drive_uri": rv[8],
-            "chat_channel_name": rv[9],
-            "chat_channel_id": rv[10],
-            "chat_channel_link": rv[11],
-            "drive_id": rv[12],
-            "puzzle_uri": rv[13],
-            "solvers": rv[14],
-            "cursolvers": rv[15],
-            "xyzloc": rv[16],
-            "lastact": lastact,
-        },
+        "puzzle": puzzle,
     }, 200
 
 
@@ -228,8 +169,10 @@ def get_puzzle_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            cursor.execute(f"SELECT {part} from puzzle_view where id = %s", (id,))
-            rv = cursor.fetchone()[0]
+            cursor.execute(
+                f"SELECT {part} from puzzle_view where id = %s LIMIT 1", (id,)
+            )
+            rv = cursor.fetchone()[part]
         except TypeError:
             errmsg = "Puzzle %s not found in database" % id
             debug_log(1, errmsg)
@@ -249,27 +192,22 @@ def get_puzzle_part(id, part):
 @app.route("/rounds", endpoint="rounds", methods=["GET"])
 @swag_from("swag/getrounds.yaml", endpoint="rounds", methods=["GET"])
 def get_all_rounds():
-    result = {}
     debug_log(4, "start")
     try:
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SELECT id, name from round")
-        rv = cursor.fetchall()
+        roundlist = cursor.fetchall()
     except:
         errmsg = "Exception in fetching all rounds from database"
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-        result["status"] = "ok"
-
-    roundlist = []
-    for round in rv:
-        roundlist.append({"id": round[0], "name": round[1]})
-    result["rounds"] = roundlist
-
     debug_log(4, "listed all rounds")
-    return result, 200
+    return {
+        "status": "ok",
+        "rounds": roundlist,
+    }, 200
 
 
 @app.route("/rounds/<id>", endpoint="round_id", methods=["GET"])
@@ -279,8 +217,8 @@ def get_one_round(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT * from round_view where id = %s", [id])
-        rv = cursor.fetchall()[0]
+        cursor.execute("SELECT * from round_view where id = %s LIMIT 1", (id,))
+        round = cursor.fetchone()
     except IndexError:
         errmsg = "Round %s not found in database" % id
         debug_log(1, errmsg)
@@ -290,20 +228,12 @@ def get_one_round(id):
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    puzzlesstruct = get_puzzles_from_list(rv[6])
+    round["puzzles"] = get_puzzles_from_list(round["puzzles"])
 
     debug_log(4, "fetched round %s" % id)
     return {
         "status": "ok",
-        "round": {
-            "id": rv[0],
-            "name": rv[1],
-            "round_uri": rv[2],
-            "drive_uri": rv[3],
-            "drive_id": rv[4],
-            "meta_id": rv[5],
-            "puzzles": puzzlesstruct,
-        },
+        "round": round,
     }, 200
 
 
@@ -315,7 +245,7 @@ def get_round_part(id, part):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(f"SELECT {part} from round_view where id = %s", (id,))
-        rv = cursor.fetchone()[0]
+        answer = cursor.fetchone()[part]
     except TypeError:
         errmsg = "Round %s not found in database" % id
         debug_log(1, errmsg)
@@ -325,11 +255,8 @@ def get_round_part(id, part):
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    answer = rv
-
     if part == "puzzles":
-        puzlist = get_puzzles_from_list(rv)
-        answer = puzlist
+        answer = get_puzzles_from_list(answer)
 
     debug_log(4, "fetched round part %s for %s" % (part, id))
     return {"status": "ok", "round": {"id": id, part: answer}}, 200
@@ -343,22 +270,15 @@ def get_all_solvers():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT id,name from solver_view")
-        rv = cursor.fetchall()
+        cursor.execute("SELECT id, name from solver_view")
+        solvers = cursor.fetchall()
     except:
         errmsg = "Exception in fetching all solvers from database"
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-        result["status"] = "ok"
-
-    solverlist = []
-    for solver in rv:
-        solverlist.append({"id": solver[0], "name": solver[1]})
-    result["solvers"] = solverlist
-
     debug_log(4, "listed all solvers")
-    return result, 200
+    return {"status": "ok", "solvers": solvers}, 200
 
 
 @app.route("/solvers/<id>", endpoint="solver_id", methods=["GET"])
@@ -369,7 +289,7 @@ def get_one_solver(id):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SELECT * from solver_view where id = %s", (id,))
-        rv = cursor.fetchall()[0]
+        solver = cursor.fetchone()
     except IndexError:
         errmsg = "Solver %s not found in database" % id
         debug_log(1, errmsg)
@@ -379,20 +299,11 @@ def get_one_solver(id):
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    lastact = get_last_activity_for_solver(id)
+    solver["lastact"] = get_last_activity_for_solver(id)
     debug_log(4, "fetched solver %s" % id)
     return {
         "status": "ok",
-        "solver": {
-            "id": rv[0],
-            "name": rv[1],
-            "puzzles": rv[2],
-            "puzz": rv[3],
-            "fullname": rv[4],
-            "chat_uid": rv[5],
-            "chat_name": rv[6],
-            "lastact": lastact,
-        },
+        "solver": solver,
     }, 200
 
 
@@ -407,7 +318,7 @@ def get_solver_part(id, part):
             conn = mysql.connection
             cursor = conn.cursor()
             cursor.execute(f"SELECT {part} from solver_view where id = %s", (id,))
-            rv = cursor.fetchone()[0]
+            rv = cursor.fetchone()[part]
         except TypeError:
             errmsg = "Solver %s not found in database" % id
             debug_log(1, errmsg)
@@ -431,8 +342,8 @@ def get_current_version():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT MAX(version) from log")
-        rv = cursor.fetchone()[0]
+        cursor.execute("SELECT MAX(version) AS max_version from log")
+        rv = cursor.fetchone()["max_version"]
     except:
         errmsg = "Exception in fetching latest version from database"
         debug_log(0, errmsg)
@@ -456,10 +367,10 @@ def get_diff(fromver, tover):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT DISTINCT * FROM log WHERE log.version >= %s AND log.version <= %s",
+            "SELECT DISTINCT * FROM log WHERE version >= %s AND version <= %s",
             (fromver, tover),
         )
-        rv = cursor.fetchall()
+        versionlist = cursor.fetchall()
     except TypeError:
         errmsg = "Exception fetching version diff from %s to %s from database" % (
             fromver,
@@ -467,18 +378,6 @@ def get_diff(fromver, tover):
         )
         debug_log(0, errmsg)
         return {"error": errmsg}
-
-    versionlist = []
-    for version in rv:
-        versionlist.append(
-            {
-                "version": version[0],
-                "module": version[3],
-                "name": version[4],
-                "id": version[5],
-                "part": version[6],
-            }
-        )
 
     debug_log(5, "fetched version diff from %s to %s" % (fromver, tover))
     return {"status": "ok", "versions": versionlist}
@@ -492,23 +391,11 @@ def get_full_diff():
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT * FROM log")
-        rv = cursor.fetchall()
+        versionlist = cursor.fetchall()
     except TypeError:
         errmsg = "Exception fetching all-time version diff from database"
         debug_log(0, errmsg)
         return {"error": errmsg}
-
-    versionlist = []
-    for version in rv:
-        versionlist.append(
-            {
-                "version": version[0],
-                "module": version[3],
-                "name": version[4],
-                "id": version[5],
-                "part": version[6],
-            }
-        )
 
     debug_log(5, "fetched all-time version diff")
     return {"status": "ok", "versions": versionlist}
@@ -540,14 +427,14 @@ def create_puzzle():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM puzzle WHERE name = %s", (puzname,))
-        rv = cursor.fetchall()
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (puzname,))
+        existing_puzzle = cursor.fetchone()
     except:
         errmsg = "Exception checking database for duplicate puzzle before insert"
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    if rv != ():
+    if existing_puzzle:
         errmsg = "Duplicate puzzle name %s detected" % puzname
         debug_log(2, errmsg)
         return {"error": errmsg}, 500
@@ -625,8 +512,8 @@ def create_puzzle():
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (puzname,))
-        rv = cursor.fetchall()
-        myid = str(rv[0][0])
+        puzzle = cursor.fetchone()
+        myid = str(puzzle["id"])
     except:
         errmsg = "Exception checking database for puzzle after insert"
         debug_log(0, errmsg)
@@ -679,14 +566,14 @@ def create_round():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM round WHERE name = %s", (roundname,))
-        rv = cursor.fetchall()
+        cursor.execute("SELECT id FROM round WHERE name = %s LIMIT 1", (roundname,))
+        existing_round = cursor.fetchone()
     except:
         errmsg = "Exception checking database for duplicate round before insert"
         debug_log(0, errmsg)
         return {"error": errmsg}, 500
 
-    if rv != ():
+    if existing_round:
         errmsg = "Duplicate round name %s detected" % roundname
         debug_log(2, errmsg)
         return {"error": errmsg}, 500
@@ -1126,14 +1013,14 @@ def finish_account(code):
             """,
             (code,),
         )
-        rv = cursor.fetchone()
+        newuser = cursor.fetchone()
 
-        debug_log(5, "query return: %s" % str(rv))
+        debug_log(5, "query return: %s" % str(newuser))
 
-        username = rv[0]
-        fullname = rv[1]
-        email = rv[2]
-        password = rv[3]
+        username = newuser["username"]
+        fullname = newuser["fullname"]
+        email = newuser["email"]
+        password = newuser["password"]
 
     except TypeError:
         errmsg = "Code %s is not valid." % code
@@ -1146,8 +1033,7 @@ def finish_account(code):
         % (username, fullname, email),
     )
 
-    firstname = fullname.split()[0]
-    lastname = fullname.split()[1]
+    firstname, lastname = fullname.split(maxsplit=1)
 
     retcode = add_or_update_user(username, firstname, lastname, email, password)
 
@@ -1189,7 +1075,7 @@ def unassign_solver_by_name(name):
     conn = mysql.connection
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM solver_view WHERE name = %s LIMIT 1", (name,))
-    id = cursor.fetchone()[0]
+    id = cursor.fetchone()["id"]
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (NULL, %s)", (id,)
@@ -1258,20 +1144,11 @@ def get_last_activity_for_puzzle(id):
             """SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1""",
             (id,),
         )
-        arv = cursor.fetchall()[0]
+        return cursor.fetchone()
     except IndexError:
         errmsg = "No Activity for Puzzle %s found in database yet" % id
         debug_log(4, errmsg)
         return None
-
-    return {
-        "actid": arv[0],
-        "timestamp": arv[1],
-        "solver_id": arv[2],
-        "puzzle_id": arv[3],
-        "source": arv[4],
-        "type": arv[5],
-    }
 
 
 def get_last_activity_for_solver(id):
@@ -1283,20 +1160,11 @@ def get_last_activity_for_solver(id):
             "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
             (id,),
         )
-        arv = cursor.fetchall()[0]
+        return cursor.fetchone()
     except IndexError:
         errmsg = "No Activity for solver %s found in database yet" % id
         debug_log(4, errmsg)
         return None
-
-    return {
-        "actid": arv[0],
-        "timestamp": arv[1],
-        "solver_id": arv[2],
-        "puzzle_id": arv[3],
-        "source": arv[4],
-        "type": arv[5],
-    }
 
 
 def set_new_activity_for_puzzle(id, actstruct):
