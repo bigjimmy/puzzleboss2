@@ -222,18 +222,13 @@ if __name__ == "__main__":
     debug_log(3, "google drive init succeeded. Hunt folder id: %s" % pblib.huntfolderid)
 
     while True:
-        r = json.loads(requests.get("%s/rounds" % config["BIGJIMMYBOT"]["APIURI"]).text)
+        r = json.loads(requests.get("%s/all" % config["BIGJIMMYBOT"]["APIURI"]).text)
         debug_log(5, "api return: %s" % r)
         rounds = r["rounds"]
         debug_log(4, "loaded round list")
         puzzles = []
         for round in rounds:
-            puzzlesinround = json.loads(
-                requests.get(
-                    "%s/rounds/%s/puzzles"
-                    % (config["BIGJIMMYBOT"]["APIURI"], round["id"])
-                ).text
-            )["round"]["puzzles"]
+            puzzlesinround = round["puzzles"]
             debug_log(
                 4, "appending puzzles from round %s: %s" % (round["id"], puzzlesinround)
             )
