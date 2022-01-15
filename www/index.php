@@ -9,7 +9,7 @@ if (isset($_GET['submit'])) {
 // Check for authenticated user
 $uid = getauthenticateduser();
 $solver = readapi("/solvers/$uid")->solver;
-$fullhunt = readapi('/all')->rounds;
+$fullhunt = array_reverse(readapi('/all')->rounds);
 
 if (isset($_GET['data'])) {
     header('Content-Type: application/json; charset=utf-8');
