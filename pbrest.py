@@ -107,11 +107,14 @@ def get_all_all():
 
     rounds = []
     for round in round_view:
-        round["puzzles"] = [
-            all_puzzles[int(id)]
-            for id in round["puzzles"].split(",")
-            if is_int(id) and int(id) in all_puzzles
-        ]
+        if "puzzles" in round and round["puzzles"]:
+            round["puzzles"] = [
+                all_puzzles[int(id)]
+                for id in round["puzzles"].split(",")
+                if is_int(id) and int(id) in all_puzzles
+            ]
+        else:
+            round["puzzles"] = []
         rounds.append(round)
 
     return {"rounds": rounds}
@@ -211,7 +214,7 @@ def get_all_rounds():
 def get_one_round(id):
     debug_log(4, "start. id: %s" % id)
     rounds = get_all_all()["rounds"]
-    round = next((round for round in rounds if round["id"] == id), None)
+    round = next((round for round in rounds if str(round["id"]) == str(id)), None)
     if not round:
         raise Exception("Round %s not found in database" % id)
 
