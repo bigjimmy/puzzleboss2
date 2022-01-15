@@ -208,7 +208,7 @@ def solver_from_email(email):
         requests.get("%s/solvers" % config["BIGJIMMYBOT"]["APIURI"]).text
     )["solvers"]
     for solver in solverslist:
-        if solver["name"] == email.split("@")[0]:
+        if solver["name"].lower() == email.split("@")[0].lower():
             debug_log(4, "Solver %s is id: %s" % (email, solver["id"]))
             return solver["id"]
     return 0
