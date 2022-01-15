@@ -238,7 +238,7 @@ if __name__ == "__main__":
                 else:
                     debug_log(4, "skipping solved puzzle %s" % puzzle["name"])
         debug_log(4, "full puzzle structure loaded")
-        fromtime = datetime.datetime.utcnow() - datetime.timedelta(minutes=5)
+        fromtime = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
         debug_log(
             4,
             "Beginning iteration of bigjimmy bot across all puzzles (checking revs from time %s)"
