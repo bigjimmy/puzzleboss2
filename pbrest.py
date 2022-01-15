@@ -80,7 +80,7 @@ def get_all_all():
 
     all_puzzles = {}
     for puzzle in puzzle_view:
-        puzzle["lastact"] = last_activity_for_puzzles.get(row["id"])
+        puzzle["lastact"] = last_activity_for_puzzles.get(puzzle["id"])
         all_puzzles[puzzle["id"]] = puzzle
 
     try:
