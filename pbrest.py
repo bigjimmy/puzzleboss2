@@ -214,21 +214,16 @@ def get_all_rounds():
 @swag_from("swag/getroundid.yaml", endpoint="round_id", methods=["GET"])
 def get_one_round(id):
     debug_log(4, "start. id: %s" % id)
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT * from round_view where id = %s LIMIT 1", (id,))
-        round = cursor.fetchone()
-    except IndexError:
+    all_rounds = get_all_all()
+    if all_rounds[1] != 200:
+        return all_rounds
+
+    rounds = all_rounds[0]["rounds"]
+    round = next(round for round in rounds if round["id"] == id, None)
+    if not round:
         errmsg = "Round %s not found in database" % id
         debug_log(1, errmsg)
         return {"error": errmsg}, 500
-    except:
-        errmsg = "Exception in fetching round %s from database" % id
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
-
-    round["puzzles"] = get_puzzles_from_list(round["puzzles"])
 
     debug_log(4, "fetched round %s" % id)
     return {
