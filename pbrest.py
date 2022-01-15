@@ -975,11 +975,14 @@ def update_puzzle_part(id, part):
 
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
-        chat_say_something(
-            mypuzzle["puzzle"]["chat_channel_id"],
-            "**ATTENTION:** %s is being worked on at %s"
-            % (mypuzzle["puzzle"]["name"], value),
-        )
+        if (value != None) and (value != ""):
+            chat_say_something(
+                mypuzzle["puzzle"]["chat_channel_id"],
+                "**ATTENTION:** %s is being worked on at %s"
+                % (mypuzzle["puzzle"]["name"], value),
+                )
+        else:
+            debug_log(3, "puzzle xyzloc removed. skipping discord announcement")
 
     elif part == "answer":
         if data != "" and data != None:
