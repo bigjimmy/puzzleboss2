@@ -222,7 +222,7 @@ def get_one_round(id):
         return all_rounds
 
     rounds = all_rounds[0]["rounds"]
-    round = next((round for round in rounds if round["id"] == id), None)
+    round = next((round for round in rounds if str(round["id"]) == str(id)), None)
     if not round:
         errmsg = "Round %s not found in database" % id
         debug_log(1, errmsg)
@@ -616,7 +616,7 @@ def update_round_part(id, part):
     try:
         data = request.get_json()
         value = data[part]
-        if value == 'NULL':
+        if value == "NULL":
             value = None
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
