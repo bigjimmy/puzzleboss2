@@ -24,6 +24,17 @@ mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
 
+
+@app.errorhandler(Exception)
+def handle_error(e):
+    code = 500
+    if isinstance(e, HTTPException):
+        code = e.code
+    errmsg = str(e)
+    debug_log(0, errmsg)
+    return {"error": str(e)}, code
+
+
 # GET/READ Operations
 
 
@@ -60,9 +71,7 @@ def get_all_all():
         )
         activity = cursor.fetchall()
     except:
-        errmsg = "Exception in querying activity"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in querying activity")
 
     last_activity_for_puzzles = {}
     for last_activity in activity:
@@ -74,9 +83,7 @@ def get_all_all():
         cursor.execute("SELECT * from puzzle_view")
         puzzle_view = cursor.fetchall()
     except:
-        errmsg = "Exception in querying puzzle_view"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in querying puzzle_view")
 
     all_puzzles = {}
     for puzzle in puzzle_view:
@@ -89,9 +96,7 @@ def get_all_all():
         cursor.execute("SELECT * from round_view")
         round_view = cursor.fetchall()
     except:
-        errmsg = "Exception in querying round_view"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in querying round_view")
 
     def is_int(val):
         try:
@@ -109,7 +114,7 @@ def get_all_all():
         ]
         rounds.append(round)
 
-    return {"rounds": rounds}, 200
+    return {"rounds": rounds}
 
 
 @app.route("/puzzles", endpoint="puzzles", methods=["GET"])
@@ -122,15 +127,13 @@ def get_all_puzzles():
         cursor.execute("SELECT id, name from puzzle")
         puzzlist = cursor.fetchall()
     except IndexError:
-        errmsg = "Exception in fetching all puzzles from database"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in fetching all puzzles from database")
 
     debug_log(4, "listed all puzzles")
     return {
         "status": "ok",
         "puzzles": puzzlist,
-    }, 200
+    }
 
 
 @app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
@@ -143,20 +146,16 @@ def get_one_puzzle(id):
         cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
         puzzle = cursor.fetchone()
     except IndexError:
-        errmsg = "Puzzle %s not found in database" % id
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Puzzle %s not found in database" % id)
     except:
-        errmsg = "Exception in fetching puzzle %s from database" % id
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in fetching puzzle %s from database" % id)
 
     debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
     puzzle["lastact"] = get_last_activity_for_puzzle(id)
     return {
         "status": "ok",
         "puzzle": puzzle,
-    }, 200
+    }
 
 
 @app.route("/puzzles/<id>/<part>", endpoint="puzzle_part", methods=["GET"])
@@ -174,19 +173,18 @@ def get_puzzle_part(id, part):
             )
             rv = cursor.fetchone()[part]
         except TypeError:
-            errmsg = "Puzzle %s not found in database" % id
-            debug_log(1, errmsg)
-            return {"error": errmsg}, 500
+            raise Exception("Puzzle %s not found in database" % id)
         except:
-            errmsg = "Exception in fetching %s part for puzzle %s from database" % (
-                part,
-                id,
+            raise Exception(
+                "Exception in fetching %s part for puzzle %s from database"
+                % (
+                    part,
+                    id,
+                )
             )
-            debug_log(0, errmsg)
-            return {"error": errmsg}, 500
 
     debug_log(4, "fetched puzzle part %s for %s" % (part, id))
-    return {"status": "ok", "puzzle": {"id": id, part: rv}}, 200
+    return {"status": "ok", "puzzle": {"id": id, part: rv}}
 
 
 @app.route("/rounds", endpoint="rounds", methods=["GET"])
@@ -199,37 +197,29 @@ def get_all_rounds():
         cursor.execute("SELECT id, name from round")
         roundlist = cursor.fetchall()
     except:
-        errmsg = "Exception in fetching all rounds from database"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in fetching all rounds from database")
 
     debug_log(4, "listed all rounds")
     return {
         "status": "ok",
         "rounds": roundlist,
-    }, 200
+    }
 
 
 @app.route("/rounds/<id>", endpoint="round_id", methods=["GET"])
 @swag_from("swag/getroundid.yaml", endpoint="round_id", methods=["GET"])
 def get_one_round(id):
     debug_log(4, "start. id: %s" % id)
-    all_rounds = get_all_all()
-    if all_rounds[1] != 200:
-        return all_rounds
-
-    rounds = all_rounds[0]["rounds"]
+    rounds = get_all_all()["rounds"]
     round = next((round for round in rounds if round["id"] == id), None)
     if not round:
-        errmsg = "Round %s not found in database" % id
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Round %s not found in database" % id)
 
     debug_log(4, "fetched round %s" % id)
     return {
         "status": "ok",
         "round": round,
-    }, 200
+    }
 
 
 @app.route("/rounds/<id>/<part>", endpoint="round_part", methods=["GET"])
@@ -242,19 +232,17 @@ def get_round_part(id, part):
         cursor.execute(f"SELECT {part} from round_view where id = %s", (id,))
         answer = cursor.fetchone()[part]
     except TypeError:
-        errmsg = "Round %s not found in database" % id
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Round %s not found in database" % id)
     except:
-        errmsg = "Exception in fetching %s part for round %s from database" % (part, id)
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception(
+            "Exception in fetching %s part for round %s from database" % (part, id)
+        )
 
     if part == "puzzles":
         answer = get_puzzles_from_list(answer)
 
     debug_log(4, "fetched round part %s for %s" % (part, id))
-    return {"status": "ok", "round": {"id": id, part: answer}}, 200
+    return {"status": "ok", "round": {"id": id, part: answer}}
 
 
 @app.route("/solvers", endpoint="solvers", methods=["GET"])
@@ -268,12 +256,10 @@ def get_all_solvers():
         cursor.execute("SELECT id, name from solver_view")
         solvers = cursor.fetchall()
     except:
-        errmsg = "Exception in fetching all solvers from database"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in fetching all solvers from database")
 
     debug_log(4, "listed all solvers")
-    return {"status": "ok", "solvers": solvers}, 200
+    return {"status": "ok", "solvers": solvers}
 
 
 @app.route("/solvers/<id>", endpoint="solver_id", methods=["GET"])
@@ -286,20 +272,16 @@ def get_one_solver(id):
         cursor.execute("SELECT * from solver_view where id = %s", (id,))
         solver = cursor.fetchone()
     except IndexError:
-        errmsg = "Solver %s not found in database" % id
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Solver %s not found in database" % id)
     except:
-        errmsg = "Exception in fetching solver %s from database" % id
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in fetching solver %s from database" % id)
 
     solver["lastact"] = get_last_activity_for_solver(id)
     debug_log(4, "fetched solver %s" % id)
     return {
         "status": "ok",
         "solver": solver,
-    }, 200
+    }
 
 
 @app.route("/solvers/<id>/<part>", endpoint="solver_part", methods=["GET"])
@@ -315,19 +297,18 @@ def get_solver_part(id, part):
             cursor.execute(f"SELECT {part} from solver_view where id = %s", (id,))
             rv = cursor.fetchone()[part]
         except TypeError:
-            errmsg = "Solver %s not found in database" % id
-            debug_log(1, errmsg)
-            return {"error": errmsg}, 500
+            raise Exception("Solver %s not found in database" % id)
         except:
-            errmsg = "Exception in fetching %s part for solver %s from database" % (
-                part,
-                id,
+            raise Exception(
+                "Exception in fetching %s part for solver %s from database"
+                % (
+                    part,
+                    id,
+                )
             )
-            debug_log(0, errmsg)
-            return {"error": errmsg}, 500
 
     debug_log(4, "fetched round part %s for %s" % (part, id))
-    return {"status": "ok", "solver": {"id": id, part: rv}}, 200
+    return {"status": "ok", "solver": {"id": id, part: rv}}
 
 
 @app.route("/version", endpoint="version", methods=["GET"])
@@ -340,12 +321,10 @@ def get_current_version():
         cursor.execute("SELECT MAX(version) AS max_version from log")
         rv = cursor.fetchone()["max_version"]
     except:
-        errmsg = "Exception in fetching latest version from database"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in fetching latest version from database")
 
     debug_log(5, "fetched latest version number: %s from database" % str(rv))
-    return {"status": "ok", "version": rv}, 200
+    return {"status": "ok", "version": rv}
 
 
 @app.route("/version/<fromver>/<tover>", endpoint="version_diff", methods=["GET"])
@@ -354,9 +333,7 @@ def get_diff(fromver, tover):
     debug_log(4, "start. fromver: %s, tover: %s" % (fromver, tover))
 
     if fromver > tover:
-        errmsg = "Version numbers being compared must be in order."
-        debug_log(1, errmsg)
-        return {"error": errmsg}
+        raise Exception("Version numbers being compared must be in order.")
 
     try:
         conn = mysql.connection
@@ -367,12 +344,13 @@ def get_diff(fromver, tover):
         )
         versionlist = cursor.fetchall()
     except TypeError:
-        errmsg = "Exception fetching version diff from %s to %s from database" % (
-            fromver,
-            tover,
+        raise Exception(
+            "Exception fetching version diff from %s to %s from database"
+            % (
+                fromver,
+                tover,
+            )
         )
-        debug_log(0, errmsg)
-        return {"error": errmsg}
 
     debug_log(5, "fetched version diff from %s to %s" % (fromver, tover))
     return {"status": "ok", "versions": versionlist}
@@ -388,9 +366,7 @@ def get_full_diff():
         cursor.execute("SELECT DISTINCT * FROM log")
         versionlist = cursor.fetchall()
     except TypeError:
-        errmsg = "Exception fetching all-time version diff from database"
-        debug_log(0, errmsg)
-        return {"error": errmsg}
+        raise Exception("Exception fetching all-time version diff from database")
 
     debug_log(5, "fetched all-time version diff")
     return {"status": "ok", "versions": versionlist}
@@ -410,13 +386,11 @@ def create_puzzle():
         roundid = int(data["round_id"])
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
-        errmsg = "failed due to invalid JSON POST structure or empty POST"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        errmsg = "One or more expected fields (name, puzzle_uri, round_id) missing."
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception(
+            "One or more expected fields (name, puzzle_uri, round_id) missing."
+        )
 
     # Check for duplicate
     try:
@@ -425,33 +399,26 @@ def create_puzzle():
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (puzname,))
         existing_puzzle = cursor.fetchone()
     except:
-        errmsg = "Exception checking database for duplicate puzzle before insert"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception(
+            "Exception checking database for duplicate puzzle before insert"
+        )
 
     if existing_puzzle:
-        errmsg = "Duplicate puzzle name %s detected" % puzname
-        debug_log(2, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Duplicate puzzle name %s detected" % puzname)
 
     # Get round drive link and name
-    round_drive_uri = get_round_part(roundid, "drive_uri")[0]["round"]["drive_uri"]
-    round_name = get_round_part(roundid, "name")[0]["round"]["name"]
+    round_drive_uri = get_round_part(roundid, "drive_uri")["round"]["drive_uri"]
+    round_name = get_round_part(roundid, "name")["round"]["name"]
     round_drive_id = round_drive_uri.split("/")[-1]
 
     # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
     drive_uri = "%s/doc.php?pname=%s" % (config["APP"]["BIN_URI"], puzname)
-    chat_channel = chat_create_channel_for_puzzle(
+    chat_id, chat_link = chat_create_channel_for_puzzle(
         puzname, round_name, puzuri, drive_uri
     )
-    debug_log(4, "return from creating chat channel is - %s" % str(chat_channel))
-    try:
-        chat_id = chat_channel[0]
-        chat_link = chat_channel[1]
-    except:
-        errmsg = "Error in creating chat channel for puzzle"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+    debug_log(
+        4, "return from creating chat channel is - %s, chat_link" % (chat_id, chat_link)
+    )
     debug_log(4, "chat channel for puzzle %s is made" % puzname)
 
     # Create google sheet
@@ -491,16 +458,12 @@ def create_puzzle():
         )
         conn.commit()
     except MySQLdb._exceptions.IntegrityError:
-        errmsg = (
+        raise Exception(
             "MySQL integrity failure. Does another puzzle with the same name %s exist?"
             % puzname
         )
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
     except:
-        errmsg = "Exception in insertion of puzzle %s into database" % puzname
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in insertion of puzzle %s into database" % puzname)
 
     # We need to figure out what the ID is that the puzzle got assigned
     try:
@@ -510,9 +473,7 @@ def create_puzzle():
         puzzle = cursor.fetchone()
         myid = str(puzzle["id"])
     except:
-        errmsg = "Exception checking database for puzzle after insert"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception checking database for puzzle after insert")
 
     # Announce new puzzle in chat
     chat_announce_new(puzname)
@@ -532,7 +493,7 @@ def create_puzzle():
             "chat_link": chat_link,
             "drive_uri": drive_uri,
         },
-    }, 200
+    }
 
 
 @app.route("/rounds", endpoint="post_rounds", methods=["POST"])
@@ -544,18 +505,12 @@ def create_round():
         roundname = sanitize_string(data["name"])
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
-        errmsg = "failed due to invalid JSON POST structure or empty POST"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        errmsg = "Expected field (name) missing."
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Expected field (name) missing.")
 
     if not roundname or roundname == "":
-        errmsg = "Round with empty name disallowed"
-        debug_log(2, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Round with empty name disallowed")
 
     # Check for duplicate
     try:
@@ -564,22 +519,16 @@ def create_round():
         cursor.execute("SELECT id FROM round WHERE name = %s LIMIT 1", (roundname,))
         existing_round = cursor.fetchone()
     except:
-        errmsg = "Exception checking database for duplicate round before insert"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception checking database for duplicate round before insert")
 
     if existing_round:
-        errmsg = "Duplicate round name %s detected" % roundname
-        debug_log(2, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Duplicate round name %s detected" % roundname)
 
     chat_status = chat_announce_round(roundname)
     debug_log(4, "return from announcing round in chat is - %s" % str(chat_status))
 
     if chat_status == None:
-        errmsg = "Error in announcing new round in chat"
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Error in announcing new round in chat")
 
     debug_log(4, "Making call to create google drive folder for round")
     round_drive_id = create_round_folder(roundname)
@@ -595,15 +544,13 @@ def create_round():
     )
     conn.commit()
     # except:
-    #     errmsg = "Exception in insertion of round %s into database" % roundname
-    #     debug_log(0, errmsg)
-    #     return {"error" : errmsg }, 500
+    #     raise Exception("Exception in insertion of round %s into database" % roundname)
 
     debug_log(
         3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri)
     )
 
-    return {"status": "ok", "round": {"name": roundname}}, 200
+    return {"status": "ok", "round": {"name": roundname}}
 
 
 @app.route("/rounds/<id>/<part>", endpoint="post_round_part", methods=["POST"])
@@ -613,17 +560,13 @@ def update_round_part(id, part):
     try:
         data = request.get_json()
         value = data[part]
-        if value == 'NULL':
+        if value == "NULL":
             value = None
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
-        errmsg = "failed due to invalid JSON POST structure or empty POST"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        errmsg = "Expected field (%s) missing." % part
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Expected field (%s) missing." % part)
 
     # Actually insert into the database
     try:
@@ -632,13 +575,13 @@ def update_round_part(id, part):
         cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
     except KeyError:
-        errmsg = "Exception in modifying %s of round %s into database" % (part, id)
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception(
+            "Exception in modifying %s of round %s into database" % (part, id)
+        )
 
     debug_log(3, "round %s %s updated to %s" % (id, part, value))
 
-    return {"status": "ok", "round": {"id": id, part: value}}, 200
+    return {"status": "ok", "round": {"id": id, part: value}}
 
 
 @app.route("/solvers", endpoint="post_solver", methods=["POST"])
@@ -651,13 +594,9 @@ def create_solver():
         name = sanitize_string(data["name"])
         fullname = data["fullname"]
     except TypeError:
-        errmsg = "failed due to invalid JSON POST structure or empty POST"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        errmsg = "One or more expected fields (name, fullname) missing."
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("One or more expected fields (name, fullname) missing.")
 
     # Actually insert into the database
     try:
@@ -668,20 +607,16 @@ def create_solver():
         )
         conn.commit()
     except MySQLdb._exceptions.IntegrityError:
-        errmsg = (
+        raise Exception(
             "MySQL integrity failure. Does another solver with the same name %s exist?"
             % name
         )
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
     except:
-        errmsg = "Exception in insertion of solver %s into database" % name
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Exception in insertion of solver %s into database" % name)
 
     debug_log(3, "solver %s added to database!" % name)
 
-    return {"status": "ok", "solver": {"name": name, "fullname": fullname}}, 200
+    return {"status": "ok", "solver": {"name": name, "fullname": fullname}}
 
 
 @app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
@@ -693,35 +628,27 @@ def update_solver_part(id, part):
         debug_log(5, "request data is - %s" % str(data))
         value = data[part]
     except TypeError:
-        errmsg = "failed due to invalid JSON POST structure or empty POST"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        errmsg = "Expected %s field missing" % part
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Expected %s field missing" % part)
     # Check if this is a legit solver
-    mysolver = get_one_solver(id)[0]
+    mysolver = get_one_solver(id)
     debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
     if "status" not in mysolver or mysolver["status"] != "ok":
-        errmsg = "Error looking up solver %s" % id
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Error looking up solver %s" % id)
 
     # This is a change to the solver's claimed puzzle
     if part == "puzz":
         if value:
             # Assigning puzzle, so check if puzzle is real
             debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
-            mypuzz = get_one_puzzle(value)[0]
+            mypuzz = get_one_puzzle(value)
             debug_log(5, "return value from get_one_puzzle %s is %s" % (value, mypuzz))
             if mypuzz["status"] != "ok":
-                errmsg = (
+                raise Exception(
                     "Error retrieving info on puzzle %s, which user %s is attempting to claim"
                     % (value, id)
                 )
-                debug_log(1, errmsg)
-                return {"error": errmsg}, 500
             # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
             if mypuzz["puzzle"]["status"] == "New":
                 debug_log(
@@ -733,9 +660,7 @@ def update_solver_part(id, part):
 
             # Reject attempt to assign to a solved puzzle
             if mypuzz["puzzle"]["status"] == "Solved":
-                errmsg = "Can't assign to a solved puzzle!"
-                debug_log(2, errmsg)
-                return {"error": errmsg}, 500
+                raise Exception("Can't assign to a solved puzzle!")
 
         else:
             # Puzz is empty, so this is a de-assignment. Populate the db with empty string for it.
@@ -755,12 +680,10 @@ def update_solver_part(id, part):
             )
             conn.commit()
         except TypeError:
-            errmsg = (
+            raise Exception(
                 "Exception in logging change to puzzle %s in activity table for solver %s in database"
                 % (value, id)
             )
-            debug_log(0, errmsg)
-            return {"error": errmsg}, 500
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
 
@@ -775,16 +698,14 @@ def update_solver_part(id, part):
             conn.commit()
         except Exception:
             tb = traceback.format_exc()
-            errmsg = (
+            raise Exception(
                 "Exception in setting solver to %s for puzzle %s. Traceback: %s"
                 % (id, value, tb)
             )
-            debug_log(0, errmsg)
-            return {"error": errmsg}, 500
 
         debug_log(3, "Solver %s claims to be working on %s" % (id, value))
 
-        return {"status": "ok", "solver": {"id": id, part: value}}, 200
+        return {"status": "ok", "solver": {"id": id, part: value}}
 
     # This is actually a change to the solver's info
     try:
@@ -793,13 +714,13 @@ def update_solver_part(id, part):
         cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
     except:
-        errmsg = "Exception in modifying %s of solver %s in database" % (part, id)
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception(
+            "Exception in modifying %s of solver %s in database" % (part, id)
+        )
 
     debug_log(3, "solver %s %s updated in database" % (id, part))
 
-    return {"status": "ok", "solver": {"id": id, part: value}}, 200
+    return {"status": "ok", "solver": {"id": id, part: value}}
 
 
 @app.route("/puzzles/<id>/<part>", endpoint="post_puzzle_part", methods=["POST"])
@@ -811,21 +732,15 @@ def update_puzzle_part(id, part):
         debug_log(5, "request data is - %s" % str(data))
         value = data[part]
     except TypeError:
-        errmsg = "failed due to invalid JSON POST structure or empty POST"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        errmsg = "Expected %s field missing" % part
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Expected %s field missing" % part)
 
     # Check if this is a legit puzzle
-    mypuzzle = get_one_puzzle(id)[0]
+    mypuzzle = get_one_puzzle(id)
     debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
     if "status" not in mypuzzle or mypuzzle["status"] != "ok":
-        errmsg = "Error looking up puzzle %s" % id
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Error looking up puzzle %s" % id)
 
     if part == "lastact":
         set_new_activity_for_puzzle(id, value)
@@ -834,14 +749,14 @@ def update_puzzle_part(id, part):
         debug_log(4, "part to update is status")
         if value == "Solved":
             if mypuzzle["puzzle"]["status"] == "Solved":
-                errmsg = "Puzzle %s is already solved! Refusing to re-solve." % id
-                debug_log(2, errmsg)
-                return {"error": errmsg}, 500
+                raise Exception(
+                    "Puzzle %s is already solved! Refusing to re-solve." % id
+                )
             # Don't mark puzzle as solved if there is no answer filled in
             if not mypuzzle["puzzle"]["answer"]:
-                errmsg = "Puzzle %s has no answer! Refusing to mark as solved." % id
-                debug_log(2, errmsg)
-                return {"error": errmsg}, 500
+                raise Exception(
+                    "Puzzle %s has no answer! Refusing to mark as solved." % id
+                )
             else:
                 debug_log(
                     3,
@@ -895,9 +810,7 @@ def update_puzzle_part(id, part):
         )
 
     else:
-        errmsg = "Invalid part name %s" % part
-        debug_log(2, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Invalid part name %s" % part)
 
     debug_log(
         3,
@@ -905,7 +818,7 @@ def update_puzzle_part(id, part):
         % (mypuzzle["puzzle"]["name"], id, part, value),
     )
 
-    return {"status": "ok", "puzzle": {"id": id, part: value}}, 200
+    return {"status": "ok", "puzzle": {"id": id, part: value}}
 
 
 @app.route("/account", endpoint="post_new_account", methods=["POST"])
@@ -921,15 +834,13 @@ def new_account():
         password = data["password"]
         reset = data.get("reset")
     except TypeError:
-        errmsg = "failed due to invalid JSON POST structure or empty POST"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        errmsg = "Expected field missing (username, fullname, email, or password)"
-        debug_log(1, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception(
+            "Expected field missing (username, fullname, email, or password)"
+        )
 
-    allusers = get_all_solvers()[0]["solvers"]
+    allusers = get_all_solvers()["solvers"]
     userfound = False
     for solver in allusers:
         if solver["name"] == username:
@@ -937,25 +848,22 @@ def new_account():
                 userfound = True
                 debug_log(3, "Password reset attempt detected for user %s" % username)
             else:
-                errmsg = (
+                raise Exception(
                     "Username %s already exists. Pick another, or add reset flag."
                     % username
                 )
-                debug_log(2, errmsg)
-                return {"error": errmsg}, 500
 
     if reset == "reset":
         if not userfound:
-            errmsg = "Username %s not found in system to reset." % username
-            debug_log(2, errmsg)
-            return {"error": errmsg}, 500
+            raise Exception("Username %s not found in system to reset." % username)
         if verify_email_for_user(email, username) != 1:
-            errmsg = "Username %s does not match email %s in the system." % (
-                username,
-                email,
+            raise Exception(
+                "Username %s does not match email %s in the system."
+                % (
+                    username,
+                    email,
+                )
             )
-            debug_log(2, errmsg)
-            return {"error": errmsg}, 500
 
     # Generate the code
     code = token_hex(4)
@@ -975,12 +883,10 @@ def new_account():
         )
         conn.commit()
     except TypeError:
-        errmsg = (
+        raise Exception(
             "Exception in insertion of unverified user request %s into database"
             % username
         )
-        debug_log(0, errmsg)
-        return {"error": errmsg}, 500
 
     if email_user_verification(email, code, fullname, username) == "OK":
         debug_log(
@@ -988,10 +894,9 @@ def new_account():
             "unverified new user %s added to database with verification code %s. email sent."
             % (username, code),
         )
-        return {"status": "ok", "code": code}, 200
+        return {"status": "ok", "code": code}
 
-    else:
-        return {"error": "some error emailing code to user"}, 500
+    raise Exception("some error emailing code to user")
 
 
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
@@ -1020,9 +925,7 @@ def finish_account(code):
         password = newuser["password"]
 
     except TypeError:
-        errmsg = "Code %s is not valid." % code
-        debug_log(2, errmsg)
-        return {"error": errmsg}, 500
+        raise Exception("Code %s is not valid." % code)
 
     debug_log(
         4,
@@ -1040,10 +943,9 @@ def finish_account(code):
         cursor = conn.cursor()
         cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
-        return {"status": "ok"}, 200
+        return {"status": "ok"}
 
-    else:
-        return {"error": retcode}, 500
+    raise Exception(retcode)
 
 
 @app.route("/deleteuser/<username>", endpoint="get_delete_account", methods=["GET"])
@@ -1057,9 +959,9 @@ def delete_account(username):
     errmsg = delete_user(username)
 
     if errmsg != "OK":
-        return {"error": errmsg}, 500
+        raise Exception(errmsg)
 
-    return {"status": "ok"}, 200
+    return {"status": "ok"}
 
 
 ############### END REST calls section
@@ -1087,7 +989,7 @@ def unassign_solver_by_name(name):
 def clear_puzzle_solvers(id):
     debug_log(4, "start, called with (id): %s" % id)
 
-    mypuzzle = get_one_puzzle(id)[0]
+    mypuzzle = get_one_puzzle(id)
     if mypuzzle["puzzle"]["cursolvers"]:
         mypuzzlesolvers = mypuzzle["puzzle"]["cursolvers"]
         solverslist = mypuzzlesolvers.split(",")
@@ -1126,7 +1028,7 @@ def get_puzzles_from_list(list):
     puzarray = []
     for mypuz in puzlist:
         debug_log(4, "fetching puzzle info for pid: %s" % mypuz)
-        puzarray.append(get_one_puzzle(mypuz)[0]["puzzle"])
+        puzarray.append(get_one_puzzle(mypuz)["puzzle"])
 
     debug_log(4, "puzzle list assembled is: %s" % puzarray)
     return puzarray
@@ -1143,8 +1045,7 @@ def get_last_activity_for_puzzle(id):
         )
         return cursor.fetchone()
     except IndexError:
-        errmsg = "No Activity for Puzzle %s found in database yet" % id
-        debug_log(4, errmsg)
+        debug_log(4, "No Activity for Puzzle %s found in database yet" % id)
         return None
 
 
@@ -1159,8 +1060,7 @@ def get_last_activity_for_solver(id):
         )
         return cursor.fetchone()
     except IndexError:
-        errmsg = "No Activity for solver %s found in database yet" % id
-        debug_log(4, errmsg)
+        debug_log(4, "No Activity for solver %s found in database yet" % id)
         return None
 
 
@@ -1173,9 +1073,10 @@ def set_new_activity_for_puzzle(id, actstruct):
         source = actstruct["source"]
         type = actstruct["type"]
     except:
-        errmsg = (
+        debug_log(
+            0,
             "Failure parsing activity dict. Needs solver_id, source, type. dict passed in is: %s"
-            % actstruct
+            % actstruct,
         )
         return 255
 
@@ -1192,11 +1093,11 @@ def set_new_activity_for_puzzle(id, actstruct):
         )
         conn.commit()
     except TypeError:
-        errmsg = (
+        debug_log(
+            0,
             "Exception in logging change to puzzle %s in activity table for solver %s in database"
-            % (value, id)
+            % (value, id),
         )
-        debug_log(0, errmsg)
         return 255
 
     debug_log(3, "Updated activity for puzzle id %s" % (puzzle_id))
