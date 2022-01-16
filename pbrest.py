@@ -25,6 +25,7 @@ mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
 
+
 @app.errorhandler(Exception)
 def handle_error(e):
     code = 500
@@ -382,10 +383,8 @@ def create_puzzle():
     chat_channel = chat_create_channel_for_puzzle(
         puzname, round_name, puzuri, drive_uri
     )
-    debug_log(
-        4, "return from creating chat channel: %s" % str(chat_channel)
-    )
-    
+    debug_log(4, "return from creating chat channel: %s" % str(chat_channel))
+
     try:
         chat_id = chat_channel[0]
         chat_link = chat_channel[1]
@@ -781,7 +780,7 @@ def update_puzzle_part(id, part):
             "**ATTENTION** new comment for puzzle %s: %s"
             % (mypuzzle["puzzle"]["name"], value),
         )
-        
+
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)
         # This obviously needs some sanity checking
