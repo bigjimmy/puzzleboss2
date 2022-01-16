@@ -219,7 +219,7 @@ def get_all_solvers():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name from solver_view")
+        cursor.execute("SELECT id, name from solver")
         solvers = cursor.fetchall()
     except:
         raise Exception("Exception in fetching all solvers from database")
@@ -950,7 +950,7 @@ def unassign_solver_by_name(name):
     # We have to look up the solver id for the given name first.
     conn = mysql.connection
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM solver_view WHERE name = %s LIMIT 1", (name,))
+    cursor.execute("SELECT id FROM solver WHERE name = %s LIMIT 1", (name,))
     id = cursor.fetchone()["id"]
     cursor = conn.cursor()
     cursor.execute(
