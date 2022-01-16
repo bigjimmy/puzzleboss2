@@ -146,34 +146,37 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                             ).text
                         )["solver"]
 
-                        # Insert this activity into the activity DB for this puzzle/solver pair
-                        databody = {
-                            "lastact": {
-                                "solver_id": "%s"
-                                % solver_from_email(
-                                    revision["lastModifyingUser"]["emailAddress"]
-                                ),
-                                "source": "google",
-                                "type": "revise",
+                        if solverinfo["puzz"] != mypuzzle["id"]:
+                        # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
+                            databody = {
+                                "lastact": {
+                                    "solver_id": "%s"
+                                    % solver_from_email(
+                                        revision["lastModifyingUser"]["emailAddress"]
+                                    ),
+                                    "source": "google",
+                                    "type": "revise",
+                                }
                             }
-                        }
-                        actupresponse = requests.post(
-                            "%s/puzzles/%s/lastact"
-                            % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"]),
-                            json=databody,
-                        )
-
-                        debug_log(
-                            4,
-                            "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
-                            % (threadname, databody, actupresponse.text),
-                        )
-                        debug_log(
-                            4,
-                            "[Thread: %s] Solver %s has current puzzle of %s"
-                            % (threadname, mysolverid, solverinfo["puzz"]),
-                        )
-
+                            actupresponse = requests.post(
+                                "%s/puzzles/%s/lastact"
+                                % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"]),
+                                json=databody,
+                            )
+    
+                            debug_log(
+                                4,
+                                "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
+                                % (threadname, databody, actupresponse.text),
+                            )
+                            debug_log(
+                                4,
+                                "[Thread: %s] Solver %s has current puzzle of %s"
+                                % (threadname, mysolverid, solverinfo["puzz"]),
+                            )
+                        else:
+                            debug_log(3, "[Thread: %s] Solver already on this puzzle. Skipping activity update" % threadname)
+                            
                         if solverinfo["puzz"] != mypuzzle["id"]:
                             # This potential solver is not currently on this puzzle. Interesting.
                             lastsolveracttime = datetime.datetime.strptime(
