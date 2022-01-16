@@ -416,12 +416,19 @@ def create_puzzle():
 
     # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
     drive_uri = "%s/doc.php?pname=%s" % (config["APP"]["BIN_URI"], puzname)
-    chat_id, chat_link = chat_create_channel_for_puzzle(
+    chat_channel = chat_create_channel_for_puzzle(
         puzname, round_name, puzuri, drive_uri
     )
     debug_log(
-        4, "return from creating chat channel is - %s, chat_link" % (chat_id, chat_link)
+        4, "return from creating chat channel: %s" % str(chat_channel)
     )
+    
+    try:
+        chat_id = chat_channel[0]
+        chat_link = chat_channel[1]
+    except:
+        raise Exception("Error in creating chat channel for puzzle")
+
     debug_log(4, "chat channel for puzzle %s is made" % puzname)
 
     # Create google sheet
