@@ -45,41 +45,6 @@ def get_all_all():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT
-                a.id AS actid,
-                a.time AS timestamp,
-                a.puzzle_id,
-                a.solver_id,
-                a.source,
-                a.type
-            FROM activity a
-            INNER JOIN (
-                SELECT
-                    puzzle_id,
-                    MAX(time) AS time
-                FROM activity
-                WHERE puzzle_id IS NOT NULL
-                GROUP BY puzzle_id
-            ) latest
-            ON
-                a.puzzle_id = latest.puzzle_id
-                AND a.time = latest.time
-            ORDER BY a.puzzle_id, a.id
-        """
-        )
-        activity = cursor.fetchall()
-    except:
-        raise Exception("Exception in querying activity")
-
-    last_activity_for_puzzles = {}
-    for last_activity in activity:
-        last_activity_for_puzzles[last_activity["puzzle_id"]] = last_activity
-
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
         cursor.execute("SELECT * from puzzle_view")
         puzzle_view = cursor.fetchall()
     except:
@@ -87,7 +52,6 @@ def get_all_all():
 
     all_puzzles = {}
     for puzzle in puzzle_view:
-        puzzle["lastact"] = last_activity_for_puzzles.get(puzzle["id"])
         all_puzzles[puzzle["id"]] = puzzle
 
     try:
@@ -154,7 +118,6 @@ def get_one_puzzle(id):
         raise Exception("Exception in fetching puzzle %s from database" % id)
 
     debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
-    puzzle["lastact"] = get_last_activity_for_puzzle(id)
     return {
         "status": "ok",
         "puzzle": puzzle,
@@ -818,6 +781,10 @@ def update_puzzle_part(id, part):
             "**ATTENTION** new comment for puzzle %s: %s"
             % (mypuzzle["puzzle"]["name"], value),
         )
+        
+    elif part == "round":
+        update_puzzle_part_in_db(id, part, value)
+        # This obviously needs some sanity checking
 
     else:
         raise Exception("Invalid part name %s" % part)
