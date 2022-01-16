@@ -146,7 +146,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                             ).text
                         )["solver"]
 
-                        if solverinfo["puzz"] != mypuzzle["id"]:
+                        if solverinfo["puzz"] != mypuzzle["name"]:
                         # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
                             databody = {
                                 "lastact": {
@@ -177,7 +177,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                         else:
                             debug_log(3, "[Thread: %s] Solver already on this puzzle. Skipping activity update" % threadname)
                             
-                        if solverinfo["puzz"] != mypuzzle["id"]:
+                        if solverinfo["puzz"] != mypuzzle["name"]:
                             # This potential solver is not currently on this puzzle. Interesting.
                             lastsolveracttime = datetime.datetime.strptime(
                                 solverinfo["lastact"]["time"],
