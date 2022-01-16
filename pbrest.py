@@ -1021,6 +1021,7 @@ def get_last_activity_for_puzzle(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute(
             """SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1""",
             (id,),
@@ -1036,6 +1037,7 @@ def get_last_activity_for_solver(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute(
             "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
             (id,),
