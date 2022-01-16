@@ -56,6 +56,7 @@ if (isset($_GET['puzzid'])) {
     $puzzid = $_GET['puzzid'];
     $puzzid = str_replace(' | MIT Mystery Hunt 2022', '', $puzzid);
 }
+$round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
 $rounds = readapi("/rounds")->rounds;
 $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
@@ -83,7 +84,8 @@ $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
                 <select id="round_id" name="round_id"/>
 <?php
 foreach ($rounds as $round) {
-    echo '<option value="' . $round->id . '">' . $round->name . "</option>\n";
+    $selected = $round->name === $round_name ? 'selected' : '';
+    echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
 }
 ?>
                 </select>

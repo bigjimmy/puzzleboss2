@@ -5,7 +5,8 @@ $bookmarkuri = 'javascript:location.href=`' .
   $pbroot . 
   '/addpuzzle.php'.
   '?puzzurl=${encodeURIComponent(location.href)}' .
-  '&puzzid=${encodeURIComponent(document.title)}`';
+  '&puzzid=${encodeURIComponent(document.title)}' .
+  '&roundname=${document.querySelector(\'.wordmark-link > img\')?.alt?.replace(/ /g, \'\')}`';
 
 ?>
 <!doctype html>
