@@ -54,12 +54,9 @@ def check_puzzle_from_queue(threadname, q, fromtime):
 
             # Lots of annoying time string conversions here between mysql and google
             lastpuzzleacttime = datetime.datetime.fromordinal(1)
-            mypuzzleastact = json.loads(
-                            requests.get(
-                                "%s/puzzles/%s/lastact"
-                                % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"])
-                            ).text
-                        )["puzzle"]["lastact"]
+            myreq = "%s/puzzles/%s/lastact" % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"])
+            responsestring = requests.get(myreq).text
+            mypuzzleastact = json.loads(responsestring)["puzzle"]["lastact"]
             
             debug_log(0, "mypuzzlelastact pulled for puzzle %s as %s" % (mypuzzle["id"], str(mypuzzlelastact)))
 
