@@ -56,9 +56,9 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             lastpuzzleacttime = datetime.datetime.fromordinal(1)
             myreq = "%s/puzzles/%s/lastact" % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"])
             responsestring = requests.get(myreq).text
-            mypuzzleastact = json.loads(responsestring)["puzzle"]["lastact"]
+            mypuzzlelastact = json.loads(responsestring)["puzzle"]["lastact"]
             
-            debug_log(0, "mypuzzlelastact pulled for puzzle %s as %s" % (mypuzzle["id"], str(mypuzzlelastact)))
+            debug_log(5, "mypuzzlelastact pulled for puzzle %s as %s" % (mypuzzle["id"], str(mypuzzlelastact)))
 
             if mypuzzlelastact:
                 lastpuzzleacttime = datetime.datetime.strptime(
