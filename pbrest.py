@@ -637,8 +637,8 @@ def update_solver_part(id, part):
                 update_puzzle_part_in_db(value, "status", "Being worked")
 
             # Reject attempt to assign to a solved puzzle
-            # if mypuzz["puzzle"]["status"] == "Solved":
-            #     raise Exception("Can't assign to a solved puzzle!")
+            if mypuzz["puzzle"]["status"] == "Solved":
+                raise Exception("Can't assign to a solved puzzle!")
 
         else:
             # Puzz is empty, so this is a de-assignment. Populate the db with empty string for it.
