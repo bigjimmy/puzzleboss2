@@ -54,9 +54,18 @@ def check_puzzle_from_queue(threadname, q, fromtime):
 
             # Lots of annoying time string conversions here between mysql and google
             lastpuzzleacttime = datetime.datetime.fromordinal(1)
-            if mypuzzle["lastact"]:
+            mypuzzleastact = json.loads(
+                            requests.get(
+                                "%s/puzzles/%s/lastact"
+                                % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"])
+                            ).text
+                        )["puzzle"]["lastact"]
+            
+            debug_log(0, "mypuzzlelastact pulled for puzzle %s as %s" % (mypuzzle["id"], str(mypuzzlelastact)))
+
+            if mypuzzlelastact:
                 lastpuzzleacttime = datetime.datetime.strptime(
-                    mypuzzle["lastact"]["timestamp"], "%a, %d %b %Y %H:%M:%S %Z"
+                    mypuzzlelastact["time"], "%a, %d %b %Y %H:%M:%S %Z"
                 )
 
             # Go through all revisions for the puzzle and see if any are relevant ("new")
