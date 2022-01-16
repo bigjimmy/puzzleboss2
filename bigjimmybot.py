@@ -147,7 +147,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                         )["solver"]
 
                         if solverinfo["puzz"] != mypuzzle["name"]:
-                        # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
+                            # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
                             databody = {
                                 "lastact": {
                                     "solver_id": "%s"
@@ -163,7 +163,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                 % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"]),
                                 json=databody,
                             )
-    
+
                             debug_log(
                                 4,
                                 "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
@@ -175,8 +175,12 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                 % (threadname, mysolverid, solverinfo["puzz"]),
                             )
                         else:
-                            debug_log(3, "[Thread: %s] Solver already on this puzzle. Skipping activity update" % threadname)
-                            
+                            debug_log(
+                                3,
+                                "[Thread: %s] Solver already on this puzzle. Skipping activity update"
+                                % threadname,
+                            )
+
                         if solverinfo["puzz"] != mypuzzle["name"]:
                             # This potential solver is not currently on this puzzle. Interesting.
                             lastsolveracttime = datetime.datetime.strptime(
