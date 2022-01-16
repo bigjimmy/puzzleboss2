@@ -13,6 +13,7 @@ from pandas.core.dtypes.generic import ABCIntervalIndex
 from secrets import token_hex
 from flasgger.utils import swag_from
 from pbldaplib import *
+from werkzeug.exceptions import HTTPException
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -23,7 +24,6 @@ app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
-
 
 @app.errorhandler(Exception)
 def handle_error(e):

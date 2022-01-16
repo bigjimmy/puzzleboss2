@@ -67,9 +67,6 @@ foreach ($fullhunt as $round) {
         //if ($puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
         //    $styleinsert .= ' style="text-decoration:line-through" ';
         //}
-        if ($puzzlename == $mypuzzle) {
-            $classlist .= " mine";
-        }
         echo '<tr ' . $styleinsert . '>';
         echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
         switch ($puzzle->status) {
