@@ -46,6 +46,7 @@ def get_all_all():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from puzzle_view")
         puzzle_view = cursor.fetchall()
     except:
@@ -58,6 +59,7 @@ def get_all_all():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from round_view")
         round_view = cursor.fetchall()
     except:
@@ -111,6 +113,7 @@ def get_one_puzzle(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
         puzzle = cursor.fetchone()
     except IndexError:
@@ -135,6 +138,7 @@ def get_puzzle_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
+            cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
             cursor.execute(
                 f"SELECT {part} from puzzle_view where id = %s LIMIT 1", (id,)
             )
@@ -236,6 +240,7 @@ def get_one_solver(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from solver_view where id = %s", (id,))
         solver = cursor.fetchone()
     except IndexError:
@@ -261,6 +266,7 @@ def get_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
+            cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
             cursor.execute(f"SELECT {part} from solver_view where id = %s", (id,))
             rv = cursor.fetchone()[part]
         except TypeError:
