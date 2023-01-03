@@ -1,0 +1,10 @@
+gunicorn
+mysqlclient
+flasgger
+bleach
+flask_restful  
+google-api-python-client  
+pandas 
+python-ldap 
+flask_mysqldb 
+google-auth-oauthlib 
