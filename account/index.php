@@ -94,8 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         print "</body></html>";
         exit(0);
     }
+        
+    $fullname = rtrim($_POST['fullname']);
 
-    if (! preg_match('/^[a-zA-Z]+ [a-zA-Z]+$/', $_POST['fullname'])) {
+    if (! preg_match('/^[a-zA-Z]+ [a-zA-Z]+$/', $fullname)) {
         print "ERROR: Fullname must be Firstname Lastname, no non-alpha characters. Try again.";
         print "</body></html>";
         exit(0);
@@ -109,7 +111,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit(0);
     }
     $username = $_POST['username'];
-    $fullname = $_POST['fullname'];
     $email = $_POST['email'];
     $password = $_POST['password'];
     if ( array_key_exists("reset", $_POST) ) {
@@ -160,7 +161,9 @@ DATA;
     foreach($responseobj as $key => $value){
         if ($key == "status") {
             if ($responseobj -> status == "ok") {
-                echo 'OK.  User has been created.  All hunt tools accessible.';
+                echo 'OK.  User has been created.  All hunt tools accessible. <br><br>';
+                echo "You should now be able to log in at: <a href='../'>Main Hunt Wiki</a><br><br>";
+                echo "If you encounter any difficulties, ask in the server-help channel in discord.";
             }
             else {
                 echo 'ERROR: Response from API is ' . var_dump($responseobj);
