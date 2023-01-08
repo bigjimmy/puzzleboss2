@@ -4,6 +4,7 @@ APP:
     EMAILRELAY: your-email-server
     REGEMAIL: "adminaccount@your-url.com"
     ACCT_URI: https://your-url.com/account
+    TEAMNAME: "Your team name"
     
 PUZZCORD:
     PUZZCORD_HOST: whateverhostpuzzcordison
