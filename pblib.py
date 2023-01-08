@@ -55,7 +55,7 @@ def email_user_verification(email, code, fullname, username):
                         (replies to this email will most likely not reach anybody)
                         """ % (
         email,
-        config["LDAP"]["LDAPO"],
+        config["APP"]["TEAMNAME"],
         username,
         fullname,
         config["APP"]["ACCT_URI"],
@@ -66,7 +66,7 @@ def email_user_verification(email, code, fullname, username):
 
     try:
         msg = EmailMessage()
-        msg["Subject"] = "Finish %s account sign-up." % config["LDAP"]["LDAPO"]
+        msg["Subject"] = "Finish %s account sign-up." % config["APP"]["TEAMNAME"]
         msg["From"] = "%s" % config["APP"]["REGEMAIL"]
         msg["To"] = email
         msg.set_content(messagecontent)
