@@ -238,6 +238,35 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                 }
             }
         )
+    else:
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "title": "%s metadata" % name,
+                        "gridProperties": {"rowCount": 7, "columnCount": 2},
+                        "index": 0,
+                        "sheetId": 1,
+                    }
+                }
+            }
+        )
+
+        # Relabel existing sheet as "Work" and setup appropriately
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": 0,
+                        "title": "Work on %s" % name,
+                        "gridProperties": {"rowCount": 100, "columnCount": 26},
+                        "index": 2,
+                    },
+                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+                }
+            }
+        )
+
 
     # Set format of metadata sheet
     requests.append(
