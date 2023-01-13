@@ -247,7 +247,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "gridProperties": {"rowCount": 7, "columnCount": 2},
                         "index": 0,
                         "sheetId": 1,
-                    }
+                    },
                     "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
                 }
             }
