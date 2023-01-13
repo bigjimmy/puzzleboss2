@@ -336,7 +336,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                             {"userEnteredValue": {"stringValue": "Actual Puzzle URL:"}},
                             {
                                 "userEnteredValue": {
-                                    "stringValue": hyperlink(puzzledict["puzzle_uri"])
+                                    "formulaValue": hyperlink(puzzledict["puzzle_uri"])
                                 }
                             },
                         ]
@@ -346,7 +346,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                             {"userEnteredValue": {"stringValue": "Chat URL:"}},
                             {
                                 "userEnteredValue": {
-                                    "stringValue": hyperlink(puzzledict["chat_uri"])
+                                    "formulaValue": hyperlink(puzzledict["chat_uri"])
                                 }
                             },
                         ]
