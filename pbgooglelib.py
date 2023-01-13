@@ -299,6 +299,9 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         }
     )
 
+    def hyperlink(url):
+        return f'=HYPERLINK("{url}", "{url}")'
+
     # Set content of metadata sheet
     requests.append(
         {
@@ -333,7 +336,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                             {"userEnteredValue": {"stringValue": "Actual Puzzle URL:"}},
                             {
                                 "userEnteredValue": {
-                                    "stringValue": puzzledict["puzzle_uri"]
+                                    "stringValue": hyperlink(puzzledict["puzzle_uri"])
                                 }
                             },
                         ]
@@ -343,7 +346,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                             {"userEnteredValue": {"stringValue": "Chat URL:"}},
                             {
                                 "userEnteredValue": {
-                                    "stringValue": puzzledict["chat_uri"]
+                                    "stringValue": hyperlink(puzzledict["chat_uri"])
                                 }
                             },
                         ]
