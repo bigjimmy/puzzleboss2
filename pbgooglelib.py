@@ -196,8 +196,12 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         "mimeType": "application/vnd.google-apps.spreadsheet",
     }
 
-    file = service.files().create(body=file_metadata, fields="id").execute()
-    debug_log(4, "file ID returned: %s" % file.get("id"))
+    if config["GOOGLE"]["SHEETS_TEMPLATE_ID"] == "none":
+        file = service.files().create(body=file_metadata, fields="id").execute()
+        debug_log(4, "file ID returned from creation: %s" % file.get("id"))
+    else:
+        file = service.files().copy(body=file_metadata, fileId=config["GOOGLE"]["SHEETS_TEMPLATE_ID"], fields="id").execute()
+        debug_log(4, "file ID returned from copy: %s" % file.get("id"))
 
     # Now let's set initial contents
 
@@ -205,36 +209,37 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     sheetsservice = build("sheets", "v4", credentials=creds)
     requests = []
 
-    # Create new page
-    requests.append(
-        {
-            "addSheet": {
-                "properties": {
-                    "title": "%s metadata" % name,
-                    "gridProperties": {"rowCount": 7, "columnCount": 2},
-                    "index": 0,
-                    "sheetId": 1,
+    if config["GOOGLE"]["SHEETS_TEMPLATE_ID"] == "none":
+    # Create new page if we're not doing a template copy
+        requests.append(
+            {
+                "addSheet": {
+                    "properties": {
+                        "title": "%s metadata" % name,
+                        "gridProperties": {"rowCount": 7, "columnCount": 2},
+                        "index": 0,
+                        "sheetId": 1,
+                    }
                 }
             }
-        }
-    )
+        )
 
-    # Relabel existing sheet as "Work" and setup appropriately
-    requests.append(
-        {
-            "updateSheetProperties": {
-                "properties": {
-                    "sheetId": 0,
-                    "title": "Work on %s" % name,
-                    "gridProperties": {"rowCount": 100, "columnCount": 26},
-                    "index": 2,
-                },
-                "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+        # Relabel existing sheet as "Work" and setup appropriately
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": 0,
+                        "title": "Work on %s" % name,
+                        "gridProperties": {"rowCount": 100, "columnCount": 26},
+                        "index": 2,
+                    },
+                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+                }
             }
-        }
-    )
+        )
 
-    # Set format of new metadata sheet
+    # Set format of metadata sheet
     requests.append(
         {
             "updateDimensionProperties": {
@@ -264,7 +269,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         }
     )
 
-    # Set content of new metadata sheet
+    # Set content of metadata sheet
     requests.append(
         {
             "updateCells": {

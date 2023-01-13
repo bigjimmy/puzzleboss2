@@ -12,9 +12,10 @@ PUZZCORD:
     SKIP_PUZZCORD: "false"
 
 GOOGLE:
-    HUNT_FOLDER_NAME: "My Hunt Folder 2022"
+    HUNT_FOLDER_NAME: "My Hunt Folder 2099"
     SKIP_GOOGLE_API: "false"
     DOMAINNAME: your-url.com
+    SHEETS_TEMPLATE_ID: "18rA6_fil1l-yA9JS33LIiMZClJQUVSRtXWHNw-cWUKw"
 
 MYSQL:
     USERNAME: puzzleboss
