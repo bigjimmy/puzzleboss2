@@ -248,6 +248,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "index": 0,
                         "sheetId": 1,
                     }
+                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
                 }
             }
         )
