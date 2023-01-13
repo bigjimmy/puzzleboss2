@@ -184,7 +184,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                         if solverinfo["puzz"] != mypuzzle["name"]:
                             # This potential solver is not currently on this puzzle. Interesting.
                             if not solverinfo["lastact"]:
-                                lastsolveracttime = 0
+                                lastsolveracttime = datetime.datetime.fromisoformat('1980-01-01')
                             else:
                                 lastsolveracttime = datetime.datetime.strptime(
                                     solverinfo["lastact"]["time"],
