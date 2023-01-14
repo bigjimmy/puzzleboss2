@@ -119,7 +119,7 @@ foreach($nolocarray as $puzzle){
     //    $styleinsert .= ' style="text-decoration:line-through" ';
         //}
         echo '<tr ' . $styleinsert . '>';
-        echo '<td><a href="editpuzzle.php?pid=' . '" target="_blank">';
+        echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '" target="_blank">';
         switch ($puzzle->status) {
             case "New":
                 echo "New";
@@ -176,7 +176,7 @@ foreach($workonarray as $puzzle) {
     //    $styleinsert .= ' style="text-decoration:line-through" ';
         //}
         echo '<tr ' . $styleinsert . '>';
-        echo '<td><a href="editpuzzle.php?pid=' . '" target="_blank">';
+        echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '" target="_blank">';
         switch ($puzzle->status) {
             case "New":
                 echo "New";
