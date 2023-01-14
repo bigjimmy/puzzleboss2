@@ -21,6 +21,7 @@ $critarray = [];
 $eyesarray = [];
 $newarray = [];
 $workonarray = [];
+$nolocarray = [];
 
 $huntstruct = readapi("/all");
 $rounds = $huntstruct->rounds;
@@ -88,6 +89,71 @@ echo '<tr><td>Critical</td><td>' . $critcnt . '</td></tr>';
 echo '</table><br><br>';
 
 echo '<table border=3>';
+echo '<tr><th colspan=4>Unsolved Puzzles Missing Location</th></tr>';
+foreach($rounds as $round) {
+    $puzzlearray = $round->puzzles;
+    foreach($puzzlearray as $thispuzzle) {
+	if (is_null($thispuzzle->xyzloc)) { 
+	    if ($thispuzzle->status != "Solved") { 
+	        array_push($nolocarray, $thispuzzle);
+	    }
+	 }
+    }
+}
+
+foreach($nolocarray as $puzzle){
+    $puzzleid = $puzzle->id;
+    $puzzlename = $puzzle->name;
+    $styleinsert = "";
+    if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+        $styleinsert .= " bgcolor='Gainsboro' ";
+    }
+    if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+        $styleinsert .= " bgcolor='aquamarine' ";
+    }
+    if ($puzzle->status == "Critical") {
+        $styleinsert .= " bgcolor='HotPink' ";
+    }
+    // Not sure what to do here for style for solved/unnecc puzzles
+    //if ($puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
+    //    $styleinsert .= ' style="text-decoration:line-through" ';
+        //}
+        echo '<tr ' . $styleinsert . '>';
+        echo '<td><a href="editpuzzle.php?pid=' . '" target="_blank">';
+        switch ($puzzle->status) {
+            case "New":
+                echo "New";
+                break;
+            case "Being worked":
+                echo "O";
+                break;
+            case "Needs eyes":
+                echo "Eyes";
+                break;
+            case "WTF":
+                echo "?";
+                break;
+            case "Critical":
+                echo "Crit";
+                break;
+            case "Solved":
+                echo "*";
+		break;
+            case "Unnecessary":
+                echo "X";
+                break;
+        }
+        echo '</a></td>';
+        echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
+        echo '<td><a href="' . $puzzle->drive_uri . '">Doc</a></td>';
+        echo '<td><a href="' . $puzzle->chat_channel_link  . '">Chat</a></td>';
+
+        echo '</tr>';
+
+}
+echo '</table><br><br>';
+echo '<table border=3>';
+
 echo '<tr><th>Good Puzzles To Work On:</th></tr><tr><td>';
 
 $workonarray = array_merge($critarray, $eyesarray, $newarray);
