@@ -238,6 +238,36 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                 }
             }
         )
+    else:
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "title": "%s metadata" % name,
+                        "gridProperties": {"rowCount": 7, "columnCount": 2},
+                        "index": 0,
+                        "sheetId": 1,
+                    },
+                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+                }
+            }
+        )
+
+        # Relabel existing sheet as "Work" and setup appropriately
+        requests.append(
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": 0,
+                        "title": "Work on %s" % name,
+                        "gridProperties": {"rowCount": 100, "columnCount": 26},
+                        "index": 2,
+                    },
+                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+                }
+            }
+        )
+
 
     # Set format of metadata sheet
     requests.append(
@@ -268,6 +298,9 @@ def create_puzzle_sheet(parentfolder, puzzledict):
             }
         }
     )
+
+    def hyperlink(url):
+        return f'=HYPERLINK("{url}", "{url}")'
 
     # Set content of metadata sheet
     requests.append(
@@ -303,7 +336,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                             {"userEnteredValue": {"stringValue": "Actual Puzzle URL:"}},
                             {
                                 "userEnteredValue": {
-                                    "stringValue": puzzledict["puzzle_uri"]
+                                    "formulaValue": hyperlink(puzzledict["puzzle_uri"])
                                 }
                             },
                         ]
@@ -313,7 +346,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                             {"userEnteredValue": {"stringValue": "Chat URL:"}},
                             {
                                 "userEnteredValue": {
-                                    "stringValue": puzzledict["chat_uri"]
+                                    "formulaValue": hyperlink(puzzledict["chat_uri"])
                                 }
                             },
                         ]

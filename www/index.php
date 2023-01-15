@@ -19,6 +19,8 @@ if (isset($_GET['data'])) {
     )));
 }
 
+$use_text = isset($_GET['text_only']);
+
 $username = $solver->name;
 $mypuzzle = $solver->puzz;
 
@@ -71,33 +73,33 @@ foreach ($fullhunt as $round) {
         echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
         switch ($puzzle->status) {
             case "New":
-                echo ".";
+                echo $use_text ? '.' : '🆕';
                 break;
             case "Being worked":
-                echo "O";
+                echo $use_text ? 'O' : '🙇';
                 break;
             case "Needs eyes":
-                echo "E";
+                echo $use_text ? 'E' : '👀';
                 break;
             case "WTF":
-                echo "?";
+                echo $use_text ? '?' : '☢️';
                 break;
             case "Critical":
-                echo "!";
+                echo $use_text ? '!' : '⚠️';
                 break;
             case "Solved":
-                echo "*";
+                echo $use_text ? '*' : '✅';
                 break;
             case "Unnecessary":
-                echo "X";
+                echo $use_text ? 'X' : '😶‍🌫️';
                 break;
         }
         echo '</a></td>';
-        echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
-        echo '<td><a href="' . $puzzle->drive_uri . '">D</a></td>';
-        echo '<td><a href="' . $puzzle->chat_channel_link  . '">C</a></td>';
+        echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a></td>';
+        echo '<td><a href="' . $puzzle->drive_uri . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
+        echo '<td><a href="' . $puzzle->chat_channel_link  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
         echo '<td style="font-family:monospace;font-style:bold">' . $puzzle->answer .'</td>';
-        echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">+</a></td>';
+        echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank" title="Edit puzzle in PB">'. ($use_text ? '±' : '⚙️') . '</a></td>';
 
         echo '</tr>';
 
@@ -114,14 +116,17 @@ foreach ($fullhunt as $round) {
 <a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>
 <br><h3>Legend:</h3>
 <table>
-    <tr bgcolor='Gainsboro'><td>.</td><td>Meta Puzzle</td></tr>
-    <tr bgcolor='aquamarine'><td>.</td><td>Open Puzzle</td></tr>
-    <tr bgcolor='HotPink'><td>!</td><td>Critical Puzzle</td></tr>
-    <tr><td>O</td><td>Puzzle Being Worked On</td></tr>
-    <tr><td>*</td><td>Solved Puzzle</td></tr>
-    <tr><td>W</td><td>WTF Puzzle</td></tr>
-    <tr><td>E</td><td>Puzzle Needs Eyes</td></tr>
-    <tr><td>X</td><td>Puzzle Not Needed</td></tr>
+    <tr bgcolor="Gainsboro"><td><?= $use_text ? '.' : '🆕' ?></td><td>Meta Puzzle</td></tr>
+    <tr bgcolor="aquamarine"><td><?= $use_text ? '.' : '🆕' ?></td><td>Open Puzzle</td></tr>
+    <tr bgcolor="HotPink"><td><?= $use_text ? '!' : '⚠️' ?></td><td>Critical Puzzle</td></tr>
+    <tr><td><?= $use_text ? 'O' : '🙇' ?></td><td>Puzzle Being Worked On</td></tr>
+    <tr><td><?= $use_text ? '*' : '✅' ?></td><td>Solved Puzzle</td></tr>
+    <tr><td><?= $use_text ? '?' : '☢️' ?></td><td>WTF Puzzle</td></tr>
+    <tr><td><?= $use_text ? 'E' : '👀' ?></td><td>Puzzle Needs Eyes</td></tr>
+    <tr><td><?= $use_text ? 'X' : '😶‍🌫️' ?></td><td>Puzzle Not Needed</td></tr>
     <tr style="text-decoration:underline overline wavy;"><td>&nbsp</td><td>My Current Puzzle</td></tr>
 </table>
+<br>
+<br>
+<a href="?text_only=1">Text-only (no emoji) mode</a>
 </body>

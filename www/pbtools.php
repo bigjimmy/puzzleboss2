@@ -1,12 +1,16 @@
 <?php
 require('puzzlebosslib.php');
 
-$bookmarkuri = 'javascript:location.href=`' .
-  $pbroot . 
+$bookmarkuri = 'javascript:location.href=' .
+  '(data => `'.
+  $pbroot.
   '/addpuzzle.php'.
-  '?puzzurl=${encodeURIComponent(location.href)}' .
-  '&puzzid=${encodeURIComponent(document.title)}' .
-  '&roundname=${document.querySelector(\'.wordmark-link > img\')?.alt?.replace(/ /g, \'\')}`';
+  '?puzzurl=${encodeURIComponent(location.href)}'.
+  '&puzzid=${encodeURIComponent(data?.name || document.title)}'.
+  '&roundname=${encodeURIComponent(data?.round?.name)}'.
+  '`)('.
+  'JSON.parse(document.querySelector(%27#__NEXT_DATA__%27).innerText)'.
+  '?.props?.pageProps?.puzzleData);';
 
 ?>
 <!doctype html>
