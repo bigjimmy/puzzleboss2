@@ -741,9 +741,16 @@ def update_puzzle_part(id, part):
                     "Puzzle id %s name %s has been Solved!!!"
                     % (id, mypuzzle["puzzle"]["name"]),
                 )
-                clear_puzzle_solvers(id)
-                update_puzzle_part_in_db(id, part, value)
-                chat_announce_solved(mypuzzle["puzzle"]["name"])
+                if mypuzzle["puzzle"]["round_id"] != 11:
+                    clear_puzzle_solvers(id)
+                    update_puzzle_part_in_db(id, part, value)
+                    chat_announce_solved(mypuzzle["puzzle"]["name"])
+                else:
+                    debug_log(
+                        3,
+                        "Puzzle id %s name %s is in round 11. SKIPPING SOLVE."
+                        % (id, mypuzzle["puzzle"]["name"]),
+                    )
         elif (
             value == "Needs eyes"
             or value == "Critical"
@@ -767,8 +774,6 @@ def update_puzzle_part(id, part):
 
     elif part == "answer":
         if data != "" and data != None:
-            # Mark puzzle as solved automatically when answer is filled in
-            update_puzzle_part_in_db(id, "status", "Solved")
             value = value.upper()
             update_puzzle_part_in_db(id, part, value)
             debug_log(
@@ -776,9 +781,17 @@ def update_puzzle_part(id, part):
                 "Puzzle id %s name %s has been Solved!!!"
                 % (id, mypuzzle["puzzle"]["name"]),
             )
-            clear_puzzle_solvers(id)
-            chat_announce_solved(mypuzzle["puzzle"]["name"])
-
+            if mypuzzle["puzzle"]["round_id"] != 11:
+                # Mark puzzle as solved automatically when answer is filled in
+                update_puzzle_part_in_db(id, "status", "Solved")
+                clear_puzzle_solvers(id)
+                chat_announce_solved(mypuzzle["puzzle"]["name"])
+            else:
+                debug_log(
+                3,
+                "Puzzle id %s name %s solution added. Skipping SOLVED transition because it's in round 11."
+                % (id, mypuzzle["puzzle"]["name"]),
+                )
     elif part == "comments":
         update_puzzle_part_in_db(id, part, value)
         chat_say_something(
