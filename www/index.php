@@ -55,16 +55,23 @@ function get_user_network() {
   return 'Other';
 }
 $user_network = get_user_network();
-if ($user_network !== 'MIT GUEST') {
+if ($user_network === 'MIT GUEST' || isset($_GET['wifi_debug'])) {
   $wifi_warning = <<<HTML
+  <style>
+    .error {
+      background-color: lightpink;
+      margin: 20px;
+      padding: 10px;
+    }
+  </style>
   <div class="error">
     <strong>WARNING:</strong>&nbsp;
     You appear to be on <tt>MIT GUEST</tt> Wifi right now, which does NOT support
     Discord audio calls and is much slower!
     Please <strong>switch to <tt>MIT</tt> / <tt>MIT SECURE</tt></strong>, by either:
     <ul>
-      <li>joining directly, if you have <a href="https://kb.mit.edu/confluence/display/istcontrib/How+to+connect+to+MIT+SECURE+wireless+on+macOS">an active Kerberos</a>,</li>
-      <li>generating a password at <a href="https://wifi.mit.edu/">wifi.mit.edu</a>, if you have some MIT affiliation (including alumni), then joining the <tt>MIT</tt> network, or</li>
+      <li>joining directly, if you have <a href="https://kb.mit.edu/confluence/display/istcontrib/How+to+connect+to+MIT+SECURE+wireless+on+macOS" target="_blank">an active Kerberos</a>,</li>
+      <li>generating a password at <a href="https://wifi.mit.edu/" target="_blank">wifi.mit.edu</a>, if you have some MIT affiliation (including alumni), then joining the <tt>MIT</tt> network, or</li>
       <li>connecting directly to the <tt>MIT</tt> network with the WiFi password in the HQ room (non-MIT folks use this one).</li>
     </ul>
     Again, <strong>you will have a harder time participating in Hunt</strong> on this WiFi network! Continue at your own peril.
