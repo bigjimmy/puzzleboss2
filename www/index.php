@@ -76,7 +76,7 @@ if ($user_network === 'MIT GUEST' || isset($_GET['wifi_debug'])) {
       <li><strong>generating a password at <a href="https://wifi.mit.edu/" target="_blank">wifi.mit.edu</a></strong>, if you have some MIT affiliation (including alumni), then joining the <tt>MIT</tt> network, or</li>
       <li>connecting directly to the <tt>MIT</tt> network with the <strong>WiFi password in the HQ room</strong> (non-MIT folks use this one).</li>
     </ul>
-    Again, <strong>you will have a harder time participating in Hunt</strong> on this WiFi network! Continue at your own peril.
+    Again, <strong>you will have a harder time participating in Hunt</strong> on this WiFi network! Continue at your own peril. <a href="https://importanthuntpoll.org/wiki/index.php/WiFi" target="_blank">See here for more info.</a>
   </div>
 HTML;
 } else {
