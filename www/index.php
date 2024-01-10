@@ -72,9 +72,9 @@ if ($user_network === 'MIT GUEST' || isset($_GET['wifi_debug'])) {
     Discord audio calls and is much slower!
     Please <strong>switch to <tt>MIT</tt> / <tt>MIT SECURE</tt></strong>, by either:
     <ul>
-      <li>joining directly, if you have <a href="https://kb.mit.edu/confluence/display/istcontrib/How+to+connect+to+MIT+SECURE+wireless+on+macOS" target="_blank">an active Kerberos</a>,</li>
-      <li>generating a password at <a href="https://wifi.mit.edu/" target="_blank">wifi.mit.edu</a>, if you have some MIT affiliation (including alumni), then joining the <tt>MIT</tt> network, or</li>
-      <li>connecting directly to the <tt>MIT</tt> network with the WiFi password in the HQ room (non-MIT folks use this one).</li>
+      <li><strong>joining directly</strong>, if you have <a href="https://kb.mit.edu/confluence/display/istcontrib/How+to+connect+to+MIT+SECURE+wireless+on+macOS" target="_blank">an active Kerberos</a>,</li>
+      <li><strong>generating a password at <a href="https://wifi.mit.edu/" target="_blank">wifi.mit.edu</a></strong>, if you have some MIT affiliation (including alumni), then joining the <tt>MIT</tt> network, or</li>
+      <li>connecting directly to the <tt>MIT</tt> network with the <strong>WiFi password in the HQ room</strong> (non-MIT folks use this one).</li>
     </ul>
     Again, <strong>you will have a harder time participating in Hunt</strong> on this WiFi network! Continue at your own peril.
   </div>
