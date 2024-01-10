@@ -47,8 +47,10 @@
 <body>
 <main>
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 'On');
+if (array_key_exists('debug', $_GET)) {
+  error_reporting(E_ALL);
+  ini_set('display_errors', 'On');
+}
 global $apiroot;
 
 // TODO: Load this from the yaml config
@@ -72,7 +74,7 @@ function readapi($apicall) {
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);
   curl_close($curl);
-  return json_decode($resp);
+  return json_decode($resp, true);
 }
 
 function postapi($apicall, $data) {
@@ -90,7 +92,7 @@ function postapi($apicall, $data) {
   curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
   $resp = curl_exec($curl);
   curl_close($curl);
-  return json_decode($resp);
+  return json_decode($resp, true);
 }
 
 function exit_with_error_message($error) {
@@ -117,12 +119,12 @@ function assert_api_success($responseobj) {
     exit_with_api_error($responseobj);
   }
   if (array_key_exists('error', $responseobj)) {
-    exit_with_api_error($responseobj->error);
+    exit_with_api_error($responseobj['error']);
   }
   if (!array_key_exists('status', $responseobj)) {
     exit_with_api_error($responseobj);
   }
-  if ($responseobj->status !== 'ok') {
+  if ($responseobj['status'] !== 'ok') {
     exit_with_api_error($responseobj);
   }
 }
