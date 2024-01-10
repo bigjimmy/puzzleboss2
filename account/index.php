@@ -48,7 +48,6 @@
 <main>
 <?php
 error_reporting(E_ALL);
-ini_set('display_errors', 'On');
 global $apiroot;
 
 // TODO: Load this from the yaml config
