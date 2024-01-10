@@ -138,9 +138,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $request_type = $reset !== 'false' ? 'account creation' : 'password reset';
 
   // Run validation
-  if ($password != $_POST['password2']) {
-    exit_with_error_message("Passwords don't match");
-  }
   if (!ctype_alnum($username)) {
     exit_with_error_message("Username has non alphanumeric chars");
   }
@@ -156,6 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // End validation
 
   if (!array_key_exists("userok", $_POST)) {
+    if ($password != $_POST['password2']) {
+      exit_with_error_message("Passwords don't match");
+    }
     // no code, but user data. present the page to submit user for verification
     print <<<HTML
       <h1>Confirm $request_type details</h1>
