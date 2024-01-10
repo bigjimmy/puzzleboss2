@@ -199,7 +199,7 @@ HTML;
         'reset' => $reset
       )
     );
-  catch (Exception $e) {
+  } catch (Exception $e) {
     exit_with_api_error($e);
     throw $e;
   }
