@@ -47,7 +47,6 @@
 <body>
 <main>
 <?php
-error_reporting(E_ALL);
 global $apiroot;
 
 // TODO: Load this from the yaml config
