@@ -52,7 +52,7 @@ ini_set('display_errors', 'On');
 global $apiroot;
 
 // TODO: Load this from the yaml config
-if ($_GET['yaml']) {
+if (array_key_exists('yaml', $_GET)) {
   $yaml = yaml_parse_file('../puzzleboss.yaml');
   print json_encode($yaml);
   exit(0);
