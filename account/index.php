@@ -47,6 +47,8 @@
 <body>
 <main>
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 'On');
 global $apiroot;
 
 // TODO: Load this from the yaml config
@@ -135,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   } else {
     $reset = "false";
   }
-  $request_type = $reset !== 'false' ? 'account creation' : 'password reset';
+  $request_type = $reset === 'false' ? 'account creation' : 'password reset';
 
   // Run validation
   if (!ctype_alnum($username)) {
@@ -188,6 +190,7 @@ HTML;
   }
 
   // user says it's ok let's get the code and display it
+  print "<h1>Running...</h1>"
   try {
     $responseobj = postapi(
       '/account',
@@ -206,7 +209,10 @@ HTML;
   assert_api_success($responseobj);
   print <<<HTML
   <h2>Request for $request_type submitted!</h2>
-  <p>Check your email ($email) for further instructions.</p>
+  <p>
+    Check your email ($email) for further instructions from $regemail.<br>
+    (Also check your spam folder; sometimes the email ends up there.)
+  </p>
   </main></body></html>
 HTML;
   exit(0);
