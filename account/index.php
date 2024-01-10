@@ -47,6 +47,8 @@
 <body>
 <main>
 <?php
+error_reporting(E_ALL);
+ini_set('display_errors', 'On');
 global $apiroot;
 
 // TODO: Load this from the yaml config
@@ -188,7 +190,7 @@ HTML;
   }
 
   // user says it's ok let's get the code and display it
-  print "<h1>Running...</h1>"
+  print "<h1>Running...</h1>";
   try {
     $responseobj = postapi(
       '/account',
