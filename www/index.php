@@ -16,6 +16,7 @@ if (isset($_GET['data'])) {
     die(json_encode(array(
         'solver' => $solver,
         'fullhunt' => $fullhunt,
+        'server' => $_SERVER,
     )));
 }
 
