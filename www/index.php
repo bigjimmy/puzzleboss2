@@ -60,13 +60,15 @@ if ($user_network === 'MIT GUEST' || isset($_GET['wifi_debug'])) {
   <style>
     .error {
       background-color: lightpink;
+      font-family: 'Lora';
       margin: 20px;
+      max-width: 700px;
       padding: 10px;
     }
   </style>
   <div class="error">
     <strong>WARNING:</strong>&nbsp;
-    You appear to be on <tt>MIT GUEST</tt> Wifi right now, which does NOT support
+    You are on <tt>MIT GUEST</tt> Wifi right now, which does NOT support
     Discord audio calls and is much slower!
     Please <strong>switch to <tt>MIT</tt> / <tt>MIT SECURE</tt></strong>, by either:
     <ul>
@@ -86,6 +88,7 @@ HTML;
 <head>
   <meta http-equiv="refresh" content=30>
   <title>Puzzleboss Interface</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
 </head>
 <body>
 <?= $wifi_warning ?>
