@@ -53,15 +53,11 @@ if (array_key_exists('debug', $_GET)) {
 }
 global $apiroot;
 
-// TODO: Load this from the yaml config
-if (array_key_exists('yaml', $_GET)) {
-  $yaml = yaml_parse_file('../puzzleboss.yaml');
-  print json_encode($yaml);
-  exit(0);
-}
-$apiroot = "http://localhost:5000";
-$google_domain = 'importanthuntpoll.org';
-$example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/1l3Sgk-5XfCEMs4SKCn4uRfx5xagNbx1L-QvsQFSuhDU/edit';
+$yaml = yaml_parse_file('../puzzleboss.yaml');
+$apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
+$google_domain = $yaml['GOOGLE']['DOMAINNAME'];
+$regemail = $yaml['APP']['REGEMAIL'];
+$example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
 
 function readapi($apicall) {
   $url  = $GLOBALS['apiroot'] . $apicall;
