@@ -1,61 +1,97 @@
-<html>
-<head><title>Add Puzzle</title></head><body>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Add Puzzle</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <style>
+  body {
+    background-color: aliceblue;
+    display: grid;
+    font-family: 'Lora';
+    height: 100vh;
+    justify-items: center;
+    margin: 0;
+    width: 100vw;
+  }
+  h1 {
+    line-height: 1em;
+  }
+  h1 > span {
+    font-size: 50%;
+  }
+  main {
+    margin-top: 50px;
+    max-width: 700px;
+  }
+  table.registration {
+    text-align: right;
+  }
+  table.registration tr > td:last-child {
+    text-align: left;
+    font-size: 80%;
+    font-style: italic;
+  }
+  table.registration tr:last-child {
+    text-align: center;
+  }
+  input[type="submit"] {
+    font-family: inherit;
+  }
+  .error {
+    background-color: lightpink;
+    padding: 10px;
+  }
+  .success {
+    background-color: lightgreen;
+    padding: 10px;
+  }
+  </style>
+</head>
+<body>
+<main>
 <?php
 
 require('puzzlebosslib.php');
 
-if (isset($_GET['submit'])) {
-    $name = $_GET['name'];
-    $round_id = $_GET['round_id'];
-    $puzzle_uri = $_GET['puzzle_uri'];
-    
-    echo 'Attempting to add puzzle.<br>';
-    echo "name: $name<br>";
-    echo "round_id: $round_id<br>";
-    echo "puzzle_uri: $puzzle_uri<br>";
-    
-    
-    $apiurl = "/puzzles";
-    $data = array(
-        'name' => $name,
-        'round_id' => $round_id,
-        'puzzle_uri' => $puzzle_uri,
-    );
-    
-    echo "<br> Submitting API request to add puzzle.  May take a few seconds.<br>";
+if (isset($_POST['submit'])) {
+  $name = $_POST['name'];
+  $round_id = $_POST['round_id'];
+  $puzzle_uri = $_POST['puzzle_uri'];
+
+  print <<<HTML
+  Attempting to add puzzle.<br>
+  <table>
+    <tr><td>name:</td><td>$name</td></tr>
+    <tr><td>round_id:</td><td>$round_id</td></tr>
+    <tr><td>puzzle_uri:</td><td>$puzzle_uri</td></tr>
+  </table>
+HTML;
+
+
+  $apiurl = "/puzzles";
+  $data = array(
+    'name' => $name,
+    'round_id' => $round_id,
+    'puzzle_uri' => $puzzle_uri,
+  );
+
+  echo "Submitting API request to add puzzle. May take a few seconds.<br>";
+  try {
     $responseobj = postapi($apiurl, $data);
-    
-    echo '<br>';
-    if (is_string($responseobj)){
-        echo 'ERROR: Response from API is ' . var_dump($responseobj);
-        echo '</body></html>';
-        die();
-    }
-    foreach($responseobj as $key => $value){
-        if ($key == "status") {
-            if ($responseobj->status == "ok") {
-                echo 'OK.  Puzzle created with ID of ' . $responseobj->puzzle->id;
-            }
-            else {
-                echo 'ERROR: Response from API is ' . var_dump($responseobj);
-            }
-        }
-        if ($key == "error") {
-            echo 'ERROR: ' . $value; 
-        }
-    }
-    die();
+  } catch (Exception $e) {
+    exit_with_api_error($e);
+    throw $e;
+  }
+  assert_api_success($responseobj);
+
+  echo '<br><div class="success">';
+  echo 'OK.  Puzzle created with ID of ' . $responseobj->puzzle->id;
+  echo '</div><br><hr>';
 }
 
-$puzzurl = "";
-$puzzid = "";
-if (isset($_GET['puzzurl'])) {
-    $puzzurl = $_GET['puzzurl'];
-}
-if (isset($_GET['puzzid'])) {
-    $puzzid = $_GET['puzzid'];
-    $puzzid = str_replace(' | MIT Mystery Hunt 2022', '', $puzzid);
-}
+$puzzurl = isset($_GET['puzzurl']) ? $_GET['puzzurl'] : '';
+$puzzname = isset($_GET['puzzid']) ? $_GET['puzzid'] : '';
 $round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
 $rounds = readapi("/rounds")->rounds;
@@ -63,49 +99,49 @@ $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
 ?>
 
 <h1>Add a puzzle!</h1>
-<form action="addpuzzle.php" method="get">
-    <table>
-        <tr>
-            <td><label for="name">Name:</label></td>
-            <td>
-                <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    required
-                    value="<?= $puzzid ?>"
-                    size="40"
-                />
-            </td>
-        </tr>
-        <tr>
-            <td><label for="round_id">Round:</label></td>
-            <td>
-                <select id="round_id" name="round_id"/>
+<form action="addpuzzle.php" method="post">
+  <table>
+    <tr>
+      <td><label for="name">Name:</label></td>
+      <td>
+        <input
+          type="text"
+          id="name"
+          name="name"
+          required
+          value="<?= $puzzname ?>"
+          size="40"
+        />
+      </td>
+    </tr>
+    <tr>
+      <td><label for="round_id">Round:</label></td>
+      <td>
+        <select id="round_id" name="round_id"/>
 <?php
 foreach ($rounds as $round) {
-    $selected = $round->name === $round_name ? 'selected' : '';
-    echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
+  $selected = $round->name === $round_name ? 'selected' : '';
+  echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
 }
 ?>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td><label for="puzzle_uri">Puzzle URI:</label></td>
-            <td>
-                <input
-                    type="text"
-                    id="puzzle_uri"
-                    name="puzzle_uri"
-                    required
-                    value="<?= $puzzurl ?>"
-                    size="80"
-                />
-            </td>
-        </tr>
-    </table>
-    <input type="submit" name="submit" value="Add New Puzzle"/>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td><label for="puzzle_uri">Puzzle URI:</label></td>
+      <td>
+        <input
+          type="text"
+          id="puzzle_uri"
+          name="puzzle_uri"
+          required
+          value="<?= $puzzurl ?>"
+          size="80"
+        />
+      </td>
+    </tr>
+  </table>
+  <input type="submit" name="submit" value="Add New Puzzle"/>
 </form>
 </body>
 </html>

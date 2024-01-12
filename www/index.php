@@ -89,6 +89,11 @@ HTML;
   <meta http-equiv="refresh" content=30>
   <title>Puzzleboss Interface</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <style>
+  body {
+    background-color: aliceblue;
+  }
+  </style>
 </head>
 <body>
 <?= $wifi_warning ?>

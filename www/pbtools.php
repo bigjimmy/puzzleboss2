@@ -12,12 +12,54 @@ $bookmarkuri = trim(str_replace(
 
 ?>
 <!doctype html>
-<html>
-<head><title>Puzzleboss-only Tools</title></head>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzleboss-only Tools</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: aliceblue;
+      display: grid;
+      font-family: 'Lora';
+      height: 100vh;
+      justify-items: center;
+      margin: 0;
+      width: 100vw;
+    }
+    h1 {
+      line-height: 1em;
+    }
+    h1 > span {
+      font-size: 50%;
+    }
+    main {
+      margin-top: 50px;
+      max-width: 700px;
+    }
+    table.registration {
+      text-align: right;
+    }
+    table.registration tr > td:last-child {
+      text-align: left;
+      font-size: 80%;
+      font-style: italic;
+    }
+    table.registration tr:last-child {
+      text-align: center;
+    }
+    input[type="submit"] {
+      font-family: inherit;
+    }
+    .error {
+      background-color: lightpink;
+      padding: 10px;
+    }
+  </style>
+</head>
 <body>
-
+<main>
 <h1>Puzzleboss-only Admin Tools</h1>
-
 <hr>
 <h3>New Puzzle Bookmarklet</h3>
 <table border="2" cellpadding="3">
@@ -33,7 +75,66 @@ $bookmarkuri = trim(str_replace(
 <br>
 
 <hr>
-<h3>Solver Assignment</h3><br>
+<h3>Add New Round</h3>
+<table border="2" cellpadding="3">
+  <tr>
+    <td>To add a new round (enter round name):</td>
+    <td valign="middle">
+      <form action="addround.php" method="post">
+        <input type="text" name="name">
+        <input type="submit" name="submit" value="Add Round">
+      </form>
+    </td>
+  </tr>
+</table>
+
+<h3>Add New Puzzle</h3>
+<form action="addpuzzle.php" method="post">
+  <table>
+    <tr>
+      <td><label for="name">Name:</label></td>
+      <td>
+        <input
+          type="text"
+          id="name"
+          name="name"
+          required
+          size="40"
+        />
+      </td>
+    </tr>
+    <tr>
+      <td><label for="round_id">Round:</label></td>
+      <td>
+        <select id="round_id" name="round_id"/>
+<?php
+$rounds = readapi("/rounds")->rounds;
+$rounds = array_reverse($rounds); // Newer rounds first in the dropdown
+foreach ($rounds as $round) {
+  echo "<option value=\"{$round->id}\">{$round->name}</option>\n";
+}
+?>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <td><label for="puzzle_uri">Puzzle URI:</label></td>
+      <td>
+        <input
+          type="text"
+          id="puzzle_uri"
+          name="puzzle_uri"
+          required
+          size="80"
+        />
+      </td>
+    </tr>
+  </table>
+  <input type="submit" name="submit" value="Add New Puzzle"/>
+</form>
+
+<hr>
+<h3>Solver Assignment</h3>
 <table border="2" cellpadding="3">
   <tr>
     <td>To manually edit a solver's current puzzle assignment (enter username):</td>
@@ -41,20 +142,6 @@ $bookmarkuri = trim(str_replace(
       <form action="editsolver.php" method="get">
         <input type="text" name="assumedid">
         <input type="submit" name="ok" value="Edit Solver">
-      </form>
-    </td>
-  </tr>
-</table>
-
-<hr>
-<h3>Add New Round</h3><br>
-<table border="2" cellpadding="3">
-  <tr>
-    <td>To add a new round (enter round name):</td>
-    <td valign="middle">
-      <form action="addround.php" method="get">
-        <input type="text" name="name">
-        <input type="submit" name="submit" value="Add Round">
       </form>
     </td>
   </tr>

@@ -41,6 +41,43 @@ function postapi($apicall, $data) {
     return json_decode($resp);
 }
 
+function exit_with_error_message($error) {
+  print <<<HTML
+    <div class="error">
+      <strong>ERROR:</strong>
+      &nbsp;$error;&nbsp;
+      <a href="javascript:window.history.back();">Try again.</a>
+    </div>
+  </main></body></html>
+HTML;
+  exit(0);
+}
+
+function exit_with_api_error($obj) {
+  exit_with_error_message(
+    'Response from API is:<pre>'.var_dump($obj).'</pre>'.
+    'Contact @Puzztech on Discord for help.'
+  );
+}
+
+function assert_api_success($responseobj) {
+  if (!$responseobj) {
+    exit_with_api_error($responseobj);
+  }
+  if (is_string($responseobj)) {
+    exit_with_api_error($responseobj);
+  }
+  if (array_key_exists('error', $responseobj)) {
+    exit_with_api_error($responseobj['error']);
+  }
+  if (!array_key_exists('status', $responseobj)) {
+    exit_with_api_error($responseobj);
+  }
+  if ($responseobj['status'] !== 'ok') {
+    exit_with_api_error($responseobj);
+  }
+}
+
 function getuid($username) {
     $userlist = readapi('/solvers')->solvers;
     foreach ($userlist as $user) {
