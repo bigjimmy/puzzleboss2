@@ -87,7 +87,9 @@ $bookmarkuri = trim(str_replace(
     </td>
   </tr>
 </table>
+<br>
 
+<hr>
 <h3>Add New Puzzle</h3>
 <form action="addpuzzle.php" method="post">
   <table>
@@ -132,6 +134,7 @@ foreach ($rounds as $round) {
   </table>
   <input type="submit" name="submit" value="Add New Puzzle"/>
 </form>
+<br>
 
 <hr>
 <h3>Solver Assignment</h3>
