@@ -1,160 +1,182 @@
-<html><head><title>Edit Puzzle</title>
-   <meta http-equiv="cache-control" content="max-age=0" />
-   <meta http-equiv="cache-control" content="no-cache" />
-   <meta http-equiv="expires" content="0" />
-   <meta http-equiv="expires" content="Tue, 01 Jan 1980 1:00:00 GMT" />
-   <meta http-equiv="pragma" content="no-cache" />
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Edit Puzzle</title>
+  <meta http-equiv="cache-control" content="max-age=0" />
+  <meta http-equiv="cache-control" content="no-cache" />
+  <meta http-equiv="expires" content="0" />
+  <meta http-equiv="expires" content="Tue, 01 Jan 1980 1:00:00 GMT" />
+  <meta http-equiv="pragma" content="no-cache" />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <style>
+  body {
+  background-color: aliceblue;
+  display: grid;
+  font-family: 'Lora';
+  height: 100vh;
+  justify-items: center;
+  margin: 0;
+  width: 100vw;
+  }
+  h1 {
+  line-height: 1em;
+  }
+  h1 > span {
+  font-size: 50%;
+  }
+  main {
+  margin-top: 50px;
+  max-width: 700px;
+  }
+  table.registration {
+  text-align: right;
+  }
+  table.registration tr > td:last-child {
+  text-align: left;
+  font-size: 80%;
+  font-style: italic;
+  }
+  table.registration tr:last-child {
+  text-align: center;
+  }
+  input[type="submit"] {
+  font-family: inherit;
+  }
+  .error {
+  background-color: lightpink;
+  padding: 10px;
+  }
+  .success {
+    background-color: lightgreen;
+    padding: 10px;
+  }
+  </style>
 </head>
 <body>
+<main>
 <?php 
 
 require('puzzlebosslib.php');
 
 function startuseronpuzzle($id, $puzz) {
-    $api = "/solvers/" . $id . "/puzz";
-    $data = array('puzz' => $puzz);
-    
+  $api = "/solvers/" . $id . "/puzz";
+  $data = array('puzz' => $puzz);
+
+  try {
     $responseobj = postapi($api, $data);
-    echo '<br>';
-    foreach($responseobj as $key => $value){
-        echo "<br><br>";
-        if ($key == "status") {
-            if ($value == "ok") {
-                echo 'OK.  Solver reassigned.';
-            }
-            else {
-                echo 'ERROR: Response from API is ' . var_dump($responseobj);
-            }
-                
-        }
-        if ($key == "error") {
-            echo 'ERROR: ' . $value;
-        }
-    }
+  } catch (Exception $e) {
+    exit_with_api_error($e);
+    throw $e;
+  }
+  assert_api_success($responseobj);
+  echo '<div class="success">OK.  Solver reassigned.</div>';
 }   
 
 function updatepuzzlepart($id, $part, $value) {
-    $api = "/puzzles/" . $id . "/" . $part;
-    $data = array($part => $value);
+  $api = "/puzzles/" . $id . "/" . $part;
+  $data = array($part => $value);
+  try {
     $responseobj = postapi($api, $data);
-    echo '<br>';
-    foreach($responseobj as $key => $value){
-        echo "<br><br>";
-        if ($key == "status") {
-            if ($value == "ok") {
-                echo 'OK.  Puzzle Part Updated.';
-            }
-            else {
-                echo 'ERROR: Response from API is ' . var_dump($responseobj);
-            }
-            
-        }
-        if ($key == "error") {
-            echo 'ERROR: ' . $value;
-        }
-    }
+  } catch (Exception $e) {
+    exit_with_api_error($e);
+    throw $e;
+  }
+  assert_api_success($responseobj);
+  echo '<div class="success">OK.  Puzzle Part Updated.</div>';
 }
 
 function updateroundpart($id, $part, $value) {
-    $api = "/rounds/" . $id . "/" . $part;
-    $data = array($part => $value);
+  $api = "/rounds/" . $id . "/" . $part;
+  $data = array($part => $value);
+  try {
     $responseobj = postapi($api, $data);
-    echo '<br>';
-    foreach($responseobj as $key => $value){
-        echo "<br><br>";
-        if ($key == "status") {
-            if ($value == "ok") {
-                echo 'OK.  Round Part Updated.';
-            }
-            else {
-                echo 'ERROR: Response from API is ' . var_dump($responseobj);
-            }
-            
-        }
-        if ($key == "error") {
-            echo 'ERROR: ' . $value;
-        }
-    }
+  } catch (Exception $e) {
+    exit_with_api_error($e);
+    throw $e;
+  }
+  assert_api_success($responseobj);
+  echo '<div class="success">OK.  Round Part Updated.</div>';
 }
 
-if (isset( $_GET['submit'] ) ) {
-    
-    if (!isset($_GET['uid'])){
-        echo 'ERROR: No Authenticated User ID Found in Request';
-        echo '</body></html>';
-        exit (2);
+if (isset($_POST['submit'])) {
+  if (!isset($_POST['uid'])) {
+    echo 'ERROR: No Authenticated User ID Found in Request';
+    echo '</body></html>';
+    exit (2);
+  }
+
+  if (!isset($_POST['pid'])) {
+    echo 'ERROR: No puzz ID Found in Request';
+    echo '</body></html>';
+    exit (2);
+  }
+  if ($_POST['pid'] == "") {
+    echo 'ERROR: No puzz ID Found in Request';
+    echo '</body></html>';
+    exit (2);
+  }
+
+  $whatdo = "";
+
+  if (isset($_POST['startwork'])) {
+    $whatdo = "startwork";
+  }
+
+  if (isset($_POST['stopwork'])) {
+    $whatdo = "stopwork";
+  }
+
+  if (isset($_POST['ismeta'])) {
+    if ($_POST['ismeta'] == "yes") {
+      $whatdo = "ismeta";
+    } else {
+      $whatdo = "isnotmeta";
     }
-    
-    if (!isset($_GET['pid'])){
-        echo 'ERROR: No puzz ID Found in Request';
-        echo '</body></html>';
-        exit (2);
+  }
+
+
+  if (isset($_POST['partupdate'])) {
+    $whatdo = "partupdate";
+    if (!isset($_POST['part']) || !isset($_POST['value'])) {
+      echo 'ERROR: Part name to update, or value to set it to not specified';
+      echo '</body></html>';
+      exit (2);
     }
-    if ($_GET['pid'] == ""){
-        echo 'ERROR: No puzz ID Found in Request';
-        echo '</body></html>';
-        exit (2);
-    }
-    
-    $whatdo = "";
-    
-    if (isset($_GET['startwork'])){
-        $whatdo = "startwork";  
-    }
-    
-    if (isset($_GET['stopwork'])){
-        $whatdo = "stopwork";
-    }
-    
-    if (isset($_GET['ismeta'])){
-        if ($_GET['ismeta'] == "yes"){
-            $whatdo = "ismeta";
-        } else {
-            $whatdo = "isnotmeta";
-        }
-    }
-    
-    
-    if (isset($_GET['partupdate'])){
-        $whatdo = "partupdate";
-        if (!isset($_GET['part']) || !isset($_GET['value'])){
-            echo 'ERROR: Part name to update, or value to set it to not specified';
-            echo '</body></html>';
-            exit (2);
-        }
-    }
-    
-    $id = $_GET['uid'];  
-    $puzz = $_GET['pid'];
-    
-    echo 'Attempting to change puzz ' . $whatdo . '<br>';
-    switch ($whatdo){
-        case "startwork":
-            startuseronpuzzle($id, $puzz);
-            break;
-        case "stopwork":
-            startuseronpuzzle($id, "");
-            break;
-        case "ismeta":
-            updateroundpart($_GET['rid'], "meta_id", $puzz);
-            break;
-        case "isnotmeta":
-            updateroundpart($_GET['rid'], "meta_id", "NULL");
-            break;
-        case "partupdate":
-            updatepuzzlepart($puzz, $_GET['part'], $_GET['value']);
-            break;
-    }    
+  }
+
+  $id = $_POST['uid'];
+  $puzz = $_POST['pid'];
+
+  echo 'Attempting to change puzz ' . $whatdo . '<br>';
+  switch ($whatdo) {
+    case "startwork":
+      startuseronpuzzle($id, $puzz);
+      break;
+    case "stopwork":
+      startuseronpuzzle($id, "");
+      break;
+    case "ismeta":
+      updateroundpart($_POST['rid'], "meta_id", $puzz);
+      break;
+    case "isnotmeta":
+      updateroundpart($_POST['rid'], "meta_id", "NULL");
+      break;
+    case "partupdate":
+      updatepuzzlepart($puzz, $_POST['part'], $_POST['value']);
+      break;
+  }
+  echo '<br><hr>';
 }
 
-    
-echo '<hr><br><h1>Per-Puzzle Change Interface</h1><br>';
+
+echo '<h1>Per-Puzzle Change Interface</h1>';
 
 // Make sure puzzle id is supplied
 if (!isset($_GET['pid'])) {
-    echo '<br>No Puzzle ID provided to script!<br>';
-    echo '</body></html>';
-    exit (2);
+  echo '<br>No Puzzle ID provided to script!<br>';
+  echo '</body></html>';
+  exit (2);
 }
 $puzzid = $_GET['pid'];
 
@@ -178,39 +200,39 @@ echo '<tr><td><b>Cur. Solvers</b></td><td>' . $puzzleobj->puzzle->cursolvers . '
 echo '<tr><td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td></tr>';
 echo '<tr><td><b>Comments</b></td><td>' . $puzzleobj->puzzle->comments . '</td></tr>';
 echo '<tr><td><b>Meta For Round</b></td><td>';
-if ($roundmeta == $puzzid){
-    echo "yes";
+if ($roundmeta == $puzzid) {
+  echo "yes";
 } else {
-    echo "no";
+  echo "no";
 }
 echo '</td></tr></table>';
 
 //Solver Assignment
-if ($userobj->solver->puzz != $puzname){
-    echo '<br>You are not marked as working on this puzzle.  Would you like to be?';
-    echo '<form action="editpuzzle.php" method="get">';
-    echo '<input type="hidden" name="startwork" value="yes">';
-    echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
-    echo '<input type="hidden" name="uid" value="' . $userid . '">';
-    echo '<input type="submit" name="submit" value="yes">';
-    echo '</form>';
+if ($userobj->solver->puzz != $puzname) {
+  echo '<br>You are not marked as working on this puzzle.  Would you like to be?';
+  echo '<form action="editpuzzle.php" method="post">';
+  echo '<input type="hidden" name="startwork" value="yes">';
+  echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+  echo '<input type="hidden" name="uid" value="' . $userid . '">';
+  echo '<input type="submit" name="submit" value="yes">';
+  echo '</form>';
 } else {
-    echo '<br>You are marked as currently working on this puzzle.  Would you like to not be?';
-    echo '<form action="editpuzzle.php" method="get">';
-    echo '<input type="hidden" name="stopwork" value="yes">';
-    echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
-    echo '<input type="hidden" name="uid" value="' . $userid . '">';
-    echo '<input type="submit" name="submit" value="yes">';  
-    echo '</form>';
-    
+  echo '<br>You are marked as currently working on this puzzle.  Would you like to not be?';
+  echo '<form action="editpuzzle.php" method="post">';
+  echo '<input type="hidden" name="stopwork" value="yes">';
+  echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+  echo '<input type="hidden" name="uid" value="' . $userid . '">';
+  echo '<input type="submit" name="submit" value="yes">';
+  echo '</form>';
+
 }
 
 
 echo '<br><table border=2><tr><th>Part</th><th>New Value</th><th></th></tr>';
 
 // Enter answer
-echo '<tr>';    
-echo '<td>Answer</td><td><form action="editpuzzle.php" method="get">';
+echo '<tr>';
+echo '<td>Answer</td><td><form action="editpuzzle.php" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -219,10 +241,10 @@ echo '<input type="text" required minlength="1" name="value" value="' . $puzzleo
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
-    
+
 // Enter location
 echo '<tr>';
-echo '<td>Location</td><td><form action="editpuzzle.php" method="get">';
+echo '<td>Location</td><td><form action="editpuzzle.php" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -233,7 +255,7 @@ echo '</form></td></tr>';
 
 // Enter Comments
 echo '<tr>';
-echo '<td>Comments</td><td><form action="editpuzzle.php" method="get">';
+echo '<td>Comments</td><td><form action="editpuzzle.php" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -244,7 +266,7 @@ echo '</form></td></tr>';
 
 // Change Status
 echo '<tr>';
-echo '<td>Status</td><td><form action="editpuzzle.php" method="get">';
+echo '<td>Status</td><td><form action="editpuzzle.php" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -262,14 +284,14 @@ echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
 //Meta Assignment
-echo '<tr><td>Meta For Round</td><td><form action="editpuzzle.php" method="get">';
+echo '<tr><td>Meta For Round</td><td><form action="editpuzzle.php" method="post">';
 echo '<select id="ismeta" name="ismeta"/>';
-if ($roundmeta != $puzzid){
-    echo '<option selected value="no">No</option>';
-    echo '<option value="yes">Yes</option>';
+if ($roundmeta != $puzzid) {
+  echo '<option selected value="no">No</option>';
+  echo '<option value="yes">Yes</option>';
 } else {
-    echo '<option selected value="yes">Yes</option>';
-    echo '<option value="no">No</option>';
+  echo '<option selected value="yes">Yes</option>';
+  echo '<option value="no">No</option>';
 }
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';

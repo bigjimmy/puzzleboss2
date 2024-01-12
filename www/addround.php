@@ -42,6 +42,10 @@
     background-color: lightpink;
     padding: 10px;
   }
+  .success {
+    background-color: lightgreen;
+    padding: 10px;
+  }
   </style>
 </head>
 <body>
