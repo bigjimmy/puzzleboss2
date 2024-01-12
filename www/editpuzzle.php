@@ -269,6 +269,7 @@ echo '<option value="Needs eyes">Needs eyes</option>';
 echo '<option value="Critical">Critical</option>';
 echo '<option value="WTF">WTF</option>';
 echo '<option value="Unnecessary">Unnecessary</option>';
+echo '<option value="[hidden]">[hidden]</option>';
 echo '</option>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';

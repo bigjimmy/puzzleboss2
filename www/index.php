@@ -116,6 +116,9 @@ foreach ($fullhunt as $round) {
 
   echo '<table>';
   foreach ($puzzlearray as $puzzle) {
+    if ($puzzle->status == '[hidden]') {
+      continue;
+    }
     $puzzleid = $puzzle->id;
     $puzzlename = $puzzle->name;
     $styleinsert = "";
