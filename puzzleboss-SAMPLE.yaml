@@ -12,6 +12,7 @@ PUZZCORD:
     SKIP_PUZZCORD: "false"
 
 GOOGLE:
+    # Folder will be created when first round is created
     HUNT_FOLDER_NAME: "My Hunt Folder 2099"
     SKIP_GOOGLE_API: "false"
     DOMAINNAME: your-url.com
