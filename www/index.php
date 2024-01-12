@@ -114,6 +114,12 @@ foreach ($fullhunt as $round) {
   $puzzlearray = $round->puzzles;
   $metapuzzle = $round->meta_id;
 
+  $is_solved_round = str_ends_with($round->round_uri, '#solved');
+  if ($is_solved_round) {
+    echo '<details>';
+    echo '<summary title="Click to see solved round puzzles">Expand solved round:</summary>';
+  }
+
   echo '<table>';
   foreach ($puzzlearray as $puzzle) {
     if ($puzzle->status == '[hidden]') {
@@ -174,6 +180,9 @@ foreach ($fullhunt as $round) {
 
   }
   echo '</table>';
+  if ($is_solved_round) {
+    echo '</details>';
+  }
   echo '</td>';
 
 }

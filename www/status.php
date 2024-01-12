@@ -26,15 +26,15 @@ $nolocarray = [];
 $huntstruct = readapi("/all");
 $rounds = $huntstruct->rounds;
 
-foreach($rounds as $round){
+foreach ($rounds as $round) {
   $totrounds += 1;
   $metapuzzle = $round->meta_id;
   $puzzlearray = $round->puzzles;
 
   // Is round solved?
-  if (isset($metapuzzle)){
+  if (isset($metapuzzle)) {
     $metapuzzlestatus = readapi("/puzzles/" . $metapuzzle)->puzzle->status;
-    if ($metapuzzlestatus == "Solved"){
+    if ($metapuzzlestatus == "Solved") {
       $solvedrounds += 1;
     } else {
       $unsolvedrounds += 1;
@@ -44,12 +44,12 @@ foreach($rounds as $round){
   }
 
   // Count puzzles
-  foreach ($puzzlearray as $puzzle){
+  foreach ($puzzlearray as $puzzle) {
     if ($puzzle->status == '[hidden]') {
       continue;
     }
     $totpuzz += 1;
-    switch ($puzzle->status){
+    switch ($puzzle->status) {
       case "New":
         $newcnt += 1;
         array_push($newarray, $puzzle);
@@ -93,9 +93,9 @@ echo '</table><br><br>';
 
 echo '<table border=3>';
 echo '<tr><th colspan=4>Unsolved Puzzles Missing Location</th></tr>';
-foreach($rounds as $round) {
+foreach ($rounds as $round) {
   $puzzlearray = $round->puzzles;
-  foreach($puzzlearray as $thispuzzle) {
+  foreach ($puzzlearray as $thispuzzle) {
     if ($thispuzzle->status == '[hidden]') {
       continue;
     }
@@ -107,7 +107,7 @@ foreach($rounds as $round) {
   }
 }
 
-foreach($nolocarray as $puzzle){
+foreach ($nolocarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
   $styleinsert = "";
@@ -164,7 +164,7 @@ echo '<tr><th>Good Puzzles To Work On:</th></tr><tr><td>';
 
 $workonarray = array_merge($critarray, $eyesarray, $newarray);
 echo '<table>';
-foreach($workonarray as $puzzle) {
+foreach ($workonarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
   $styleinsert = "";
