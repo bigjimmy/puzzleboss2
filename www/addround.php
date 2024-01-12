@@ -55,7 +55,7 @@ if (isset($_POST['submit'])) {
 
   print <<<HTML
 Attempting to add round.<br>
-<table>
+<table class="registration">
 <tr><td>name:</td><td>$name</td></tr>
 </table>
 HTML;

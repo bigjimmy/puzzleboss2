@@ -64,10 +64,10 @@ if (isset($_POST['submit'])) {
 
   print <<<HTML
   Attempting to add puzzle.<br>
-  <table>
+  <table class="registration">
     <tr><td>name:</td><td>$name</td></tr>
     <tr><td>round_id:</td><td>$round_id</td></tr>
-    <tr><td>puzzle_uri:</td><td>$puzzle_uri</td></tr>
+    <tr><td>puzzle_uri:</td><td><a href="$puzzle_uri">$puzzle_uri</a></td></tr>
   </table>
 HTML;
 
@@ -95,7 +95,7 @@ HTML;
 
 $puzzurl = isset($_GET['puzzurl']) ? $_GET['puzzurl'] : '';
 $puzzname = isset($_GET['puzzid']) ? $_GET['puzzid'] : '';
-$round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
+$round_name = isset($_SERVER['roundname']) ? $_SERVER['roundname'] : '';
 
 $rounds = readapi("/rounds")->rounds;
 $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
