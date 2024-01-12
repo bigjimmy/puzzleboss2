@@ -115,7 +115,7 @@ CREATE TABLE `puzzle` (
   `chat_channel_id` varchar(500) DEFAULT NULL,
   `chat_channel_link` varchar(255) DEFAULT NULL,
   `comments` text,
-  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF') NOT NULL,
+  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','[hidden]') NOT NULL,
   `answer` varchar(500) DEFAULT NULL,
   `round_id` int(11) NOT NULL,
   `drive_id` varchar(100) DEFAULT NULL,
