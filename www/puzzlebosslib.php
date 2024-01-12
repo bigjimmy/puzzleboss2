@@ -45,7 +45,7 @@ function exit_with_error_message($error) {
   print <<<HTML
     <div class="error">
       <strong>ERROR:</strong>
-      &nbsp;$error;&nbsp;
+      &nbsp;$error&nbsp;
       <a href="javascript:window.history.back();">Try again.</a>
     </div>
   </main></body></html>

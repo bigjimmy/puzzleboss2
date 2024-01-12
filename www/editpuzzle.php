@@ -163,18 +163,15 @@ if (isset($_POST['submit'])) {
   echo '<br><hr>';
 }
 
+// Make sure puzzle id is supplied
+if (!isset($_GET['pid'])) {
+  exit_with_error_message('No Puzzle ID provided to script!');
+}
 
 echo '<h1>Per-Puzzle Change Interface</h1>';
 
-// Make sure puzzle id is supplied
-if (!isset($_GET['pid'])) {
-  echo '<br>No Puzzle ID provided to script!<br>';
-  echo '</body></html>';
-  exit (2);
-}
-$puzzid = $_GET['pid'];
-
 // Check for authenticated user
+$puzzid = $_GET['pid'];
 $userid = getauthenticateduser();
 
 $userobj = readapi('/solvers/' . $userid);
@@ -218,7 +215,6 @@ if ($userobj->solver->puzz != $puzname) {
   echo '<input type="hidden" name="uid" value="' . $userid . '">';
   echo '<input type="submit" name="submit" value="yes">';
   echo '</form>';
-
 }
 
 
@@ -298,5 +294,6 @@ echo '</table>';
 
 
 ?>
+</main>
 </body>
 </html>

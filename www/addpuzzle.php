@@ -144,5 +144,6 @@ foreach ($rounds as $round) {
   </table>
   <input type="submit" name="submit" value="Add New Puzzle"/>
 </form>
+</main>
 </body>
 </html>

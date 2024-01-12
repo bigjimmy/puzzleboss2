@@ -63,7 +63,6 @@ Attempting to add round.<br>
 <tr><td>name:</td><td>$name</td></tr>
 </table>
 HTML;
-  echo 'name: ' . $name . '<br>';
 
   $apiurl = "/rounds";
   $data = array('name' => $name);
@@ -93,5 +92,6 @@ HTML;
     </td>
   </tr>
 </table>
+</main>
 </body>
 </html>
