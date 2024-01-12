@@ -64,7 +64,10 @@ function assert_api_success($responseobj) {
   if (!$responseobj) {
     exit_with_api_error($responseobj);
   }
-  if (is_string($responseobj)) {
+  if (is_object($responseobj)) {
+    $responseobj = json_decode(json_encode($responseobj), true);
+  }
+  if (!is_array($responseobj)) {
     exit_with_api_error($responseobj);
   }
   if (array_key_exists('error', $responseobj)) {
