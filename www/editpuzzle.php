@@ -70,7 +70,7 @@ function startuseronpuzzle($id, $puzz) {
     throw $e;
   }
   assert_api_success($responseobj);
-  echo '<div class="success">OK.  Solver reassigned.</div>';
+  echo '<div class="success">OK.  Solver '.$id.' reassigned.</div>';
 }   
 
 function updatepuzzlepart($id, $part, $value) {
@@ -83,7 +83,7 @@ function updatepuzzlepart($id, $part, $value) {
     throw $e;
   }
   assert_api_success($responseobj);
-  echo '<div class="success">OK.  Puzzle Part Updated.</div>';
+  echo '<div class="success">OK.  Puzzle Part '.$part.' Updated.</div>';
 }
 
 function updateroundpart($id, $part, $value) {
@@ -96,25 +96,19 @@ function updateroundpart($id, $part, $value) {
     throw $e;
   }
   assert_api_success($responseobj);
-  echo '<div class="success">OK.  Round Part Updated.</div>';
+  echo '<div class="success">OK.  Round Part '.$part.' Updated.</div>';
 }
 
 if (isset($_POST['submit'])) {
   if (!isset($_POST['uid'])) {
-    echo 'ERROR: No Authenticated User ID Found in Request';
-    echo '</body></html>';
-    exit (2);
+    exit_with_error_message('No Authenticated User ID Found in Request');
   }
 
   if (!isset($_POST['pid'])) {
-    echo 'ERROR: No puzz ID Found in Request';
-    echo '</body></html>';
-    exit (2);
+    exit_with_error_message('No puzz ID Found in Request');
   }
   if ($_POST['pid'] == "") {
-    echo 'ERROR: No puzz ID Found in Request';
-    echo '</body></html>';
-    exit (2);
+    exit_with_error_message('No puzz ID Found in Request');
   }
 
   $whatdo = "";
@@ -139,9 +133,9 @@ if (isset($_POST['submit'])) {
   if (isset($_POST['partupdate'])) {
     $whatdo = "partupdate";
     if (!isset($_POST['part']) || !isset($_POST['value'])) {
-      echo 'ERROR: Part name to update, or value to set it to not specified';
-      echo '</body></html>';
-      exit (2);
+      exit_with_error_message(
+        'Part name to update, or value to set it to not specified',
+      );
     }
   }
 
