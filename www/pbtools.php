@@ -3,8 +3,8 @@ require('puzzlebosslib.php');
 
 $bookmarkuri = 'javascript:window.open((data => `' .
   $pbroot.'addpuzzle.php' .
-  '?puzzurl=${encodeURIComponent(location.href)}' .
-  '&puzzid=${encodeURIComponent(data?.name || document.title)}' .
+  '?puzzurl=${encodeURIComponent(location.href.split("#")[0])}' .
+  '&puzzid=${encodeURIComponent(data?.name || document.title.replace(/ - Google Docs$/, ''))}' .
   '&roundname=${encodeURIComponent(data?.round?.name)}' .
   "`)(JSON.parse(document.querySelector('#__NEXT_DATA__')?.innerText || '{}')?.props?.pageProps?.puzzleData));";
 ?>
