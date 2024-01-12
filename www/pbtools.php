@@ -2,7 +2,7 @@
 require('puzzlebosslib.php');
 
 $bookmarkuri = <<<'JAVASCRIPT'
-javascript:window.open((data => `<<<ADDPUZZLEURI>>>?puzzurl=${encodeURIComponent(location.href.split('#')[0])}&puzzid=${encodeURIComponent(data?.name || document.title.replace(/ - Google Docs$/, ''))}&roundname=${encodeURIComponent(data?.round?.name?.replace(/\s+/g, ''))}`)(JSON.parse(document.querySelector('#__NEXT_DATA__')?.innerText || '{}')?.props?.pageProps?.puzzleData));
+javascript:window.open((data => `<<<ADDPUZZLEURI>>>?puzzurl=${encodeURIComponent(location.href.split('#')[0])}&puzzid=${encodeURIComponent(data?.name || document.title.replace(/ - Google Docs$/, ''))}&roundname=${encodeURIComponent(data?.round?.name?.replace(/[^A-Za-z0-9]+/g, ''))}`)(JSON.parse(document.querySelector('#__NEXT_DATA__')?.innerText || '{}')?.props?.pageProps?.puzzleData));
 JAVASCRIPT;
 $bookmarkuri = trim(str_replace(
   '<<<ADDPUZZLEURI>>>',
