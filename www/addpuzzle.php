@@ -87,7 +87,9 @@ HTML;
   assert_api_success($responseobj);
 
   echo '<br><div class="success">';
-  echo 'OK.  Puzzle created with ID of ' . $responseobj->puzzle->id;
+  echo 'OK.  Puzzle created with ID of ';
+  $pid = $responseobj->puzzle->id;
+  echo '<a href="editpuzzle.php?pid='.$pid.'">'.$pid.'</a>';
   echo '</div><br><hr>';
 }
 
