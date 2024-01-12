@@ -57,6 +57,7 @@ ini_set('display_errors', 'On');
 
 require('puzzlebosslib.php');
 
+$round_id = null;
 if (isset($_POST['submit'])) {
   $name = $_POST['name'];
   $round_id = $_POST['round_id'];
@@ -95,7 +96,7 @@ HTML;
 
 $puzzurl = isset($_GET['puzzurl']) ? $_GET['puzzurl'] : '';
 $puzzname = isset($_GET['puzzid']) ? $_GET['puzzid'] : '';
-$round_name = isset($_SERVER['roundname']) ? $_SERVER['roundname'] : '';
+$round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
 $rounds = readapi("/rounds")->rounds;
 $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
@@ -123,7 +124,7 @@ $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
         <select id="round_id" name="round_id"/>
 <?php
 foreach ($rounds as $round) {
-  $selected = $round->name === $round_name ? 'selected' : '';
+  $selected = ($round->name === $round_name || $round->id === $round_id) ? 'selected' : '';
   echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
 }
 ?>
