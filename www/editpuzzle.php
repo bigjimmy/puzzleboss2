@@ -210,7 +210,7 @@ echo '</td></tr></table>';
 //Solver Assignment
 if ($userobj->solver->puzz != $puzname) {
   echo '<br>You are not marked as working on this puzzle.  Would you like to be?';
-  echo '<form action="editpuzzle.php?pid=<?= $puzzid; ?>" method="post">';
+  echo '<form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
   echo '<input type="hidden" name="startwork" value="yes">';
   echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
   echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -218,7 +218,7 @@ if ($userobj->solver->puzz != $puzname) {
   echo '</form>';
 } else {
   echo '<br>You are marked as currently working on this puzzle.  Would you like to not be?';
-  echo '<form action="editpuzzle.php?pid=<?= $puzzid; ?>" method="post">';
+  echo '<form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
   echo '<input type="hidden" name="stopwork" value="yes">';
   echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
   echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -232,7 +232,7 @@ echo '<br><table border=2><tr><th>Part</th><th>New Value</th><th></th></tr>';
 
 // Enter answer
 echo '<tr>';
-echo '<td>Answer</td><td><form action="editpuzzle.php?pid=<?= $puzzid; ?>" method="post">';
+echo '<td>Answer</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -244,7 +244,7 @@ echo '</form></td></tr>';
 
 // Enter location
 echo '<tr>';
-echo '<td>Location</td><td><form action="editpuzzle.php?pid=<?= $puzzid; ?>" method="post">';
+echo '<td>Location</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -255,7 +255,7 @@ echo '</form></td></tr>';
 
 // Enter Comments
 echo '<tr>';
-echo '<td>Comments</td><td><form action="editpuzzle.php?pid=<?= $puzzid; ?>" method="post">';
+echo '<td>Comments</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -266,7 +266,7 @@ echo '</form></td></tr>';
 
 // Change Status
 echo '<tr>';
-echo '<td>Status</td><td><form action="editpuzzle.php?pid=<?= $puzzid; ?>" method="post">';
+echo '<td>Status</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
@@ -284,7 +284,7 @@ echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
 //Meta Assignment
-echo '<tr><td>Meta For Round</td><td><form action="editpuzzle.php?pid=<?= $puzzid; ?>" method="post">';
+echo '<tr><td>Meta For Round</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<select id="ismeta" name="ismeta"/>';
 if ($roundmeta != $puzzid) {
   echo '<option selected value="no">No</option>';
