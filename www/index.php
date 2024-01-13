@@ -188,7 +188,7 @@ function print_rounds_table($rounds) {
 if (isset($_GET['r']) && is_array($_GET['r'])) {
   $comparison = array();
   foreach ($_GET['r'] as $round_name => $round_data) {
-    $round_data = array_chunk(explode(',', $round_data), 3);
+    $round_data = array_chunk(explode('|', $round_data), 3);
     foreach ($round_data as $puzzle_data) {
       $slug = strtolower(str_replace('-', '', $puzzle_data[0]));
       $comparison[$slug] = array(
