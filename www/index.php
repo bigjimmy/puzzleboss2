@@ -83,6 +83,81 @@ HTML;
   $wifi_warning = '';
 }
 
+function print_rounds_table($rounds) {
+  echo '<table border=4 style="vertical-align:top;"><tr>';
+  foreach ($rounds as $round) {
+    echo '<th>' . $round->name . '</th>';
+  }
+  foreach ($fullhunt as $round) {
+    echo '<td>';
+    $puzzlearray = $round->puzzles;
+    $metapuzzle = $round->meta_id;
+
+    echo '<table>';
+    foreach ($puzzlearray as $puzzle) {
+      if ($puzzle->status == '[hidden]') {
+        continue;
+      }
+      $puzzleid = $puzzle->id;
+      $puzzlename = $puzzle->name;
+      $styleinsert = "";
+      if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+        $styleinsert .= " bgcolor='Gainsboro' ";
+      }
+      if ($puzzlename == $mypuzzle) {
+        $styleinsert .= ' style="text-decoration:underline overline wavy" ';
+      }
+      if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+        $styleinsert .= " bgcolor='aquamarine' ";
+      }
+      if ($puzzle->status == "Critical") {
+        $styleinsert .= " bgcolor='HotPink' ";
+      }
+      // Not sure what to do here for style for solved/unnecc puzzles
+      //if ($puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
+      //  $styleinsert .= ' style="text-decoration:line-through" ';
+      //}
+      echo '<tr ' . $styleinsert . '>';
+      echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
+      switch ($puzzle->status) {
+        case "New":
+          echo $use_text ? '.' : '🆕';
+          break;
+        case "Being worked":
+          echo $use_text ? 'O' : '🙇';
+          break;
+        case "Needs eyes":
+          echo $use_text ? 'E' : '👀';
+          break;
+        case "WTF":
+          echo $use_text ? '?' : '☢️';
+          break;
+        case "Critical":
+          echo $use_text ? '!' : '⚠️';
+          break;
+        case "Solved":
+          echo $use_text ? '*' : '✅';
+          break;
+        case "Unnecessary":
+          echo $use_text ? 'X' : '😶‍🌫️';
+          break;
+      }
+      echo '</a></td>';
+      echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a></td>';
+      echo '<td><a href="' . $puzzle->drive_uri . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
+      echo '<td><a href="' . $puzzle->chat_channel_link  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
+      echo '<td style="font-family:monospace;font-style:bold">' . $puzzle->answer .'</td>';
+      echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank" title="Edit puzzle in PB">'. ($use_text ? '±' : '⚙️') . '</a></td>';
+
+      echo '</tr>';
+
+    }
+    echo '</table>';
+    echo '</td>';
+  }
+  echo '</tr></table>';
+}
+
 ?>
 <html>
 <head>
@@ -99,98 +174,23 @@ HTML;
 <?= $wifi_warning ?>
 You are: <?= $username ?><br>
 <a href="status.php">Hunt Status Overview / Puzzle Suggester</a><br>
-<table border=4 style="vertical-align:top;">
-  <tr>
 <?php
+$unsolved_rounds = array();
+$solved_rounds = array();
 foreach ($fullhunt as $round) {
-  echo '<th>' . $round->name . '</th>';
+  if (str_ends_with($round->round_uri, '#solved')) {
+    $solved_rounds[] = $round;
+  } else {
+    $unsolved_rounds[] = $round;
+  }
 }
+print_rounds_table($unsolved_rounds);
 ?>
-  </tr>
-  <tr style="vertical-align:top">
-<?php
-foreach ($fullhunt as $round) {
-  echo '<td>';
-  $puzzlearray = $round->puzzles;
-  $metapuzzle = $round->meta_id;
-
-  $is_solved_round = str_ends_with($round->round_uri, '#solved');
-  if ($is_solved_round) {
-    echo '<details>';
-    echo '<summary title="Click to see solved round puzzles">Expand solved round:</summary>';
-  }
-
-  echo '<table>';
-  foreach ($puzzlearray as $puzzle) {
-    if ($puzzle->status == '[hidden]') {
-      continue;
-    }
-    $puzzleid = $puzzle->id;
-    $puzzlename = $puzzle->name;
-    $styleinsert = "";
-    if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
-      $styleinsert .= " bgcolor='Gainsboro' ";
-    }
-    if ($puzzlename == $mypuzzle) {
-      $styleinsert .= ' style="text-decoration:underline overline wavy" ';
-    }
-    if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
-      $styleinsert .= " bgcolor='aquamarine' ";
-    }
-    if ($puzzle->status == "Critical") {
-      $styleinsert .= " bgcolor='HotPink' ";
-    }
-    // Not sure what to do here for style for solved/unnecc puzzles
-    //if ($puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
-    //  $styleinsert .= ' style="text-decoration:line-through" ';
-    //}
-    echo '<tr ' . $styleinsert . '>';
-    echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
-    switch ($puzzle->status) {
-      case "New":
-        echo $use_text ? '.' : '🆕';
-        break;
-      case "Being worked":
-        echo $use_text ? 'O' : '🙇';
-        break;
-      case "Needs eyes":
-        echo $use_text ? 'E' : '👀';
-        break;
-      case "WTF":
-        echo $use_text ? '?' : '☢️';
-        break;
-      case "Critical":
-        echo $use_text ? '!' : '⚠️';
-        break;
-      case "Solved":
-        echo $use_text ? '*' : '✅';
-        break;
-      case "Unnecessary":
-        echo $use_text ? 'X' : '😶‍🌫️';
-        break;
-    }
-    echo '</a></td>';
-    echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a></td>';
-    echo '<td><a href="' . $puzzle->drive_uri . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
-    echo '<td><a href="' . $puzzle->chat_channel_link  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
-    echo '<td style="font-family:monospace;font-style:bold">' . $puzzle->answer .'</td>';
-    echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank" title="Edit puzzle in PB">'. ($use_text ? '±' : '⚙️') . '</a></td>';
-
-    echo '</tr>';
-
-  }
-  echo '</table>';
-  if ($is_solved_round) {
-    echo '</details>';
-  }
-  echo '</td>';
-
-}
-?>
-</tr>
-</table>
 <br>
-
+<details>
+  <summary>Show solved rounds:</summary>
+  <?php print_rounds_table($solved_rounds); ?>
+</details>
 <a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>
 <br><h3>Legend:</h3>
 <table>
