@@ -60,6 +60,57 @@ if (isset($_POST['submit'])) {
   $round_id = $_POST['round_id'];
   $puzzle_uri = $_POST['puzzle_uri'];
 
+  if (isset($_POST['create_new_round'])) {
+    $create_new_round = $_POST['create_new_round'];
+    if ($create_new_round != $round_id) {
+      exit_with_error_message(
+        'You confirmed you want to create a new round but also specified '.
+        'a <em>different</em> round, which is confusing and probably bad.',
+      );
+    }
+
+    // Okay, creating a new round
+    print <<<HTML
+Attempting to add round.<br>
+<table class="registration">
+<tr><td>name:</td><td>$create_new_round</td></tr>
+</table>
+HTML;
+
+    try {
+      $resp = postapi("/rounds", array('name' => $create_new_round));
+    } catch (Exception $e) {
+      exit_with_api_error($e);
+      throw $e;
+    }
+    assert_api_success($resp);
+    echo '<div class="success"><pre>'.var_dump($resp).'</pre></div>';
+    echo '<a href="javascript:window.history.back();">Go back</a>';
+    echo '<br><hr>';
+
+    $round_id = null;
+    $round_name = $resp->round->name;
+    foreach (readapi("/rounds")->rounds as $round) {
+      if ($round->name == $round_name) {
+        $round_id = (string)$round->id;
+        break;
+      }
+    }
+    if (!$round_id) {
+      exit_with_error_message(
+        'Created a new round, but could not find it in time for puzzle creation. '.
+        'Go back, refresh the add puzzle page, and it should be there by then.',
+      );
+    }
+  }
+
+  if (!is_numeric($round_id)) {
+    exit_with_error_message(
+      'You did not select a round to create this puzzle in, or chose '.
+      'a new round name but did not confirm that you wanted to do that!',
+    );
+  }
+
   print <<<HTML
   Attempting to add puzzle.<br>
   <table class="registration">
@@ -122,12 +173,27 @@ $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
       <td>
         <select id="round_id" name="round_id"/>
 <?php
+$selected_any = false;
 foreach ($rounds as $round) {
   $selected = ($round->name === $round_name || $round->id === $round_id) ? 'selected' : '';
+  if ($selected) {
+    $selected_any = true;
+  }
   echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
+}
+$offer_create_new_round = !$selected_any && $round_name && $round_name !== 'undefined';
+if ($offer_create_new_round) {
+  echo "<option value=\"$round_name\" selected>[NEW ROUND] $round_name</option>";
 }
 ?>
         </select>
+<?php
+if ($offer_create_new_round) {
+  echo '&nbsp;';
+  echo '<label for="create_new_round">Click to confirm you want to create a new round:</label>';
+  echo '<input type="checkbox" id="create_new_round" name="create_new_round" value="'.$round_name.'" />';
+}
+?>
       </td>
     </tr>
     <tr>
