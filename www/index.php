@@ -59,8 +59,8 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         $discrepancies[] = sprintf(
           '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
           $prefix,
-          $official_puzzle['answer'] or '<null>',
-          $puzzle->answer or '<null>',
+          $official_puzzle['answer'],
+          $puzzle->answer,
         );
       }
       if ($official_puzzle['is_meta'] != ($round->meta_id == $puzzle->id)) {
