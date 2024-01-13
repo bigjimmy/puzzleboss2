@@ -190,9 +190,16 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   foreach ($_GET['r'] as $round_name => $round_data) {
     $round_data = array_chunk(explode('|', $round_data), 3);
     foreach ($round_data as $puzzle_data) {
-      $slug = strtolower(str_replace('-', '', $puzzle_data[0]));
-      $comparison[$slug] = array(
-        'slug' => $puzzle_data[0],
+      $puzzle_url = $puzzle_data[0];
+      $puzzle_url_parts = explode('/', $puzzle_url);
+      $slug = end($puzzle_uri_parts) ?? '';
+      if ($slug == '') {
+        continue;
+      }
+      $comparison[strtolower(str_replace('-', '', $slug))] = array(
+        'url' => $puzzle_data[0],
+        'slug' => $slug,
+        'name' => str_replace('-', '', ucwords($slug, '-')),
         'round' => $round_name,
         'solved' => $puzzle_data[1] !== '',
         'answer' => $puzzle_data[1],
@@ -214,10 +221,8 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       $prefix = 'Puzzle '.$puzzle->name.':';
       if (!array_key_exists($slug, $comparison)) {
         $found_puzzle = false;
-        $puzzle_uri_parts = explode('/', $puzzle->puzzle_uri ?? '');
-        $puzzle_uri_slug = end($puzzle_uri_parts);
         foreach ($comparison as $slug2 => $official_puzzle) {
-          if ($official_puzzle['slug'] == $puzzle_uri_slug) {
+          if (str_contains($puzzle->puzzle_uri ?? '', $official_puzzle['url'])) {
             $found_puzzle = true;
             $slug = $slug2;
             break;
@@ -225,7 +230,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         }
         if (!$found_puzzle) {
           $discrepancies[] = sprintf(
-            '%s Could not find by URL exactly from the /puzzles name',
+            '%s Could not find by URL exactly from the /puzzles page',
             $prefix,
           );
           continue;
@@ -273,8 +278,12 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   // Iterate over leftover puzzles
   foreach ($comparison as $official_puzzle) {
     $discrepancies[] = sprintf(
-      '[MISSING] Puzzle %s not found in PB! Make sure it\'s added to round %s.',
-      $official_puzzle['slug'],
+      '[MISSING] Puzzle %s not found in PB! '.
+      '<a href="addpuzzle.php?puzzurl=%s&roundname=%s" target="_blank">'.
+      'Make sure it\'s added to round %s.</a>',
+      $official_puzzle['name'],
+      $official_puzzle['url'],
+      $official_puzzle['round'],
       $official_puzzle['round'],
     );
   }

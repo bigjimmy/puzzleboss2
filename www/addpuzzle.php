@@ -151,9 +151,11 @@ HTML;
 }
 
 $puzzurl = isset($_GET['puzzurl']) ? $_GET['puzzurl'] : '';
-$puzzname = isset($_GET['puzzid']) ? $_GET['puzzid'] : '';
-if (sanitize_string($puzzname) == '') {
-  $puzzname = end(explode('/', $puzzurl));
+$puzzurl_parts = explode('/', $puzzurl);
+$puzzname = str_replace('-', '', ucwords(end($puzzurl_parts), '-'));
+$puzzname = sanitize_string($puzzname);
+if ($puzzname == '') {
+  $puzzname = isset($_GET['puzzid']) ? sanitize_string($_GET['puzzid']) : '';
 }
 $round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
