@@ -84,7 +84,8 @@ HTML;
   $wifi_warning = '';
 }
 
-function print_rounds_table($rounds, $use_text, $username, $mypuzzle) {
+function print_rounds_table($rounds) {
+  global $use_text, $username, $mypuzzle;
   echo '<table border=4 style="vertical-align:top;"><tr>';
   foreach ($rounds as $round) {
     echo '<th>' . $round->name . '</th>';
@@ -286,11 +287,11 @@ foreach ($fullhunt as $round) {
     $unsolved_rounds[] = $round;
   }
 }
-print_rounds_table($unsolved_rounds, $use_text, $username, $mypuzzle);
+print_rounds_table($unsolved_rounds);
 
 if (count($solved_rounds) > 0) {
   echo '<details><summary>Show solved rounds:</summary>';
-  print_rounds_table($solved_rounds, $use_text, $username, $mypuzzle);
+  print_rounds_table($solved_rounds);
   echo '</details>';
 }
 ?>

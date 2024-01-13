@@ -115,13 +115,18 @@ function getauthenticateduser() {
         http_response_code(403);
         die("No solver found for user $username. Check Solvers Database");
     }
+    if ($username == 'dannybd') {
+      error_reporting(E_ALL);
+      ini_set("display_errors", 1);
+    }
     return $uid;
 }
 
 // Mirrors pblib.py implementation
 // TOOD: Stop doing this
 function sanitize_string($str) {
-  return preg_replace('/[^A-Z0-9]/ig', '', $str);
+  return $str;
+  // return preg_replace('/[^A-Z0-9]/ig', '', $str);
 }
 
 ?>
