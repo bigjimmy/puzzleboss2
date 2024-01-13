@@ -57,6 +57,12 @@ require('puzzlebosslib.php');
 $round_id = null;
 if (isset($_POST['submit'])) {
   $name = $_POST['name'];
+  if (sanitize_string($name) == '') {
+    exit_with_error_message(
+      'This will not work: this puzzle name will be erased in Puzzboss, '.
+      'breaking everything. Please manually add some text to this puzzle name.',
+    );
+  }
   $round_id = $_POST['round_id'];
   $puzzle_uri = $_POST['puzzle_uri'];
 
@@ -146,6 +152,9 @@ HTML;
 
 $puzzurl = isset($_GET['puzzurl']) ? $_GET['puzzurl'] : '';
 $puzzname = isset($_GET['puzzid']) ? $_GET['puzzid'] : '';
+if (sanitize_string($puzzname) == '') {
+  $puzzname = end(explode('/', $puzzurl));
+}
 $round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
 $rounds = readapi("/rounds")->rounds;

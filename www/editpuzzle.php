@@ -60,11 +60,11 @@
 require('puzzlebosslib.php');
 
 function startuseronpuzzle($id, $puzz) {
-  $api = "/solvers/" . $id . "/puzz";
-  $data = array('puzz' => $puzz);
-
   try {
-    $responseobj = postapi($api, $data);
+    $responseobj = postapi(
+      "/solvers/" . $id . "/puzz",
+      array('puzz' => $puzz),
+    );
   } catch (Exception $e) {
     exit_with_api_error($e);
     throw $e;
@@ -74,10 +74,11 @@ function startuseronpuzzle($id, $puzz) {
 }   
 
 function updatepuzzlepart($id, $part, $value) {
-  $api = "/puzzles/" . $id . "/" . $part;
-  $data = array($part => $value);
   try {
-    $responseobj = postapi($api, $data);
+    $responseobj = postapi(
+      "/puzzles/" . $id . "/" . $part,
+      array($part => $value),
+    );
   } catch (Exception $e) {
     exit_with_api_error($e);
     throw $e;
@@ -87,10 +88,11 @@ function updatepuzzlepart($id, $part, $value) {
 }
 
 function updateroundpart($id, $part, $value) {
-  $api = "/rounds/" . $id . "/" . $part;
-  $data = array($part => $value);
   try {
-    $responseobj = postapi($api, $data);
+    $responseobj = postapi(
+      "/rounds/" . $id . "/" . $part,
+      array($part => $value),
+    );
   } catch (Exception $e) {
     exit_with_api_error($e);
     throw $e;

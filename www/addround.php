@@ -64,10 +64,8 @@ Attempting to add round.<br>
 </table>
 HTML;
 
-  $apiurl = "/rounds";
-  $data = array('name' => $name);
   try {
-    $resp = postapi($apiurl, $data);
+    $resp = postapi("/rounds", array('name' => $name));
   } catch (Exception $e) {
     exit_with_api_error($e);
     throw $e;
