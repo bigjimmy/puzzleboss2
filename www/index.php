@@ -214,9 +214,10 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       $prefix = 'Puzzle '.$puzzle->name.':';
       if (!array_key_exists($slug, $comparison)) {
         $found_puzzle = false;
-        $puzzle_slug = end(explode('/', $puzzle->puzzle_uri ?? '')) ?? '';
+        $puzzle_uri_parts = explode('/', $puzzle->puzzle_uri ?? '');
+        $puzzle_uri_slug = end($puzzle_uri_parts);
         foreach ($comparison as $slug2 => $official_puzzle) {
-          if ($official_puzzle['slug'] == $puzzle_slug) {
+          if ($official_puzzle['slug'] == $puzzle_uri_slug) {
             $found_puzzle = true;
             $slug = $slug2;
             break;
