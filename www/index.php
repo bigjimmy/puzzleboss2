@@ -11,6 +11,15 @@ $uid = getauthenticateduser();
 $solver = readapi("/solvers/$uid")->solver;
 $fullhunt = array_reverse(readapi('/all')->rounds);
 
+if (isset($_GET['data'])) {
+  header('Content-Type: application/json; charset=utf-8');
+  die(json_encode(array(
+    'comparison' => $comparison,
+    'solver' => $solver,
+    'fullhunt' => $fullhunt,
+  )));
+}
+
 if (isset($_GET['r']) && is_array($_GET['r'])) {
   $comparison = array();
   foreach ($_GET['r'] as $round_name => $round_data) {
@@ -91,23 +100,13 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   }
   if (count($discrepancies) === 0) {
     echo 'No issues found! PB is up to date.';
-    die();
+  } else {
+    echo '<ul>';
+    foreach ($discrepancies as $discrepancy) {
+      echo "<li>$discrepancy</li>";
+    }
+    echo '</ul>';
   }
-  echo '<ul>';
-  foreach ($discrepancies as $discrepancy) {
-    echo "<li>$discrepancy</li>";
-  }
-  echo '</ul>';
-  die();
-}
-
-if (isset($_GET['data'])) {
-  header('Content-Type: application/json; charset=utf-8');
-  die(json_encode(array(
-    'comparison' => $comparison,
-    'solver' => $solver,
-    'fullhunt' => $fullhunt,
-  )));
 }
 
 $use_text = isset($_GET['text_only']);
