@@ -265,7 +265,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   if (count($discrepancies) === 0) {
     echo '<div class="success">No issues found! PB is up to date.</div>';
   } else {
-    echo '<div class="error"><ul>';
+    echo '<div class="error"><h3>Discrepancies between Puzzleboss and Mystery Hunt:</h3><ul>';
     foreach ($discrepancies as $discrepancy) {
       echo "<li>$discrepancy</li>";
     }
