@@ -192,7 +192,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
     foreach ($round_data as $puzzle_data) {
       $puzzle_url = $puzzle_data[0];
       $puzzle_url_parts = explode('/', $puzzle_url);
-      $slug = end($puzzle_uri_parts) ?? '';
+      $slug = end($puzzle_url_parts) ?? '';
       if ($slug == '') {
         continue;
       }
