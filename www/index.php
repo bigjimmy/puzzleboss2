@@ -213,11 +213,21 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       $slug = strtolower($puzzle->name);
       $prefix = 'Puzzle '.$puzzle->name.':';
       if (!array_key_exists($slug, $comparison)) {
-        $discrepancies[] = sprintf(
-          '%s Could not find by URL exactly from the /puzzles name',
-          $prefix,
-        );
-        continue;
+        $found_puzzle = false;
+        $puzzle_slug = end(explode('/', $puzzle->puzzle_uri ?? ''));
+        foreach ($comparison as $slug => $official_puzzle) {
+          if ($official_puzzle['slug'] == $puzzle_slug) {
+            $found_puzzle = true;
+            break;
+          }
+        }
+        if (!$found_puzzle) {
+          $discrepancies[] = sprintf(
+            '%s Could not find by URL exactly from the /puzzles name',
+            $prefix,
+          );
+          continue;
+        }
       }
       $official_puzzle = $comparison[$slug];
       if ($official_puzzle['round'] != $round->name) {
