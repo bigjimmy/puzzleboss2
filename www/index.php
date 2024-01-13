@@ -88,6 +88,7 @@ function print_rounds_table($rounds) {
   foreach ($rounds as $round) {
     echo '<th>' . $round->name . '</th>';
   }
+  echo '</tr><tr>';
   foreach ($rounds as $round) {
     echo '<td>';
     $puzzlearray = $round->puzzles;
