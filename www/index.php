@@ -29,7 +29,13 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
 
   $discrepancies = array();
   foreach ($fullhunt as $round) {
+    if ($round->name == 'Events') {
+      continue;
+    }
     foreach ($round->puzzles as $puzzle) {
+      if ($puzzle->status == '[hidden]') {
+        continue;
+      }
       $slug = strtolower($puzzle->name);
       $prefix = 'Puzzle '.$puzzle->name.':';
       if (!array_key_exists($slug, $comparison)) {
