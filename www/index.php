@@ -88,7 +88,7 @@ function print_rounds_table($rounds) {
   foreach ($rounds as $round) {
     echo '<th>' . $round->name . '</th>';
   }
-  foreach ($fullhunt as $round) {
+  foreach ($rounds as $round) {
     echo '<td>';
     $puzzlearray = $round->puzzles;
     $metapuzzle = $round->meta_id;
