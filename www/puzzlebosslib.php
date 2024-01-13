@@ -125,8 +125,7 @@ function getauthenticateduser() {
 // Mirrors pblib.py implementation
 // TOOD: Stop doing this
 function sanitize_string($str) {
-  return $str;
-  // return preg_replace('/[^A-Z0-9]/ig', '', $str);
+  return preg_replace('/[^A-Za-z0-9]/', '', $str);
 }
 
 ?>
