@@ -150,5 +150,7 @@ foreach ($rounds as $round) {
   </tr>
 </table>
 
+</main>
+<footer><br><hr><br><a href="/pb/">Puzzleboss Home</a></footer>
 </body>
 </html>

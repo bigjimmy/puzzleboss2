@@ -147,5 +147,6 @@ foreach ($rounds as $round) {
   <input type="submit" name="submit" value="Add New Puzzle"/>
 </form>
 </main>
+<footer><br><hr><br><a href="/pb/">Puzzleboss Home</a></footer>
 </body>
 </html>
