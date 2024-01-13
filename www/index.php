@@ -190,14 +190,9 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   foreach ($_GET['r'] as $round_name => $round_data) {
     $round_data = array_chunk(explode('|', $round_data), 3);
     foreach ($round_data as $puzzle_data) {
-      $puzzle_url = $puzzle_data[0];
-      $puzzle_url_parts = explode('/', $puzzle_url);
-      $slug = end($puzzle_url_parts) ?? '';
-      if ($slug == '') {
-        continue;
-      }
+      $slug = $puzzle_data[0];
       $comparison[strtolower(str_replace('-', '', $slug))] = array(
-        'url' => $puzzle_data[0],
+        'url' => 'https://mythstoryhunt.world/puzzles/'.$slug,
         'slug' => $slug,
         'name' => str_replace('-', '', ucwords($slug, '-')),
         'round' => $round_name,
@@ -280,7 +275,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
     $discrepancies[] = sprintf(
       '[MISSING] Puzzle %s not found in PB! '.
       '<a href="addpuzzle.php?puzzurl=%s&roundname=%s" target="_blank">'.
-      'Make sure it\'s added to round %s.</a>',
+      'Add it to round %s.</a>',
       $official_puzzle['name'],
       $official_puzzle['url'],
       $official_puzzle['round'],
