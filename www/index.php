@@ -16,7 +16,8 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   foreach ($_GET['r'] as $round_name => $round_data) {
     $round_data = array_chunk(explode(',', $round_data), 3);
     foreach ($round_data as $puzzle_data) {
-      $comparison[$puzzle_data[0]] = array(
+      $slug = strtolower(str_replace('-', '', $puzzle_data[0]));
+      $comparison[$slug] = array(
         'slug' => $puzzle_data[0],
         'round' => $round_name,
         'solved' => $puzzle_data[1] !== '',
@@ -29,7 +30,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   $discrepancies = array();
   foreach ($fullhunt as $round) {
     foreach ($round->puzzles as $puzzle) {
-      $slug = end(explode('/', $puzzle->puzzle_uri));
+      $slug = strtolower($puzzle->name);
       $prefix = 'Puzzle '.$puzzle->name.':';
       if (!array_key_exists($slug, $comparison)) {
         $discrepancies[] = sprintf(
