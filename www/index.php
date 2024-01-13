@@ -281,7 +281,8 @@ You are: <?= $username ?><br>
 $unsolved_rounds = array();
 $solved_rounds = array();
 foreach ($fullhunt as $round) {
-  if ($round->round_uri != null && str_ends_with($round->round_uri, '#solved')) {
+  $round_uri = $round->round_uri;
+  if (is_string($round_uri) && str_ends_with($round_uri, '#solved')) {
     $solved_rounds[] = $round;
   } else {
     $unsolved_rounds[] = $round;
