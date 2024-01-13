@@ -186,12 +186,14 @@ foreach ($fullhunt as $round) {
   }
 }
 print_rounds_table($unsolved_rounds);
+
+if (count($solved_rounds) > 0) {
+  echo '<details><summary>Show solved rounds:</summary>';
+  print_rounds_table($solved_rounds);
+  echo '</details>';
+}
 ?>
 <br>
-<details>
-  <summary>Show solved rounds:</summary>
-  <?php print_rounds_table($solved_rounds); ?>
-</details>
 <a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>
 <br><h3>Legend:</h3>
 <table>
