@@ -11,13 +11,28 @@ $uid = getauthenticateduser();
 $solver = readapi("/solvers/$uid")->solver;
 $fullhunt = array_reverse(readapi('/all')->rounds);
 
+$comparison = null;
+if (isset($_GET['r']) && is_array($_GET['r'])) {
+  foreach ($_GET['r'] as $round_name => $round_data) {
+    $comparison[$round_name] = array();
+    $round_data = array_chunk(explode(',', $round_data), 3);
+    foreach ($round_data as $puzzle_data) {
+      $comparison[$round_name][$puzzle_data[0]] = array(
+        'slug' => $puzzle_data[0],
+        'solved' => $puzzle_data[1] !== '',
+        'answer' => $puzzle_data[1],
+        'is_meta' => $puzzle_data[2] === '1',
+      );
+    }
+  }
+}
+
 if (isset($_GET['data'])) {
   header('Content-Type: application/json; charset=utf-8');
   die(json_encode(array(
-    'r' => isset($_GET['r']) ? $_GET['r'] : null,
+    'comparison' => $comparison,
     'solver' => $solver,
     'fullhunt' => $fullhunt,
-    '$_GET' => $_GET,
   )));
 }
 
