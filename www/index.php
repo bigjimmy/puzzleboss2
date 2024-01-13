@@ -55,7 +55,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
           $puzzle->status,
         );
       }
-      if ($official_puzzle['answer'] != $puzzle->answer) {
+      if (str_replace(' ', '', $official_puzzle['answer']) != str_replace(' ', '', $puzzle->answer)) {
         $discrepancies[] = sprintf(
           '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
           $prefix,
