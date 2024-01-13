@@ -1,6 +1,12 @@
 <html><head>
 <meta http-equiv="refresh" content=30>
-<title>Hunt Status</title></head></html>
+<title>Hunt Status</title>
+<style>
+  body {
+    background-color: aliceblue;
+  }
+</style>
+</head>
 <body><h1>Hunt Status Overview</h1>
 <?php 
 require('puzzlebosslib.php');
@@ -218,4 +224,6 @@ echo '</table></td></tr></table>';
 
 
 ?>
+<footer><a href="/pb/">Puzzleboss Home</a></footer>
 </body>
+</html>
