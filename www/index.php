@@ -237,8 +237,8 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         );
       }
       if (
-        str_replace(' ', '', $official_puzzle['answer'] ?? '') !=
-        str_replace(' ', '', $puzzle->answer ?? '')
+        strtolower(preg_replace('/[^A-Z0-9]/g', '', $official_puzzle['answer'] ?? '')) !=
+        strtolower(preg_replace('/[^A-Z0-9]/g', '', $puzzle->answer ?? ''))
       ) {
         $discrepancies[] = sprintf(
           '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
