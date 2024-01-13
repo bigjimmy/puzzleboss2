@@ -14,8 +14,10 @@ $fullhunt = array_reverse(readapi('/all')->rounds);
 if (isset($_GET['data'])) {
   header('Content-Type: application/json; charset=utf-8');
   die(json_encode(array(
+    'r' => isset($_GET['r']) ? $_GET['r'] : null,
     'solver' => $solver,
     'fullhunt' => $fullhunt,
+    '$_GET' => $_GET,
   )));
 }
 
