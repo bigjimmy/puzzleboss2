@@ -196,7 +196,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         'round' => $round_name,
         'solved' => $puzzle_data[1] !== '',
         'answer' => $puzzle_data[1],
-        'is_meta' => $puzzle_data[2] === '1',
+        'is_meta' => isset($puzzle_data[2]) ? $puzzle_data[2] === '1' : false,
       );
     }
   }
@@ -236,7 +236,10 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
           $puzzle->status ?? '<null>',
         );
       }
-      if (str_replace(' ', '', $official_puzzle['answer'] ?? '<null>') != str_replace(' ', '', $puzzle->answer ?? '<null>')) {
+      if (
+        str_replace(' ', '', $official_puzzle['answer'] ?? '') !=
+        str_replace(' ', '', $puzzle->answer ?? '')
+      ) {
         $discrepancies[] = sprintf(
           '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
           $prefix,
