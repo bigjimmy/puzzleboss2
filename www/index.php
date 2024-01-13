@@ -224,8 +224,8 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         $discrepancies[] = sprintf(
           '%s Round mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
           $prefix,
-          $official_puzzle['round'],
-          $round->name,
+          $official_puzzle['round'] ?? '<null>',
+          $round->name ?? '<null>',
         );
       }
       if ($official_puzzle['solved'] != ($puzzle->status == 'Solved')) {
@@ -233,15 +233,15 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
           '%s Solved mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
           $prefix,
           $official_puzzle['solved'] ? 'true' : 'false',
-          $puzzle->status,
+          $puzzle->status ?? '<null>',
         );
       }
-      if (str_replace(' ', '', $official_puzzle['answer']) != str_replace(' ', '', $puzzle->answer)) {
+      if (str_replace(' ', '', $official_puzzle['answer'] ?? '<null>') != str_replace(' ', '', $puzzle->answer ?? '<null>')) {
         $discrepancies[] = sprintf(
           '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
           $prefix,
-          $official_puzzle['answer'],
-          $puzzle->answer,
+          $official_puzzle['answer'] ?? '<null>',
+          $puzzle->answer ?? '<null>',
         );
       }
       if ($official_puzzle['is_meta'] != ($round->meta_id == $puzzle->id)) {
