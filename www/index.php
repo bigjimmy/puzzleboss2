@@ -20,95 +20,6 @@ if (isset($_GET['data'])) {
   )));
 }
 
-if (isset($_GET['r']) && is_array($_GET['r'])) {
-  $comparison = array();
-  foreach ($_GET['r'] as $round_name => $round_data) {
-    $round_data = array_chunk(explode(',', $round_data), 3);
-    foreach ($round_data as $puzzle_data) {
-      $slug = strtolower(str_replace('-', '', $puzzle_data[0]));
-      $comparison[$slug] = array(
-        'slug' => $puzzle_data[0],
-        'round' => $round_name,
-        'solved' => $puzzle_data[1] !== '',
-        'answer' => $puzzle_data[1],
-        'is_meta' => $puzzle_data[2] === '1',
-      );
-    }
-  }
-
-  $discrepancies = array();
-  foreach ($fullhunt as $round) {
-    if ($round->name == 'Events') {
-      continue;
-    }
-    foreach ($round->puzzles as $puzzle) {
-      if ($puzzle->status == '[hidden]') {
-        continue;
-      }
-      $slug = strtolower($puzzle->name);
-      $prefix = 'Puzzle '.$puzzle->name.':';
-      if (!array_key_exists($slug, $comparison)) {
-        $discrepancies[] = sprintf(
-          '%s Could not find by URL exactly from the /puzzles name',
-          $prefix,
-        );
-        continue;
-      }
-      $official_puzzle = $comparison[$slug];
-      if ($official_puzzle['round'] != $round->name) {
-        $discrepancies[] = sprintf(
-          '%s Round mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
-          $prefix,
-          $official_puzzle['round'],
-          $round->name,
-        );
-      }
-      if ($official_puzzle['solved'] != ($puzzle->status == 'Solved')) {
-        $discrepancies[] = sprintf(
-          '%s Solved mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
-          $prefix,
-          $official_puzzle['solved'] ? 'true' : 'false',
-          $puzzle->status,
-        );
-      }
-      if (str_replace(' ', '', $official_puzzle['answer']) != str_replace(' ', '', $puzzle->answer)) {
-        $discrepancies[] = sprintf(
-          '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
-          $prefix,
-          $official_puzzle['answer'],
-          $puzzle->answer,
-        );
-      }
-      if ($official_puzzle['is_meta'] != ($round->meta_id == $puzzle->id)) {
-        $discrepancies[] = sprintf(
-          '%s IsMeta mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
-          $prefix,
-          $official_puzzle['is_meta'] ? 'true' : 'false',
-          $round->meta_id == $puzzle->id ? 'true' : 'false',
-        );
-      }
-      unset($comparison[$slug]);
-    }
-  }
-  // Iterate over leftover puzzles
-  foreach ($comparison as $official_puzzle) {
-    $discrepancies[] = sprintf(
-      '[MISSING] Puzzle %s not found in PB! Make sure it\'s added to round %s.',
-      $official_puzzle['slug'],
-      $official_puzzle['round'],
-    );
-  }
-  if (count($discrepancies) === 0) {
-    echo 'No issues found! PB is up to date.';
-  } else {
-    echo '<ul>';
-    foreach ($discrepancies as $discrepancy) {
-      echo "<li>$discrepancy</li>";
-    }
-    echo '</ul>';
-  }
-}
-
 $use_text = isset($_GET['text_only']);
 
 $username = $solver->name;
@@ -259,9 +170,109 @@ function print_rounds_table($rounds) {
   body {
     background-color: aliceblue;
   }
+  .error {
+    background-color: lightpink;
+    padding: 10px;
+  }
+  .success {
+    background-color: lightgreen;
+    padding: 10px;
+  }
   </style>
 </head>
 <body>
+<?php
+
+
+if (isset($_GET['r']) && is_array($_GET['r'])) {
+  $comparison = array();
+  foreach ($_GET['r'] as $round_name => $round_data) {
+    $round_data = array_chunk(explode(',', $round_data), 3);
+    foreach ($round_data as $puzzle_data) {
+      $slug = strtolower(str_replace('-', '', $puzzle_data[0]));
+      $comparison[$slug] = array(
+        'slug' => $puzzle_data[0],
+        'round' => $round_name,
+        'solved' => $puzzle_data[1] !== '',
+        'answer' => $puzzle_data[1],
+        'is_meta' => $puzzle_data[2] === '1',
+      );
+    }
+  }
+
+  $discrepancies = array();
+  foreach ($fullhunt as $round) {
+    if ($round->name == 'Events') {
+      continue;
+    }
+    foreach ($round->puzzles as $puzzle) {
+      if ($puzzle->status == '[hidden]') {
+        continue;
+      }
+      $slug = strtolower($puzzle->name);
+      $prefix = 'Puzzle '.$puzzle->name.':';
+      if (!array_key_exists($slug, $comparison)) {
+        $discrepancies[] = sprintf(
+          '%s Could not find by URL exactly from the /puzzles name',
+          $prefix,
+        );
+        continue;
+      }
+      $official_puzzle = $comparison[$slug];
+      if ($official_puzzle['round'] != $round->name) {
+        $discrepancies[] = sprintf(
+          '%s Round mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
+          $prefix,
+          $official_puzzle['round'],
+          $round->name,
+        );
+      }
+      if ($official_puzzle['solved'] != ($puzzle->status == 'Solved')) {
+        $discrepancies[] = sprintf(
+          '%s Solved mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
+          $prefix,
+          $official_puzzle['solved'] ? 'true' : 'false',
+          $puzzle->status,
+        );
+      }
+      if (str_replace(' ', '', $official_puzzle['answer']) != str_replace(' ', '', $puzzle->answer)) {
+        $discrepancies[] = sprintf(
+          '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
+          $prefix,
+          $official_puzzle['answer'],
+          $puzzle->answer,
+        );
+      }
+      if ($official_puzzle['is_meta'] != ($round->meta_id == $puzzle->id)) {
+        $discrepancies[] = sprintf(
+          '%s IsMeta mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
+          $prefix,
+          $official_puzzle['is_meta'] ? 'true' : 'false',
+          $round->meta_id == $puzzle->id ? 'true' : 'false',
+        );
+      }
+      unset($comparison[$slug]);
+    }
+  }
+  // Iterate over leftover puzzles
+  foreach ($comparison as $official_puzzle) {
+    $discrepancies[] = sprintf(
+      '[MISSING] Puzzle %s not found in PB! Make sure it\'s added to round %s.',
+      $official_puzzle['slug'],
+      $official_puzzle['round'],
+    );
+  }
+  if (count($discrepancies) === 0) {
+    echo '<div class="success">No issues found! PB is up to date.</div>';
+  } else {
+    echo '<div class="error"><ul>';
+    foreach ($discrepancies as $discrepancy) {
+      echo "<li>$discrepancy</li>";
+    }
+    echo '</ul></div>';
+  }
+}
+?>
 <?= $wifi_warning ?>
 You are: <?= $username ?><br>
 <a href="status.php">Hunt Status Overview / Puzzle Suggester</a><br>
