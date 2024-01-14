@@ -184,21 +184,23 @@ function print_rounds_table($rounds) {
 <body>
 <?php
 
-
 if (isset($_GET['r']) && is_array($_GET['r'])) {
   $comparison = array();
   foreach ($_GET['r'] as $round_name => $round_data) {
-    $round_data = array_chunk(explode('|', $round_data), 3);
+    $round_data = explode(',', $round_data);
     foreach ($round_data as $puzzle_data) {
       $slug = $puzzle_data[0];
+      if ($slug == '') {
+        continue;
+      }
+      $is_meta = $slug[0] == '!';
+      $slug = ltrim($slug, '!');
       $comparison[strtolower(str_replace('-', '', $slug))] = array(
         'url' => 'https://mythstoryhunt.world/puzzles/'.$slug,
         'slug' => $slug,
         'name' => str_replace('-', '', ucwords($slug, '-')),
         'round' => $round_name,
-        'solved' => $puzzle_data[1] !== '',
-        'answer' => $puzzle_data[1],
-        'is_meta' => isset($puzzle_data[2]) ? $puzzle_data[2] === '1' : false,
+        'is_meta' => $is_meta,
       );
     }
   }
@@ -238,25 +240,6 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
           $prefix,
           $official_puzzle['round'] ?? '<null>',
           $round->name ?? '<null>',
-        );
-      }
-      if ($official_puzzle['solved'] != ($puzzle->status == 'Solved')) {
-        $discrepancies[] = sprintf(
-          '%s Solved mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
-          $prefix,
-          $official_puzzle['solved'] ? 'true' : 'false',
-          $puzzle->status ?? '<null>',
-        );
-      }
-      if (
-        strtolower(preg_replace('/[^A-Z0-9]/', '', $official_puzzle['answer'] ?? '')) !=
-        strtolower(preg_replace('/[^A-Z0-9]/', '', $puzzle->answer ?? ''))
-      ) {
-        $discrepancies[] = sprintf(
-          '%s Answer mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
-          $prefix,
-          $official_puzzle['answer'] ?? '<null>',
-          $puzzle->answer ?? '<null>',
         );
       }
       if ($official_puzzle['is_meta'] != ($round->meta_id == $puzzle->id)) {
