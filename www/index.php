@@ -293,7 +293,11 @@ if (count($comparison) > 0) {
         continue;
       }
       $slug = strtolower($puzzle->name);
-      $prefix = 'Puzzle '.$puzzle->name.':';
+      $prefix = sprintf(
+        'Puzzle <a href="%s">%s</a>:',
+        $puzzle->puzzle_uri,
+        $puzzle->name,
+      );
       if (!array_key_exists($slug, $comparison)) {
         $found_puzzle = false;
         foreach ($comparison as $slug2 => $official_puzzle) {
