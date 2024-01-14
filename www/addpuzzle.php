@@ -127,12 +127,16 @@ HTML;
   </table>
 HTML;
 
-
+  $defer_to = null,
+  if (isset($_POST['defer'])) {
+    $defer_to = $_POST['defer_to'];
+  }
   $apiurl = "/puzzles";
   $data = array(
     'name' => $name,
     'round_id' => $round_id,
     'puzzle_uri' => $puzzle_uri,
+    'defer_to' => $defer_to,
   );
 
   echo "Submitting API request to add puzzle. May take a few seconds.<br>";

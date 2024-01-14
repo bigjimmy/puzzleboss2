@@ -310,9 +310,10 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   // Iterate over leftover puzzles
   foreach ($comparison as $official_puzzle) {
     $discrepancies[] = sprintf(
-      '[MISSING] Puzzle %s not found in PB! '.
+      '[MISSING] Puzzle <a href="%s" target="_blank">%s</a> not found in PB! '.
       '<a href="addpuzzle.php?puzzurl=%s&roundname=%s" target="_blank">'.
       'Add it to round %s.</a>',
+      $official_puzzle['url'],
       $official_puzzle['name'],
       $official_puzzle['url'],
       $official_puzzle['round'],

@@ -81,6 +81,12 @@ HTML;
 ?>
 
 <h3>Add New Round</h3>
+<p>
+  <strong>No longer necessary!</strong>
+  If you use the bookmarklet above on a puzzle in a new round,
+  you can create new rounds
+  <a href="addpuzzle.php">on the new puzzle page</a>.
+</p>
 <table border="2" cellpadding="3">
   <tr>
     <td>To add a new round (enter round name):</td>

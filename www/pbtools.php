@@ -81,7 +81,18 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
 <br>
 
 <hr>
-<h3>Add New Round</h3>
+<h3>Add New Puzzle</h3>
+<strong><a href="addpuzzle.php" target="_blank">Page to add new puzzles</a></strong>
+<br>
+
+<hr>
+<h3>Add New Round (backup)</h3>
+<p>
+  <strong>No longer necessary!</strong>
+  If you use the bookmarklet above on a puzzle in a new round,
+  you can create new rounds
+  <a href="addpuzzle.php" target="_blank">on the new puzzle page</a>.
+</p>
 <table border="2" cellpadding="3">
   <tr>
     <td>To add a new round (enter round name):</td>
@@ -93,53 +104,6 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
     </td>
   </tr>
 </table>
-<br>
-
-<hr>
-<h3>Add New Puzzle</h3>
-<form action="addpuzzle.php" method="post">
-  <table>
-    <tr>
-      <td><label for="name">Name:</label></td>
-      <td>
-        <input
-          type="text"
-          id="name"
-          name="name"
-          required
-          size="40"
-        />
-      </td>
-    </tr>
-    <tr>
-      <td><label for="round_id">Round:</label></td>
-      <td>
-        <select id="round_id" name="round_id"/>
-<?php
-$rounds = readapi("/rounds")->rounds;
-$rounds = array_reverse($rounds); // Newer rounds first in the dropdown
-foreach ($rounds as $round) {
-  echo "<option value=\"{$round->id}\">{$round->name}</option>\n";
-}
-?>
-        </select>
-      </td>
-    </tr>
-    <tr>
-      <td><label for="puzzle_uri">Puzzle URI:</label></td>
-      <td>
-        <input
-          type="text"
-          id="puzzle_uri"
-          name="puzzle_uri"
-          required
-          size="80"
-        />
-      </td>
-    </tr>
-  </table>
-  <input type="submit" name="submit" value="Add New Puzzle"/>
-</form>
 <br>
 
 <hr>
