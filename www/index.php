@@ -3,7 +3,7 @@ require('puzzlebosslib.php');
 
 $hunt_domain = $yaml['HUNTSITE']['DOMAIN'];
 
-if (isset($_GET['compare'])) {
+if (isset($_GET['scrape'])) {
   error_reporting(E_ALL);
   ini_set("display_errors", 1);
   $url = $hunt_domain.'/puzzles';
