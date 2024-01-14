@@ -310,7 +310,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   // Iterate over leftover puzzles
   foreach ($comparison as $official_puzzle) {
     $discrepancies[] = sprintf(
-      '[MISSING] Puzzle <a href="%s" target="_blank">%s</a> not found in PB! '.
+      '[MISSING] Puzzle <a href="%s">%s</a> not found in PB! '.
       'Go to its page and re-use the bookmarklet to add it.',
       $official_puzzle['url'],
       $official_puzzle['name'],
