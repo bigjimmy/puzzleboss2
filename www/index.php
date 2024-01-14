@@ -332,14 +332,14 @@ if (count($comparison) > 0) {
       }
       if ($official_puzzle['is_meta'] && ($round->meta_id != $puzzle->id)) {
         $discrepancies[] = sprintf(
-          '%s needs to be <a href="editpuzzle.php?pid=%s">marked as a meta!</a>',
+          '%s needs to be <a href="editpuzzle.php?pid=%s&ismeta=1">marked as a meta!</a>',
           $prefix,
           $puzzle->id,
         );
       }
       if (!$official_puzzle['is_meta'] && ($round->meta_id == $puzzle->id)) {
         $discrepancies[] = sprintf(
-          '%s needs to be <a href="editpuzzle.php?pid=%s">unmarked as a meta!</a>',
+          '%s needs to be <a href="editpuzzle.php?pid=%s&ismeta=0">unmarked as a meta!</a>',
           $prefix,
           $puzzle->id,
         );

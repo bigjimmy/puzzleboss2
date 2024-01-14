@@ -280,10 +280,14 @@ echo '</option>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
-//Meta Assignment
+// Meta Assignment
 echo '<tr><td>Meta For Round</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<select id="ismeta" name="ismeta"/>';
-if ($roundmeta != $puzzid) {
+$ismeta = $roundmeta == $puzzid;
+if (isset($_GET['ismeta'])) {
+  $ismeta = (int)$_GET['ismeta'];
+}
+if ($ismeta) {
   echo '<option selected value="no">No</option>';
   echo '<option value="yes">Yes</option>';
 } else {
