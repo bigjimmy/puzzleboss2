@@ -105,7 +105,7 @@ HTML;
 
 function exit_with_api_error($obj) {
   exit_with_error_message(
-    'Response from API is:<pre>'.var_dump($obj).'</pre>'.
+    'Response from API is:<pre>'.var_export($obj, true).'</pre>'.
     'Contact @Puzztech on Discord for help.'
   );
 }

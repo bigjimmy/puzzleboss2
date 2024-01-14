@@ -90,7 +90,7 @@ HTML;
       throw $e;
     }
     assert_api_success($resp);
-    echo '<div class="success"><pre>'.var_dump($resp).'</pre></div>';
+    echo '<div class="success"><pre>'.var_export($resp, true).'</pre></div>';
     echo '<a href="javascript:window.history.back();">Go back</a>';
     echo '<br><hr>';
 
