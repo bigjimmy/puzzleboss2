@@ -38,9 +38,11 @@ if (isset($_GET['scrape'])) {
         'url' => idx($puzzle, 'url'),
         'isMeta' => idx($puzzle, 'isMeta'),
         'answer' => idx($puzzle, 'answer'),
-        'round_slug' => $round_slug,
-        'round_name' => idx(idx($rounds, $round_slug), 'name'),
-        'round_url' => idx(idx($rounds, $round_slug), 'url'),
+        'round' => array(
+          'slug' => $round_slug,
+          'name' => idx(idx($rounds, $round_slug), 'name'),
+          'url' => idx(idx($rounds, $round_slug), 'url'),
+        ),
       );
     }
   }
