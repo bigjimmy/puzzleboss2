@@ -1,11 +1,11 @@
 <?php 
 require('puzzlebosslib.php');
 
-$hunt_domain = $yaml['HUNTSITE']['DOMAIN'];
-
-if (isset($_GET['scrape'])) {
+function get_scrape_data() {
+  global $yaml;
   error_reporting(E_ALL);
   ini_set("display_errors", 1);
+  $hunt_domain = $yaml['HUNTSITE']['DOMAIN'];
   $url = $hunt_domain.'/puzzles';
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
@@ -47,7 +47,11 @@ if (isset($_GET['scrape'])) {
     }
   }
   header('Content-Type: application/json; charset=utf-8');
-  print json_encode($output);
+  return $output;
+}
+
+if (isset($_GET['scrape'])) {
+  print json_encode(get_scrape_data());
   die();
 }
 
@@ -233,8 +237,8 @@ function print_rounds_table($rounds) {
 <body>
 <?php
 
+$comparison = array();
 if (isset($_GET['r']) && is_array($_GET['r'])) {
-  $comparison = array();
   foreach ($_GET['r'] as $round_name => $round_data) {
     $round_data = explode(',', $round_data);
     foreach ($round_data as $slug) {
@@ -254,7 +258,28 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       );
     }
   }
+} else if (isset($_GET['compare'])) {
+  try {
+    $scrape = get_scrape_data();
+    foreach ($scrape as $puzzle) {
+      $comparison[strtolower(str_replace('-', '', $puzzle['slug']))] = array(
+        'url' => $puzzle['url'],
+        'slug' => $puzzle['slug'],
+        'name' => sanitize_string($puzzle['name']),
+        'round' => sanitize_string($puzzle['round']['name']),
+        'is_meta' => $puzzle['isMeta'],
+      );
+      if (!array_key_exists($round_name, $comparison)) {
+        $comparison[$round_name] = array();
+      }
+    }
+  } catch (Exception $e) {
+    echo '<div class="error">Something went wrong: '.var_export($e, true).'</div>';
+    $comparison = array();
+  }
+}
 
+if (count($comparison) > 0) {
   $discrepancies = array();
   foreach ($fullhunt as $round) {
     if ($round->name == 'Events') {
