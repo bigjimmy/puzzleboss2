@@ -366,6 +366,7 @@ if (count($comparison) > 0) {
     $discrepancies[] = sprintf(
       '[MISSING] Puzzle <a href="%s">%s</a> not found in PB! %s',
       $official_puzzle['url'],
+      $official_puzzle['name'] ?? $official_puzzle['slug'],
       $official_puzzle['name'] != null
         ? sprintf(
             '<a href="addpuzzle.php?puzzurl=%s&puzzid=%s&roundname=%s">Add it to round %s</a>.',
