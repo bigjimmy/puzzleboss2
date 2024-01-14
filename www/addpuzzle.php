@@ -162,6 +162,9 @@ $puzzname = sanitize_string($puzzname);
 if ($puzzname == '') {
   $puzzname = isset($_GET['puzzid']) ? sanitize_string($_GET['puzzid']) : '';
 }
+if (str_contains($puzzurl, '-head/') && isset($_GET['puzzid'])) {
+  $puzzname = sanitize_string($_GET['puzzid']).$puzzname;
+}
 $round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
 $rounds = readapi("/rounds")->rounds;
