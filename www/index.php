@@ -228,10 +228,11 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
           }
         }
         if (!$found_puzzle) {
-          $discrepancies[] = sprintf(
-            '%s Could not find by URL exactly from the /puzzles page',
-            $prefix,
-          );
+          // Not worth bothering if extra puzzles
+          // $discrepancies[] = sprintf(
+          //   '%s Could not find by URL exactly from the /puzzles page',
+          //   $prefix,
+          // );
           continue;
         }
       }

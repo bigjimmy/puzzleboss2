@@ -1,13 +1,22 @@
 <?php
 require('puzzlebosslib.php');
 
-$bookmarkuri = <<<'JAVASCRIPT'
+$newpuzzle_bookmarkuri = <<<'JAVASCRIPT'
 javascript:window.open((data => `<<<ADDPUZZLEURI>>>?puzzurl=${encodeURIComponent(location.href.split('#')[0])}&puzzid=${encodeURIComponent(data?.name || document.title.replace(/ - Google Docs$/, ''))}&roundname=${encodeURIComponent(data?.round?.name?.replace(/[^A-Za-z0-9]+/g, ''))}`)(JSON.parse(document.querySelector('#__NEXT_DATA__')?.innerText || '{}')?.props?.pageProps?.puzzleData));
 JAVASCRIPT;
-$bookmarkuri = trim(str_replace(
+$newpuzzle_bookmarkuri = trim(str_replace(
   '<<<ADDPUZZLEURI>>>',
   $pbroot.'addpuzzle.php',
-  $bookmarkuri,
+  $newpuzzle_bookmarkuri,
+));
+
+$compare_bookmarkuri = <<<'JAVASCRIPT'
+javascript:window.open('<<<PBROOTURI>>>?'+(data => Object.entries(data.puzzles || {}).map(([roundSlug, puzzles]) => ['r[' + data.rounds[roundSlug].name.replace(/[^A-Za-z0-9]/g,'') + ']', puzzles.filter(({answer}) => !answer).map(({slug, isMeta}) => (isMeta ? '!' : '') + slug).join(',')].join('=')).join('&'))(JSON.parse(document.getElementById('__NEXT_DATA__')?.innerText || '{}')?.props?.pageProps || {}));
+JAVASCRIPT;
+$compare_bookmarkuri = trim(str_replace(
+  '<<<PBROOTURI>>>',
+  $pbroot,
+  $compare_bookmarkuri,
 ));
 
 ?>
@@ -60,16 +69,31 @@ $bookmarkuri = trim(str_replace(
 <body>
 <main>
 <h1>Puzzleboss-only Admin Tools</h1>
+
 <hr>
 <h3>New Puzzle Bookmarklet</h3>
 <table border="2" cellpadding="3">
   <tr>
     <td>For a bookmark for adding a new puzzle (while on a puzzle page), drag this link to your bookmarks:</td>
-    <td><a href="<?= $bookmarkuri ?>">Puzzleboss New Puzzle</a></td>
+    <td><a href="<?= $newpuzzle_bookmarkuri ?>">Puzzleboss New Puzzle</a></td>
   </tr>
   <tr>
     <td>Or alternatively, copy the following into a new bookmark:</td>
-    <td><code><?= $bookmarkuri ?></code></td>
+    <td><code><?= $newpuzzle_bookmarkuri ?></code></td>
+  </tr>
+</table>
+<br>
+
+<hr>
+<h3>Compare Puzzles Bookmarklet</h3>
+<table border="2" cellpadding="3">
+  <tr>
+    <td>For a bookmark for checking if there are new puzzles (from the <tt>/puzzles</tt> page, drag this link to your bookmarks:</td>
+    <td><a href="<?= $compare_bookmarkuri ?>">Puzzleboss Check New Puzzles</a></td>
+  </tr>
+  <tr>
+    <td>Or alternatively, copy the following into a new bookmark:</td>
+    <td><code><?= $compare_bookmarkuri ?></code></td>
   </tr>
 </table>
 <br>
