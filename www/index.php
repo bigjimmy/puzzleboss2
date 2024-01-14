@@ -188,8 +188,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
   $comparison = array();
   foreach ($_GET['r'] as $round_name => $round_data) {
     $round_data = explode(',', $round_data);
-    foreach ($round_data as $puzzle_data) {
-      $slug = $puzzle_data[0];
+    foreach ($round_data as $slug) {
       if ($slug == '') {
         continue;
       }
