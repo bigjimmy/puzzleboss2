@@ -636,10 +636,6 @@ def update_solver_part(id, part):
                 )
                 update_puzzle_part_in_db(value, "status", "Being worked")
 
-            # Reject attempt to assign to a solved puzzle
-            # if mypuzz["puzzle"]["status"] == "Solved":
-            #     raise Exception("Can't assign to a solved puzzle!")
-
         else:
             # Puzz is empty, so this is a de-assignment. Populate the db with empty string for it.
             value = None
@@ -665,23 +661,24 @@ def update_solver_part(id, part):
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
 
-        # Now actually assign puzzle to solver
-        try:
-            conn = mysql.connection
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (%s, %s)",
-                (value, id),
-            )
-            conn.commit()
-        except Exception:
-            tb = traceback.format_exc()
-            raise Exception(
-                "Exception in setting solver to %s for puzzle %s. Traceback: %s"
-                % (id, value, tb)
-            )
+        if mypuzz["puzzle"]["status"] != "Solved":
+            # Now actually assign puzzle to solver on unsolved puzzles
+            try:
+                conn = mysql.connection
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (%s, %s)",
+                    (value, id),
+                )
+                conn.commit()
+            except Exception:
+                tb = traceback.format_exc()
+                raise Exception(
+                    "Exception in setting solver to %s for puzzle %s. Traceback: %s"
+                    % (id, value, tb)
+                )
 
-        debug_log(3, "Solver %s claims to be working on %s" % (id, value))
+            debug_log(3, "Solver %s claims to be working on %s" % (id, value))
 
         return {"status": "ok", "solver": {"id": id, part: value}}
 
