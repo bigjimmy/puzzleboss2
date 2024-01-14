@@ -1,7 +1,9 @@
 <?php 
 require('puzzlebosslib.php');
 
-if (isset($_GET['dev'])) {
+if (isset($_GET['scrape'])) {
+  error_reporting(E_ALL);
+  ini_set("display_errors", 1);
   $url = 'https://mythstoryhunt.world/puzzles';
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
@@ -16,6 +18,9 @@ if (isset($_GET['dev'])) {
   $resp = curl_exec($curl);
   curl_close($curl);
   header('Content-Type: application/json; charset=utf-8');
+  $resp = strstr($resp, 'id="__NEXT_DATA__"');
+  $resp = strstr($resp, '{');
+  $resp = strstr($resp, '</script>', true);
   print $resp;
   die();
 }
