@@ -222,7 +222,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       if (!array_key_exists($slug, $comparison)) {
         $found_puzzle = false;
         foreach ($comparison as $slug2 => $official_puzzle) {
-          if (str_contains($puzzle->puzzle_uri ?? '', $official_puzzle['url'])) {
+          if (str_ends_with($puzzle->puzzle_uri ?? '', $official_puzzle['url'])) {
             $found_puzzle = true;
             $slug = $slug2;
             break;
