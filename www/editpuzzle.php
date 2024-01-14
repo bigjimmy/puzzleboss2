@@ -223,13 +223,17 @@ if ($userobj->solver->puzz != $puzname) {
 echo '<br><table border=2><tr><th>Part</th><th>New Value</th><th></th></tr>';
 
 // Enter answer
+$answer = $puzzleobj->puzzle->answer;
+if (isset($_GET['answer'])) {
+  $answer = $_GET['answer'];
+}
 echo '<tr>';
 echo '<td>Answer</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
 echo '<input type="hidden" name="part" value="answer">';
-echo '<input type="text" required minlength="1" name="value" value="' . $puzzleobj->puzzle->answer . '"></td>';
+echo '<input type="text" required minlength="1" name="value" value="' . $answer . '"></td>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 

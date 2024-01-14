@@ -345,9 +345,10 @@ if (count($comparison) > 0) {
           strtolower(preg_replace('/[^A-Z0-9]/', '', $puzzle->answer ?? ''))
         ) {
           $discrepancies[] = sprintf(
-            '%s is <a href="editpuzzle.php?pid=%s">solved with answer <tt>%s</tt>!</a>',
+            '%s is <a href="editpuzzle.php?pid=%s&answer=%s">solved with answer <tt>%s</tt>!</a>',
             $prefix,
             $puzzle->id,
+            urlencode($official_puzzle['answer']),
             $official_puzzle['answer'],
           );
         }
