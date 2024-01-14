@@ -46,11 +46,11 @@ function get_scrape_data() {
       );
     }
   }
-  header('Content-Type: application/json; charset=utf-8');
   return $output;
 }
 
 if (isset($_GET['scrape'])) {
+  header('Content-Type: application/json; charset=utf-8');
   print json_encode(get_scrape_data());
   die();
 }
