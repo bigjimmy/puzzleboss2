@@ -213,6 +213,9 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       if ($puzzle->status == '[hidden]') {
         continue;
       }
+      if ($puzzle->status == 'Solved') {
+        continue;
+      }
       $slug = strtolower($puzzle->name);
       $prefix = 'Puzzle '.$puzzle->name.':';
       if (!array_key_exists($slug, $comparison)) {
