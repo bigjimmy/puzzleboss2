@@ -5,6 +5,10 @@ APP:
     REGEMAIL: "adminaccount@your-url.com"
     ACCT_URI: https://your-url.com/account
     TEAMNAME: "Your team name"
+
+HUNTSITE:
+    DOMAIN: https://puzzles.mit.edu
+    COOKIE: YOURSESSIONCOOKIE
     
 PUZZCORD:
     PUZZCORD_HOST: whateverhostpuzzcordison

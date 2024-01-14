@@ -3,9 +3,10 @@ global $apiroot;
 global $noremoteusertestmode;
 global $pbroot;
 
+$yaml = yaml_parse_file('../puzzleboss.yaml');
 //TODO: Load this from the yaml config
-$pbroot = "https://importanthuntpoll.org/pb/";
-$apiroot = "http://localhost:5000";
+$pbroot = $yaml['APP']['BIN_URI'];
+$apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
 $noremoteusertestmode = "true"; //set this if we're testing without apache auth in front
 

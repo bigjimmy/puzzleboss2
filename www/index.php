@@ -1,18 +1,21 @@
 <?php 
 require('puzzlebosslib.php');
 
+$hunt_domain = $yaml['HUNTSITE']['DOMAIN'];
+
 if (isset($_GET['scrape'])) {
   error_reporting(E_ALL);
   ini_set("display_errors", 1);
-  $url = 'https://mythstoryhunt.world/puzzles';
+  $url = $hunt_domain.'/puzzles';
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
   curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $team_name = $yaml['APP']['TEAMNAME'];
   $headers = array(
       'accept: text/html',
       'cache-control: max-age=0',
-      'cookie: sessionid='.$_GET['cookie'],
-      'user-agent: HuntTeam:blankspacebaby (trying_to_pull_team_data) v0.1',
+      'cookie: sessionid='.$yaml['APP']['cookie'],
+      "user-agent: Puzzleboss v0.1 HuntTeam:$team_name",
   );
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);
