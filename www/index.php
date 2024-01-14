@@ -1,6 +1,25 @@
 <?php 
 require('puzzlebosslib.php');
 
+if (isset($_GET['dev'])) {
+  $url = 'https://mythstoryhunt.world/puzzles';
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_URL, $url);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $headers = array(
+      'accept: text/html',
+      'cache-control: max-age=0',
+      'cookie: sessionid='.$_GET['cookie'],
+      'user-agent: HuntTeam:blankspacebaby (trying_to_pull_team_data) v0.1',
+  );
+  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+  $resp = curl_exec($curl);
+  curl_close($curl);
+  header('Content-Type: application/json; charset=utf-8');
+  print $resp;
+  die();
+}
+
 if (isset($_GET['submit'])) {
   http_response_code(500);
   die('submission not implemented here');
