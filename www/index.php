@@ -255,7 +255,8 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         'url' => 'https://mythstoryhunt.world/puzzles/'.
           preg_replace('/head-(\d+)$/', 'head/\1', $slug),
         'slug' => $slug,
-        'name' => str_replace('-', '', ucwords($slug, '-')),
+        // Can't pass through bookmarklet
+        'name' => null,
         'round' => $round_name,
         'is_meta' => $is_meta,
         // Can't pass through bookmarklet
@@ -363,10 +364,17 @@ if (count($comparison) > 0) {
   // Iterate over leftover puzzles
   foreach ($comparison as $official_puzzle) {
     $discrepancies[] = sprintf(
-      '[MISSING] Puzzle <a href="%s">%s</a> not found in PB! '.
-      'Go to its page and re-use the bookmarklet to add it.',
+      '[MISSING] Puzzle <a href="%s">%s</a> not found in PB! %s',
       $official_puzzle['url'],
-      $official_puzzle['name'],
+      $official_puzzle['name'] != null
+        ? sprintf(
+            '<a href="addpuzzle.php?puzzurl=%s&puzzid=%s&roundname=%s">Add it to round %s</a>.',
+            urlencode($official_puzzle['url']),
+            urlencode($official_puzzle['name']),
+            urlencode($official_puzzle['round']),
+            $official_puzzle['round'],
+          )
+        : 'Go to its page and re-use the bookmarklet to add it.',
     );
   }
   if (count($discrepancies) === 0) {
