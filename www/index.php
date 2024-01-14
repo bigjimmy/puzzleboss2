@@ -196,7 +196,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       $slug = ltrim($slug, '!');
       $comparison[strtolower(str_replace('-', '', $slug))] = array(
         'url' => 'https://mythstoryhunt.world/puzzles/'.
-          preg_replace('/-(\d+)$/', '/\1', $slug),
+          preg_replace('/head-(\d+)$/', 'head/\1', $slug),
         'slug' => $slug,
         'name' => str_replace('-', '', ucwords($slug, '-')),
         'round' => $round_name,
