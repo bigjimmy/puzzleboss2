@@ -7,6 +7,7 @@ if (!isset($_GET['pname']) || empty($_GET['pname'])) {
 }
 
 $name = $_GET['pname'];
+$name2 = str_replace('-', '', ucwords($name, '-'));
 
 $puzzles = readapi('/puzzles');
 if (!$puzzles) {
@@ -16,7 +17,7 @@ if (!$puzzles) {
 
 $puzzle_id = null;
 foreach ($puzzles->puzzles as $puzzle) {
-    if ($puzzle->name === $name) {
+    if ($puzzle->name === $name || $puzzle->name === $name2) {
         $puzzle_id = $puzzle->id;
         break;
     }
