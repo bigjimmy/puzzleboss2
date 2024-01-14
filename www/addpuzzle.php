@@ -98,7 +98,8 @@ HTML;
         break;
       }
     }
-    echo '<div class="success">Round <tt>'.$round_name.'</tt> created!<pre>'.var_export($resp, true).'</pre></div>';
+    echo '<div class="success">Round <tt>'.$round_name.'</tt> created!';
+    echo '<pre>'.var_export($resp, true).'</pre></div>';
     echo '<a href="javascript:window.history.back();">Go back</a>';
     echo '<br><hr>';
 
