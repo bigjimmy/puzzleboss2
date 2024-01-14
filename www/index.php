@@ -277,7 +277,11 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       );
     }
   } catch (Exception $e) {
-    echo '<div class="error">Something went wrong: '.var_export($e, true).'</div>';
+    echo sprintf(
+      '<div class="error"><strong>ERROR:</strong>&nbsp;%s<pre>%s</pre></div>',
+      $e->getMessage(),
+      var_export($e, true),
+    );
     $comparison = array();
   }
 }
