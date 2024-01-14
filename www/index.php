@@ -195,6 +195,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       $is_meta = $slug[0] == '!';
       $slug = ltrim($slug, '!');
       $comparison[strtolower(str_replace('-', '', $slug))] = array(
+        // TODO: Fix for 2025. `head-` is also a year-specific hack
         'url' => 'https://mythstoryhunt.world/puzzles/'.
           preg_replace('/head-(\d+)$/', 'head/\1', $slug),
         'slug' => $slug,
