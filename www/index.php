@@ -334,8 +334,8 @@ if (count($comparison) > 0) {
       }
       if ($official_puzzle['answer'] != null) {
         if (
-          strtolower(preg_replace('/[^A-Z0-9]/g', '', $official_puzzle['answer'] ?? '')) !=
-          strtolower(preg_replace('/[^A-Z0-9]/g', '', $puzzle->answer ?? ''))
+          strtolower(preg_replace('/[^A-Z0-9]/', '', $official_puzzle['answer'] ?? '')) !=
+          strtolower(preg_replace('/[^A-Z0-9]/', '', $puzzle->answer ?? ''))
         ) {
           $discrepancies[] = sprintf(
             '%s is <a href="editpuzzle.php?pid=%s">solved with answer <tt>%s</tt>!</a>',
