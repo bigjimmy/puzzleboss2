@@ -67,11 +67,15 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
 <table border="2" cellpadding="3">
   <tr>
     <td>Drag this link to your bookmarks:</td>
-    <td><a href="<?= $bookmarkuri ?>">Puzzleboss New/Check Puzzles</a></td>
+    <td><a href="<?= $bookmarkuri ?>">Add to Puzzboss</a></td>
   </tr>
   <tr>
     <td>Or alternatively, copy the following into a new bookmark:</td>
-    <td><pre style="text-size: 40%;"><?= $bookmarkuri ?></pre></td>
+    <td>
+      <div style="background-color: lightgray; font-size: 40%;">
+        <code><?= $bookmarkuri ?></code>
+      </div>
+    </td>
   </tr>
 </table>
 <br>
