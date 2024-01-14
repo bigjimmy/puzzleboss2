@@ -26,6 +26,9 @@ function get_scrape_data() {
   $resp = strstr($resp, '{');
   $resp = strstr($resp, '</script>', true);
   $data = json_decode($resp, true);
+  if ($data == null) {
+    throw new Exception('No data returned; Hunt site is likely down right now.');
+  }
   $data = $data['props']['pageProps'];
   $rounds = idx($data, 'rounds', array());
   $puzzles = idx($data, 'puzzles', array());
