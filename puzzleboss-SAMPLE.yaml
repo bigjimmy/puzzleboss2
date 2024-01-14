@@ -8,7 +8,7 @@ APP:
 
 HUNTSITE:
     DOMAIN: https://puzzles.mit.edu
-    COOKIE: YOURSESSIONCOOKIE
+    SESSIONID: YOURSESSIONCOOKIE
     
 PUZZCORD:
     PUZZCORD_HOST: whateverhostpuzzcordison

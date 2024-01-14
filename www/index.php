@@ -14,7 +14,7 @@ if (isset($_GET['scrape'])) {
   $headers = array(
       'accept: text/html',
       'cache-control: max-age=0',
-      'cookie: sessionid='.$yaml['APP']['cookie'],
+      'cookie: sessionid='.$yaml['HUNTSITE']['SESSIONID'],
       "user-agent: Puzzleboss v0.1 HuntTeam:$team_name",
   );
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
