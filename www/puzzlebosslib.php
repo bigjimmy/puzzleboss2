@@ -129,4 +129,11 @@ function sanitize_string($str) {
   return preg_replace('/[^A-Za-z0-9]/', '', $str);
 }
 
+function idx($container, $key, $default=null) {
+  if ($container == null) {
+    return $default;
+  }
+  return isset($container[$key]) ? ($container[$key] ?? $default) : $default;
+}
+
 ?>

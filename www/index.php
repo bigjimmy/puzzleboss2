@@ -3,28 +3,49 @@ require('puzzlebosslib.php');
 
 $hunt_domain = $yaml['HUNTSITE']['DOMAIN'];
 
-if (isset($_GET['scrape'])) {
+if (isset($_GET['compare'])) {
   error_reporting(E_ALL);
   ini_set("display_errors", 1);
   $url = $hunt_domain.'/puzzles';
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
   curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-  $team_name = $yaml['APP']['TEAMNAME'];
+  $session_id = isset($_GET['sessionid'])
+    ? $_GET['sessionid']
+    : $yaml['HUNTSITE']['SESSIONID'];
   $headers = array(
       'accept: text/html',
       'cache-control: max-age=0',
-      'cookie: sessionid='.$yaml['HUNTSITE']['SESSIONID'],
-      "user-agent: Puzzleboss v0.1 HuntTeam:$team_name",
+      'cookie: sessionid='.$session_id,
+      'user-agent: Puzzleboss v0.1 HuntTeam:'.$yaml['APP']['TEAMNAME'],
   );
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);
   curl_close($curl);
-  header('Content-Type: application/json; charset=utf-8');
   $resp = strstr($resp, 'id="__NEXT_DATA__"');
   $resp = strstr($resp, '{');
   $resp = strstr($resp, '</script>', true);
-  print $resp;
+  $data = json_decode($resp, true);
+  $data = $data['props']['pageProps'];
+  $rounds = idx($data, 'rounds', array());
+  $puzzles = idx($data, 'puzzles', array());
+  $output = array();
+  foreach ($puzzles as $round_slug => $round_puzzles) {
+    foreach ($round_puzzles as $puzzle) {
+      $output[] = array(
+        'slug' => idx($puzzle, 'slug'),
+        'name' => idx($puzzle, 'name'),
+        'url' => idx($puzzle, 'url'),
+        'isMeta' => idx($puzzle, 'isMeta'),
+        'answer' => idx($puzzle, 'answer'),
+        'round_slug' => $round_slug,
+        'round_name' => idx(idx($rounds, $round_slug), 'name'),
+        'round_url' => idx(idx($rounds, $round_slug), 'url'),
+      );
+    }
+  }
+  header('Content-Type: application/json; charset=utf-8');
+  print json_encode($output);
   die();
 }
 
@@ -41,7 +62,6 @@ $fullhunt = array_reverse(readapi('/all')->rounds);
 if (isset($_GET['data'])) {
   header('Content-Type: application/json; charset=utf-8');
   die(json_encode(array(
-    'comparison' => $comparison,
     'solver' => $solver,
     'fullhunt' => $fullhunt,
   )));
