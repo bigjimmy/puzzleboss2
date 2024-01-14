@@ -188,10 +188,10 @@ echo '<tr><td><b>Puzzle Name</b></td><td>' . $puzname . '</td></tr>';
 echo '<tr><td><b>Round</b></td><td>' . $puzzleobj->puzzle->roundname . '</td></tr>';
 echo '<tr><td><b>Status</b></td><td>' . $puzzleobj->puzzle->status . '</td></tr>';
 echo '<tr><td><b>Answer</b></td><td>' . $puzzleobj->puzzle->answer . '</td></tr>';
-echo '<tr><td><b>Location</b></td><td>' . htmlentities($puzzleobj->puzzle->xyzloc) . '</td></tr>';
+echo '<tr><td><b>Location</b></td><td>' . htmlentities($puzzleobj->puzzle->xyzloc ?? '') . '</td></tr>';
 echo '<tr><td><b>Cur. Solvers</b></td><td>' . $puzzleobj->puzzle->cursolvers . '</td></tr>';
 echo '<tr><td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td></tr>';
-echo '<tr><td><b>Comments</b></td><td>' . htmlentities($puzzleobj->puzzle->comments) . '</td></tr>';
+echo '<tr><td><b>Comments</b></td><td>' . htmlentities($puzzleobj->puzzle->comments ?? '') . '</td></tr>';
 echo '<tr><td><b>Meta For Round</b></td><td>';
 if ($roundmeta == $puzzid) {
   echo "yes";
