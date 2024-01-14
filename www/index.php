@@ -269,9 +269,6 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         'round' => sanitize_string($puzzle['round']['name']),
         'is_meta' => $puzzle['isMeta'],
       );
-      if (!array_key_exists($round_name, $comparison)) {
-        $comparison[$round_name] = array();
-      }
     }
   } catch (Exception $e) {
     echo '<div class="error">Something went wrong: '.var_export($e, true).'</div>';
