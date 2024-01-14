@@ -90,10 +90,6 @@ HTML;
       throw $e;
     }
     assert_api_success($resp);
-    echo '<div class="success"><pre>'.var_export($resp, true).'</pre></div>';
-    echo '<a href="javascript:window.history.back();">Go back</a>';
-    echo '<br><hr>';
-
     $round_id = null;
     $round_name = $resp->round->name;
     foreach (readapi("/rounds")->rounds as $round) {
@@ -102,6 +98,10 @@ HTML;
         break;
       }
     }
+    echo '<div class="success">Round <tt>'.$round_name.'</tt> created!<pre>'.var_export($resp, true).'</pre></div>';
+    echo '<a href="javascript:window.history.back();">Go back</a>';
+    echo '<br><hr>';
+
     if (!$round_id) {
       exit_with_error_message(
         'Created a new round, but could not find it in time for puzzle creation. '.
