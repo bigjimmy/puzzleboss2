@@ -255,6 +255,8 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         'name' => str_replace('-', '', ucwords($slug, '-')),
         'round' => $round_name,
         'is_meta' => $is_meta,
+        // Can't pass through bookmarklet
+        'answer' => null,
       );
     }
   }
@@ -268,6 +270,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
         'name' => sanitize_string($puzzle['name']),
         'round' => sanitize_string($puzzle['round']['name']),
         'is_meta' => $puzzle['isMeta'],
+        'answer' => $puzzle['answer'],
       );
     }
   } catch (Exception $e) {
@@ -284,9 +287,6 @@ if (count($comparison) > 0) {
     }
     foreach ($round->puzzles as $puzzle) {
       if ($puzzle->status == '[hidden]') {
-        continue;
-      }
-      if ($puzzle->status == 'Solved') {
         continue;
       }
       $slug = strtolower($puzzle->name);
@@ -318,13 +318,32 @@ if (count($comparison) > 0) {
           $round->name ?? '<null>',
         );
       }
-      if ($official_puzzle['is_meta'] != ($round->meta_id == $puzzle->id)) {
+      if ($official_puzzle['is_meta'] && ($round->meta_id != $puzzle->id)) {
         $discrepancies[] = sprintf(
-          '%s IsMeta mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
+          '%s needs to be <a href="editpuzzle.php?pid=%s">marked as a meta!</a>',
           $prefix,
-          $official_puzzle['is_meta'] ? 'true' : 'false',
-          $round->meta_id == $puzzle->id ? 'true' : 'false',
+          $puzzle->id,
         );
+      }
+      if (!$official_puzzle['is_meta'] && ($round->meta_id == $puzzle->id)) {
+        $discrepancies[] = sprintf(
+          '%s needs to be <a href="editpuzzle.php?pid=%s">unmarked as a meta!</a>',
+          $prefix,
+          $puzzle->id,
+        );
+      }
+      if ($official_puzzle['answer'] != null) {
+        if (
+          strtolower(preg_replace('/[^A-Z0-9]/g', '', $official_puzzle['answer'] ?? '')) !=
+          strtolower(preg_replace('/[^A-Z0-9]/g', '', $puzzle->answer ?? ''))
+        ) {
+          $discrepancies[] = sprintf(
+            '%s is <a href="editpuzzle.php?pid=%s">solved with answer <tt>%s</tt>!</a>',
+            $prefix,
+            $puzzle->id,
+            $official_puzzle['answer'],
+          );
+        }
       }
       unset($comparison[$slug]);
     }
