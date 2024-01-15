@@ -242,9 +242,9 @@ function print_rounds_table($rounds) {
           echo sprintf(
             '&nbsp;<span title="Hints in %d minute%s">%s</span>',
             str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
-            $use_text ? '!hint' : '⏳',
             $min_left,
             $min_left !== 1 ? 's' : '',
+            $use_text ? '!hint' : '⏳',
           );
         }
       }
