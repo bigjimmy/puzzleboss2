@@ -220,7 +220,15 @@ function print_rounds_table($rounds) {
           break;
       }
       echo '</a></td>';
-      echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a></td>';
+      echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
+      if ($puzzle->chat_channel_id && ($puzzle->chat_channel_id < '1196291166044160000')) {
+        echo sprintf(
+          '&nbsp;<a href="%s" target="_blank">%s</a>',
+          str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
+          $use_text ? 'HINT?' : '🙉',
+        );
+      }
+      echo '</td>';
       echo '<td><a href="' . $puzzle->drive_uri . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
       echo '<td><a href="' . $puzzle->chat_channel_link  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
       echo '<td style="font-family:monospace;font-style:bold">' . $puzzle->answer .'</td>';
