@@ -287,7 +287,7 @@ $ismeta = $roundmeta == $puzzid;
 if (isset($_GET['ismeta'])) {
   $ismeta = (int)$_GET['ismeta'];
 }
-if ($ismeta) {
+if (!$ismeta) {
   echo '<option selected value="no">No</option>';
   echo '<option value="yes">Yes</option>';
 } else {
