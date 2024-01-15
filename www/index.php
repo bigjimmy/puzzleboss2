@@ -165,6 +165,11 @@ function print_rounds_table($rounds) {
       : sprintf('<th>%s</th>', $round_title);
   }
   echo '</tr><tr>';
+  $min_hint_time = time() - 6 * 3600;
+  // Discord IDs are effectively time records in the Discord epoch.
+  // Convert min hint time to the min snowflake so we can check
+  // which puzzle Discord channels were created long enough ago.
+  $min_discord_snowflake = (string)(($min_hint_time - 1420070400) * 1000 << 22);
   foreach ($rounds as $round) {
     echo '<td>';
     $puzzlearray = $round->puzzles;
@@ -221,9 +226,13 @@ function print_rounds_table($rounds) {
       }
       echo '</a></td>';
       echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
-      if ($puzzle->chat_channel_id && ($puzzle->chat_channel_id < '1196291166044160000')) {
+      if (
+        $puzzle->status != 'Solved' &&
+        $puzzle->chat_channel_id &&
+        $puzzle->chat_channel_id < $min_discord_snowflake
+      ) {
         echo sprintf(
-          '&nbsp;<a href="%s" target="_blank">%s</a>',
+          '&nbsp;<a href="%s" target="_blank" title="Hints available!">%s</a>',
           str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
           $use_text ? 'HINT?' : '🙉',
         );
