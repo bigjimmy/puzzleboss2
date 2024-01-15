@@ -2,7 +2,7 @@
 require('puzzlebosslib.php');
 
 function get_scrape_data() {
-  global $yaml;
+  global $config;
   error_reporting(E_ALL);
   ini_set("display_errors", 1);
   $url = $config->hunt_domain.'/puzzles';
@@ -16,7 +16,7 @@ function get_scrape_data() {
       'accept: text/html',
       'cache-control: max-age=0',
       'cookie: sessionid='.$session_id,
-      'user-agent: Puzzleboss v0.1 HuntTeam:'.$yaml['APP']['TEAMNAME'],
+      'user-agent: Puzzleboss v0.1 HuntTeam:'.$config->hunt_team_username,
   );
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);
