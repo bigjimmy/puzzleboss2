@@ -144,7 +144,26 @@ function print_rounds_table($rounds) {
   global $use_text, $username, $mypuzzle;
   echo '<table border=4 style="vertical-align:top;"><tr>';
   foreach ($rounds as $round) {
-    echo '<th>' . $round->name . '</th>';
+    $num_open = 0;
+    $num_solved = 0;
+    foreach ($round->puzzles as $puzzle) {
+      if ($puzzle->status == '[hidden]') {
+        continue;
+      }
+      $num_open++;
+      if ($puzzle->status == 'Solved') {
+        $num_solved++;
+      }
+    }
+    $round_title = sprintf(
+      '%s (%d solved / %d open)',
+      $round->name,
+      $num_solved,
+      $num_open,
+    );
+    echo $round->meta_id
+      ? sprintf('<th title="Meta unlocked!">🏅 %s</th>', $round_title)
+      : sprintf('<th>%s</th>', $round_title);
   }
   echo '</tr><tr>';
   foreach ($rounds as $round) {
