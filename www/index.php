@@ -241,7 +241,6 @@ function print_rounds_table($rounds) {
           $min_left = round(($channel_create_time - $min_hint_time) / 60);
           echo sprintf(
             '&nbsp;<span title="Hints in %d minute%s">%s</span>',
-            str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
             $min_left,
             $min_left !== 1 ? 's' : '',
             $use_text ? '!hint' : '⏳',
