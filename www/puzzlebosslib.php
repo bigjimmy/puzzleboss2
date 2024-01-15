@@ -119,9 +119,8 @@ function getauthenticateduser() {
     http_response_code(403);
     die("No solver found for user $username. Check Solvers Database");
   }
-  // $debugging_usernames = explode(',', idx($config, 'debugging_usernames', ''));
-  // if (in_array($username, $debugging_usernames)) {
-  if ($username == 'dannybd') {
+  $debugging_usernames = explode(',', $config->debugging_usernames ?? '');
+  if (in_array($username, $debugging_usernames)) {
     error_reporting(E_ALL);
     ini_set("display_errors", 1);
   }
