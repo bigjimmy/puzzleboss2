@@ -5,14 +5,13 @@ function get_scrape_data() {
   global $yaml;
   error_reporting(E_ALL);
   ini_set("display_errors", 1);
-  $hunt_domain = $yaml['HUNTSITE']['DOMAIN'];
-  $url = $hunt_domain.'/puzzles';
+  $url = $config->hunt_domain.'/puzzles';
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
   curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
   $session_id = isset($_GET['sessionid'])
     ? $_GET['sessionid']
-    : $yaml['HUNTSITE']['SESSIONID'];
+    : $config->hunt_sessionid;
   $headers = array(
       'accept: text/html',
       'cache-control: max-age=0',
@@ -131,7 +130,7 @@ if ($user_network === 'MIT GUEST' || isset($_GET['wifi_debug'])) {
     <ul>
       <li><strong>joining directly</strong>, if you have <a href="https://kb.mit.edu/confluence/display/istcontrib/How+to+connect+to+MIT+SECURE+wireless+on+macOS" target="_blank">an active Kerberos</a>,</li>
       <li><strong>generating a password at <a href="https://wifi.mit.edu/" target="_blank">wifi.mit.edu</a></strong>, if you have some MIT affiliation (including alumni), then joining the <tt>MIT</tt> network, or</li>
-      <li>connecting directly to the <tt>{$config->wifi_network}</tt> network with the <strong>WiFi password <tt>{$config->wifi_password}</tt> in the HQ room ({$config->hq_room})</strong> (non-MIT folks use this one).</li>
+      <li>connecting directly to the <strong><tt>{$config->wifi_network}</tt></strong> network with the WiFi password <strong><tt>{$config->wifi_password}</tt></strong> in the HQ room ({$config->hq_room}) (non-MIT folks use this one).</li>
     </ul>
     Again, <strong>you will have a harder time participating in Hunt</strong> on this WiFi network! Continue at your own peril. <a href="https://importanthuntpoll.org/wiki/index.php/WiFi" target="_blank">See here for more info.</a>
   </div>
@@ -275,7 +274,7 @@ if (isset($_GET['r']) && is_array($_GET['r'])) {
       $slug = ltrim($slug, '!');
       $comparison[strtolower(str_replace('-', '', $slug))] = array(
         // TODO: Fix for 2025. `head-` is also a year-specific hack
-        'url' => 'https://mythstoryhunt.world/puzzles/'.
+        'url' => $config->hunt_domain.'/puzzles/'.
           preg_replace('/head-(\d+)$/', 'head/\1', $slug),
         'slug' => $slug,
         // Can't pass through bookmarklet
