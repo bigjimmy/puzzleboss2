@@ -379,7 +379,7 @@ if (count($comparison) > 0) {
     );
   }
   if (count($discrepancies) === 0) {
-    echo '<div class="success">No issues found! PB is up to date.</div>';
+    echo '<div class="success">No discrepancies found! PB is up to date.</div>';
   } else {
     echo '<div class="error"><h3>Discrepancies between Puzzleboss and Mystery Hunt:</h3><ul>';
     foreach ($discrepancies as $discrepancy) {
