@@ -142,7 +142,7 @@ HTML;
 
 function print_rounds_table($rounds) {
   global $use_text, $username, $mypuzzle;
-  echo '<table border=4 style="vertical-align:top;"><tr>';
+  echo '<table border=4 style="vertical-align:top;" class="rounds"><tr>';
   foreach ($rounds as $round) {
     $num_open = 0;
     $num_solved = 0;
@@ -156,7 +156,7 @@ function print_rounds_table($rounds) {
       }
     }
     $round_title = sprintf(
-      '%s (%d solved / %d open)',
+      '%s <span class="round-stats">(%d solved / %d open)</span>',
       $round->name,
       $num_solved,
       $num_open,
@@ -253,6 +253,10 @@ function print_rounds_table($rounds) {
   .success {
     background-color: lightgreen;
     padding: 10px;
+  }
+  table.rounds span.round-stats {
+    font-weight: normal;
+    font-size: 70%;
   }
   </style>
 </head>
