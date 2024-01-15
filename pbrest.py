@@ -345,6 +345,22 @@ def get_full_diff():
     return {"status": "ok", "versions": versionlist}
 
 
+@app.route("/config", endpoint="config", methods=["GET"])
+# @swag_from("swag/getconfig.yaml", endpoint="config", methods=["GET"])
+def get_config():
+    debug_log(4, "start")
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM config")
+        config = {row["key"]: row["val"] for row in cursor.fetchall()}
+    except TypeError:
+        raise Exception("Exception fetching config info from database")
+
+    debug_log(5, "fetched all-time version diff")
+    return {"status": "ok", "config": config}
+
+
 # POST/WRITE Operations
 
 
