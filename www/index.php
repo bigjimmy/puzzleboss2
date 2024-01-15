@@ -131,7 +131,7 @@ if ($user_network === 'MIT GUEST' || isset($_GET['wifi_debug'])) {
     <ul>
       <li><strong>joining directly</strong>, if you have <a href="https://kb.mit.edu/confluence/display/istcontrib/How+to+connect+to+MIT+SECURE+wireless+on+macOS" target="_blank">an active Kerberos</a>,</li>
       <li><strong>generating a password at <a href="https://wifi.mit.edu/" target="_blank">wifi.mit.edu</a></strong>, if you have some MIT affiliation (including alumni), then joining the <tt>MIT</tt> network, or</li>
-      <li>connecting directly to the <tt>{$config['wifi_network']}</tt> network with the <strong>WiFi password <tt>{$config['wifi_password']}</tt> in the HQ room ({$config['hq_room']})</strong> (non-MIT folks use this one).</li>
+      <li>connecting directly to the <tt>{$config->wifi_network}</tt> network with the <strong>WiFi password <tt>{$config->wifi_password}</tt> in the HQ room ({$config->hq_room})</strong> (non-MIT folks use this one).</li>
     </ul>
     Again, <strong>you will have a harder time participating in Hunt</strong> on this WiFi network! Continue at your own peril. <a href="https://importanthuntpoll.org/wiki/index.php/WiFi" target="_blank">See here for more info.</a>
   </div>
