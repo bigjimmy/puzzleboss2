@@ -166,10 +166,6 @@ function print_rounds_table($rounds) {
   }
   echo '</tr><tr>';
   $min_hint_time = time() - 6 * 3600;
-  // Discord IDs are effectively time records in the Discord epoch.
-  // Convert min hint time to the min snowflake so we can check
-  // which puzzle Discord channels were created long enough ago.
-  $min_discord_snowflake = (string)(($min_hint_time - 1420070400) * 1000 << 22);
   foreach ($rounds as $round) {
     echo '<td>';
     $puzzlearray = $round->puzzles;
@@ -228,14 +224,29 @@ function print_rounds_table($rounds) {
       echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
       if (
         $puzzle->status != 'Solved' &&
-        $puzzle->chat_channel_id &&
-        $puzzle->chat_channel_id < $min_discord_snowflake
+        is_numeric($puzzle->chat_channel_id)
       ) {
-        echo sprintf(
-          '&nbsp;<a href="%s" target="_blank" title="Hints available!">%s</a>',
-          str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
-          $use_text ? 'HINT?' : '🙉',
-        );
+        $channel_id = (int)($puzzle->chat_channel_id);
+        // Discord IDs are effectively time records in the Discord epoch.
+        // Convert min hint time to the min snowflake so we can check
+        // which puzzle Discord channels were created long enough ago.
+        $channel_create_time = (int)($channel_id >> 22 / 1000) + 1420070400;
+        if ($channel_create_time <= $min_hint_time) {
+          echo sprintf(
+            '&nbsp;<a href="%s" target="_blank" title="Hints available!">%s</a>',
+            str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
+            $use_text ? 'HINT?' : '🙉',
+          );
+        } else {
+          $min_left = round(($channel_create_time - $min_hint_time) / 60);
+          echo sprintf(
+            '&nbsp;<span title="Hints in %d minute%s">%s</span>',
+            str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
+            $use_text ? '!hint' : '⏳',
+            $min_left,
+            $min_left !== 1 ? 's' : '',
+          );
+        }
       }
       echo '</td>';
       echo '<td><a href="' . $puzzle->drive_uri . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
