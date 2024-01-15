@@ -230,7 +230,7 @@ function print_rounds_table($rounds) {
         // Discord IDs are effectively time records in the Discord epoch.
         // Convert min hint time to the min snowflake so we can check
         // which puzzle Discord channels were created long enough ago.
-        $channel_create_time = round($channel_id >> 22 / 1000) + 1420070400;
+        $channel_create_time = round(($channel_id >> 22) / 1000) + 1420070400;
         if ($channel_create_time <= $min_hint_time) {
           echo sprintf(
             '&nbsp;<a href="%s" target="_blank" title="Hints available!">%s</a>',
