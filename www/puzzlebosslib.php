@@ -121,7 +121,7 @@ function getauthenticateduser() {
   }
   // $debugging_usernames = explode(',', idx($config, 'debugging_usernames', ''));
   // if (in_array($username, $debugging_usernames)) {
-  if ($username == 'dannybd')
+  if ($username == 'dannybd') {
     error_reporting(E_ALL);
     ini_set("display_errors", 1);
   }
