@@ -120,7 +120,6 @@ CREATE TABLE `puzzle` (
   `round_id` int(11) NOT NULL,
   `drive_id` varchar(100) DEFAULT NULL,
   `xyzloc` varchar(500) DEFAULT NULL,
-  `drive_link` varchar(255) DEFAULT NULL,
   `chat_channel_name` varchar(300) DEFAULT NULL,
   `ismeta` tinyint DEFAULT 0 NOT NULL,
   PRIMARY KEY (`id`),
@@ -165,9 +164,6 @@ IF IFNULL(OLD.puzzle_uri,'') <> IFNULL(NEW.puzzle_uri,'') THEN
 END IF;
 IF IFNULL(OLD.drive_uri,'') <> IFNULL(NEW.drive_uri,'') THEN 
 	INSERT INTO `log` (`user`,`module`,`name`,`part`, `id`) VALUES (@user,'puzzles',NEW.name,'drive_uri', NEW.id);
-END IF;
-IF IFNULL(OLD.drive_link,'') <> IFNULL(NEW.drive_link,'') THEN
-	INSERT INTO `log` (`user`,`module`,`name`,`part`, `id`) VALUES (@user,'puzzles',NEW.name,'drive_link', NEW.id);
 END IF;
 IF IFNULL(OLD.comments,'') <> IFNULL(NEW.comments,'') THEN 
 	INSERT INTO `log` (`user`,`module`,`name`,`part`, `id`) VALUES (@user,'puzzles',NEW.name,'comments', NEW.id);
@@ -289,7 +285,6 @@ SET character_set_client = utf8;
 /*!50001 CREATE TABLE `puzzle_view` (
   `id` tinyint NOT NULL,
   `name` tinyint NOT NULL,
-  `drive_link` tinyint NOT NULL,
   `status` tinyint NOT NULL,
   `answer` tinyint NOT NULL,
   `roundname` tinyint NOT NULL,
@@ -597,7 +592,7 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET character_set_results     = utf8 */;
 /*!50001 SET collation_connection      = utf8_unicode_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `puzzle_view` AS select `puzzle`.`id` AS `id`,`puzzle`.`name` AS `name`,`puzzle`.`drive_link` AS `drive_link`,`puzzle`.`status` AS `status`,`puzzle`.`answer` AS `answer`,`round`.`name` AS `roundname`, `round`.`id` AS `round_id`, `puzzle`.`comments` AS `comments`, `puzzle`.`drive_uri` AS `drive_uri`,`puzzle`.`chat_channel_name` AS `chat_channel_name`,`puzzle`.`chat_channel_id` AS `chat_channel_id`,`puzzle`.`chat_channel_link` AS `chat_channel_link`,`puzzle`.`drive_id` AS `drive_id`,`puzzle`.`puzzle_uri` AS `puzzle_uri`,`ps`.`solvers` AS `solvers`,`cps`.`cursolvers` AS `cursolvers`,`puzzle`.`xyzloc` AS `xyzloc` from (((`puzzle` join `round` on((`round`.`id` = `puzzle`.`round_id`))) left join `puzzle_solvers` `ps` on((`ps`.`puzzle_id` = `puzzle`.`id`))) left join `puzzle_cursolvers` `cps` on((`cps`.`puzzle_id` = `puzzle`.`id`))) */;
+/*!50001 VIEW `puzzle_view` AS select `puzzle`.`id` AS `id`,`puzzle`.`name` AS `name`,`puzzle`.`status` AS `status`,`puzzle`.`answer` AS `answer`,`round`.`name` AS `roundname`, `round`.`id` AS `round_id`, `puzzle`.`comments` AS `comments`, `puzzle`.`drive_uri` AS `drive_uri`,`puzzle`.`chat_channel_name` AS `chat_channel_name`,`puzzle`.`chat_channel_id` AS `chat_channel_id`,`puzzle`.`chat_channel_link` AS `chat_channel_link`,`puzzle`.`drive_id` AS `drive_id`,`puzzle`.`puzzle_uri` AS `puzzle_uri`,`ps`.`solvers` AS `solvers`,`cps`.`cursolvers` AS `cursolvers`,`puzzle`.`xyzloc` AS `xyzloc` from (((`puzzle` join `round` on((`round`.`id` = `puzzle`.`round_id`))) left join `puzzle_solvers` `ps` on((`ps`.`puzzle_id` = `puzzle`.`id`))) left join `puzzle_cursolvers` `cps` on((`cps`.`puzzle_id` = `puzzle`.`id`))) */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;

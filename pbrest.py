@@ -426,7 +426,6 @@ def create_puzzle():
         },
     )
     drive_uri = "https://docs.google.com/spreadsheets/d/%s/edit#gid=1" % drive_id
-    drive_link = '<a href="%s">%s</a>' % (drive_uri, puzname)
 
     # Actually insert into the database
     try:
@@ -435,8 +434,8 @@ def create_puzzle():
         cursor.execute(
             """
             INSERT INTO puzzle
-            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, drive_link)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 puzname,
@@ -447,7 +446,6 @@ def create_puzzle():
                 puzname.lower(),
                 drive_id,
                 drive_uri,
-                drive_link,
             ),
         )
         conn.commit()

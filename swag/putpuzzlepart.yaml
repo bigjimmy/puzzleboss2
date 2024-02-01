@@ -20,9 +20,6 @@ parameters:
               name:
                   type: string
                   description: Puzzle name
-              drive_link:
-                  type: string
-                  description: HTML A tag for linking to puzzle's google sheet
               status:
                   type: string
                   enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
