@@ -9,9 +9,7 @@ function get_scrape_data() {
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
   curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-  $session_id = isset($_GET['sessionid'])
-    ? $_GET['sessionid']
-    : $config->hunt_sessionid;
+  $session_id = idx($_GET, 'sessionid', $config->hunt_sessionid);
   $headers = array(
       'accept: text/html',
       'cache-control: max-age=0',
@@ -455,7 +453,12 @@ foreach ($fullhunt as $round) {
 print_rounds_table($unsolved_rounds);
 
 if (count($solved_rounds) > 0) {
-  echo '<details><summary>Show solved rounds:</summary>';
+  if ((bool)idx($_COOKIE, 'show_solved', false)) {
+    echo '<details open>';
+  } else {
+    echo '<details>';
+  }
+  echo '<summary id="solved">Show solved rounds:</summary>';
   print_rounds_table($solved_rounds);
   echo '</details>';
 }
@@ -477,4 +480,13 @@ if (count($solved_rounds) > 0) {
 <br>
 <br>
 <a href="?text_only=1">Text-only (no emoji) mode</a>
+<script type="text/javascript">
+document.getElementById('solved').addEventListener(
+  'click',
+  e => {
+    const open = +!e.target.parentElement.attributes.open;
+    document.cookie = `show_solved=${open ? '1' : ''}`;
+  },
+);
+</script>
 </body>
