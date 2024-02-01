@@ -219,10 +219,10 @@ def create_puzzle_sheet(parentfolder, puzzledict):
 
     sheet_properties = {
         "metadata": {
+            "sheetId": 1,
             "title": "Metadata",
             "gridProperties": {"rowCount": 7, "columnCount": 2},
             "index": 0,
-            "sheetId": 1,
         },
         "work": {
             "sheetId": 0,
@@ -231,6 +231,18 @@ def create_puzzle_sheet(parentfolder, puzzledict):
             "index": 2,
         },
     }
+
+    def get_fields(properties, prefix=""):
+        fields = []
+        for key in properties.keys():
+            if not prefix and key == "sheetId":
+                continue
+            label = prefix + "." + key if prefix else key
+            if type(properties[key]) == dict:
+                fields.append(get_fields(properties[key], prefix=label))
+            else:
+                fields.append(label)
+        return ",".join(fields)
 
     # Create new page if we're not doing a template copy
     if config["GOOGLE"]["SHEETS_TEMPLATE_ID"] == "none":
@@ -254,7 +266,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
             {
                 "updateSheetProperties": {
                     "properties": sheet_properties["metadata"],
-                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+                    "fields": get_fields(sheet_properties["metadata"]),
                 }
             }
         )
@@ -264,7 +276,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
             {
                 "updateSheetProperties": {
                     "properties": sheet_properties["work"],
-                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+                    "fields": get_fields(sheet_properties["work"]),
                 }
             }
         )
