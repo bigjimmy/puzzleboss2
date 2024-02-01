@@ -14,7 +14,6 @@ SCOPES = [
 
 
 def main():
-
     # Run this from a terminal to trigger auth token creation with google for puzzleboss.
 
     creds = None
@@ -50,7 +49,7 @@ def main():
     else:
         print("Files:")
         for item in items:
-            print(u"{0} ({1})".format(item["name"], item["id"]))
+            print("{0} ({1})".format(item["name"], item["id"]))
 
 
 if __name__ == "__main__":

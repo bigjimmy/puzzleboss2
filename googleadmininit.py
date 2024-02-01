@@ -9,7 +9,6 @@ SCOPES = ["https://www.googleapis.com/auth/admin.directory.user"]
 
 
 def main():
-
     # Run this from a terminal to trigger auth token creation with google for puzzleboss.
 
     creds = None
@@ -46,7 +45,7 @@ def main():
     else:
         print("Users:")
         for user in users:
-            print(u"{0} ({1})".format(user["primaryEmail"], user["name"]["fullName"]))
+            print("{0} ({1})".format(user["primaryEmail"], user["name"]["fullName"]))
 
 
 if __name__ == "__main__":

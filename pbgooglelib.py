@@ -200,7 +200,15 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         file = service.files().create(body=file_metadata, fields="id").execute()
         debug_log(4, "file ID returned from creation: %s" % file.get("id"))
     else:
-        file = service.files().copy(body=file_metadata, fileId=config["GOOGLE"]["SHEETS_TEMPLATE_ID"], fields="id").execute()
+        file = (
+            service.files()
+            .copy(
+                body=file_metadata,
+                fileId=config["GOOGLE"]["SHEETS_TEMPLATE_ID"],
+                fields="id",
+            )
+            .execute()
+        )
         debug_log(4, "file ID returned from copy: %s" % file.get("id"))
 
     # Now let's set initial contents
@@ -260,7 +268,6 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                 }
             }
         )
-
 
     # Set format of metadata sheet
     requests.append(
