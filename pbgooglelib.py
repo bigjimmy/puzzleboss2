@@ -209,32 +209,35 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     sheetsservice = build("sheets", "v4", credentials=creds)
     requests = []
 
-    if config["GOOGLE"]["SHEETS_TEMPLATE_ID"] == "none":
+    sheet_properties = {
+        "metadata": {
+            "title": "Metadata",
+            "gridProperties": {"rowCount": 7, "columnCount": 2},
+            "index": 0,
+            "sheetId": 1,
+        },
+        "work": {
+            "sheetId": 0,
+            "title": "Work",
+            "gridProperties": {"rowCount": 100, "columnCount": 26},
+            "index": 2,
+        },
+    }
+
     # Create new page if we're not doing a template copy
+    if config["GOOGLE"]["SHEETS_TEMPLATE_ID"] == "none":
         requests.append(
             {
                 "addSheet": {
-                    "properties": {
-                        "title": "%s metadata" % name,
-                        "gridProperties": {"rowCount": 7, "columnCount": 2},
-                        "index": 0,
-                        "sheetId": 1,
-                    }
+                    "properties": sheet_properties["metadata"],
                 }
             }
         )
 
-        # Relabel existing sheet as "Work" and setup appropriately
         requests.append(
             {
-                "updateSheetProperties": {
-                    "properties": {
-                        "sheetId": 0,
-                        "title": "Work on %s" % name,
-                        "gridProperties": {"rowCount": 100, "columnCount": 26},
-                        "index": 2,
-                    },
-                    "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
+                "addSheet": {
+                    "properties": sheet_properties["work"],
                 }
             }
         )
@@ -242,12 +245,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         requests.append(
             {
                 "updateSheetProperties": {
-                    "properties": {
-                        "title": "%s metadata" % name,
-                        "gridProperties": {"rowCount": 7, "columnCount": 2},
-                        "index": 0,
-                        "sheetId": 1,
-                    },
+                    "properties": sheet_properties["metadata"],
                     "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
                 }
             }
@@ -257,12 +255,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         requests.append(
             {
                 "updateSheetProperties": {
-                    "properties": {
-                        "sheetId": 0,
-                        "title": "Work on %s" % name,
-                        "gridProperties": {"rowCount": 100, "columnCount": 26},
-                        "index": 2,
-                    },
+                    "properties": sheet_properties["work"],
                     "fields": "title,gridProperties.rowCount,gridProperties.columnCount,index",
                 }
             }
