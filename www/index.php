@@ -181,7 +181,7 @@ function print_rounds_table($rounds, $mypuzzle) {
         $styleinsert .= " bgcolor='Gainsboro' ";
       }
       if ($puzzlename == $mypuzzle) {
-        $styleinsert .= ' style="text-decoration:underline overline wavy" ';
+        $styleinsert .= " style='text-decoration:underline overline wavy' ";
       }
       if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
         $styleinsert .= " bgcolor='aquamarine' ";
