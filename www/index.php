@@ -137,7 +137,7 @@ HTML;
   $wifi_warning = '';
 }
 
-function print_rounds_table($rounds) {
+function print_rounds_table($rounds, $mypuzzle) {
   global $use_text, $username, $mypuzzle;
   echo '<table border=4 style="vertical-align:top;" class="rounds"><tr>';
   foreach ($rounds as $round) {
@@ -165,7 +165,7 @@ function print_rounds_table($rounds) {
   echo '</tr><tr>';
   $min_hint_time = time() - 6 * 3600;
   foreach ($rounds as $round) {
-    echo '<td>';
+    echo '<td style="vertical-align:top;">';
     $puzzlearray = $round->puzzles;
     $metapuzzle = $round->meta_id;
 
@@ -459,7 +459,7 @@ if (count($solved_rounds) > 0) {
     echo '<details>';
   }
   echo '<summary id="solved">Show solved rounds:</summary>';
-  print_rounds_table($solved_rounds);
+  print_rounds_table($solved_rounds, $mypuzzle);
   echo '</details>';
 }
 ?>
