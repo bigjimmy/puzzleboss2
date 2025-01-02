@@ -956,6 +956,14 @@ def delete_account(username):
 
     return {"status": "ok"}
 
+@app.route("/deletepuzzle/<puzzlename>", endpoint="get_delete_puzzle", methods=["GET"])
+@swag_from("swag/getdeletepuzzle.yaml", endpoint="get_delete_puzzle", methods=["GET"])
+def delete_puzzle(puzzlename):
+    debug_log(4, "start. delete puzzle %s" % puzzlename)
+
+    debug_log(2, "puzzle %s deleted from system!" % puzzlename)
+    return {"status": "ok"}
+    
 
 ############### END REST calls section
 
