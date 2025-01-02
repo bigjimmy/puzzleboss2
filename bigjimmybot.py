@@ -58,8 +58,19 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                 config["BIGJIMMYBOT"]["APIURI"],
                 mypuzzle["id"],
             )
-            responsestring = requests.get(myreq).text
-            mypuzzlelastact = json.loads(responsestring)["puzzle"]["lastact"]
+            try:
+                responsestring = requests.get(myreq).text
+            except Exception as e:
+              debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
+              time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
+              continue
+
+            try:
+                mypuzzlelastact = json.loads(responsestring)["puzzle"]["lastact"]
+            except Exception as e:
+              debug_log(1, "Error interpreting puzzle info from puzzleboss. Corruption?: %s" % e)
+              time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
+              continue
 
             debug_log(
                 5,
@@ -247,7 +258,13 @@ if __name__ == "__main__":
     debug_log(3, "google drive init succeeded. Hunt folder id: %s" % pblib.huntfolderid)
 
     while True:
-        r = json.loads(requests.get("%s/all" % config["BIGJIMMYBOT"]["APIURI"]).text)
+        try:
+            r = json.loads(requests.get("%s/all" % config["BIGJIMMYBOT"]["APIURI"]).text)
+        except Exception as e:
+              debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
+              time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
+              continue
+
         debug_log(5, "api return: %s" % r)
         rounds = r["rounds"]
         debug_log(4, "loaded round list")
