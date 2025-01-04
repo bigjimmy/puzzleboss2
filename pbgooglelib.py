@@ -177,6 +177,25 @@ def create_round_folder(foldername):
     debug_log(4, "folder id returned: %s" % file.get("id"))
     return file.get("id")
 
+def delete_puzzle_sheet(sheetid):
+    debug_log(4, "start delete with sheet id: %s" % sheetid)
+
+    initdrive()
+
+    body_value = {"trashed": True}
+
+    try:
+        response = (
+            service.files()
+            .update(fileId=sheetid, body=body_value)
+            .execute()
+            )
+
+    except Exception as e:
+        debug_log(1, "Delete failed for sheet %s. Error is %s." % (sheetid, e))
+        return 255
+
+    return 0
 
 def create_puzzle_sheet(parentfolder, puzzledict):
     debug_log(
