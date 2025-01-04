@@ -1,11 +1,5 @@
 <?php
 require('../puzzlebosslib.php');
-
-$bookmarkuri = <<<'JAVASCRIPT'
-javascript:if(window.location.pathname==='/puzzles'){pbPath=(data => '?'+Object.entries(data.puzzles || {}).map(([roundSlug, puzzles]) => ['r[' + data.rounds[roundSlug].name.replace(/[^A-Za-z0-9]/g,'') + ']', puzzles.filter(({answer}) => !answer).map(({slug, isMeta}) => (isMeta ? '!' : '') + slug).join(',')].join('=')).join('&'))(JSON.parse(document.getElementById('__NEXT_DATA__')?.innerText || '{}')?.props?.pageProps || {});}else{pbPath=(data => `addpuzzle.php?puzzurl=${encodeURIComponent(location.href.split('#')[0])}&puzzid=${encodeURIComponent(data?.name || document.title.replace(/ - Google Docs$/, ''))}&roundname=${encodeURIComponent(data?.round?.name?.replace(/[^A-Za-z0-9]+/g, ''))}`)(JSON.parse(document.querySelector('#__NEXT_DATA__')?.innerText || '{}')?.props?.pageProps?.puzzleData);}window.open('<<<PBROOTURI>>>/'+pbPath);
-JAVASCRIPT;
-$bookmarkuri = trim(str_replace('<<<PBROOTURI>>>', $pbroot, $bookmarkuri));
-
 ?>
 <!doctype html>
 <html lang="en">
