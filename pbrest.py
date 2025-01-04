@@ -106,7 +106,7 @@ def get_all_puzzles():
     }
 
 @app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
-@swag_from("swag/rbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
+@swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
 def check_puzztech(priv,uid):
     debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
     try:
