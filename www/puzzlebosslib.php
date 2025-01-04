@@ -140,4 +140,14 @@ function idx($container, $key, $default=null) {
   return isset($container[$key]) ? ($container[$key] ?? $default) : $default;
 }
 
+function checkpriv($priv, $uid) {
+  try {
+    $resp = readapi('/rbac/' . $priv . '/' . $uid);
+  } catch (Exception $e) {
+    exit_with_api_error($resp);
+    throw $e;
+  }
+  return $resp->allowed;
+}
+
 ?>
