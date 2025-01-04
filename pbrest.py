@@ -959,9 +959,20 @@ def delete_account(username):
 @app.route("/deletepuzzle/<puzzlename>", endpoint="get_delete_puzzle", methods=["GET"])
 @swag_from("swag/getdeletepuzzle.yaml", endpoint="get_delete_puzzle", methods=["GET"])
 def delete_puzzle(puzzlename):
-    debug_log(4, "start. delete puzzle %s" % puzzlename)
+    debug_log(4, "start. delete puzzle named %s" % puzzlename)
+    puzzid = get_puzzle_id_by_name(puzzlename)
+    if puzzid == 0:
+        debug_log(2, "puzzle named %s not found in system!" % puzzlename)
+        raise Exception("puzzle not found in system.")
 
-    debug_log(2, "puzzle %s deleted from system!" % puzzlename)
+    clear_puzzle_solvers(puzzid)
+
+    conn = mysql.connection
+    cursor = conn.cursor()
+    cursor.execute("DELETE from puzzle where id = %s", (puzzid,))
+    conn.commit()
+
+    debug_log(2, "puzzle id %s named %s deleted from system!" % (puzzid, puzzlename))
     return {"status": "ok"}
     
 
@@ -985,6 +996,20 @@ def unassign_solver_by_name(name):
     debug_log(3, "Solver id: %s, name: %s unassigned" % (id, name))
 
     return 0
+
+def get_puzzle_id_by_name(name):
+    debug_log(4, "start, called with (name): %s" % name)
+
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
+        rv = cursor.fetchone()['id']
+        debug_log(4, "rv = %s" % rv)
+    except:
+        debug_log(2, "Puzzle name %s not found in database." % name)
+        return 0
+    return rv
 
 
 def clear_puzzle_solvers(id):
