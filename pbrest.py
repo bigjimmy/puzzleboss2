@@ -966,10 +966,8 @@ def delete_puzzle(puzzlename):
         raise Exception("puzzle not found in system.")
     sheetid = get_puzzle_part(puzzid, "drive_id")["puzzle"]["drive_id"]
 
-    try:
-        delete_puzzle_sheet(sheetid) 
-    except:
-        debug_log(2, "Puzzle id %s deletion request but it does not have a sheet! continuing." % puzzid)
+    if delete_puzzle_sheet(sheetid) != 0:
+        debug_log(2, "Puzzle id %s deletion request but sheet deletion failed! continuing. this may cause a mess!" % puzzid)
 
     clear_puzzle_solvers(puzzid)
 
