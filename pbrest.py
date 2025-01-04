@@ -966,15 +966,20 @@ def delete_puzzle(puzzlename):
         raise Exception("puzzle not found in system.")
     sheetid = get_puzzle_part(puzzid, "drive_id")["puzzle"]["drive_id"]
 
-    if delete_puzzle_sheet(sheetid) != 0:
-        return {"status": "error no sheet"}
+    try:
+        delete_puzzle_sheet(sheetid) 
+    except:
+        debug_log(2, "Puzzle id %s deletion request but it does not have a sheet! continuing." % puzzid)
 
     clear_puzzle_solvers(puzzid)
 
-    conn = mysql.connection
-    cursor = conn.cursor()
-    cursor.execute("DELETE from puzzle where id = %s", (puzzid,))
-    conn.commit()
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("DELETE from puzzle where id = %s", (puzzid,))
+        conn.commit()
+    except:
+        raise Exception("Puzzle deletion attempt for id %s name %s failed in database operation." % puzzid, puzzlename)
 
     debug_log(2, "puzzle id %s named %s deleted from system!" % (puzzid, puzzlename))
     return {"status": "ok"}
