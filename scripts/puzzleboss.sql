@@ -194,7 +194,6 @@ DELIMITER ;
 DELIMITER ;;
 /*!50003 CREATE*/ /*!50003 TRIGGER `puzzle_ADEL` AFTER DELETE ON `puzzle` FOR EACH ROW BEGIN
 DELETE FROM `log` WHERE `module`="puzzles" AND `name`=OLD.name;
-INSERT INTO `log` (`user`, `module`, `name`, `part`, `id`) VALUES ("puzzles", OLD.name, "deletion", `id`);
 END */;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
