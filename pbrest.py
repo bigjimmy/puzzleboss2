@@ -107,7 +107,7 @@ def get_all_puzzles():
 
 @app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
 @swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
-def check_puzztech(priv,uid):
+def check_priv(priv,uid):
     debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
     try:
         conn = mysql.connection
@@ -584,6 +584,31 @@ def create_round():
     )
 
     return {"status": "ok", "round": {"name": roundname}}
+
+@app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
+@swag_from("swag/putrbacprivuid.yaml", endpoint="post_rbac_priv_uid", methods=["POST"])
+def set_priv(priv,uid):
+    debug_log(4, "start. priv: %s, uid %s" % (priv, uid))
+    try:
+        data = request.get_json()
+        debug_log(4, "post data: %s" % (data))
+        value = data["allowed"]
+        if ( value != "YES" and value != "NO"):
+            raise Exception("Improper privset allowed syntax. e.g. {'allowed':'YES'} or {'allowed':'NO'}")
+    except Exception as e:
+        raise Exception("Error interpreting privset JSON allowed field: %s" % (e))
+    debug_log(3, "Attempting privset of uid %s:  %s = %s" % (uid, priv, value))
+
+    # Actually insert into the database
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(f"INSERT INTO privs (uid, {priv}) VALUES (%s, %s) ON DUPLICATE KEY UPDATE uid=%s, {priv}=%s", (uid, value, uid, value))
+        conn.commit()
+    except Exception as e:
+        raise Exception("Error modifying priv table for uid %s priv %s value %s. Is priv string valid?" % (uid, priv, value))
+
+    return {"status": "ok"}
 
 
 @app.route("/rounds/<id>/<part>", endpoint="post_round_part", methods=["POST"])
