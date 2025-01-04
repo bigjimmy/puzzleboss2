@@ -46,9 +46,6 @@ if (isset($_GET['submit'])) {
     if ($noremoteusertestmode == 'true') {
       $username = "testuser";
     }
-    if (isset($_GET['assumedid'])) {
-      $username = $_GET['assumedid'];
-    }
     if ($username == "") {
       echo '<br>authenticated REMOTE_USER not provided<br>';
       echo '</body></html>';
@@ -56,6 +53,9 @@ if (isset($_GET['submit'])) {
     }
   } else {
     $username = $_SERVER['REMOTE_USER'];
+    if (isset($_GET['assumedid'])) {
+      $username = $_GET['assumedid'];
+    }
   }
   $id = getuid($username);
 

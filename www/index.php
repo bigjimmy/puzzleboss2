@@ -450,7 +450,7 @@ foreach ($fullhunt as $round) {
     $unsolved_rounds[] = $round;
   }
 }
-print_rounds_table($unsolved_rounds);
+print_rounds_table($unsolved_rounds, $mypuzzle);
 
 if (count($solved_rounds) > 0) {
   if ((bool)idx($_COOKIE, 'show_solved', false)) {
