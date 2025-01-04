@@ -105,6 +105,47 @@ def get_all_puzzles():
         "puzzles": puzzlist,
     }
 
+@app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
+@swag_from("swag/rbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
+def check_puzztech(priv,uid):
+    debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid, )) 
+        rv = cursor.fetchone()
+    except:
+        raise Exception("Exception querying database for privs)")
+
+    debug_log(3, "in database user %s ACL is %s" % (uid, rv))
+
+    if rv == None:
+        return {
+            "status": "ok",
+            "allowed": False,
+        }
+
+    try:
+        privanswer = rv[priv]
+    except:
+        raise Exception(
+                "Exception in reading priv %s from user %s ACL. No such priv?"
+                % (
+                    priv,
+                    uid,
+                  )
+                )
+
+    if privanswer == "YES":
+        return {
+            "status": "ok",
+            "allowed": True,
+        }
+    else:
+        return {
+            "status": "ok",
+            "allowed": False,
+        }   
 
 @app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
 @swag_from("swag/getpuzzleid.yaml", endpoint="puzzle_id", methods=["GET"])
