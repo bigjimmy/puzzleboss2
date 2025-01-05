@@ -121,6 +121,8 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
 </table>
 
 </main>
-<footer><br><hr><br><a href="/pb/">Puzzleboss Home</a></footer>
+<footer><br><hr><br><a href="/pb/">Puzzleboss Home</a>
+<br><a href="/pb/admin.php">Puzztech-only Puzzleboss Admininstration Page</a>
+</footer>
 </body>
 </html>

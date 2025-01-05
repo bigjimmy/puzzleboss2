@@ -1,6 +1,3 @@
-<?php
-require('../puzzlebosslib.php');
-?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -48,6 +45,25 @@ require('../puzzlebosslib.php');
   </style>
 </head>
 <body>
+
+<?php
+// Permissions check
+require('puzzlebosslib.php');
+
+$username = $_SERVER['REMOTE_USER'];
+$uid = getuid($username);
+$allowed = checkpriv("puzztech", $uid); //puzztech only!
+
+if (!$allowed) {
+  echo "<h1>ACCESS DENIED</h1>";
+  echo "<br><hr><br>Access to this page is restricted to users with the puzztech role. Contact puzzleboss or puzztech for assistance.</body>";
+  echo "</html>";
+  exit (2);
+}
+
+
+
+?>
 <main>
 <h1>Puzztech-only Super Admin Tools</h1>
 
@@ -63,7 +79,7 @@ It will NOT delete the discord chat room. Do that in discord (or find a puzztech
   <tr>
     <td>To delete a puzzle (enter puzzle name):</td>
     <td valign="middle">
-      <form action="../deletepuzzle.php" method="post">
+      <form action="deletepuzzle.php" method="post">
         <input type="text" name="name">
         <input type="submit" name="submit" value="Delete Puzzle">
       </form>
@@ -79,14 +95,14 @@ It will NOT delete the discord chat room. Do that in discord (or find a puzztech
     <td>To check if a user has a specific privilege:</td>
     <td valign="middle">
       Enter Username:
-      <form action="../checkpriv.php" method="post">
+      <form action="checkpriv.php" method="post">
 	<input type="text" name="name">
         <input type="hidden" name="priv" value="puzztech">
         <input type="submit" name="check" value="Check Puzztech Priv">
       </form>
     <td valign="middle">
       Enter Username:
-      <form action="../checkpriv.php" method="post">
+      <form action="checkpriv.php" method="post">
         <input type="text" name="name">
         <input type="hidden" name="priv" value="puzzleboss">
         <input type="submit" name="check" value="Check Puzzleboss Priv">
@@ -101,7 +117,7 @@ It will NOT delete the discord chat room. Do that in discord (or find a puzztech
     <td>To modify a role for a user:</td>
     <td valign="middle">
       Enter Username:
-      <form action="../setpriv.php" method="post">
+      <form action="setpriv.php" method="post">
         <input type="text" name="name">
 	<input type="hidden" name="priv" value="puzztech">
 	<input type="radio" name="allowed" id="YES" value="YES">
@@ -112,7 +128,7 @@ It will NOT delete the discord chat room. Do that in discord (or find a puzztech
       </form>
     <td valign="middle">
       Enter Username:
-      <form action="../setpriv.php" method="post">
+      <form action="setpriv.php" method="post">
         <input type="text" name="name">
         <input type="hidden" name="priv" value="puzzleboss">
         <input type="radio" name="allowed" id="YES" value="YES">

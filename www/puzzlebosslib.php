@@ -4,7 +4,6 @@ global $noremoteusertestmode;
 global $pbroot;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
-//TODO: Load this from the yaml config
 $pbroot = $yaml['APP']['BIN_URI'];
 $apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
