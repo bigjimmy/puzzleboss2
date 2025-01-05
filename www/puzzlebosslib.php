@@ -2,12 +2,18 @@
 global $apiroot;
 global $noremoteusertestmode;
 global $pbroot;
+global $bookmarkuri;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
-$pbroot = $yaml['APP']['BIN_URI'];
 $apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
-$noremoteusertestmode = "true"; //set this if we're testing without apache auth in front
+$noremoteusertestmode = "true"; //TODO: eliminate this
+
+//TODO: add error handling here for mandatory config values. should direct user to admin page for config editing.
+$config = readapi('/config')->config;
+$pbroot = $config->BIN_URI;
+$bookmarkuri = $config->bookmarklet_js;
+
 
 function readapi($apicall) {
   $url = $GLOBALS['apiroot'] . $apicall;
@@ -91,7 +97,6 @@ function getuid($username) {
   return 0;
 }
 
-$config = readapi('/config')->config;
 
 function getauthenticateduser() {
   $username = "";
