@@ -35,11 +35,33 @@ if [[ $? != 0 ]]; then
         exit 2
 fi
 
+echo "Dumping privs table to privstable.$$.sql"
+mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --add-drop-table $PB_DATA_DB_NAME privs > privstable.$$.sql
+
+if [[ $? != 0 ]]; then
+        echo "Mysqldump failed.  Aborting."
+        exit 2
+fi
+
+echo "Dumping config table to configtable.$$.sql"
+mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --add-drop-table $PB_DATA_DB_NAME config > configtable.$$.sql
+
+if [[ $? != 0 ]]; then
+        echo "Mysqldump failed.  Aborting."
+        exit 2
+fi
+
 #Drop and Re-create database tables using the sql template
 echo "Destroying database and reloading saved schema"
-echo "truncate table puzzle; truncate table puzzle_solver; truncate table round; truncate table activity; truncate table clientindex; truncate table log; truncate table solver" | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER $PB_DATA_DB_NAME -p$PB_DATA_DB_PASS 
+echo "truncate table puzzle; truncate table puzzle_solver; truncate table round; truncate table activity; truncate table clientindex; truncate table log; truncate table solver; truncate table privs; truncate table config" | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER $PB_DATA_DB_NAME -p$PB_DATA_DB_PASS 
 cat puzzleboss.sql | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER $PB_DATA_DB_NAME -p$PB_DATA_DB_PASS
 
 #Restore previously preserved tables
 echo "Restoring solver table"
 cat solvertable.$$.sql | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER -p$PB_DATA_DB_PASS $PB_DATA_DB_NAME
+
+echo "Restoring privs table"
+cat privstable.$$.sql | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER -p$PB_DATA_DB_PASS $PB_DATA_DB_NAME
+
+echo "Restoring config table"
+cat configtable.$$.sql | mysql -h $PB_DATA_DB_HOST -P $PB_DATA_DB_PORT -u $PB_DATA_DB_USER -p$PB_DATA_DB_PASS $PB_DATA_DB_NAME

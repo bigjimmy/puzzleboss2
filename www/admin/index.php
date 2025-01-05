@@ -72,6 +72,60 @@ It will NOT delete the discord chat room. Do that in discord (or find a puzztech
 </table>
 <br>
 
+<hr>
+<h3>Check Privileges</h3>
+<table border="2" cellpadding="3">
+  <tr>
+    <td>To check if a user has a specific privilege:</td>
+    <td valign="middle">
+      Enter Username:
+      <form action="../checkpriv.php" method="post">
+	<input type="text" name="name">
+        <input type="hidden" name="priv" value="puzztech">
+        <input type="submit" name="check" value="Check Puzztech Priv">
+      </form>
+    <td valign="middle">
+      Enter Username:
+      <form action="../checkpriv.php" method="post">
+        <input type="text" name="name">
+        <input type="hidden" name="priv" value="puzzleboss">
+        <input type="submit" name="check" value="Check Puzzleboss Priv">
+      </form>
+  </tr>
+</table>
+
+<hr>
+<h3>Set Privileges</h3>
+<table border="2" cellpadding="3">
+  <tr>
+    <td>To modify a role for a user:</td>
+    <td valign="middle">
+      Enter Username:
+      <form action="../setpriv.php" method="post">
+        <input type="text" name="name">
+	<input type="hidden" name="priv" value="puzztech">
+	<input type="radio" name="allowed" id="YES" value="YES">
+        <label for="YES">YES</label>
+	<input type="radio" name="allowed" id="NO" value="NO">
+        <label for="NO">NO</label>
+        <input type="submit" name="setpriv" value="Set Puzztech Priv">
+      </form>
+    <td valign="middle">
+      Enter Username:
+      <form action="../setpriv.php" method="post">
+        <input type="text" name="name">
+        <input type="hidden" name="priv" value="puzzleboss">
+        <input type="radio" name="allowed" id="YES" value="YES">
+        <label for="YES">YES</label>
+        <input type="radio" name="allowed" id="NO" value="NO">
+        <label for="NO">NO</label>
+        <input type="submit" name="setpriv" value="Set Puzzleboss Priv">
+      </form>
+  </tr>
+</table>
+
+
+
 </main>
 <footer><br><hr><br><a href="/pb/">Puzzleboss Home</a></footer>
 </body>

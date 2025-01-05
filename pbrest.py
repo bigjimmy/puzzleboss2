@@ -105,6 +105,47 @@ def get_all_puzzles():
         "puzzles": puzzlist,
     }
 
+@app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
+@swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
+def check_priv(priv,uid):
+    debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid, )) 
+        rv = cursor.fetchone()
+    except:
+        raise Exception("Exception querying database for privs)")
+
+    debug_log(3, "in database user %s ACL is %s" % (uid, rv))
+
+    if rv == None:
+        return {
+            "status": "ok",
+            "allowed": False,
+        }
+
+    try:
+        privanswer = rv[priv]
+    except:
+        raise Exception(
+                "Exception in reading priv %s from user %s ACL. No such priv?"
+                % (
+                    priv,
+                    uid,
+                  )
+                )
+
+    if privanswer == "YES":
+        return {
+            "status": "ok",
+            "allowed": True,
+        }
+    else:
+        return {
+            "status": "ok",
+            "allowed": False,
+        }   
 
 @app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
 @swag_from("swag/getpuzzleid.yaml", endpoint="puzzle_id", methods=["GET"])
@@ -543,6 +584,31 @@ def create_round():
     )
 
     return {"status": "ok", "round": {"name": roundname}}
+
+@app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
+@swag_from("swag/putrbacprivuid.yaml", endpoint="post_rbac_priv_uid", methods=["POST"])
+def set_priv(priv,uid):
+    debug_log(4, "start. priv: %s, uid %s" % (priv, uid))
+    try:
+        data = request.get_json()
+        debug_log(4, "post data: %s" % (data))
+        value = data["allowed"]
+        if ( value != "YES" and value != "NO"):
+            raise Exception("Improper privset allowed syntax. e.g. {'allowed':'YES'} or {'allowed':'NO'}")
+    except Exception as e:
+        raise Exception("Error interpreting privset JSON allowed field: %s" % (e))
+    debug_log(3, "Attempting privset of uid %s:  %s = %s" % (uid, priv, value))
+
+    # Actually insert into the database
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(f"INSERT INTO privs (uid, {priv}) VALUES (%s, %s) ON DUPLICATE KEY UPDATE uid=%s, {priv}=%s", (uid, value, uid, value))
+        conn.commit()
+    except Exception as e:
+        raise Exception("Error modifying priv table for uid %s priv %s value %s. Is priv string valid?" % (uid, priv, value))
+
+    return {"status": "ok"}
 
 
 @app.route("/rounds/<id>/<part>", endpoint="post_round_part", methods=["POST"])

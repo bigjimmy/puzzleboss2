@@ -1,0 +1,27 @@
+description: Post Priv Change/Set
+consumes:
+    - application/json
+parameters:
+    - name: priv
+      in: path
+      type: string
+      description: privilege we are trying to set (e.g. puzztech)
+    - name: uid
+      in: path
+      type: integer
+      description: ID of solver to set
+    - name: body
+      in: body
+      required: true
+      schema:
+        id: privset
+        type: object
+        properties:
+              allowed:
+                  type: string
+                  enum: ["YES", "NO"]
+                  example: "YES"
+                  description: YES to allow, NO to disallow
+responses:
+    200:
+        description: Update of solver priv OK

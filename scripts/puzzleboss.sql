@@ -101,6 +101,21 @@ CREATE TABLE `log` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `privs`
+--
+
+DROP TABLE IF EXISTS `privs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `privs` (
+  `uid` int(11) NOT NULL,
+  `puzztech` enum('NO','YES') NOT NULL DEFAULT 'NO',
+  `puzzleboss` enum('NO','YES') NOT NULL DEFAULT 'NO',
+  PRIMARY KEY (`uid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `puzzle`
 --
 
@@ -461,6 +476,7 @@ DELIMITER ;
 --
 -- Temporary table structure for view `solver_curpuzzle`
 --
+
 
 DROP TABLE IF EXISTS `solver_curpuzzle`;
 /*!50001 DROP VIEW IF EXISTS `solver_curpuzzle`*/;
