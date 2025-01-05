@@ -140,8 +140,27 @@ It will NOT delete the discord chat room. Do that in discord (or find a puzztech
   </tr>
 </table>
 
+<hr>
+<h3>Config Edit</h3>
+<p>BE CAREFUL:</br>
+Changes to these configuration values take effect immediately and are not reversible. They may cause irreperable damage or breakage to the hunt if set improperly. Please proceed with caution. Set only one at a time.
+</p>
+<table border="2" cellpadding="3">
+<tr><th>Config Variable</th><th>Current Value</th><th>Desired Value</th></tr>
+<?php
+foreach ($config as $key => $value){
+  echo "<tr><td>".$key."</td>";
+  echo "<td bgcolor=lightgray><code>".$value."</code></td>";
+  echo "<td style='width:90%'><form id='".$key."' action='changeconfig.php' method='post'>";
+  echo "<textarea name='configval' cols='40' rows='10' form='".$key."'></textarea>";
+  #echo "<input type='text' name='configval'>";
+  echo "<input type='hidden' name='key' value='".$key."'>";
+  echo "<input type='submit' name='changeconfig' value='Set Value'>";
+  echo "</form></td></tr>";
+}
 
-
+?>
+</table>
 </main>
 <footer><br><hr><br><a href="/pb/">Puzzleboss Home</a></footer>
 </body>
