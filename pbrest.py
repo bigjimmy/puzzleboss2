@@ -386,8 +386,8 @@ def get_full_diff():
     return {"status": "ok", "versions": versionlist}
 
 
-@app.route("/config", endpoint="config", methods=["GET"])
-# @swag_from("swag/getconfig.yaml", endpoint="config", methods=["GET"])
+@app.route("/config", endpoint="getconfig", methods=["GET"])
+# @swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
 def get_config():
     debug_log(4, "start")
     try:
@@ -404,6 +404,26 @@ def get_config():
 
 # POST/WRITE Operations
 
+@app.route("/config", endpoint="putconfig", methods=["POST"])
+# @swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
+def put_config():
+    debug_log(4, "start")
+    try:
+        data = request.get_json()
+        mykey = data["cfgkey"]
+        myval = data["cfgval"]
+        debug_log(3, "Config change attempt.  struct: %s key %s val %s" % (str(data), mykey, myval))
+    except Exception as e:
+        raise Exception("Exception Interpreting input data for config change: %s" % e)
+    conn = mysql.connection
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s", (mykey, myval, mykey, myval)
+    )
+    conn.commit()
+
+    debug_log(2, "Config value %s changed successfully" % mykey)
+    return {"status": "ok"}
 
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
 @swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
