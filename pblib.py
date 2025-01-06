@@ -3,12 +3,26 @@ import inspect
 import datetime
 import bleach
 import smtplib
+import MySQLdb
+from flask import Flask, request
+from flask_restful import Api
+from flask_mysqldb import MySQL
 from email.message import EmailMessage
 
 with open("puzzleboss.yaml") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 huntfolderid = "undefined"
+
+try:
+  db_connection = MySQLdb.connect(config["MYSQL"]["HOST"], config["MYSQL"]["USERNAME"], config["MYSQL"]["PASSWORD"], config["MYSQL"]["DATABASE"])
+  cursor = db_connection.cursor()
+  cursor.execute("SELECT * FROM config")
+  configdump = cursor.fetchall()
+  db_connection.close()
+  configstruct = dict(configdump)
+except Exception as e:
+  print("FATAL EXCEPTION reading and expanding configuration from database:  %s" % e)
 
 
 def debug_log(sev, message):
@@ -28,7 +42,6 @@ def debug_log(sev, message):
             flush=True,
         )
     return
-
 
 def sanitize_string(mystring):
     outstring = "".join(e for e in mystring if e.isalnum())

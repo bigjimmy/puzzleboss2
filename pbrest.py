@@ -25,7 +25,6 @@ mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
 
-
 @app.errorhandler(Exception)
 def handle_error(e):
     code = 500
@@ -462,7 +461,7 @@ def create_puzzle():
     round_drive_id = round_drive_uri.split("/")[-1]
 
     # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
-    drive_uri = "%s/doc.php?pname=%s" % (config["APP"]["BIN_URI"], puzname)
+    drive_uri = "%s/doc.php?pname=%s" % (configstruct["BIN_URI"], puzname)
     chat_channel = chat_create_channel_for_puzzle(
         puzname, round_name, puzuri, drive_uri
     )
@@ -1233,7 +1232,6 @@ def delete_pb_solver(username):
     cursor.execute("DELETE from solver where name = %s", (username,))
     conn.commit()
     return 0
-
 
 if __name__ == "__main__":
     if initdrive() != 0:
