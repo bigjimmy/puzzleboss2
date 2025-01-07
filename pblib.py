@@ -34,7 +34,7 @@ def debug_log(sev, message):
     # 4 = debug
     # 5 = trace
 
-    if config["APP"]["LOGLEVEL"] >= sev:
+    if int(configstruct["LOGLEVEL"]) >= sev:
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         print(
             "[%s] [SEV%s] %s: %s"
@@ -68,10 +68,10 @@ def email_user_verification(email, code, fullname, username):
                         (replies to this email will most likely not reach anybody)
                         """ % (
         email,
-        config["APP"]["TEAMNAME"],
+        configstruct["TEAMNAME"],
         username,
         fullname,
-        config["APP"]["ACCT_URI"],
+        configstruct["ACCT_URI"],
         code,
     )
 
@@ -79,11 +79,11 @@ def email_user_verification(email, code, fullname, username):
 
     try:
         msg = EmailMessage()
-        msg["Subject"] = "Finish %s account sign-up." % config["APP"]["TEAMNAME"]
-        msg["From"] = "%s" % config["APP"]["REGEMAIL"]
+        msg["Subject"] = "Finish %s account sign-up." % configstruct["TEAMNAME"]
+        msg["From"] = "%s" % configstruct["REGEMAIL"]
         msg["To"] = email
         msg.set_content(messagecontent)
-        s = smtplib.SMTP(config["APP"]["MAILRELAY"])
+        s = smtplib.SMTP(configstruct["MAILRELAY"])
         s.send_message(msg)
         s.quit()
 
