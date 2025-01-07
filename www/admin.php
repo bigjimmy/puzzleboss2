@@ -158,8 +158,19 @@ foreach ($config as $key => $value){
   echo "<input type='submit' name='changeconfig' value='Set Value'>";
   echo "</form></td></tr>";
 }
-
 ?>
+</table>
+<hr>
+<h3>Add Config Variable:</h3>
+
+<form id="newconfig" action='changeconfig.php' method='post'>
+<table border="2" cellpadding="3">
+<tr><th>New Config Key</th><th>New Config Value</th><th></th>
+<tr><td><input type="text" name="key"</td>
+<td><textarea name='configval' cols='40' rows='10' form="newconfig"></textarea></td>
+<td><input type="submit" name="changeconfig" value='Set New Config Entry'></td></tr>
+
+
 </table>
 </main>
 <footer><br><hr><br><a href="/pb/">Puzzleboss Home</a></footer>

@@ -65,18 +65,15 @@ Setting config key $key to:<br>
 </table>
 HTML;
 
-#  $uid = getuid($name);
-#  $apiurl = "/rbac/" . $priv . "/" . $uid;
-#  $data = array('allowed' => $allowed);
-#  try {
-#    $responseobj = postapi($apiurl, $data);
-#  } catch (Exception $e) {
-#    exit_with_api_error($e);
-#    throw $e;
-#  }
-#  assert_api_success($responseobj);
-
-  echo 'JUST TESTING FOR NOW. STUB DOES NOT DO ANYTHING';
+  $apiurl = "/config";
+  $data = array('cfgkey' => $key, 'cfgval' => $configval);
+  try {
+    $responseobj = postapi($apiurl, $data);
+  } catch (Exception $e) {
+    exit_with_api_error($e);
+    throw $e;
+  }
+  assert_api_success($responseobj);
 
   echo '<br><div class="success">';
   echo 'OK. config ' . $key . ' is ' . $configval;

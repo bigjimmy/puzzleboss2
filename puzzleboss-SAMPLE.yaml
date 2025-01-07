@@ -1,11 +1,3 @@
-APP:
-    LOGLEVEL: 3
-    BIN_URI: https://your-url.com/puzzleboss
-    EMAILRELAY: your-email-server
-    REGEMAIL: "adminaccount@your-url.com"
-    ACCT_URI: https://your-url.com/account
-    TEAMNAME: "Your team name"
-
 HUNTSITE:
     DOMAIN: https://puzzles.mit.edu
     SESSIONID: YOURSESSIONCOOKIE

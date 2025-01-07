@@ -5,7 +5,6 @@ global $pbroot;
 global $bookmarkuri;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
-$pbroot = $yaml['APP']['BIN_URI'];
 $apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
 $noremoteusertestmode = "true"; //TODO: eliminate this
@@ -13,6 +12,7 @@ $noremoteusertestmode = "true"; //TODO: eliminate this
 //TODO: add error handling here for mandatory config values. should direct user to admin page for config editing.
 $config = readapi('/config')->config;
 $bookmarkuri = $config->bookmarklet_js;
+$pbroot = $config->BIN_URI;
 
 function readapi($apicall) {
   $url = $GLOBALS['apiroot'] . $apicall;

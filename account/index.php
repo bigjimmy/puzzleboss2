@@ -56,7 +56,6 @@ global $apiroot;
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 $apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
 $google_domain = $yaml['GOOGLE']['DOMAINNAME'];
-$regemail = $yaml['APP']['REGEMAIL'];
 $example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
 
 function readapi($apicall) {
@@ -72,6 +71,12 @@ function readapi($apicall) {
   curl_close($curl);
   return json_decode($resp, true);
 }
+
+//TODO: add error handling here for mandatory config values. should direct user to admin page for config editing.
+$config = readapi('/config')->config;
+$bookmarkuri = $config->bookmarklet_js;
+$pbroot = $config->BIN_URI;
+$regemail = $config->REGEMAIL;
 
 function postapi($apicall, $data) {
   $url  = $GLOBALS['apiroot'] . $apicall;

@@ -3,12 +3,26 @@ import inspect
 import datetime
 import bleach
 import smtplib
+import MySQLdb
+from flask import Flask, request
+from flask_restful import Api
+from flask_mysqldb import MySQL
 from email.message import EmailMessage
 
 with open("puzzleboss.yaml") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
 huntfolderid = "undefined"
+
+try:
+  db_connection = MySQLdb.connect(config["MYSQL"]["HOST"], config["MYSQL"]["USERNAME"], config["MYSQL"]["PASSWORD"], config["MYSQL"]["DATABASE"])
+  cursor = db_connection.cursor()
+  cursor.execute("SELECT * FROM config")
+  configdump = cursor.fetchall()
+  db_connection.close()
+  configstruct = dict(configdump)
+except Exception as e:
+  print("FATAL EXCEPTION reading and expanding configuration from database:  %s" % e)
 
 
 def debug_log(sev, message):
@@ -20,7 +34,7 @@ def debug_log(sev, message):
     # 4 = debug
     # 5 = trace
 
-    if config["APP"]["LOGLEVEL"] >= sev:
+    if int(configstruct["LOGLEVEL"]) >= sev:
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         print(
             "[%s] [SEV%s] %s: %s"
@@ -28,7 +42,6 @@ def debug_log(sev, message):
             flush=True,
         )
     return
-
 
 def sanitize_string(mystring):
     outstring = "".join(e for e in mystring if e.isalnum())
@@ -55,10 +68,10 @@ def email_user_verification(email, code, fullname, username):
                         (replies to this email will most likely not reach anybody)
                         """ % (
         email,
-        config["APP"]["TEAMNAME"],
+        configstruct["TEAMNAME"],
         username,
         fullname,
-        config["APP"]["ACCT_URI"],
+        configstruct["ACCT_URI"],
         code,
     )
 
@@ -66,11 +79,11 @@ def email_user_verification(email, code, fullname, username):
 
     try:
         msg = EmailMessage()
-        msg["Subject"] = "Finish %s account sign-up." % config["APP"]["TEAMNAME"]
-        msg["From"] = "%s" % config["APP"]["REGEMAIL"]
+        msg["Subject"] = "Finish %s account sign-up." % configstruct["TEAMNAME"]
+        msg["From"] = "%s" % configstruct["REGEMAIL"]
         msg["To"] = email
         msg.set_content(messagecontent)
-        s = smtplib.SMTP(config["APP"]["MAILRELAY"])
+        s = smtplib.SMTP(configstruct["MAILRELAY"])
         s.send_message(msg)
         s.quit()
 

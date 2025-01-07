@@ -25,7 +25,6 @@ mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
 
-
 @app.errorhandler(Exception)
 def handle_error(e):
     code = 500
@@ -386,8 +385,8 @@ def get_full_diff():
     return {"status": "ok", "versions": versionlist}
 
 
-@app.route("/config", endpoint="config", methods=["GET"])
-# @swag_from("swag/getconfig.yaml", endpoint="config", methods=["GET"])
+@app.route("/config", endpoint="getconfig", methods=["GET"])
+# @swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
 def get_config():
     debug_log(4, "start")
     try:
@@ -404,6 +403,26 @@ def get_config():
 
 # POST/WRITE Operations
 
+@app.route("/config", endpoint="putconfig", methods=["POST"])
+# @swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
+def put_config():
+    debug_log(4, "start")
+    try:
+        data = request.get_json()
+        mykey = data["cfgkey"]
+        myval = data["cfgval"]
+        debug_log(3, "Config change attempt.  struct: %s key %s val %s" % (str(data), mykey, myval))
+    except Exception as e:
+        raise Exception("Exception Interpreting input data for config change: %s" % e)
+    conn = mysql.connection
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s", (mykey, myval, mykey, myval)
+    )
+    conn.commit()
+
+    debug_log(2, "Config value %s changed successfully" % mykey)
+    return {"status": "ok"}
 
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
 @swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
@@ -442,7 +461,7 @@ def create_puzzle():
     round_drive_id = round_drive_uri.split("/")[-1]
 
     # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
-    drive_uri = "%s/doc.php?pname=%s" % (config["APP"]["BIN_URI"], puzname)
+    drive_uri = "%s/doc.php?pname=%s" % (configstruct["BIN_URI"], puzname)
     chat_channel = chat_create_channel_for_puzzle(
         puzname, round_name, puzuri, drive_uri
     )
@@ -1213,7 +1232,6 @@ def delete_pb_solver(username):
     cursor.execute("DELETE from solver where name = %s", (username,))
     conn.commit()
     return 0
-
 
 if __name__ == "__main__":
     if initdrive() != 0:
