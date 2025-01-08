@@ -11,10 +11,10 @@ from ldap import modlist
 def verify_email_for_user(email, username):
     debug_log(4, "start, called with (email, username): %s, %s" % (email, username))
 
-    ldapconn = ldap.initialize("ldap://%s" % config["LDAP"]["HOST"])
+    ldapconn = ldap.initialize("ldap://%s" % configstruct["LDAP_HOST"])
 
     result = ldapconn.search_s(
-        config["LDAP"]["DOMAIN"], ldap.SCOPE_SUBTREE, "email=%s" % email, ["uid"]
+        configstruct["LDAP_DOMAIN"], ldap.SCOPE_SUBTREE, "email=%s" % email, ["uid"]
     )
     debug_log(4, "result of ldap search for %s is %s" % (email, result))
 
@@ -30,11 +30,11 @@ def verify_email_for_user(email, username):
 def delete_user(username):
     debug_log(4, "start, called with username %s" % username)
 
-    ldapconn = ldap.initialize("ldap://%s" % config["LDAP"]["HOST"])
-    ldapconn.simple_bind_s(config["LDAP"]["ADMINDN"], config["LDAP"]["ADMINPW"])
+    ldapconn = ldap.initialize("ldap://%s" % configstruct["LDAP_HOST"])
+    ldapconn.simple_bind_s(configstruct["LDAP_ADMINDN"], configstruct["LDAP_ADMINPW"])
 
-    debug_log(4, "admin bound to ldap with dn: %s" % config["LDAP"]["ADMINDN"])
-    userdn = "uid=%s,%s" % (username, config["LDAP"]["DOMAIN"])
+    debug_log(4, "admin bound to ldap with dn: %s" % configstruct["LDAP_ADMINDN"])
+    userdn = "uid=%s,%s" % (username, configstruct["LDAP_DOMAIN"])
 
     errmsg = ""
 
@@ -84,12 +84,12 @@ def add_or_update_user(username, firstname, lastname, email, password):
 
     debug_log(4, "based on user existence, operation requested is: %s" % operation)
 
-    ldapconn = ldap.initialize("ldap://%s" % config["LDAP"]["HOST"])
-    ldapconn.simple_bind_s(config["LDAP"]["ADMINDN"], config["LDAP"]["ADMINPW"])
+    ldapconn = ldap.initialize("ldap://%s" % configstruct["LDAP_HOST"])
+    ldapconn.simple_bind_s(configstruct["LDAP_ADMINDN"], configstruct["LDAP_ADMINPW"])
 
-    debug_log(4, "admin bound to ldap with dn: %s" % config["LDAP"]["ADMINDN"])
+    debug_log(4, "admin bound to ldap with dn: %s" % configstruct["LDAP_ADMINDN"])
 
-    userdn = "uid=%s,%s" % (username, config["LDAP"]["DOMAIN"])
+    userdn = "uid=%s,%s" % (username, configstruct["LDAP_DOMAIN"])
 
     fullname = "%s %s" % (firstname, lastname)
     mailaddr = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
@@ -105,7 +105,7 @@ def add_or_update_user(username, firstname, lastname, email, password):
         newuserattrs["userPassword"] = password.encode("utf-8")
         newuserattrs["email"] = email.encode("utf-8")
         newuserattrs["mail"] = mailaddr.encode("utf-8")
-        newuserattrs["o"] = config["LDAP"]["LDAPO"].encode("utf-8")
+        newuserattrs["o"] = configstruct["LDAP_LDAPO"].encode("utf-8")
 
         # Add to google
         googaddresponse = add_user_to_google(username, firstname, lastname, password)
