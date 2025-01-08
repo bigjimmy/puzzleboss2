@@ -15,9 +15,9 @@
     - MySQL (see below for schema load and config instructions)
     
 - copy puzzleboss-SAMPLE.yaml into puzzleboss.yaml and edit appropriately:
-    - LOGLEVELs: 0 = FATAL, 1=CRIT, 2=WARN, 3=INFO, 4=DEBUG, 5=TRACE
-    - BIN_URI: URI root for web-accessible tools, forms, pages (where www subdir will be reachable publically)
-    - The rest should be self explanatory
+    - database access parameters
+    - API endpoint access parameters
+    - Other config as noted in sample file
 
 - Apache config:
     - www subdir should be a web docroot or alias
@@ -42,6 +42,12 @@
 - Running the REST Api Service:
     - Start up pbrest.py: Will run on localhost:5000. 
     - For actual multi-client use, install gunicorn and use the wsgi.py app object provided. Is safe to run on multiple servers at once for scale.
+
+- Initial Configuration:
+    - Make sure one solver is provisioned via normal account setup procedure and set in privs table to have "puzztech" permissions = YES.
+    - Use /pb/admin.php to override the default config values as needed.
+    - Alternatively use phpmyadmin or mysql access directly to update config values in the 'config' table in the database.
+    - Restart puzzleboss to make new config take effect.
     
 - Swagger API Doc:
     - Is accessible at localhost:5000/apidocs (or appropriate proxied URL if behind a proxy) by just running pbapi.py.

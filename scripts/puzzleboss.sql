@@ -81,6 +81,13 @@ CREATE TABLE `config` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+LOCK TABLES `config` WRITE;
+/*!40000 ALTER TABLE `config` DISABLE KEYS */;
+INSERT INTO `config` VALUES ('ACCT_URI', 'https://yourdomain.org/account'), ('BIN_URI', 'https://yourdomain.org/pb'), ('bookmarklet_js', 'insert complicated bookmarklet javascript here'), ('LOGLEVEL','3'), ('MAILRELAY', 'mail-server.yourdomain.org'), ('REGEMAIL', 'admin@yourdomain.org'), ('TEAMNAME', 'Default Team Name');
+/*!40000 ALTER TABLE `config` ENABLE KEYS */;
+UNLOCK TABLES;
+
+
 --
 -- Table structure for table `log`
 --
