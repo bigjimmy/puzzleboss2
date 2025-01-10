@@ -7,13 +7,6 @@ PUZZCORD:
     PUZZCORD_PORT: 2134
     SKIP_PUZZCORD: "false"
 
-GOOGLE:
-    # Folder will be created when first round is created
-    HUNT_FOLDER_NAME: "My Hunt Folder 2099"
-    SKIP_GOOGLE_API: "false"
-    DOMAINNAME: your-url.com
-    SHEETS_TEMPLATE_ID: "18rA6_fil1l-yA9JS33LIiMZClJQUVSRtXWHNw-cWUKw"
-
 MYSQL:
     USERNAME: puzzleboss
     PASSWORD: YOURPASSWORD
@@ -26,11 +19,3 @@ BIGJIMMYBOT:
     THREADCOUNT: 5
     PUZZLEPAUSETIME: 1
     AUTOASSIGN: "true"
-
-LDAP:
-    HOST: ldaphostname.your-url.com
-    DOMAIN: "ou=people,dc=your-url,dc=com"
-    ADMINDN: "cn=admin,dc=your-url,dc=com"
-    ADMINPW: "password"
-    LDAPO: "Your Team"
-    
