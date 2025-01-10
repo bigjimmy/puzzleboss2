@@ -128,7 +128,7 @@ def add_or_update_user(username, firstname, lastname, email, password):
         # Add to solver DB
         postbody = {"fullname": "%s %s" % (firstname, lastname), "name": username}
         solveraddresponse = requests.post(
-            "%s/solvers" % config["BIGJIMMYBOT"]["APIURI"], json=postbody
+            "%s/solvers" % config["API"]["APIURI"], json=postbody
         )
         debug_log(
             4,

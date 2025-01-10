@@ -9,7 +9,7 @@ import threading
 import queue
 from queue import *
 from threading import *
-from pblib import debug_log, sanitize_string, config
+from pblib import *
 from pbgooglelib import *
 from pbdiscordlib import *
 
@@ -41,7 +41,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             queueLock.release()
 
             # puzzle-pull wait time per thread to avoid API limits
-            time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
+            time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
 
             debug_log(
                 4,
@@ -55,21 +55,21 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             # Lots of annoying time string conversions here between mysql and google
             lastpuzzleacttime = datetime.datetime.fromordinal(1)
             myreq = "%s/puzzles/%s/lastact" % (
-                config["BIGJIMMYBOT"]["APIURI"],
+                config["API"]["APIURI"],
                 mypuzzle["id"],
             )
             try:
                 responsestring = requests.get(myreq).text
             except Exception as e:
               debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
-              time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
+              time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
               continue
 
             try:
                 mypuzzlelastact = json.loads(responsestring)["puzzle"]["lastact"]
             except Exception as e:
               debug_log(1, "Error interpreting puzzle info from puzzleboss. Corruption?: %s" % e)
-              time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
+              time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
               continue
 
             debug_log(
@@ -153,7 +153,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                         solverinfo = json.loads(
                             requests.get(
                                 "%s/solvers/%s"
-                                % (config["BIGJIMMYBOT"]["APIURI"], mysolverid)
+                                % (config["API"]["APIURI"], mysolverid)
                             ).text
                         )["solver"]
 
@@ -171,7 +171,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                             }
                             actupresponse = requests.post(
                                 "%s/puzzles/%s/lastact"
-                                % (config["BIGJIMMYBOT"]["APIURI"], mypuzzle["id"]),
+                                % (config["API"]["APIURI"], mypuzzle["id"]),
                                 json=databody,
                             )
 
@@ -208,7 +208,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                 "[Thread: %s] Last solver activity for %s was at %s"
                                 % (threadname, solverinfo["name"], lastsolveracttime),
                             )
-                            if config["BIGJIMMYBOT"]["AUTOASSIGN"] == "true":
+                            if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
                                 if revisiontime > lastsolveracttime:
                                     debug_log(
                                         3,
@@ -220,7 +220,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
 
                                     assignmentresponse = requests.post(
                                         "%s/solvers/%s/puzz"
-                                        % (config["BIGJIMMYBOT"]["APIURI"], mysolverid),
+                                        % (config["API"]["APIURI"], mysolverid),
                                         json=databody,
                                     )
                                     debug_log(
@@ -241,7 +241,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
 def solver_from_email(email):
     debug_log(4, "start. called with %s" % email)
     solverslist = json.loads(
-        requests.get("%s/solvers" % config["BIGJIMMYBOT"]["APIURI"]).text
+        requests.get("%s/solvers" % config["API"]["APIURI"]).text
     )["solvers"]
     for solver in solverslist:
         if solver["name"].lower() == email.split("@")[0].lower():
@@ -259,10 +259,10 @@ if __name__ == "__main__":
 
     while True:
         try:
-            r = json.loads(requests.get("%s/all" % config["BIGJIMMYBOT"]["APIURI"]).text)
+            r = json.loads(requests.get("%s/all" % config["API"]["APIURI"]).text)
         except Exception as e:
               debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
-              time.sleep(config["BIGJIMMYBOT"]["PUZZLEPAUSETIME"])
+              time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
               continue
 
         debug_log(5, "api return: %s" % r)
@@ -288,7 +288,7 @@ if __name__ == "__main__":
         )
 
         # initialize threads
-        for i in range(1, config["BIGJIMMYBOT"]["THREADCOUNT"] + 1):
+        for i in range(1, configstruct["BIGJIMMY_THREADCOUNT"] + 1):
             thread = puzzThread(threadID, i, workQueue, fromtime)
             thread.start()
             threads.append(thread)

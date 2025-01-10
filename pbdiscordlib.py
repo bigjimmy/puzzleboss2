@@ -17,7 +17,7 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
     retval = call_puzzcord("create_json %s %s" % (puzname, topic))
     debug_log(4, "retval from call_puzzcord is %s" % retval)
 
-    if config["PUZZCORD"].get("SKIP_PUZZCORD", "false") == "true":
+    if configstruct["SKIP_PUZZCORD"] == "true":
         debug_log(3, "SKIP_PUZZCORD true. stubbing channel id/uri")
         retval = '{"id":"0xtestchannelid", "url":"http://testdiscordurl.com"}'
 
@@ -54,11 +54,11 @@ def chat_announce_solved(puzzlename):
 
 def call_puzzcord(command):
     debug_log(4, "start, called with (command): %s" % command)
-    if config["PUZZCORD"].get("SKIP_PUZZCORD", "false") == "true":
+    if configstruct["SKIP_PUZZCORD"] == "true":
         return "OK"
 
     sock = socket.create_connection(
-        (config["PUZZCORD"]["PUZZCORD_HOST"], config["PUZZCORD"]["PUZZCORD_PORT"]),
+        (configstruct["PUZZCORD_HOST"], configstruct["PUZZCORD_PORT"]),
         timeout=2,
     )
     response = "error"

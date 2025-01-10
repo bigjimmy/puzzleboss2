@@ -54,7 +54,7 @@ if (array_key_exists('debug', $_GET)) {
 global $apiroot;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
-$apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
+$apiroot = $yaml['API']['APIURI'];
 $example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
 
 function readapi($apicall) {
