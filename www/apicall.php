@@ -1,6 +1,11 @@
 <?php
 require('puzzlebosslib.php');
 header('Content-Type: application/json');
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Headers: *");
+header('Access-Control-Allow-Credentials: true');
+header("Access-Control-Allow-Methods: GET, OPTIONS");
+
 
 if (!isset($_GET['apicall']) || empty($_GET['apicall'])) {
     http_response_code(500);
