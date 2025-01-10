@@ -55,7 +55,6 @@ global $apiroot;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 $apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
-$google_domain = $yaml['GOOGLE']['DOMAINNAME'];
 $example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
 
 function readapi($apicall) {
@@ -77,6 +76,8 @@ $config = readapi('/config')->config;
 $bookmarkuri = $config->bookmarklet_js;
 $pbroot = $config->BIN_URI;
 $regemail = $config->REGEMAIL;
+$google_domain = $config->DOMAINNAME;
+
 
 function postapi($apicall, $data) {
   $url  = $GLOBALS['apiroot'] . $apicall;

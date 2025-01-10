@@ -57,7 +57,7 @@ def initadmin():
 def initdrive():
     debug_log(4, "start")
 
-    if config["GOOGLE"]["SKIP_GOOGLE_API"] == "true":
+    if configstruct["SKIP_GOOGLE_API"] == "true":
         debug_log(3, "google docs auth and init skipped by config.")
         return 0
 
@@ -86,7 +86,7 @@ def initdrive():
 
     service = build("drive", "v3", credentials=creds)
 
-    foldername = config["GOOGLE"]["HUNT_FOLDER_NAME"]
+    foldername = configstruct["HUNT_FOLDER_NAME"]
 
     # Check if hunt folder exists
     huntfoldercheck = (
@@ -160,7 +160,7 @@ def get_revisions(myfileid):
 def create_round_folder(foldername):
     debug_log(4, "start with foldername: %s" % foldername)
 
-    if config["GOOGLE"]["SKIP_GOOGLE_API"] == "true":
+    if configstruct["SKIP_GOOGLE_API"] == "true":
         debug_log(3, "google round folder creation skipped by config.")
         return "xxxskippedbyconfigxxx"
 
@@ -203,7 +203,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     )
     name = puzzledict["name"]
 
-    if config["GOOGLE"]["SKIP_GOOGLE_API"] == "true":
+    if configstruct["SKIP_GOOGLE_API"] == "true":
         debug_log(3, "google puzzle creation skipped by config.")
         return "xxxskippedbyconfigxxx"
 
@@ -215,7 +215,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         "mimeType": "application/vnd.google-apps.spreadsheet",
     }
 
-    if config["GOOGLE"]["SHEETS_TEMPLATE_ID"] == "none":
+    if configstruct["SHEETS_TEMPLATE_ID"] == "none":
         file = service.files().create(body=file_metadata, fields="id").execute()
         debug_log(4, "file ID returned from creation: %s" % file.get("id"))
     else:
@@ -223,7 +223,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
             service.files()
             .copy(
                 body=file_metadata,
-                fileId=config["GOOGLE"]["SHEETS_TEMPLATE_ID"],
+                fileId=configstruct["SHEETS_TEMPLATE_ID"],
                 fields="id",
             )
             .execute()
@@ -264,7 +264,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         return ",".join(fields)
 
     # Create new page if we're not doing a template copy
-    if config["GOOGLE"]["SHEETS_TEMPLATE_ID"] == "none":
+    if configstruct["SHEETS_TEMPLATE_ID"] == "none":
         requests.append(
             {
                 "addSheet": {
@@ -421,7 +421,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     permission = {
         "role": "writer",
         "type": "domain",
-        "domain": config["GOOGLE"]["DOMAINNAME"],
+        "domain": configstruct["DOMAINNAME"],
     }
     debug_log(5, "Response from sheetservice.spreadsheets.batchUpdate: %s" % response)
     permresp = (
@@ -471,7 +471,7 @@ def add_user_to_google(username, firstname, lastname, password):
     userbody = {
         "name": {"familyName": lastname, "givenName": firstname},
         "password": password,
-        "primaryEmail": "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"]),
+        "primaryEmail": "%s@%s" % (username, configstruct["DOMAINNAME"]),
     }
 
     debug_log(5, "Attempting to add user with post body: %s" % json.dumps(userbody))
@@ -495,7 +495,7 @@ def delete_google_user(username):
     initadmin()
 
     userservice = build("admin", "directory_v1", credentials=admincreds)
-    email = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
+    email = "%s@%s" % (username, configstruct["DOMAINNAME"])
 
     changeresponse = userservice.users().delete(userKey=email).execute()
     return "OK"
@@ -507,7 +507,7 @@ def change_google_user_password(username, password):
     initadmin()
 
     userservice = build("admin", "directory_v1", credentials=admincreds)
-    email = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
+    email = "%s@%s" % (username, configstruct["DOMAINNAME"])
     userbody = {"password": password, "primaryEmail": email}
 
     debug_log(

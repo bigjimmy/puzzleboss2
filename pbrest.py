@@ -1241,6 +1241,6 @@ if __name__ == "__main__":
         debug_log(
             3,
             "Authenticated to google drive. Existing drive folder %s found with id %s."
-            % (config["GOOGLE"]["HUNT_FOLDER_NAME"], pblib.huntfolderid),
+            % (configstruct["HUNT_FOLDER_NAME"], pblib.huntfolderid),
         )
     app.run()

@@ -92,7 +92,7 @@ def add_or_update_user(username, firstname, lastname, email, password):
     userdn = "uid=%s,%s" % (username, configstruct["LDAP_DOMAIN"])
 
     fullname = "%s %s" % (firstname, lastname)
-    mailaddr = "%s@%s" % (username, config["GOOGLE"]["DOMAINNAME"])
+    mailaddr = "%s@%s" % (username, configstruct["DOMAINNAME"])
 
     if operation == "new":
         newuserattrs = {}
