@@ -41,7 +41,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             queueLock.release()
 
             # puzzle-pull wait time per thread to avoid API limits
-            time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
+            time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
 
             debug_log(
                 4,
@@ -62,14 +62,14 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                 responsestring = requests.get(myreq).text
             except Exception as e:
               debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
-              time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
+              time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
               continue
 
             try:
                 mypuzzlelastact = json.loads(responsestring)["puzzle"]["lastact"]
             except Exception as e:
               debug_log(1, "Error interpreting puzzle info from puzzleboss. Corruption?: %s" % e)
-              time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
+              time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
               continue
 
             debug_log(
@@ -262,7 +262,7 @@ if __name__ == "__main__":
             r = json.loads(requests.get("%s/all" % config["API"]["APIURI"]).text)
         except Exception as e:
               debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
-              time.sleep(configstruct["BIGJIMMY_PUZZLEPAUSETIME"])
+              time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
               continue
 
         debug_log(5, "api return: %s" % r)
@@ -288,7 +288,7 @@ if __name__ == "__main__":
         )
 
         # initialize threads
-        for i in range(1, configstruct["BIGJIMMY_THREADCOUNT"] + 1):
+        for i in range(1, (int(configstruct["BIGJIMMY_THREADCOUNT"]) + 1)):
             thread = puzzThread(threadID, i, workQueue, fromtime)
             thread.start()
             threads.append(thread)
