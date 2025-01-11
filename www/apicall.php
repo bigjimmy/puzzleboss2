@@ -41,6 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     case "puzzle":
       echo json_encode(postapi(('/puzzles/' . $apiparam1 . '/' . $apiparam2), $post));
       break;
+    case "round":
+      echo json_encode(postapi(('/rounds/' . $apiparam1 . '/' . $apiparam2), $post));
+      break;
     default:
       http_response_code(500);
       die('Error: improper apicall specified.');
@@ -59,6 +62,9 @@ else {
       break;
     case "puzzle":
       echo json_encode(readapi('/puzzles/' . $apiparam1));
+      break;
+    case "round":
+      echo json_encode(readapi('/rounds/' . $apiparam1));
       break;
     default:
       http_response_code(500);
