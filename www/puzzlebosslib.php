@@ -5,7 +5,7 @@ global $pbroot;
 global $bookmarkuri;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
-$apiroot = $yaml['BIGJIMMYBOT']['APIURI'];
+$apiroot = $yaml['API']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
 $noremoteusertestmode = "true"; //TODO: eliminate this
 
