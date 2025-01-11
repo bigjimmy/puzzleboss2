@@ -4,7 +4,7 @@ header('Content-Type: application/json');
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: *");
 header('Access-Control-Allow-Credentials: true');
-header("Access-Control-Allow-Methods: GET, OPTIONS");
+header("Access-Control-Allow-Methods: GET, OPTIONS, POST");
 
 
 if (!isset($_GET['apicall']) || empty($_GET['apicall'])) {
@@ -22,22 +22,54 @@ else {
   $apiparam1 = $_GET['apiparam1'];
 }
 
-switch ($apicall) {
-  case "all":
-    echo json_encode(readapi('/all'));
-    break;
-  case "solver":
-    echo json_encode(readapi('/solvers/' . $apiparam1));
-    break;
-  case "solvers":
-    echo json_encode(readapi('/solvers'));
-    break;
-  case "puzzle":
-    echo json_encode(readapi('/puzzles/' . $apiparam1));
-    break;
-  default:
-    http_response_code(500);
-    die('Error: improper apicall specified.');
+if (!isset($_GET['apiparam2']) || empty($_GET['apiparam2'])) {
+  $apiparam2 = '';
+}
+
+else {
+  $apiparam2 = $_GET['apiparam2'];
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+  $post = json_decode(file_get_contents('php://input'));
+
+  switch ($apicall) {
+    case "solver":
+      echo json_encode(postapi(('/solvers/' . $apiparam1 . '/' . $apiparam2), $post));
+      break;
+    case "puzzle":
+      echo json_encode(postapi(('/puzzles/' . $apiparam1 . '/' . $apiparam2), $post));
+      break;
+    case "round":
+      echo json_encode(postapi(('/rounds/' . $apiparam1 . '/' . $apiparam2), $post));
+      break;
+    default:
+      http_response_code(500);
+      die('Error: improper apicall specified.');
+  }
+}
+else {
+  switch ($apicall) {
+    case "all":
+      echo json_encode(readapi('/all'));
+      break;
+    case "solver":
+      echo json_encode(readapi('/solvers/' . $apiparam1));
+      break;
+    case "solvers":
+      echo json_encode(readapi('/solvers'));
+      break;
+    case "puzzle":
+      echo json_encode(readapi('/puzzles/' . $apiparam1));
+      break;
+    case "round":
+      echo json_encode(readapi('/rounds/' . $apiparam1));
+      break;
+    default:
+      http_response_code(500);
+      die('Error: improper apicall specified.');
+  }
 }
 
 http_response_code(200);
