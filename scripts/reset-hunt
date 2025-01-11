@@ -28,7 +28,7 @@ echo "Enter the puzzleboss database name:"
 read PB_DATA_DB_NAME
 
 echo "Dumping solver table to solvertable.$$.sql"
-mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --add-drop-table $PB_DATA_DB_NAME solver > solvertable.$$.sql
+mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --set-gtid-purged=OFF --add-drop-table $PB_DATA_DB_NAME solver > solvertable.$$.sql
 
 if [[ $? != 0 ]]; then
         echo "Mysqldump failed.  Aborting."
@@ -36,7 +36,7 @@ if [[ $? != 0 ]]; then
 fi
 
 echo "Dumping privs table to privstable.$$.sql"
-mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --add-drop-table $PB_DATA_DB_NAME privs > privstable.$$.sql
+mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --set-gtid-purged=OFF --add-drop-table $PB_DATA_DB_NAME privs > privstable.$$.sql
 
 if [[ $? != 0 ]]; then
         echo "Mysqldump failed.  Aborting."
@@ -44,7 +44,7 @@ if [[ $? != 0 ]]; then
 fi
 
 echo "Dumping config table to configtable.$$.sql"
-mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --add-drop-table $PB_DATA_DB_NAME config > configtable.$$.sql
+mysqldump -h $PB_DATA_DB_HOST -u $PB_DATA_DB_USER -P $PB_DATA_DB_PORT -p$PB_DATA_DB_PASS --no-tablespaces --set-gtid-purged=OFF --add-drop-table $PB_DATA_DB_NAME config > configtable.$$.sql
 
 if [[ $? != 0 ]]; then
         echo "Mysqldump failed.  Aborting."
