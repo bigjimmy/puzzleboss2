@@ -105,7 +105,7 @@ def add_or_update_user(username, firstname, lastname, email, password):
         newuserattrs["userPassword"] = password.encode("utf-8")
         newuserattrs["email"] = email.encode("utf-8")
         newuserattrs["mail"] = mailaddr.encode("utf-8")
-        newuserattrs["o"] = configstruct["LDAP_LDAPO"].encode("utf-8")
+        newuserattrs["o"] = configstruct["LDAP_LDAP0"].encode("utf-8")
 
         # Add to google
         googaddresponse = add_user_to_google(username, firstname, lastname, password)
