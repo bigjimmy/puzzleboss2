@@ -1,0 +1,238 @@
+#main {
+    display: flex;
+    flex-direction: column;
+    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter {
+    box-shadow: 0 2px 4px 0 rgba(0,0,0,0.2);
+    width: fit-content;
+    padding: 5px;
+}
+
+#status > p{
+    margin: 0;
+}
+
+/*
+ * #Allrounds contains two columns; the left side is #Rounds, and the right
+ * side is #Roundshidden.
+ *
+ */
+ 
+#allrounds {
+    display: flex;
+    flex-direction: row;
+}
+
+#allrounds.usecolumns {
+    min-width: 100%;
+    width: max-content;
+}
+
+
+#roundshidden {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    gap: 10px;
+    margin-left: auto;
+}
+
+
+/*
+ * #Rounds is a grid flex-box of .rounds.
+ * Each .round consists of a header and a body.
+ * 
+ * The header is clickable and highlights on hover.
+ * The body consists of a column of .puzzles. The body is .hideable and
+ * expands and contracts to a max height of 5000px.
+ * 
+ */
+
+#rounds {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 10px;
+    gap: 10px;
+}
+
+#rounds.usecolumns {
+    flex-direction: column;
+    max-height: 1500px;
+}
+
+.round {
+    display: flex;
+    flex-direction: column;
+    height: fit-content;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+}
+
+.round-header {
+    display: flex;
+    gap: 10px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    box-shadow: 0 0 4px 0 rgba(0,0,0,0.4);
+    background-color: rgba(0,0,0,0.1);
+    transition: background-color 0.5s ease;
+}
+
+.round-header.solved {
+    background-color: rgba(144, 238, 144, 0.1);
+}
+
+.round-header:hover {
+    background-color: rgba(0,0,0,0.3);
+}
+
+.round-header.solved:hover {
+    background-color: rgba(144, 238, 144, 0.3);
+}
+
+.round-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.hiding {
+    max-height: 0;
+    transition: max-height 0.5s ease;
+    overflow: hidden;
+}
+
+.round-header.highlighted, .round-header.highlighted:hover, .round-header.solved.highlighted, .round-header.solved.highlighted:hover {
+    background-color: orangered;
+    transition: background-color 0.2s ease;
+}
+
+/*
+ * Puzzles are layed out horizontally.
+ * 
+ * They layout links in p form and include an answer element.
+ * They are colored azure and bolded if they are the meta.
+ *
+ */
+
+.puzzle {
+    padding: 10px;
+    display: flex;
+    flex-direction: row;
+    gap: 2px;
+    justify-content: space-between;
+    box-shadow: 0 0 2px 0 rgba(0,0,0,0.2);
+}
+
+.puzzle-icons {
+    display: flex;
+    flex-direction: row;
+    align-items: last baseline;
+    margin: 0px;
+}
+
+.puzzle-name {
+    width: 120px;
+    overflow: hidden;
+}
+
+.puzzle-icons > p, .puzzle > p {
+    margin: 0px;
+}
+
+div.meta, div.meta.solved {
+    background-color: azure;
+}
+
+p.meta, p.meta.solved {
+    font-weight: bold;
+}
+
+.solved {
+    background-color: lightgray;
+}
+
+div.critical, div.meta.critical {
+    background-color: coral;
+}
+
+/*
+ * Answers are constant-width (up to 16.5 chars - half is used to show that the
+ * answer continues if it is longer than 16 chars.)
+ *
+ * An unspoiled answer is blacked out. No guarantees on if your browser chooses
+ * to, e.g., for dark mode, display background-color and color differently.
+ *
+ * An unspoiled answer can be spoiled on hover or by clicking spoil all, which
+ * adds the spoil class.
+ *
+ */
+
+.answer {
+    font-family: 'Courier New', Courier, monospace;
+    white-space: pre;
+    width: 16.5ch;
+    overflow: hidden;
+}
+
+.answer.done {
+    color: black;
+    background-color: black;
+}
+
+.answer.done:hover, .answer.done.spoil {
+    background-color: transparent;
+    opacity: 1;
+}
+
+/*
+ * Status indicator from https://codepen.io/saigowthamr/pen/PowdZqy.
+ */ 
+
+#status {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.active {
+    background: #66FF99;
+}
+
+.stale {
+    background: rgba(0,0,0,0.4);
+}
+
+.error{
+    background: red;
+}
+
+.circle {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    box-shadow: 0px 0px 1px 1px #0000001a;
+}
+
+.pulse {
+    animation: pulse-animation 1s infinite;
+}
+
+@keyframes pulse-animation {
+    0% {
+        box-shadow: 0 0 0 0px rgba(0, 0, 0, 0.2);
+    }
+    100% {
+        box-shadow: 0 0 0 20px rgba(0, 0, 0, 0);
+    }
+}
