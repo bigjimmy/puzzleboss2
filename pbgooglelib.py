@@ -344,7 +344,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                     "endRowIndex": 7,
                     "endColumnIndex": 2,
                 },
-                "fields": "userEnteredValue, effectiveValue",
+                "fields": "userEnteredValue, effectiveValue, textFormatRuns",
                 "rows": [
                     {
                         "values": [
