@@ -29,6 +29,7 @@
             </div>
             <button @click="applyShowFilter(false)">Hide All Puzzles</button>
             <button @click="applyShowFilter(true)">Show All Puzzles</button>
+            <p>Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/></p>
             </div>
 
             <div id = "allrounds" :class = "{'usecolumns': useColumns}">
@@ -43,6 +44,8 @@
                         :key="round.id"
                         :scrollspeed="scrollSpeed"
                         :uid="uid"
+                        :sortpuzzles="sortPuzzles"
+                        :currpuzz="currPuzz"
                         @toggle-body="toggleBody"
                         @please-fetch = "fetchData"
                     ></round>
@@ -58,7 +61,9 @@
                         :key="round.id"
                         :pfk="puzzleFilterKeys"
                         :scrollspeed="scrollSpeed"
+                        :sortpuzzles="sortPuzzles"
                         :uid="uid"
+                        :currpuzz="currPuzz"
                         @toggle-body="toggleBody"
                     ></round>
                 </div>
@@ -134,6 +139,7 @@
                 const puzzleFilter = ref({
                     'Solved': true, 'WTF': true, 'Critical': true, 'Being worked': true, 'New': true, 'Needs eyes': true, 'Unnecessary': true
                 })
+                const sortPuzzles = ref(false);
                 const roundStats = ref({})
                 const puzzleStats = ref({})
                 const time = ref("")
@@ -144,8 +150,9 @@
 
                 const useColumns = ref(true);
                 const scrollSpeed = ref(1);
+                const currPuzz = ref(0);
                 
-                
+
                 <?php
                      echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\");";
                 ?>
@@ -172,20 +179,24 @@
                     try {
                         temp = await (await fetch(url, {cache: "no-store"})).json();
                         data.value = temp;
+
+                        if (firstUpdate) {
+                            const url = `https://importanthuntpoll.org/pb/apicall.php?&apicall=solvers`;
+                            let solvers = await (await fetch(url)).json();
+                            uid.value = solvers.solvers.filter(s => s.name === username.value)[0].id;
+                        }
+
+                        const solver_url = `https://importanthuntpoll.org/pb/apicall.php?&apicall=solver&apiparam1=${uid.value}`
+                        let solver = await(await fetch(solver_url)).json();
+
+                        currPuzz.value = solver.solver.puzz;
+
                         success = true;
                     } catch (e) {
                         console.error(e);
                         errorTimer.value = setTimeout(() => {
                             data.value = {'rounds': []};
                         }, 60000);
-                    }
-
-                    if (firstUpdate && success) {
-
-                        const url = `https://importanthuntpoll.org/pb/apicall.php?&apicall=solvers`;
-                        let solvers = await (await fetch(url)).json();
-                        uid.value = solvers.solvers.filter(s => s.name === username.value)[0].id;
-
                     }
 
                     if (staleTimer.value != null) {
@@ -288,6 +299,9 @@
                     const ss = localStorage.getItem("scrollSpeed");
                     if (ss !== null && ss !== undefined) scrollSpeed.value = JSON.parse(ss);
 
+                    const sp = localStorage.getItem("sortPuzzles");
+                    if (sp !== null && sp !== undefined) sortPuzzles.value = JSON.parse(sp);
+
                     await fetchData(true);
                     setInterval(fetchData, 5000);
                 });
@@ -358,10 +372,14 @@
                     persist("scrollSpeed", update);
                 });
 
+                watch(sortPuzzles, (update) => {
+                    persist("sortPuzzles", update);
+                });
+
                 return {
                     data,
                     showBody, highlight,
-                    puzzleFilter, puzzleFilterKeys,
+                    puzzleFilter, puzzleFilterKeys, sortPuzzles,
                     toggleBody, toggleKey,
                     applyShow, applyShowFilter,
                     roundStats,
@@ -369,7 +387,7 @@
                     time, updateState,
                     fetchData,
                     useColumns, scrollSpeed,
-                    uid, username
+                    uid, username, currPuzz
                 }
             },
         }).mount('#main');

@@ -8,6 +8,7 @@
     display: flex;
     flex-direction: row;
     align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
 }
 
@@ -117,6 +118,10 @@
     transition: background-color 0.2s ease;
 }
 
+.round-body a {
+    text-decoration: none;
+}
+
 /*
  * Puzzles are layed out horizontally.
  * 
@@ -151,19 +156,32 @@
 }
 
 div.meta, div.meta.solved {
-    background-color: azure;
+    background-color: rgba(120, 255, 255, 0.8);
 }
 
 p.meta, p.meta.solved {
     font-weight: bold;
 }
 
-.solved {
+.solved, .unnecessary {
     background-color: lightgray;
 }
 
 div.critical, div.meta.critical {
     background-color: coral;
+}
+
+div.needseyes, div.meta.needseyes {
+    background-color: rgba(255, 215, 0, 0.8);
+}
+
+div.wtf, div.meta.wtf {
+    background-color: rgb(173, 255, 47, 0.8);
+}
+
+div.currpuzz {
+    outline: 6px rgba(173,255,47,1);
+    outline-style: outset;
 }
 
 /*

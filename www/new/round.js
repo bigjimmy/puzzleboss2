@@ -11,6 +11,8 @@ export default {
       highlighted: Boolean,
       pfk: Object,
       scrollspeed: Number,
+      sortpuzzles: Boolean,
+      currpuzz: String,
       uid: Number
     },
     emits: ['please-fetch'],
@@ -21,7 +23,20 @@ export default {
         // current filters. 
         //
         filteredPuzzles() {
-            return this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status]);
+            const fp = this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status]);
+            if(!this.sortpuzzles) return fp;
+
+            const meta_id = this.round.meta_id;
+
+            function pri(puzzle) {
+                if (meta_id === puzzle.id) return -1;
+
+                return ['Critical', 'Needs eyes', 'WTF', 'Being worked', 'New', 'Unnecessary', 'Solved'].indexOf(puzzle.status);
+            }
+
+            return [...fp].sort((a, b) => {
+                return pri(a) - pri(b);
+            });
         },
        
         //
@@ -134,7 +149,7 @@ export default {
             <div
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
-                :class="{'puzzle': true, 'meta': round.meta_id === puzzle.id, 'critical': puzzle.status == 'Critical', 'solved': puzzle.status == 'Solved'}">
+                :class="'puzzle' + (round.meta_id === puzzle.id ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '')">
                 <div class="puzzle-icons">
                     <AddStatus :puzzle='puzzle' :ismeta='round.meta_id === puzzle.id' :pfk='pfk' @please-fetch="$emit('please-fetch')"></AddStatus>
                     <p :class="{'meta': round.meta_id === puzzle.id, 'puzzle-name': true}" @mouseover="scroll" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
@@ -143,7 +158,16 @@ export default {
                     <AddSolvers :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid"></AddSolvers>
                     <AddNote :puzzle='puzzle' @please-fetch="$emit('please-fetch')"></AddNote>
                 </div>
-                <p :class = "{'answer': true, 'spoil': spoilAll, 'done': puzzle.answer !== null}" @mouseover="scroll" @mouseout="stopscroll">{{ puzzle.answer == null ? ''.padStart(16) : puzzle.answer.padStart(16) }}</p>
+                <p 
+                    v-if = "puzzle.answer === null"
+                    :class = "{'answer': true, 'spoil': true}">
+                    {{ puzzle.name === currpuzz ? 'CURRENT PUZZLE'.padStart(16) : "".padStart(16) }}
+                </p>
+                <p 
+                    v-if = "puzzle.answer !== null"
+                    :class = "{'answer': true, 'spoil': spoilAll, 'done': true}" @mouseover="scroll" @mouseout="stopscroll">
+                    {{ puzzle.answer.padStart(16) }}
+                </p>
             </div>
         </div>
     </div>  `
