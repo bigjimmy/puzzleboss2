@@ -1,6 +1,7 @@
 import { ref, watch, watchEffect } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
 import AddNote from './add-note.js'
 import AddStatus from './add-status.js'
+import AddSolvers from './add-solvers.js'
 
 export default {
     props: {
@@ -9,7 +10,8 @@ export default {
       puzzlefilter: Object,
       highlighted: Boolean,
       pfk: Object,
-      scrollspeed: Number
+      scrollspeed: Number,
+      uid: Number
     },
     emits: ['please-fetch'],
     computed: {
@@ -43,7 +45,8 @@ export default {
     },
     components: {
        AddNote,
-       AddStatus
+       AddStatus,
+       AddSolvers
     },
     setup(props) {
 
@@ -137,7 +140,7 @@ export default {
                     <p :class="{'meta': round.meta_id === puzzle.id, 'puzzle-name': true}" @mouseover="scroll" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                     <p><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
                     <p><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
-                    <p><a title='puzzboss edit' :href="'https://importanthuntpoll.org/pb/editpuzzle.php?pid='+puzzle.id" target="_blank">⚙️</a></p>
+                    <AddSolvers :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid"></AddSolvers>
                     <AddNote :puzzle='puzzle' @please-fetch="$emit('please-fetch')"></AddNote>
                 </div>
                 <p :class = "{'answer': true, 'spoil': spoilAll, 'done': puzzle.answer !== null}" @mouseover="scroll" @mouseout="stopscroll">{{ puzzle.answer == null ? ''.padStart(16) : puzzle.answer.padStart(16) }}</p>
