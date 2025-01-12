@@ -7,7 +7,7 @@
     <body>
         <div id = "main">
 
-            <h2>Hello, hunter! It is currently {{time}} TIMEMIT.</h2>
+            <h2>Hello, {{username}}! It is currently {{time}} TIMEMIT.</h2>
             <div id = "status">
                 <p>{{roundStats["solved"]}} rounds solved out of {{roundStats["count"]}} open.
                     {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open ({{puzzleStats["New"]}} new, {{puzzleStats["Being worked"]}} being worked, {{puzzleStats["Critical"]}} critical, {{puzzleStats["Needs eyes"]}} needs eyes, {{puzzleStats["WTF"]}} WTF). Page status: </p>
@@ -42,6 +42,7 @@
                         :pfk="puzzleFilterKeys"
                         :key="round.id"
                         :scrollspeed="scrollSpeed"
+                        :uid="uid"
                         @toggle-body="toggleBody"
                         @please-fetch = "fetchData"
                     ></round>
@@ -57,6 +58,7 @@
                         :key="round.id"
                         :pfk="puzzleFilterKeys"
                         :scrollspeed="scrollSpeed"
+                        :uid="uid"
                         @toggle-body="toggleBody"
                     ></round>
                 </div>
@@ -142,6 +144,12 @@
 
                 const useColumns = ref(true);
                 const scrollSpeed = ref(1);
+                
+                
+                <?php
+                     echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\")";
+                ?>
+                const uid = ref(0);
 
                 //
                 // This function fetches data from an endpoint and updates the
@@ -158,7 +166,7 @@
                     // never reads stale data for too long.
                     //
 
-                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=all` // CORS
+                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=all`
                     let success = false;
                     let temp = {'rounds': []};
                     try {
@@ -170,6 +178,14 @@
                         errorTimer.value = setTimeout(() => {
                             data.value = {'rounds': []};
                         }, 60000);
+                    }
+
+                    if (firstUpdate && success) {
+
+                        const url = `https://importanthuntpoll.org/pb/apicall.php?&apicall=solvers`;
+                        let solvers = await (await fetch(url)).json();
+                        uid.value = solvers.solvers.filter(s => s.name === username.value)[0].id;
+
                     }
 
                     if (staleTimer.value != null) {
@@ -352,7 +368,8 @@
                     puzzleStats,
                     time, updateState,
                     fetchData,
-                    useColumns, scrollSpeed
+                    useColumns, scrollSpeed,
+                    uid, username
                 }
             },
         }).mount('#main');
