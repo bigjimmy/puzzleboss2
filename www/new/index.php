@@ -147,7 +147,7 @@
                 
                 
                 <?php
-                     echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\")";
+                     echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\");";
                 ?>
                 const uid = ref(0);
 
