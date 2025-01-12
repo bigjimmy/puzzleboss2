@@ -403,6 +403,11 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                             }
                         ]
                     },
+                    {
+                        "values": [
+                            _color_palette_cell_value()
+                        ]
+                    },
                 ],
             }
         }
@@ -429,6 +434,43 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     )
     debug_log(5, "Response from service.permissions.create: %s" % permresp)
     return file.get("id")
+
+
+def _color_palette_cell_value():
+    # From https://sashamaps.net/docs/resources/20-colors/
+    colors = [
+        # Middle row
+        '#e6194B', '#f58231', '#ffe119', '#bfef45', '#3cb44b', '#42d4f4', '#4363d8', '#911eb4', '#f032e6',
+        # Darker tones
+        '#800000', '#9A6324', '#808000', '#469990', '#000075',
+        # Pastels
+        '#fabed4', '#ffd8b1', '#fffac8', '#aaffc3', '#dcbeff',
+    ]
+    format_runs = []
+    for idx, color in enumerate(colors):
+        r, g, b = _hex_to_rgb_triple(color)
+        format_runs.append({
+            "startIndex": idx,
+            "format": {
+                "foregroundColorStyle": {
+                    "rgbColor": {"red": r, "green": g, "blue": b},
+                },
+            },
+        })
+    # The string is made of spaces so that the colored text is invisible, just
+    # to reduce visual distractions on the sheet.
+    return {
+        "userEnteredValue": {
+            "stringValue": " " * len(colors),
+        },
+        "textFormatRuns": format_runs,
+    }
+
+
+def _hex_to_rgb_triple(hex_color):
+    # hex_color is a hex code, with leading '#', e.g., '#abc123'
+    hexes = hex_color[1:3], hex_color[3:5], hex_color[5:7]
+    return tuple(int(x, base=16) / 255 for x in hexes)
 
 
 def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
