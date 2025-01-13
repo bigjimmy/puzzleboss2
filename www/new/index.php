@@ -3,6 +3,7 @@
     <head>
         <title>Puzzboss - Now With More JS!</title>
         <link rel="stylesheet" href="./pb-ui.css">
+        <script src="https://cdn.rawgit.com/localForage/localForage/4ce19202/dist/localforage.min.js"></script>
     </head>
     <body>
         <div id = "main">
@@ -73,17 +74,20 @@
                 <h4>Advanced Settings</h4>
                 <p>Use columns display (fixed-height, scroll-to-right) <input type="checkbox" v-model="useColumns"></input></p>
                 <p>Scroll speed (default 1) <input type="number" v-model="scrollSpeed" min="1"></input></p>
+                <solvesound ref="solveSound"></solvesound>
             </div>
 
         </div>
     <script type="module">
 
-        import { createApp, ref, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
+        import { createApp, ref, useTemplateRef, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
         import Round from './round.js'
+        import solvesound from './solve-sound.js'
 
         createApp({
             components: {
                 Round,
+                solvesound
             },
             computed: {
                 
@@ -151,8 +155,8 @@
                 const useColumns = ref(true);
                 const scrollSpeed = ref(1);
                 const currPuzz = ref(0);
+                const solveSoundRef = useTemplateRef('solveSound');
                 
-
                 <?php
                      echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\");";
                 ?>
@@ -273,6 +277,10 @@
                         puzzleStatsLocal[status] += 1;
                         puzzleStatsLocal['Count'] += 1;
                     })
+
+                    if(puzzleStats.value['Solved'] < puzzleStatsLocal['Solved'] && !firstUpdate) {
+                        solveSoundRef.value.playSound();
+                    } 
 
                     roundStats.value = roundStatsLocal;
                     puzzleStats.value = puzzleStatsLocal;
