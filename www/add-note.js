@@ -66,7 +66,7 @@ export default {
                 // Write the data to the backend.
                 //
 
-                const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=comments`
+                const url = `./apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=comments`
                 
                 if(comments.value !== props.puzzle.comments) {
                     
