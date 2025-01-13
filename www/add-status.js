@@ -135,7 +135,7 @@ export default {
                         // N.B. This is ugly but we'll live.
                         //
 
-                        const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=answer`
+                        const url = `./apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=answer`
                         
                         try {
                             await fetch(url, {
@@ -155,7 +155,7 @@ export default {
                 } else {
                     if (status.value !== props.puzzle.status) {
 
-                        const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=status`
+                        const url = `./apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=status`
 
                         try {
                             await fetch(url, {
@@ -175,7 +175,7 @@ export default {
 
                 if (isMetaLoc.value ^ props.ismeta) {
 
-                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.round_id}&apiparam2=meta_id`
+                    const url = `./apicall.php?apicall=round&apiparam1=${props.puzzle.round_id}&apiparam2=meta_id`
 
                     try {
                         await fetch(url, {

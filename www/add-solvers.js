@@ -85,7 +85,7 @@ export default {
 
                 xyzloc.value = props.puzzle.xyzloc;
 
-                const url = `https://importanthuntpoll.org/pb/apicall.php?&apicall=solver&apiparam1=${props.uid}`
+                const url = `./apicall.php?&apicall=solver&apiparam1=${props.uid}`
                 let solver = await(await fetch(url)).json();
 
                 showStatus.value = true;
@@ -110,7 +110,7 @@ export default {
                 // Write the data to the backend.
                 //
 
-                const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=xyzloc`
+                const url = `./apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=xyzloc`
                 
                 if(xyzloc.value !== props.puzzle.xyzloc) {
                     
@@ -138,7 +138,7 @@ export default {
             // Write the data to the backend.
             //
 
-            const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=solver&apiparam1=${props.uid}&apiparam2=puzz`
+            const url = `./apicall.php?apicall=solver&apiparam1=${props.uid}&apiparam2=puzz`
             
             
             try {
