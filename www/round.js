@@ -1,7 +1,5 @@
 import { ref, watch, watchEffect } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
-import AddNote from './add-note.js'
-import AddStatus from './add-status.js'
-import AddSolvers from './add-solvers.js'
+import AddGeneric from './add-generic.js'
 
 export default {
     props: {
@@ -59,14 +57,12 @@ export default {
         }
     },
     components: {
-       AddNote,
-       AddStatus,
-       AddSolvers
+       AddGeneric
     },
     setup(props) {
 
         //
-        // This component contains four pieces of state:
+        // This component contains five pieces of state:
         //
         // spoilAll indicates whether or not to display all answers from the
         // given round.
@@ -77,11 +73,15 @@ export default {
         // solved and open are the solved and open puzzle counts for the round,
         // respectively.
         //
+        // highlightedPuzzle indicates puzzles which should be highlighted
+        // because we just closed a modal associated with it from AddGeneric.
+        //
 
         const spoilAll = ref(false);
         const solved = ref(0);
         const open = ref(0);
         const scrolling = ref(null);
+        const highlightedPuzzle = ref({});
 
         //
         // This function toggles the spoilAll state.
@@ -110,22 +110,30 @@ export default {
         }
 
         //
+        // This function highlights a puzzle with a given puzzle id (and
+        // fires a timer to unhighlight it).
+        //
+        function highlight(pid) {
+            highlightedPuzzle.value[pid] = true;
+            setTimeout(
+                () => {highlightedPuzzle.value[pid] = false}, 750);
+        }
+
+        //
         // This function should re-calculate the open/solved values whenever
         // we get an update from the PB API.
         //
         watchEffect(() => {
-
             open.value = props.round.puzzles.length;
             solved.value = props.round.puzzles.filter(puzzle => {
                 return puzzle.status === "Solved";
             }).length;
-
         });
 
         return {
             spoilAll, toggleSpoil,
             open, solved,
-            scroll, stopscroll
+            scroll, stopscroll, highlight, highlightedPuzzle
         }
     },
 
@@ -136,6 +144,8 @@ export default {
     template: `
     <div class = "round">
         <div :class = "{'round-header': true, 'solved': isSolved, 'highlighted': highlighted}" @click="$emit('toggle-body', round.id);">
+            <p v-if="showbody">▼</p>
+            <p v-if="!showbody">▶</p>
             <h3>{{round.name}}</h3>
             <p>({{solved}} solved / {{open}} open)</p>
             <button v-if="showbody" @click.stop="toggleSpoil">{{ spoilAll ? 'Hide' : 'Show' }} Spoilers</button>
@@ -149,14 +159,14 @@ export default {
             <div
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
-                :class="'puzzle' + (round.meta_id === puzzle.id ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '')">
+                :class="'puzzle' + (round.meta_id === puzzle.id ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] === true ? ' highlighted' : '')">
                 <div class="puzzle-icons">
-                    <AddStatus :puzzle='puzzle' :ismeta='round.meta_id === puzzle.id' :pfk='pfk' @please-fetch="$emit('please-fetch')"></AddStatus>
+                    <AddGeneric type="status" :puzzle='puzzle' :ismeta='round.meta_id === puzzle.id' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
+                    <AddGeneric type="work state" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="highlight(puzzle.id)"></AddGeneric>
                     <p :class="{'meta': round.meta_id === puzzle.id, 'puzzle-name': true}" @mouseover="scroll" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                     <p><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
                     <p><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
-                    <AddSolvers :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid"></AddSolvers>
-                    <AddNote :puzzle='puzzle' @please-fetch="$emit('please-fetch')"></AddNote>
+                    <AddGeneric type="note" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
                 </div>
                 <p 
                     v-if = "puzzle.answer === null"
