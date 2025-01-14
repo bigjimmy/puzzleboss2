@@ -1,5 +1,4 @@
 <html><head>
-<meta http-equiv="refresh" content=30>
 <title>Hunt Status</title>
 <style>
   body {
@@ -11,7 +10,6 @@
 <?php 
 require('puzzlebosslib.php');
 
-$rounds = readapi('/rounds')->rounds;
 $totrounds = 0;
 $solvedrounds = 0;
 $unsolvedrounds = 0;
@@ -28,26 +26,33 @@ $eyesarray = [];
 $newarray = [];
 $workonarray = [];
 $nolocarray = [];
+$workarray = [];
+$wtfarray = [];
+$rounds;
+
 
 $huntstruct = readapi("/all");
 $rounds = $huntstruct->rounds;
+
+// Check for authenticated user
+$uid = getauthenticateduser();
+
+function getroundnamefrompuzzid($puzzid) {
+  global $rounds;
+  foreach ($rounds as $round) {
+    foreach ($round->puzzles as $puzzle) {
+      if ($puzzle->id == $puzzid) {
+        return $round->name;
+      }
+    }
+  }
+  return "NONEERROR";
+}
 
 foreach ($rounds as $round) {
   $totrounds += 1;
   $metapuzzle = $round->meta_id;
   $puzzlearray = $round->puzzles;
-
-  // Is round solved?
-  if (isset($metapuzzle)) {
-    $metapuzzlestatus = readapi("/puzzles/" . $metapuzzle)->puzzle->status;
-    if ($metapuzzlestatus == "Solved") {
-      $solvedrounds += 1;
-    } else {
-      $unsolvedrounds += 1;
-    }
-  } else {
-    $unsolvedrounds += 1;
-  }
 
   // Count puzzles
   foreach ($puzzlearray as $puzzle) {
@@ -62,9 +67,11 @@ foreach ($rounds as $round) {
         break;
       case "Being worked":
         $workcnt += 1;
+	array_push($workarray, $puzzle);
         break;
       case "WTF":
         $wtfcnt += 1;
+	array_push($wtfarray, $puzzle);
         break;
       case "Needs eyes":
         $eyescnt += 1;
@@ -75,12 +82,18 @@ foreach ($rounds as $round) {
         array_push($critarray, $puzzle);
         break;
       case "Solved":
-        $solvedpuzz += 1;
+	$solvedpuzz += 1;
+	if (isset($metapuzzle)) {
+          if ($metapuzzle == $puzzle->id) {
+            $solvedrounds += 1;
+	  }
+       }
     }
   }
 }
 
 $unsolvedpuzz = $totpuzz - $solvedpuzz;
+$unsolvedrounds = $totrounds - $solvedrounds;
 
 echo '<table border=3>';
 echo '<tr><td></td><th scope="col">Opened</th><th scope="col">Solved</th><th scope="col">Unsolved</th></tr>';
@@ -97,8 +110,9 @@ echo '<tr><td>Needs Eyes</td><td>' . $eyescnt . '</td></tr>';
 echo '<tr><td>Critical</td><td>' . $critcnt . '</td></tr>';
 echo '</table><br><br>';
 
+echo 'Unsolved Puzzles Missing Location<br>';
 echo '<table border=3>';
-echo '<tr><th colspan=4>Unsolved Puzzles Missing Location</th></tr>';
+echo '<tr><th>Status</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers (current)</th><th>Solvers (all time)</th><th>Comment</th></tr>';
 foreach ($rounds as $round) {
   $puzzlearray = $round->puzzles;
   foreach ($puzzlearray as $thispuzzle) {
@@ -137,13 +151,13 @@ foreach ($nolocarray as $puzzle) {
         echo "New";
         break;
       case "Being worked":
-        echo "O";
+        echo "Work";
         break;
       case "Needs eyes":
         echo "Eyes";
         break;
       case "WTF":
-        echo "?";
+        echo "WTF";
         break;
       case "Critical":
         echo "Crit";
@@ -159,17 +173,26 @@ foreach ($nolocarray as $puzzle) {
     echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
     echo '<td><a href="' . $puzzle->drive_uri . '">Doc</a></td>';
     echo '<td><a href="' . $puzzle->chat_channel_link  . '">Chat</a></td>';
-
+    echo '<td>' . $puzzle->cursolvers . '</td>';
+    echo '<td>' . $puzzle->solvers . '</td>';
+    echo '<form action="editpuzzle.php?pid=' . $puzzle->id .'" method="post">';
+    echo '<td><input type="text" name="value" required minlength="1" value="' . $puzzle->comments . '"></td>';
+    echo '<input type="hidden" name="partupdate" value="yes">';
+    echo '<input type="hidden" name="pid" value="' . $puzzle->id . '">';
+    echo '<input type="hidden" name="uid" value="' . $uid . '">';
+    echo '<input type="hidden" name="part" value="comments">';
+    echo '<td><input type="submit" name="submit" value="submit"></td>';
+    echo '</form>';
     echo '</tr>';
 
 }
 echo '</table><br><br>';
-echo '<table border=3>';
 
-echo '<tr><th>Good Puzzles To Work On:</th></tr><tr><td>';
+echo 'Total Hunt Overview:<br>';
 
-$workonarray = array_merge($critarray, $eyesarray, $newarray);
-echo '<table>';
+$workonarray = array_merge($critarray, $eyesarray, $wtfarray, $newarray, $workarray);
+echo '<table border = 3>';
+echo '<tr><th>Status</th><th>Round</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers(current)</th><th>Solvers(all time)</th><th>Location</th><th>Comment</th></tr>';
 foreach ($workonarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
@@ -188,37 +211,82 @@ foreach ($workonarray as $puzzle) {
   //  $styleinsert .= ' style="text-decoration:line-through" ';
     //}
     echo '<tr ' . $styleinsert . '>';
-    echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '" target="_blank">';
+    echo '<td>';
+    echo '<form action="editpuzzle.php?pid=' . $puzzle->id .'" method="post">';
+    echo '<input type="hidden" name="partupdate" value="yes">';
+    echo '<input type="hidden" name="pid" value="' . $puzzle->id . '">';
+    echo '<input type="hidden" name="uid" value="' . $uid . '">';
+    echo '<input type="hidden" name="part" value="status">';
+    echo '<select id="value" name="value"/>';
+
     switch ($puzzle->status) {
       case "New":
-        echo "New";
+    echo '<option value="New" selected>New</option>';
+    echo '<option value="Being worked">Being worked</option>';
+    echo '<option value="Needs eyes">Needs eyes</option>';
+    echo '<option value="Critical">Critical</option>';
+    echo '<option value="WTF">WTF</option>';
+    echo '<option value="Unnecessary">Unnecessary</option>';
         break;
       case "Being worked":
-        echo "O";
+    echo '<option value="New">New</option>';
+    echo '<option value="Being worked" selected>Being worked</option>';
+    echo '<option value="Needs eyes">Needs eyes</option>';
+    echo '<option value="Critical">Critical</option>';
+    echo '<option value="WTF">WTF</option>';
+    echo '<option value="Unnecessary">Unnecessary</option>';
         break;
       case "Needs eyes":
-        echo "Eyes";
+    echo '<option value="New">New</option>';
+    echo '<option value="Being worked">Being worked</option>';
+    echo '<option value="Needs eyes" selected>Needs eyes</option>';
+    echo '<option value="Critical">Critical</option>';
+    echo '<option value="WTF">WTF</option>';
+    echo '<option value="Unnecessary">Unnecessary</option>';
         break;
       case "WTF":
-        echo "?";
+    echo '<option value="New">New</option>';
+    echo '<option value="Being worked">Being worked</option>';
+    echo '<option value="Needs eyes">Needs eyes</option>';
+    echo '<option value="Critical">Critical</option>';
+    echo '<option value="WTF" selected>WTF</option>';
+    echo '<option value="Unnecessary">Unnecessary</option>';
         break;
       case "Critical":
-        echo "Crit";
-        break;
-      case "Solved":
-        echo "*";
+    echo '<option value="New">New</option>';
+    echo '<option value="Being worked">Being worked</option>';
+    echo '<option value="Needs eyes">Needs eyes</option>';
+    echo '<option value="Critical" selected>Critical</option>';
+    echo '<option value="WTF">WTF</option>';
+    echo '<option value="Unnecessary">Unnecessary</option>';
         break;
       case "Unnecessary":
-        echo "X";
+    echo '<option value="New">New</option>';
+    echo '<option value="Being worked">Being worked</option>';
+    echo '<option value="Needs eyes">Needs eyes</option>';
+    echo '<option value="Critical">Critical</option>';
+    echo '<option value="WTF">WTF</option>';
+    echo '<option value="Unnecessary" selected>Unnecessary</option>';
         break;
     }
-    echo '</a></td>';
+    echo '<input type="submit" name="submit" value="submit"></td>';
+    echo '</form>';
+    echo '<td>' . getroundnamefrompuzzid($puzzle->id) . '</td>';
     echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
     echo '<td><a href="' . $puzzle->drive_uri . '">Doc</a></td>';
     echo '<td><a href="' . $puzzle->chat_channel_link  . '">Chat</a></td>';
-
+    echo '<td>' . $puzzle->cursolvers . '</td>';
+    echo '<td>' . $puzzle->solvers . '</td>';
+    echo '<td>' . $puzzle->xyzloc . '</td>';
+    echo '<form action="editpuzzle.php?pid=' . $puzzle->id .'" method="post">';
+    echo '<td><input type="text" name="value" required minlength="1" value="' . $puzzle->comments . '"></td>';
+    echo '<input type="hidden" name="partupdate" value="yes">';
+    echo '<input type="hidden" name="pid" value="' . $puzzle->id . '">';
+    echo '<input type="hidden" name="uid" value="' . $uid . '">';
+    echo '<input type="hidden" name="part" value="comments">';
+    echo '<td><input type="submit" name="submit" value="submit"></td>';
     echo '</tr>';
-
+    echo '</form>';
 }
 echo '</table></td></tr></table>';
 
