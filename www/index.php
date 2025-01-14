@@ -14,7 +14,7 @@
                     {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open ({{puzzleStats["New"]}} new, {{puzzleStats["Being worked"]}} being worked, {{puzzleStats["Critical"]}} critical, {{puzzleStats["Needs eyes"]}} needs eyes, {{puzzleStats["WTF"]}} WTF). Page status: </p>
                 <div :class = updateState></div>
             </div>
-            <p>Go to: <a href="../pbtools.php" target="_blank">pbtools</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">oldi-ui</a></p>
+            <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a></p>
 
             <div id= "controls"> 
             <button @click="applyShow(false)">Hide All Rounds</button>
