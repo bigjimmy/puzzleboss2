@@ -49,6 +49,16 @@ function getroundnamefrompuzzid($puzzid) {
   return "NONEERROR";
 }
 
+function ispuzzlemeta($puzzid) {
+  global $rounds;
+  foreach ($rounds as $round) {
+    if ($round->meta_id == $puzzid) {
+      return "Yes";
+    }
+  }
+  return "";
+}
+
 foreach ($rounds as $round) {
   $totrounds += 1;
   $metapuzzle = $round->meta_id;
@@ -112,7 +122,7 @@ echo '</table><br><br>';
 
 echo 'Unsolved Puzzles Missing Location<br>';
 echo '<table border=3>';
-echo '<tr><th>Status</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers (current)</th><th>Solvers (all time)</th><th>Comment</th></tr>';
+echo '<tr><th>Status</th><th>Meta</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers (current)</th><th>Solvers (all time)</th><th>Comment</th></tr>';
 foreach ($rounds as $round) {
   $puzzlearray = $round->puzzles;
   foreach ($puzzlearray as $thispuzzle) {
@@ -166,10 +176,11 @@ foreach ($nolocarray as $puzzle) {
         echo "*";
 		break;
       case "Unnecessary":
-        echo "X";
+        echo "Unnecessary";
         break;
     }
     echo '</a></td>';
+    echo '<td>' . ispuzzlemeta($puzzle->id) . '</td>';
     echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
     echo '<td><a href="' . $puzzle->drive_uri . '">Doc</a></td>';
     echo '<td><a href="' . $puzzle->chat_channel_link  . '">Chat</a></td>';
@@ -192,7 +203,7 @@ echo 'Total Hunt Overview:<br>';
 
 $workonarray = array_merge($critarray, $eyesarray, $wtfarray, $newarray, $workarray);
 echo '<table border = 3>';
-echo '<tr><th>Status</th><th>Round</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers(current)</th><th>Solvers(all time)</th><th>Location</th><th>Comment</th></tr>';
+echo '<tr><th>Status</th><th>Round</th><th>Meta</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers(current)</th><th>Solvers(all time)</th><th>Location</th><th>Comment</th></tr>';
 foreach ($workonarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
@@ -272,6 +283,7 @@ foreach ($workonarray as $puzzle) {
     echo '<input type="submit" name="submit" value="submit"></td>';
     echo '</form>';
     echo '<td>' . getroundnamefrompuzzid($puzzle->id) . '</td>';
+    echo '<td>' . ispuzzlemeta($puzzle->id) . '</td>';
     echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
     echo '<td><a href="' . $puzzle->drive_uri . '">Doc</a></td>';
     echo '<td><a href="' . $puzzle->chat_channel_link  . '">Chat</a></td>';
