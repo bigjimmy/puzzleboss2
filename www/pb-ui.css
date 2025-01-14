@@ -85,9 +85,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px;
-    box-shadow: 0 0 4px 0 rgba(0,0,0,0.4);
+    box-shadow: 0 0 6px 0 rgba(0,0,0,0.5);
     background-color: rgba(0,0,0,0.1);
     transition: background-color 0.5s ease;
+}
+
+.round-header > * {
+    margin-block-start: 0.6em;
+    margin-block-end: 0.6em;
 }
 
 .round-header.solved {
@@ -134,9 +139,15 @@
     padding: 10px;
     display: flex;
     flex-direction: row;
-    gap: 2px;
+    gap: 5px;
     justify-content: space-between;
     box-shadow: 0 0 2px 0 rgba(0,0,0,0.2);
+    transition: background-color 0.5s ease;
+}
+
+.puzzle.highlighted {
+    background-color: orangered;
+    transition: background-color 0.2s ease;
 }
 
 .puzzle-icons {
