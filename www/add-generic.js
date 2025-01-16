@@ -303,6 +303,14 @@ export default {
                 warning.value = "failed to POST; check devtools";
                 console.log(e);
             }
+
+            //
+            // Focus the modal if we closed it!
+            //
+            if (showModal.value == false) {
+                puzzle.value.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
+                context.emit('highlight-me');
+            }
         }
 
         return {
