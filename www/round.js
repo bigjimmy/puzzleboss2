@@ -93,11 +93,35 @@ export default {
         //
         // This function scrolls the puzzle title by incrementing scrollLeft.
         //
-        function scroll(event) {
+        function scroll(event, delay) {
             const ct = event.currentTarget;
-            scrolling.value = setInterval(() => {
-                ct.scrollLeft += props.scrollspeed;
-            }, 10);
+
+            //
+            // There should only ever be one timer assigned to scrolling.value,
+            // but there's definitely a risk of a race condition when the timer
+            // has fired, then clearInterval happens on the expired timer, and
+            // then a new timer is set. This state should become consistent
+            // again when the user hovers/unhovers, but in any case, it's not
+            // enough of a risk or problem to be fixed. We skip the timeout
+            // when delay is zero though, just in case.
+            //
+            // N.B. We're clearing a setTimeout with clearInterval. MDN notes:
+            //      "It's worth noting that the pool of IDs used by
+            //       setInterval() and setTimeout() are shared, which means you
+            //       can technically use clearInterval() and clearTimeout()
+            //       interchangeably." The more you know.
+            //
+            if (delay != 0) {
+                scrolling.value = setTimeout(() => {
+                    scrolling.value = setInterval(() => {
+                        ct.scrollLeft += props.scrollspeed;
+                    }, 10);
+                }, delay);
+            } else {
+                scrolling.value = setInterval(() => {
+                    ct.scrollLeft += props.scrollspeed;
+                }, 10);
+            }
         }
 
         //
@@ -144,9 +168,9 @@ export default {
     template: `
     <div class = "round">
         <div :class = "{'round-header': true, 'solved': isSolved, 'highlighted': highlighted}" @click="$emit('toggle-body', round.id);">
-            <p v-if="showbody">▼</p>
-            <p v-if="!showbody">▶</p>
-            <h3>{{round.name}}</h3>
+            <p v-if="showbody" class="puzzle-icon">▼</p>
+            <p v-if="!showbody" class="puzzle-icon">▶</p>
+            <h3 @mouseover="scroll($event, 0)" @mouseout="stopscroll">{{round.name}}</h3>
             <p>({{solved}} solved / {{open}} open)</p>
             <button v-if="showbody" @click.stop="toggleSpoil">{{ spoilAll ? 'Hide' : 'Show' }} Spoilers</button>
         </div>
@@ -163,9 +187,9 @@ export default {
                 <div class="puzzle-icons">
                     <AddGeneric type="status" :puzzle='puzzle' :ismeta='round.meta_id === puzzle.id' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
                     <AddGeneric type="work state" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="highlight(puzzle.id)"></AddGeneric>
-                    <p :class="{'meta': round.meta_id === puzzle.id, 'puzzle-name': true}" @mouseover="scroll" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
-                    <p><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
-                    <p><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
+                    <p :class="{'meta': round.meta_id === puzzle.id, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
+                    <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
+                    <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
                     <AddGeneric type="note" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
                 </div>
                 <p 
@@ -175,7 +199,7 @@ export default {
                 </p>
                 <p 
                     v-if = "puzzle.answer !== null"
-                    :class = "{'answer': true, 'spoil': spoilAll, 'done': true}" @mouseover="scroll" @mouseout="stopscroll">
+                    :class = "{'answer': true, 'spoil': spoilAll, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
                     {{ puzzle.answer.padStart(16) }}
                 </p>
             </div>

@@ -14,9 +14,9 @@
                     {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open ({{puzzleStats["New"]}} new, {{puzzleStats["Being worked"]}} being worked, {{puzzleStats["Critical"]}} critical, {{puzzleStats["Needs eyes"]}} needs eyes, {{puzzleStats["WTF"]}} WTF). Page status: </p>
                 <div :class = updateState></div>
             </div>
-            <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a></p>
+            <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp; <button @click="showControls = !showControls">{{showControls ? 'Hide ' : 'Show '}}all controls</button></p>
 
-            <div id= "controls"> 
+            <div v-if="showControls" id= "controls"> 
             <button @click="applyShow(false)">Hide All Rounds</button>
             <button @click="applyShow(true)">Show All Rounds</button>
 
@@ -143,6 +143,8 @@
                 const puzzleFilter = ref({
                     'Solved': true, 'WTF': true, 'Critical': true, 'Being worked': true, 'New': true, 'Needs eyes': true, 'Unnecessary': true
                 })
+                const showControls = ref(true);
+
                 const sortPuzzles = ref(false);
                 const roundStats = ref({})
                 const puzzleStats = ref({})
@@ -154,7 +156,9 @@
 
                 const useColumns = ref(true);
                 const scrollSpeed = ref(1);
+                
                 const currPuzz = ref(0);
+
                 const solveSoundRef = useTemplateRef('solveSound');
                 
                 <?php
@@ -310,6 +314,9 @@
                     const sp = localStorage.getItem("sortPuzzles");
                     if (sp !== null && sp !== undefined) sortPuzzles.value = JSON.parse(sp);
 
+                    const sc = localStorage.getItem("showControls");
+                    if (sc !== null && sc !== undefined) showControls.value = JSON.parse(sc);
+
                     await fetchData(true);
                     setInterval(fetchData, 5000);
                 });
@@ -384,9 +391,13 @@
                     persist("sortPuzzles", update);
                 });
 
+                watch(showControls, (update) => {
+                    persist("showControls", update);
+                });
+
                 return {
                     data,
-                    showBody, highlight,
+                    showBody, highlight, showControls,
                     puzzleFilter, puzzleFilterKeys, sortPuzzles,
                     toggleBody, toggleKey,
                     applyShow, applyShowFilter,
