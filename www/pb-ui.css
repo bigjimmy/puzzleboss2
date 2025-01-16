@@ -16,6 +16,7 @@
     box-shadow: 0 2px 4px 0 rgba(0,0,0,0.2);
     width: fit-content;
     padding: 5px;
+    cursor: pointer;
 }
 
 #status > p{
@@ -85,14 +86,19 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px;
-    box-shadow: 0 0 6px 0 rgba(0,0,0,0.5);
+    box-shadow: 0 0 8px 0 rgba(0,0,0,0.5);
     background-color: rgba(0,0,0,0.1);
     transition: background-color 0.5s ease;
 }
 
 .round-header > * {
-    margin-block-start: 0.6em;
-    margin-block-end: 0.6em;
+    margin-block-start: 0.5em;
+    margin-block-end: 0.5em;
+}
+
+.round-header > h3 {
+    width: 110px;
+    overflow: hidden;
 }
 
 .round-header.solved {
@@ -127,6 +133,10 @@
     text-decoration: none;
 }
 
+textarea {
+    resize: none;
+}
+
 /*
  * Puzzles are layed out horizontally.
  * 
@@ -155,6 +165,14 @@
     flex-direction: row;
     align-items: last baseline;
     margin: 0px;
+}
+
+.puzzle-icon {
+    cursor: pointer;
+}
+
+.puzzle-icon:hover {
+    transform: scale(1.25);
 }
 
 .puzzle-name {

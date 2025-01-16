@@ -39,7 +39,7 @@ export default {
             }
             if (this.type === 'status') {
                 if (this.ismeta) return 'Ⓜ️';
-                const map = {'New': '🆕', 'Being worked': '🙇', 'Unnecessary': '😶‍🌫️', 'WTF': '☢️', 'Critical': '⚠️', 'Solved': '✅', 'Needs eyes': '👀'}
+                const map = {'New': '🆕', 'Being worked': '🙇', 'Unnecessary': '🙃', 'WTF': '☢️', 'Critical': '⚠️', 'Solved': '✅', 'Needs eyes': '👀'}
                 const ret = map[this.puzzle.status];
                 return (ret === undefined) ? '🤡' : ret;
             }
@@ -303,6 +303,14 @@ export default {
                 warning.value = "failed to POST; check devtools";
                 console.log(e);
             }
+
+            //
+            // Focus the modal if we closed it!
+            //
+            if (showModal.value == false) {
+                puzzle.value.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
+                context.emit('highlight-me');
+            }
         }
 
         return {
@@ -314,7 +322,7 @@ export default {
     },
 
     template: `
-    <p ref="puzzle-tag" :title="description" @click.prevent="toggleModal(false)">{{icon}}</p>
+    <p class="puzzle-icon" ref="puzzle-tag" :title="description" @click.prevent="toggleModal(false)">{{icon}}</p>
     <dialog v-if='showModal' open>
         <h4>Editing {{type}} for {{puzzle.name}}:</h4>
         <p v-if="warning.length !== 0">{{warning}}</p>
@@ -326,7 +334,7 @@ export default {
         <p v-if="type === 'work state'">Location: <input ref="modal-input" v-model="stateStrA"></input></p>
 
         <!-- note -->
-        <p><textarea v-if="type === 'note'" ref="modal-input" v-model="stateStrA"></textarea></p>
+        <p><textarea v-if="type === 'note'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
 
         <!-- status -->
         <p v-if="type === 'status'">Is Meta: <input type="checkbox" v-model="isMetaLoc"></input></p>
@@ -346,4 +354,3 @@ export default {
     </dialog>
     `
   }
-  
