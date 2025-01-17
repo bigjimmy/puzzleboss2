@@ -5,43 +5,41 @@ function get_scrape_data() {
   global $config;
   error_reporting(E_ALL);
   ini_set("display_errors", 1);
-  $url = $config->hunt_domain.'/puzzles';
+  $url = 'https://www.two-pi-noir.agency/all_puzzles';
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
   curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-  $session_id = idx($_GET, 'sessionid', $config->hunt_sessionid);
+  $cookie = idx($_GET, 'cookie', $config->hunt_cookie);
   $headers = array(
       'accept: text/html',
       'cache-control: max-age=0',
-      'cookie: sessionid='.$session_id,
+      'cookie: '.$cookie,
       'user-agent: Puzzleboss v0.1 HuntTeam:'.$config->hunt_team_username,
   );
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);
   curl_close($curl);
-  $resp = strstr($resp, 'id="__NEXT_DATA__"');
+  $resp = strstr($resp, 'window.initialAllPuzzlesState = ');
   $resp = strstr($resp, '{');
   $resp = strstr($resp, '</script>', true);
   $data = json_decode($resp, true);
   if ($data == null) {
     throw new Exception('No data returned; Hunt site is likely down right now.');
   }
-  $data = $data['props']['pageProps'];
   $rounds = idx($data, 'rounds', array());
-  $puzzles = idx($data, 'puzzles', array());
   $output = array();
-  foreach ($puzzles as $round_slug => $round_puzzles) {
-    foreach ($round_puzzles as $puzzle) {
+  foreach ($rounds as $round) {
+    foreach (idx($round, 'puzzles', array()) as $puzzle) {
       $output[] = array(
         'slug' => idx($puzzle, 'slug'),
-        'name' => idx($puzzle, 'name'),
-        'url' => idx($puzzle, 'url'),
-        'isMeta' => idx($puzzle, 'isMeta'),
+        'name' => idx($puzzle, 'title'),
+        'url' => 'https://www.two-pi-noir.agency/puzzles/'.idx($puzzle, 'slug', ''),
+        'isMeta' => idx($puzzle, 'is_meta'),
         'answer' => idx($puzzle, 'answer'),
         'round' => array(
-          'slug' => $round_slug,
-          'name' => idx(idx($rounds, $round_slug), 'name'),
-          'url' => idx(idx($rounds, $round_slug), 'url'),
+          'slug' => idx($round, 'slug'),
+          'name' => idx($round, 'title'),
+          'url' => 'https://www.two-pi-noir.agency/rounds/'.idx($round, 'slug', ''),
         ),
       );
     }
