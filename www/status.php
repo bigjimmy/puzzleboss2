@@ -49,20 +49,16 @@ function getroundnamefrompuzzid($puzzid) {
   return "NONEERROR";
 }
 
-function ispuzzlemeta($puzzid) {
-  global $rounds;
-  foreach ($rounds as $round) {
-    if ($round->meta_id == $puzzid) {
-      return "Yes";
-    }
-  }
-  return "";
+function ispuzzlemeta($puzzleid) {
+  $puzzleobj = readapi('/puzzles/' . $puzzleid);
+  return $puzzleobj->puzzle->ismeta;
 }
 
 foreach ($rounds as $round) {
   $totrounds += 1;
-  $metapuzzle = $round->meta_id;
   $puzzlearray = $round->puzzles;
+  $round_metas = 0;
+  $round_metas_solved = 0;
 
   // Count puzzles
   foreach ($puzzlearray as $puzzle) {
@@ -93,12 +89,19 @@ foreach ($rounds as $round) {
         break;
       case "Solved":
 	$solvedpuzz += 1;
-	if (isset($metapuzzle)) {
-          if ($metapuzzle == $puzzle->id) {
-            $solvedrounds += 1;
-	  }
-       }
+        if ($puzzle->ismeta) {
+          $round_metas_solved += 1;
+        }
+        break;
     }
+    if ($puzzle->ismeta) {
+      $round_metas += 1;
+    }
+  }
+  
+  // Round is solved only if it has metas and all are solved
+  if ($round_metas > 0 && $round_metas == $round_metas_solved) {
+    $solvedrounds += 1;
   }
 }
 
