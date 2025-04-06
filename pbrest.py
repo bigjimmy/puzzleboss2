@@ -433,6 +433,7 @@ def create_puzzle():
         puzname = sanitize_string(data["name"])
         puzuri = bleach.clean(data["puzzle_uri"])
         roundid = int(data["round_id"])
+        ismeta = data.get("ismeta", False)
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
@@ -494,8 +495,8 @@ def create_puzzle():
         cursor.execute(
             """
             INSERT INTO puzzle
-            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 puzname,
@@ -506,6 +507,7 @@ def create_puzzle():
                 puzname.lower(),
                 drive_id,
                 drive_uri,
+                ismeta,
             ),
         )
         conn.commit()
@@ -840,6 +842,10 @@ def update_puzzle_part(id, part):
                 clear_puzzle_solvers(id)
                 update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
+                
+                # Check if this is a meta puzzle and if all metas in the round are solved
+                if mypuzzle["puzzle"]["ismeta"]:
+                    check_round_completion(mypuzzle["puzzle"]["round_id"])
         elif (
             value == "Needs eyes"
             or value == "Critical"
@@ -849,6 +855,14 @@ def update_puzzle_part(id, part):
         ):
             update_puzzle_part_in_db(id, part, value)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
+
+    elif part == "ismeta":
+        # When setting a puzzle as meta, just update it directly
+        update_puzzle_part_in_db(id, part, value)
+        
+        # Check if this is a meta puzzle and if all metas in the round are solved
+        if value:
+            check_round_completion(mypuzzle["puzzle"]["round_id"])
 
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
@@ -874,6 +888,10 @@ def update_puzzle_part(id, part):
             )
             clear_puzzle_solvers(id)
             chat_announce_solved(mypuzzle["puzzle"]["name"])
+            
+            # Check if this is a meta puzzle and if all metas in the round are solved
+            if mypuzzle["puzzle"]["ismeta"]:
+                check_round_completion(mypuzzle["puzzle"]["round_id"])
 
     elif part == "comments":
         update_puzzle_part_in_db(id, part, value)
@@ -1232,6 +1250,31 @@ def delete_pb_solver(username):
     cursor.execute("DELETE from solver where name = %s", (username,))
     conn.commit()
     return 0
+
+def check_round_completion(round_id):
+    """Check if all meta puzzles in a round are solved"""
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Solved' THEN 1 ELSE 0 END) as solved 
+            FROM puzzle 
+            WHERE round_id = %s AND ismeta = 1
+            """,
+            (round_id,)
+        )
+        result = cursor.fetchone()
+        if result["total"] > 0 and result["total"] == result["solved"]:
+            # All meta puzzles are solved, mark the round as solved
+            cursor.execute(
+                "UPDATE round SET status = 'Solved' WHERE id = %s",
+                (round_id,)
+            )
+            conn.commit()
+            debug_log(3, "Round %s marked as solved - all meta puzzles completed" % round_id)
+    except:
+        debug_log(0, "Error checking round completion status for round %s" % round_id)
 
 if __name__ == "__main__":
     if initdrive() != 0:

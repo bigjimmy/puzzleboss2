@@ -141,6 +141,8 @@ function print_rounds_table($rounds, $mypuzzle) {
   foreach ($rounds as $round) {
     $num_open = 0;
     $num_solved = 0;
+    $num_metas = 0;
+    $num_metas_solved = 0;
     foreach ($round->puzzles as $puzzle) {
       if ($puzzle->status == '[hidden]') {
         continue;
@@ -149,6 +151,12 @@ function print_rounds_table($rounds, $mypuzzle) {
       if ($puzzle->status == 'Solved') {
         $num_solved++;
       }
+      if ($puzzle->ismeta) {
+        $num_metas++;
+        if ($puzzle->status == 'Solved') {
+          $num_metas_solved++;
+        }
+      }
     }
     $round_title = sprintf(
       '%s <span class="round-stats">(%d solved / %d open)</span>',
@@ -156,9 +164,13 @@ function print_rounds_table($rounds, $mypuzzle) {
       $num_solved,
       $num_open,
     );
-    echo $round->meta_id
-      ? sprintf('<th title="Meta unlocked!">🏅 %s</th>', $round_title)
-      : sprintf('<th>%s</th>', $round_title);
+    if ($num_metas > 0) {
+      $round_title .= sprintf(' <span class="round-stats">(%d/%d metas solved)</span>', 
+        $num_metas_solved, 
+        $num_metas
+      );
+    }
+    echo sprintf('<th>%s</th>', $round_title);
   }
   echo '</tr><tr>';
   $min_hint_time = time() - 6 * 3600;
@@ -175,22 +187,18 @@ function print_rounds_table($rounds, $mypuzzle) {
       $puzzleid = $puzzle->id;
       $puzzlename = $puzzle->name;
       $styleinsert = "";
-      if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+      if ($puzzle->ismeta && $puzzle->status != "Critical") {
         $styleinsert .= " bgcolor='Gainsboro' ";
       }
       if ($puzzlename == $mypuzzle) {
         $styleinsert .= " style='text-decoration:underline overline wavy' ";
       }
-      if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+      if ($puzzle->status == "New" && !$puzzle->ismeta) {
         $styleinsert .= " bgcolor='aquamarine' ";
       }
       if ($puzzle->status == "Critical") {
         $styleinsert .= " bgcolor='HotPink' ";
       }
-      // Not sure what to do here for style for solved/unnecc puzzles
-      //if ($puzzle->status == "Solved" || $val->puzzle->status == "Unnecessary") {
-      //  $styleinsert .= ' style="text-decoration:line-through" ';
-      //}
       echo '<tr ' . $styleinsert . '>';
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
       switch ($puzzle->status) {
@@ -218,6 +226,9 @@ function print_rounds_table($rounds, $mypuzzle) {
       }
       echo '</a></td>';
       echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
+      if ($puzzle->ismeta) {
+        echo ' <span title="Meta Puzzle">' . ($use_text ? '(M)' : '🎯') . '</span>';
+      }
       if (
         $puzzle->status != 'Solved' &&
         is_numeric($puzzle->chat_channel_id)

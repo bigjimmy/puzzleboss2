@@ -180,7 +180,6 @@ $userobj = readapi('/solvers/' . $userid);
 $puzzleobj = readapi('/puzzles/' . $puzzid);
 $puzname = $puzzleobj->puzzle->name;
 $username = $userobj->solver->name;
-$roundmeta = readapi('/rounds/' . $puzzleobj->puzzle->round_id . '/meta_id')->round->meta_id;
 
 echo 'You Are: ' . $username;
 echo '<br><br><table border=2>';
@@ -193,11 +192,7 @@ echo '<tr><td><b>Cur. Solvers</b></td><td>' . $puzzleobj->puzzle->cursolvers . '
 echo '<tr><td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td></tr>';
 echo '<tr><td><b>Comments</b></td><td>' . htmlentities($puzzleobj->puzzle->comments ?? '') . '</td></tr>';
 echo '<tr><td><b>Meta For Round</b></td><td>';
-if ($roundmeta == $puzzid) {
-  echo "yes";
-} else {
-  echo "no";
-}
+echo $puzzleobj->puzzle->ismeta ? "Yes" : "No";
 echo '</td></tr></table>';
 
 //Solver Assignment
@@ -282,23 +277,17 @@ echo '</form></td></tr>';
 
 // Meta Assignment
 echo '<tr><td>Meta For Round</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
-echo '<select id="ismeta" name="ismeta"/>';
-$ismeta = $roundmeta == $puzzid;
-if (isset($_GET['ismeta'])) {
-  $ismeta = (int)$_GET['ismeta'];
-}
-if (!$ismeta) {
-  echo '<option selected value="no">No</option>';
-  echo '<option value="yes">Yes</option>';
-} else {
-  echo '<option selected value="yes">Yes</option>';
-  echo '<option value="no">No</option>';
-}
+echo '<input type="hidden" name="partupdate" value="yes">';
 echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
 echo '<input type="hidden" name="uid" value="' . $userid . '">';
-echo '<input type="hidden" name="rid" value="' . $puzzleobj->puzzle->round_id . '"></td>';
+echo '<input type="hidden" name="part" value="ismeta">';
+echo '<select id="ismeta" name="value"/>';
+$ismeta = $puzzleobj->puzzle->ismeta;
+echo '<option value="0" ' . ($ismeta ? '' : 'selected') . '>No</option>';
+echo '<option value="1" ' . ($ismeta ? 'selected' : '') . '>Yes</option>';
+echo '</select>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
-echo '</form>';
+echo '</form></td></tr>';
 
 echo '</table>';
 

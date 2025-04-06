@@ -143,11 +143,12 @@ CREATE TABLE `puzzle` (
   `drive_id` varchar(100) DEFAULT NULL,
   `xyzloc` varchar(500) DEFAULT NULL,
   `chat_channel_name` varchar(300) DEFAULT NULL,
-  `ismeta` tinyint DEFAULT 0 NOT NULL,
+  `ismeta` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
   KEY `fk_puzzles_rounds1_idx` (`round_id`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
+
 --
 -- Temporary table structure for view `puzzle_cursolver_distinct`
 --
@@ -282,7 +283,7 @@ CREATE TABLE `round` (
   `round_uri` text,
   `drive_uri` varchar(255) DEFAULT NULL,
   `drive_id` varchar(100) DEFAULT NULL,
-  `meta_id` int(11) DEFAULT NULL,
+  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','[hidden]') NOT NULL DEFAULT 'New',
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
@@ -456,7 +457,7 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET character_set_results     = utf8 */;
 /*!50001 SET collation_connection      = utf8_unicode_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, `round`.`meta_id` AS `meta_id`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */; 
+/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */; 
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
