@@ -297,32 +297,100 @@ def get_one_solver(id):
     }
 
 
-@app.route("/solvers/<id>/<part>", endpoint="solver_part", methods=["GET"])
-@swag_from("swag/getsolverpart.yaml", endpoint="solver_part", methods=["GET"])
-def get_solver_part(id, part):
+@app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
+@swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
+def update_solver_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
-    if part == "lastact":
-        rv = get_last_activity_for_solver(id)
-    else:
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+        value = data[part]
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+    except KeyError:
+        raise Exception("Expected %s field missing" % part)
+    # Check if this is a legit solver
+    mysolver = get_one_solver(id)
+    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % id)
+
+    # This is a change to the solver's claimed puzzle
+    if part == "puzz":
+        if value:
+            # Assigning puzzle, so check if puzzle is real
+            debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
+            mypuzz = get_one_puzzle(value)
+            debug_log(5, "return value from get_one_puzzle %s is %s" % (value, mypuzz))
+            if mypuzz["status"] != "ok":
+                raise Exception(
+                    "Error retrieving info on puzzle %s, which user %s is attempting to claim"
+                    % (value, id)
+                )
+            # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
+            if mypuzz["puzzle"]["status"] == "New":
+                debug_log(
+                    3,
+                    "Automatically marking puzzle id %s, name %s as being worked on."
+                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"]),
+                )
+                update_puzzle_part_in_db(value, "status", "Being worked")
+
+            # Assign the solver to the puzzle using the new JSON-based system
+            assign_solver_to_puzzle(value, id)
+        else:
+            # Puzz is empty, so this is a de-assignment
+            # Find the puzzle the solver is currently assigned to
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id FROM puzzle 
+                WHERE JSON_CONTAINS(current_solvers, 
+                    JSON_OBJECT('solver_id', %s), 
+                    '$.solvers'
+                )
+            """, (id,))
+            current_puzzle = cursor.fetchone()
+            if current_puzzle:
+                # Unassign the solver from their current puzzle
+                unassign_solver_from_puzzle(current_puzzle['id'], id)
+
+        # Now log it in the activity table
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-            cursor.execute(f"SELECT {part} from solver_view where id = %s", (id,))
-            rv = cursor.fetchone()[part]
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'apache', 'interact')
+                """,
+                (value, id),
+            )
+            conn.commit()
         except TypeError:
-            raise Exception("Solver %s not found in database" % id)
-        except:
             raise Exception(
-                "Exception in fetching %s part for solver %s from database"
-                % (
-                    part,
-                    id,
-                )
+                "Exception in logging change to puzzle %s in activity table for solver %s in database"
+                % (value, id)
             )
 
-    debug_log(4, "fetched round part %s for %s" % (part, id))
-    return {"status": "ok", "solver": {"id": id, part: rv}}
+        debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
+        return {"status": "ok", "solver": {"id": id, part: value}}
+
+    # This is actually a change to the solver's info
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
+        conn.commit()
+    except:
+        raise Exception(
+            "Exception in modifying %s of solver %s in database" % (part, id)
+        )
+
+    debug_log(3, "solver %s %s updated in database" % (id, part))
+
+    return {"status": "ok", "solver": {"id": id, part: value}}
 
 
 @app.route("/version", endpoint="version", methods=["GET"])
@@ -697,107 +765,6 @@ def create_solver():
     debug_log(3, "solver %s added to database!" % name)
 
     return {"status": "ok", "solver": {"name": name, "fullname": fullname}}
-
-
-@app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
-@swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
-def update_solver_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        value = data[part]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected %s field missing" % part)
-    # Check if this is a legit solver
-    mysolver = get_one_solver(id)
-    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
-    if "status" not in mysolver or mysolver["status"] != "ok":
-        raise Exception("Error looking up solver %s" % id)
-
-    # This is a change to the solver's claimed puzzle
-    if part == "puzz":
-        if value:
-            # Assigning puzzle, so check if puzzle is real
-            debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
-            mypuzz = get_one_puzzle(value)
-            debug_log(5, "return value from get_one_puzzle %s is %s" % (value, mypuzz))
-            if mypuzz["status"] != "ok":
-                raise Exception(
-                    "Error retrieving info on puzzle %s, which user %s is attempting to claim"
-                    % (value, id)
-                )
-            # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
-            if mypuzz["puzzle"]["status"] == "New":
-                debug_log(
-                    3,
-                    "Automatically marking puzzle id %s, name %s as being worked on."
-                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"]),
-                )
-                update_puzzle_part_in_db(value, "status", "Being worked")
-
-        else:
-            # Puzz is empty, so this is a de-assignment. Populate the db with empty string for it.
-            value = None
-
-        # Now log it in the activity table
-        try:
-            conn = mysql.connection
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'apache', 'interact')
-                """,
-                (value, id),
-            )
-            conn.commit()
-        except TypeError:
-            raise Exception(
-                "Exception in logging change to puzzle %s in activity table for solver %s in database"
-                % (value, id)
-            )
-
-        debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
-
-        if mypuzz["puzzle"]["status"] != "Solved":
-            # Now actually assign puzzle to solver on unsolved puzzles
-            try:
-                conn = mysql.connection
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (%s, %s)",
-                    (value, id),
-                )
-                conn.commit()
-            except Exception:
-                tb = traceback.format_exc()
-                raise Exception(
-                    "Exception in setting solver to %s for puzzle %s. Traceback: %s"
-                    % (id, value, tb)
-                )
-
-            debug_log(3, "Solver %s claims to be working on %s" % (id, value))
-
-        return {"status": "ok", "solver": {"id": id, part: value}}
-
-    # This is actually a change to the solver's info
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
-        conn.commit()
-    except:
-        raise Exception(
-            "Exception in modifying %s of solver %s in database" % (part, id)
-        )
-
-    debug_log(3, "solver %s %s updated in database" % (id, part))
-
-    return {"status": "ok", "solver": {"id": id, part: value}}
 
 
 @app.route("/puzzles/<id>/<part>", endpoint="post_puzzle_part", methods=["POST"])
