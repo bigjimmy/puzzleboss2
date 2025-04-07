@@ -154,13 +154,12 @@ CREATE TABLE `puzzle` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
----
---- Remove legacy tables and views
----
+--
+-- Remove legacy tables and views
+--
 
 DROP TABLE IF EXISTS `puzzle_cursolver_distinct`;
 DROP TABLE IF EXISTS `puzzle_cursolvers`;
-DROP TABLE IF EXISTS `puzzle_solver`;
 DROP TABLE IF EXISTS `puzzle_solver_distinct`;
 DROP TABLE IF EXISTS `puzzle_solvers`;
 
