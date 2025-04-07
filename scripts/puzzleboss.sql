@@ -379,10 +379,7 @@ BEGIN
     DECLARE result TEXT;
     SELECT p.name INTO result
     FROM puzzle p
-    WHERE JSON_CONTAINS(p.current_solvers, 
-        JSON_OBJECT('solver_id', solver_id), 
-        '$.solvers'
-    )
+    WHERE JSON_SEARCH(p.current_solvers, 'one', solver_id, NULL, '$.solvers[*].solver_id') IS NOT NULL
     LIMIT 1;
     RETURN IFNULL(result, '');
 END //
@@ -394,10 +391,7 @@ BEGIN
     DECLARE result TEXT;
     SELECT GROUP_CONCAT(DISTINCT p.name) INTO result
     FROM puzzle p
-    WHERE JSON_CONTAINS(p.solver_history, 
-        JSON_OBJECT('solver_id', solver_id), 
-        '$.solvers[*]'
-    );
+    WHERE JSON_SEARCH(p.solver_history, 'one', solver_id, NULL, '$.solvers[*].solver_id') IS NOT NULL;
     RETURN IFNULL(result, '');
 END //
 
