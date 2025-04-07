@@ -148,9 +148,7 @@ CREATE TABLE `puzzle` (
   `solver_history` JSON DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
-  KEY `fk_puzzles_rounds1_idx` (`round_id`),
-  INDEX `idx_current_solvers` ((CAST(current_solvers AS CHAR(255) ARRAY))),
-  INDEX `idx_solver_history` ((CAST(solver_history AS CHAR(255) ARRAY)))
+  KEY `fk_puzzles_rounds1_idx` (`round_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
