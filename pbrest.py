@@ -14,6 +14,7 @@ from secrets import token_hex
 from flasgger.utils import swag_from
 from pbldaplib import *
 from werkzeug.exceptions import HTTPException
+import json
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -1143,11 +1144,19 @@ def clear_puzzle_solvers(id):
 
 
 def update_puzzle_part_in_db(id, part, value):
-    debug_log(4, "start, called with (id, part, value): %s, %s, %s" % (id, part, value))
     conn = mysql.connection
     cursor = conn.cursor()
-    cursor.execute(f"UPDATE puzzle SET {part} = %s WHERE id = %s", (value, id))
-    conn.commit()
+    
+    if part == 'solvers':
+        # Handle solver assignments
+        if value:  # Assign solver
+            assign_solver_to_puzzle(id, value)
+        else:  # Clear all solvers
+            clear_puzzle_solvers(id)
+    else:
+        # Handle other puzzle updates
+        cursor.execute(f"UPDATE puzzle SET {part} = %s WHERE id = %s", (value, id))
+        conn.commit()
 
     debug_log(4, "puzzle %s %s updated in database" % (id, part))
 
@@ -1275,6 +1284,78 @@ def check_round_completion(round_id):
             debug_log(3, "Round %s marked as solved - all meta puzzles completed" % round_id)
     except:
         debug_log(0, "Error checking round completion status for round %s" % round_id)
+
+def assign_solver_to_puzzle(puzzle_id, solver_id):
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Update current solvers
+    cursor.execute("""
+        SELECT current_solvers FROM puzzle WHERE id = %s
+    """, (puzzle_id,))
+    current_solvers = cursor.fetchone()['current_solvers'] or {'solvers': []}
+    
+    # Add new solver if not already present
+    if not any(s['solver_id'] == solver_id for s in current_solvers['solvers']):
+        current_solvers['solvers'].append({'solver_id': solver_id})
+        cursor.execute("""
+            UPDATE puzzle 
+            SET current_solvers = %s 
+            WHERE id = %s
+        """, (json.dumps(current_solvers), puzzle_id))
+    
+    # Update history
+    cursor.execute("""
+        SELECT solver_history FROM puzzle WHERE id = %s
+    """, (puzzle_id,))
+    history = cursor.fetchone()['solver_history'] or {'solvers': []}
+    
+    # Add to history if not already present
+    if not any(s['solver_id'] == solver_id for s in history['solvers']):
+        history['solvers'].append({'solver_id': solver_id})
+        cursor.execute("""
+            UPDATE puzzle 
+            SET solver_history = %s 
+            WHERE id = %s
+        """, (json.dumps(history), puzzle_id))
+    
+    conn.commit()
+
+def unassign_solver_from_puzzle(puzzle_id, solver_id):
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Update current solvers
+    cursor.execute("""
+        SELECT current_solvers FROM puzzle WHERE id = %s
+    """, (puzzle_id,))
+    current_solvers = cursor.fetchone()['current_solvers'] or {'solvers': []}
+    
+    current_solvers['solvers'] = [
+        s for s in current_solvers['solvers'] 
+        if s['solver_id'] != solver_id
+    ]
+    
+    cursor.execute("""
+        UPDATE puzzle 
+        SET current_solvers = %s 
+        WHERE id = %s
+    """, (json.dumps(current_solvers), puzzle_id))
+    
+    conn.commit()
+
+def clear_puzzle_solvers(puzzle_id):
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Clear current solvers
+    cursor.execute("""
+        UPDATE puzzle 
+        SET current_solvers = '{"solvers": []}' 
+        WHERE id = %s
+    """, (puzzle_id,))
+    
+    conn.commit()
 
 if __name__ == "__main__":
     if initdrive() != 0:

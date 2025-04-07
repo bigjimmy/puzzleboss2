@@ -144,10 +144,15 @@ CREATE TABLE `puzzle` (
   `xyzloc` varchar(500) DEFAULT NULL,
   `chat_channel_name` varchar(300) DEFAULT NULL,
   `ismeta` tinyint(1) NOT NULL DEFAULT 0,
+  `current_solvers` JSON DEFAULT NULL,
+  `solver_history` JSON DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
-  KEY `fk_puzzles_rounds1_idx` (`round_id`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
+  KEY `fk_puzzles_rounds1_idx` (`round_id`),
+  INDEX `idx_current_solvers` ((CAST(current_solvers AS CHAR(255) ARRAY))),
+  INDEX `idx_solver_history` ((CAST(solver_history AS CHAR(255) ARRAY)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Temporary table structure for view `puzzle_cursolver_distinct`
@@ -525,3 +530,143 @@ SET character_set_client = @saved_cs_client;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+--
+-- Helper functions for JSON-based solver tracking
+--
+
+DELIMITER //
+
+CREATE FUNCTION get_current_solvers(puzzle_id INT) 
+RETURNS TEXT
+DETERMINISTIC
+BEGIN
+    DECLARE result TEXT;
+    SELECT GROUP_CONCAT(solver.name) INTO result
+    FROM puzzle p,
+    JSON_TABLE(
+        p.current_solvers,
+        '$.solvers[*]' COLUMNS (
+            solver_id INT PATH '$.solver_id'
+        )
+    ) AS jt
+    JOIN solver ON solver.id = jt.solver_id
+    WHERE p.id = puzzle_id;
+    RETURN IFNULL(result, '');
+END //
+
+CREATE FUNCTION get_all_solvers(puzzle_id INT) 
+RETURNS TEXT
+DETERMINISTIC
+BEGIN
+    DECLARE result TEXT;
+    SELECT GROUP_CONCAT(DISTINCT solver.name) INTO result
+    FROM puzzle p,
+    JSON_TABLE(
+        p.solver_history,
+        '$.solvers[*]' COLUMNS (
+            solver_id INT PATH '$.solver_id'
+        )
+    ) AS jt
+    JOIN solver ON solver.id = jt.solver_id
+    WHERE p.id = puzzle_id;
+    RETURN IFNULL(result, '');
+END //
+
+CREATE FUNCTION get_current_puzzle(solver_id INT) 
+RETURNS TEXT
+DETERMINISTIC
+BEGIN
+    DECLARE result TEXT;
+    SELECT p.name INTO result
+    FROM puzzle p
+    WHERE JSON_CONTAINS(p.current_solvers, 
+        JSON_OBJECT('solver_id', solver_id), 
+        '$.solvers'
+    )
+    LIMIT 1;
+    RETURN IFNULL(result, '');
+END //
+
+CREATE FUNCTION get_all_puzzles(solver_id INT) 
+RETURNS TEXT
+DETERMINISTIC
+BEGIN
+    DECLARE result TEXT;
+    SELECT GROUP_CONCAT(DISTINCT p.name) INTO result
+    FROM puzzle p
+    WHERE JSON_CONTAINS(p.solver_history, 
+        JSON_OBJECT('solver_id', solver_id), 
+        '$.solvers[*]'
+    );
+    RETURN IFNULL(result, '');
+END //
+
+DELIMITER ;
+
+--
+-- Updated views for JSON-based solver tracking
+--
+
+DROP TABLE IF EXISTS `puzzle_cursolvers`;
+/*!50001 DROP VIEW IF EXISTS `puzzle_cursolvers`*/;
+SET @saved_cs_client     = @@character_set_client;
+SET character_set_client = utf8;
+/*!50001 CREATE TABLE `puzzle_cursolvers` (
+  `puzzle_id` tinyint NOT NULL,
+  `cursolvers` tinyint NOT NULL
+) ENGINE=INNODB */;
+SET character_set_client = @saved_cs_client;
+
+CREATE OR REPLACE VIEW `puzzle_cursolvers` AS 
+SELECT p.id AS puzzle_id, get_current_solvers(p.id) AS cursolvers
+FROM puzzle p;
+
+DROP TABLE IF EXISTS `puzzle_solvers`;
+/*!50001 DROP VIEW IF EXISTS `puzzle_solvers`*/;
+SET @saved_cs_client     = @@character_set_client;
+SET character_set_client = utf8;
+/*!50001 CREATE TABLE `puzzle_solvers` (
+  `puzzle_id` tinyint NOT NULL,
+  `solvers` tinyint NOT NULL
+) ENGINE=INNODB */;
+SET character_set_client = @saved_cs_client;
+
+CREATE OR REPLACE VIEW `puzzle_solvers` AS 
+SELECT p.id AS puzzle_id, get_all_solvers(p.id) AS solvers
+FROM puzzle p;
+
+DROP TABLE IF EXISTS `solver_curpuzzle`;
+/*!50001 DROP VIEW IF EXISTS `solver_curpuzzle`*/;
+SET @saved_cs_client     = @@character_set_client;
+SET character_set_client = utf8;
+/*!50001 CREATE TABLE `solver_curpuzzle` (
+  `solver_id` tinyint NOT NULL,
+  `curpuzzle` tinyint NOT NULL,
+  `curpuzzle_id` tinyint NOT NULL
+) ENGINE=INNODB */;
+SET character_set_client = @saved_cs_client;
+
+CREATE OR REPLACE VIEW `solver_curpuzzle` AS 
+SELECT s.id AS solver_id, 
+       get_current_puzzle(s.id) AS curpuzzle,
+       (SELECT p.id FROM puzzle p 
+        WHERE JSON_CONTAINS(p.current_solvers, 
+            JSON_OBJECT('solver_id', s.id), 
+            '$.solvers'
+        ) LIMIT 1) AS curpuzzle_id
+FROM solver s;
+
+DROP TABLE IF EXISTS `solver_puzzles`;
+/*!50001 DROP VIEW IF EXISTS `solver_puzzles`*/;
+SET @saved_cs_client     = @@character_set_client;
+SET character_set_client = utf8;
+/*!50001 CREATE TABLE `solver_puzzles` (
+  `solver_id` tinyint NOT NULL,
+  `puzzles` tinyint NOT NULL
+) ENGINE=INNODB */;
+SET character_set_client = @saved_cs_client;
+
+CREATE OR REPLACE VIEW `solver_puzzles` AS 
+SELECT s.id AS solver_id, get_all_puzzles(s.id) AS puzzles
+FROM solver s;
