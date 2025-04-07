@@ -1,4 +1,4 @@
--- mysql puzzleboss schema 2022
+-- mysql puzzleboss schema 2025
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -154,15 +154,16 @@ CREATE TABLE `puzzle` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
---
--- Temporary table structure for view `puzzle_cursolver_distinct`
---
+---
+--- Remove legacy tables and views
+---
 
 DROP TABLE IF EXISTS `puzzle_cursolver_distinct`;
 DROP TABLE IF EXISTS `puzzle_cursolvers`;
 DROP TABLE IF EXISTS `puzzle_solver`;
 DROP TABLE IF EXISTS `puzzle_solver_distinct`;
 DROP TABLE IF EXISTS `puzzle_solvers`;
+
 DROP TABLE IF EXISTS `puzzle_view`;
 /*!50001 DROP VIEW IF EXISTS `puzzle_view`*/;
 SET @saved_cs_client     = @@character_set_client;
@@ -244,36 +245,6 @@ CREATE TABLE `solver` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 --
--- Temporary table structure for view `solver_curpuzzle`
---
-
-
-DROP TABLE IF EXISTS `solver_curpuzzle`;
-/*!50001 DROP VIEW IF EXISTS `solver_curpuzzle`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `solver_curpuzzle` (
-  `solver_id` tinyint NOT NULL,
-  `curpuzzle` tinyint NOT NULL,
-  `curpuzzle_id` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
-
---
--- Temporary table structure for view `solver_puzzles`
---
-
-DROP TABLE IF EXISTS `solver_puzzles`;
-/*!50001 DROP VIEW IF EXISTS `solver_puzzles`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `solver_puzzles` (
-  `solver_id` tinyint NOT NULL,
-  `puzzles` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
-
---
 -- Temporary table structure for view `solver_view`
 --
 
@@ -324,43 +295,6 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET collation_connection      = utf8_unicode_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
 /*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */; 
-/*!50001 SET character_set_client      = @saved_cs_client */;
-/*!50001 SET character_set_results     = @saved_cs_results */;
-/*!50001 SET collation_connection      = @saved_col_connection */;
-
-
---
--- Final view structure for view `solver_curpuzzle`
---
-
-/*!50001 DROP TABLE IF EXISTS `solver_curpuzzle`*/;
-/*!50001 DROP VIEW IF EXISTS `solver_curpuzzle`*/;
-/*!50001 SET @saved_cs_client          = @@character_set_client */;
-/*!50001 SET @saved_cs_results         = @@character_set_results */;
-/*!50001 SET @saved_col_connection     = @@collation_connection */;
-/*!50001 SET character_set_client      = utf8 */;
-/*!50001 SET character_set_results     = utf8 */;
-/*!50001 SET collation_connection      = utf8_unicode_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `solver_curpuzzle` AS select `solver`.`id` AS `solver_id`,`puzzle`.`name` AS `curpuzzle`,`puzzle`.`id` AS `curpuzzle_id` from ((`solver` left join `puzzle_cursolver_distinct` `sp` on((`sp`.`solver_id` = `solver`.`id`))) left join `puzzle` on((`puzzle`.`id` = `sp`.`puzzle_id`))) */;
-/*!50001 SET character_set_client      = @saved_cs_client */;
-/*!50001 SET character_set_results     = @saved_cs_results */;
-/*!50001 SET collation_connection      = @saved_col_connection */;
-
---
--- Final view structure for view `solver_puzzles`
---
-
-/*!50001 DROP TABLE IF EXISTS `solver_puzzles`*/;
-/*!50001 DROP VIEW IF EXISTS `solver_puzzles`*/;
-/*!50001 SET @saved_cs_client          = @@character_set_client */;
-/*!50001 SET @saved_cs_results         = @@character_set_results */;
-/*!50001 SET @saved_col_connection     = @@collation_connection */;
-/*!50001 SET character_set_client      = utf8 */;
-/*!50001 SET character_set_results     = utf8 */;
-/*!50001 SET collation_connection      = utf8_unicode_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `solver_puzzles` AS select `solver`.`id` AS `solver_id`,group_concat(`puzzle`.`name` separator ',') AS `puzzles` from ((`solver` left join `puzzle_solver_distinct` `ps` on((`ps`.`solver_id` = `solver`.`id`))) left join `puzzle` on((`puzzle`.`id` = `ps`.`puzzle_id`))) group by `solver`.`id` */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
