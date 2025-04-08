@@ -32,12 +32,14 @@ def check_backup_permissions(backups_dir: Path) -> bool:
         if backups_dir.exists():
             if not os.access(backups_dir, os.W_OK):
                 print(f"Error: Backup directory {backups_dir} exists but is not writable")
+                print("Try running the script with sudo: sudo ./reset-hunt.py")
                 return False
         else:
             # Try to create the directory
             backups_dir.mkdir(parents=True, exist_ok=True)
             if not os.access(backups_dir, os.W_OK):
                 print(f"Error: Cannot write to newly created backup directory {backups_dir}")
+                print("Try running the script with sudo: sudo ./reset-hunt.py")
                 return False
         
         # Test write permission by creating a temporary file
@@ -47,11 +49,13 @@ def check_backup_permissions(backups_dir: Path) -> bool:
             test_file.unlink()
         except Exception as e:
             print(f"Error: Cannot write to backup directory {backups_dir}: {e}")
+            print("Try running the script with sudo: sudo ./reset-hunt.py")
             return False
             
         return True
     except Exception as e:
         print(f"Error checking backup directory permissions: {e}")
+        print("Try running the script with sudo: sudo ./reset-hunt.py")
         return False
 
 def run_command(cmd, error_msg):
