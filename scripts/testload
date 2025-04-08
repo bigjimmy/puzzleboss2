@@ -2,12 +2,13 @@
 
 ROUNDS=10
 PUZZLES=15
+TESTSOLVERS = NO  ## DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. IT WILL DELETE ALL EXISTING SOLVERS AND CREATE NEW ONES.
 
-## uncomment below to also load test solvers (DONT DO THIS IF YOU ALREADY HAVE A VALID SOLVERS DB)
-#for i in `seq 1 25`; 
-#do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc'"$i"'","fullname":"user test"}'; 
-#done
-#curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc", "fullname":"Benjamin OConnor"}'
+if [ "$TESTSOLVERS" = "YES" ]; then
+for i in `seq 1 25`; 
+do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc'"$i"'","fullname":"user test"}'; 
+done
+curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc", "fullname":"Benjamin OConnor"}'
 
 for i in `seq 1 $ROUNDS`; 
 do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/rounds -d '{"name":"Round'"$i"'"}'; 
