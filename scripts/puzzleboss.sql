@@ -200,6 +200,7 @@ SET character_set_client = utf8;
   `round_uri` tinyint NOT NULL,
   `drive_uri` tinyint NOT NULL,
   `drive_id` tinyint NOT NULL,
+  `meta_id` tinyint NOT NULL,
   `puzzles` tinyint NOT NULL
 ) ENGINE=INNODB */;
 SET character_set_client = @saved_cs_client;
@@ -260,24 +261,6 @@ SET character_set_client = utf8;
 SET character_set_client = @saved_cs_client;
 
 --
--- Final view structure for view `puzzle_view`
---
-
-/*!50001 DROP TABLE IF EXISTS `puzzle_view`*/;
-/*!50001 DROP VIEW IF EXISTS `puzzle_view`*/;
-/*!50001 SET @saved_cs_client          = @@character_set_client */;
-/*!50001 SET @saved_cs_results         = @@character_set_results */;
-/*!50001 SET @saved_col_connection     = @@collation_connection */;
-/*!50001 SET character_set_client      = utf8 */;
-/*!50001 SET character_set_results     = utf8 */;
-/*!50001 SET collation_connection      = utf8_unicode_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `puzzle_view` AS select `puzzle`.`id` AS `id`,`puzzle`.`name` AS `name`,`puzzle`.`status` AS `status`,`puzzle`.`answer` AS `answer`,`round`.`name` AS `roundname`, `round`.`id` AS `round_id`, `puzzle`.`comments` AS `comments`, `puzzle`.`drive_uri` AS `drive_uri`,`puzzle`.`chat_channel_name` AS `chat_channel_name`,`puzzle`.`chat_channel_id` AS `chat_channel_id`,`puzzle`.`chat_channel_link` AS `chat_channel_link`,`puzzle`.`drive_id` AS `drive_id`,`puzzle`.`puzzle_uri` AS `puzzle_uri`, get_all_solvers(puzzle.id) AS `solvers`, get_current_solvers(puzzle.id) AS `cursolvers`,`puzzle`.`xyzloc` AS `xyzloc`, `puzzle`.`ismeta` AS `ismeta` from (`puzzle` join `round` on((`round`.`id` = `puzzle`.`round_id`))) */;
-/*!50001 SET character_set_client      = @saved_cs_client */;
-/*!50001 SET character_set_results     = @saved_cs_results */;
-/*!50001 SET collation_connection      = @saved_col_connection */;
-
---
 -- Final view structure for view `round_view`
 --
 
@@ -290,7 +273,7 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET character_set_results     = utf8 */;
 /*!50001 SET collation_connection      = utf8_unicode_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */;
+/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */; 
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
@@ -393,3 +376,49 @@ BEGIN
 END //
 
 DELIMITER ;
+
+-- Add indexes for better performance
+ALTER TABLE puzzle ADD INDEX idx_puzzle_id (id);
+ALTER TABLE puzzle ADD INDEX idx_puzzle_round_id (round_id);
+ALTER TABLE round ADD INDEX idx_round_id (id);
+
+-- Optimize puzzle_view while maintaining same interface
+DROP VIEW IF EXISTS puzzle_view;
+CREATE VIEW puzzle_view AS 
+SELECT 
+    p.id,
+    p.name,
+    p.status,
+    p.answer,
+    r.name AS roundname,
+    p.round_id,
+    p.comments,
+    p.drive_uri,
+    p.chat_channel_name,
+    p.chat_channel_id,
+    p.chat_channel_link,
+    p.drive_id,
+    p.puzzle_uri,
+    (
+        SELECT GROUP_CONCAT(DISTINCT s.name)
+        FROM JSON_TABLE(
+            p.solver_history,
+            '$.solvers[*]' COLUMNS (
+                solver_id INT PATH '$.solver_id'
+            )
+        ) AS jt
+        JOIN solver s ON s.id = jt.solver_id
+    ) AS solvers,
+    (
+        SELECT GROUP_CONCAT(DISTINCT s.name)
+        FROM JSON_TABLE(
+            p.current_solvers,
+            '$.solvers[*]' COLUMNS (
+                solver_id INT PATH '$.solver_id'
+            )
+        ) AS jt
+        JOIN solver s ON s.id = jt.solver_id
+    ) AS cursolvers,
+    p.xyzloc
+FROM puzzle p
+LEFT JOIN round r ON p.round_id = r.id;
