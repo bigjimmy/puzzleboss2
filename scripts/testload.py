@@ -57,19 +57,23 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
     
     # Create rounds
     for i in range(1, num_rounds + 1):
+        print(f"Creating Round {i}...", end="", flush=True)
         response = requests.post(
             f"{base_url}/rounds",
             json={"name": f"Round{i}"}
         )
         if not response.ok:
-            print(f"Failed to create Round{i}: {response.text}")
+            print(f"\nFailed to create Round{i}: {response.text}")
             return False
+        print(" Done")
             
     print("\nCreating puzzles...")
     
     # Create puzzles for each round
     for r in range(1, num_rounds + 1):
+        print(f"\nCreating puzzles for Round {r}:")
         for p in range(1, puzzles_per_round + 1):
+            print(f"  Creating puzzle {p}/{puzzles_per_round}...", end="", flush=True)
             response = requests.post(
                 f"{base_url}/puzzles",
                 json={
@@ -79,8 +83,9 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
                 }
             )
             if not response.ok:
-                print(f"Failed to create puzzle R{r}Puzz{p}: {response.text}")
+                print(f"\nFailed to create puzzle R{r}Puzz{p}: {response.text}")
                 return False
+            print(" Done")
                 
     return True
 
