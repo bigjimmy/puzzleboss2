@@ -1253,14 +1253,28 @@ def check_round_completion(round_id):
         debug_log(0, "Error checking round completion status for round %s" % round_id)
 
 def assign_solver_to_puzzle(puzzle_id, solver_id):
+    debug_log(4, "Started with puzzle id %s" % puzzle_id) 
     conn = mysql.connection
     cursor = conn.cursor()
     
-    # Update current solvers
+    # First, find and unassign from any other puzzle the solver is currently working on
+    cursor.execute("""
+        SELECT id FROM puzzle 
+        WHERE JSON_CONTAINS(current_solvers, 
+            JSON_OBJECT('solver_id', %s), 
+            '$.solvers'
+        )
+    """, (solver_id,))
+    current_puzzle = cursor.fetchone()
+    if current_puzzle and current_puzzle['id'] != puzzle_id:
+        # Unassign from current puzzle if it's different from the new one
+        unassign_solver_from_puzzle(current_puzzle['id'], solver_id)
+    
+    # Update current solvers for the new puzzle
     cursor.execute("""
         SELECT current_solvers FROM puzzle WHERE id = %s
     """, (puzzle_id,))
-    current_solvers = cursor.fetchone()['current_solvers'] or {'solvers': []}
+    current_solvers = json.loads(cursor.fetchone()['current_solvers']) or {'solvers': []}
     
     # Add new solver if not already present
     if not any(s['solver_id'] == solver_id for s in current_solvers['solvers']):
@@ -1275,7 +1289,7 @@ def assign_solver_to_puzzle(puzzle_id, solver_id):
     cursor.execute("""
         SELECT solver_history FROM puzzle WHERE id = %s
     """, (puzzle_id,))
-    history = cursor.fetchone()['solver_history'] or {'solvers': []}
+    history = json.loads(cursor.fetchone()['solver_history']) or {'solvers': []}
     
     # Add to history if not already present
     if not any(s['solver_id'] == solver_id for s in history['solvers']):
@@ -1296,7 +1310,7 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id):
     cursor.execute("""
         SELECT current_solvers FROM puzzle WHERE id = %s
     """, (puzzle_id,))
-    current_solvers = cursor.fetchone()['current_solvers'] or {'solvers': []}
+    current_solvers = json.loads(cursor.fetchone()['current_solvers']) or {'solvers': []}
     
     current_solvers['solvers'] = [
         s for s in current_solvers['solvers'] 
