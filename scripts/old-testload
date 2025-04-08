@@ -1,0 +1,20 @@
+#!/bin/bash
+
+ROUNDS=10
+PUZZLES=15
+TESTSOLVERS = NO  ## DO NOT CHANGE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. IT WILL DELETE ALL EXISTING SOLVERS AND CREATE NEW ONES.
+
+if [ "$TESTSOLVERS" = "YES" ]; then
+for i in `seq 1 25`; 
+do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc'"$i"'","fullname":"user test"}'; 
+done
+curl -H 'Content-Type: application/json' -X POST http://localhost:5000/solvers -d '{"name":"benoc", "fullname":"Benjamin OConnor"}'
+
+for i in `seq 1 $ROUNDS`; 
+do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/rounds -d '{"name":"Round'"$i"'"}'; 
+done
+
+for r in `seq 1 $ROUNDS`; 
+do for p in `seq 1 $PUZZLES`; 
+do curl -H 'Content-Type: application/json' -X POST http://localhost:5000/puzzles -d '{"name":"R'"$r"'Puzz'"$p"'", "round_id":"'"$r"'", "puzzle_uri":"http://www.google.com"}'; 
+done; done
