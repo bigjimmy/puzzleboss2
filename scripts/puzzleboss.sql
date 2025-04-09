@@ -320,6 +320,7 @@ SELECT
     p.chat_channel_link,
     p.drive_id,
     p.puzzle_uri,
+    p.ismeta,
     (
         SELECT GROUP_CONCAT(DISTINCT s.name)
         FROM JSON_TABLE(
