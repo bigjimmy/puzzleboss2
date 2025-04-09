@@ -92,20 +92,6 @@ UNLOCK TABLES;
 -- Table structure for table `log`
 --
 
-DROP TABLE IF EXISTS `log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `log` (
-  `version` int(11) NOT NULL AUTO_INCREMENT,
-  `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `user` varchar(500) DEFAULT NULL,
-  `module` enum('puzzles','rounds','solvers','locations') NOT NULL,
-  `name` varchar(500) DEFAULT NULL,
-  `id` int(11) DEFAULT NULL,
-  `part` varchar(30) DEFAULT NULL,
-  PRIMARY KEY (`version`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `privs`
@@ -160,51 +146,10 @@ DROP TABLE IF EXISTS `puzzle_cursolver_distinct`;
 DROP TABLE IF EXISTS `puzzle_cursolvers`;
 DROP TABLE IF EXISTS `puzzle_solver_distinct`;
 DROP TABLE IF EXISTS `puzzle_solvers`;
-
+DROP TABLE IF EXISTS `log`;
 DROP TABLE IF EXISTS `puzzle_view`;
-/*!50001 DROP VIEW IF EXISTS `puzzle_view`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `puzzle_view` (
-  `id` tinyint NOT NULL,
-  `name` tinyint NOT NULL,
-  `status` tinyint NOT NULL,
-  `answer` tinyint NOT NULL,
-  `roundname` tinyint NOT NULL,
-  `round_id` tinyint NOT NULL,
-  `comments` tinyint NOT NULL,
-  `locations` tinyint NOT NULL,
-  `drive_uri` tinyint NOT NULL,
-  `chat_channel_name` tinyint NOT NULL,
-  `drive_id` tinyint NOT NULL,
-  `linkid` tinyint NOT NULL,
-  `puzzle_uri` tinyint NOT NULL,
-  `activity` tinyint NOT NULL,
-  `solvers` tinyint NOT NULL,
-  `cursolvers` tinyint NOT NULL,
-  `xyzloc` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
-
---
--- Temporary table structure for view `round_view`
---
-
 DROP TABLE IF EXISTS `round_view`;
-/*!50001 DROP VIEW IF EXISTS `round_view`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `round_view` (
-  `id` tinyint NOT NULL,
-  `name` tinyint NOT NULL,
-  `round_uri` tinyint NOT NULL,
-  `drive_uri` tinyint NOT NULL,
-  `drive_id` tinyint NOT NULL,
-  `meta_id` tinyint NOT NULL,
-  `puzzles` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
-
+DROP TABLE IF EXISTS `solver_view`;
 
 --
 -- Table structure for table `round`
@@ -240,25 +185,6 @@ CREATE TABLE `solver` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uid_UNIQUE` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
---
--- Temporary table structure for view `solver_view`
---
-
-DROP TABLE IF EXISTS `solver_view`;
-/*!50001 DROP VIEW IF EXISTS `solver_view`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `solver_view` (
-  `id` tinyint NOT NULL,
-  `name` tinyint NOT NULL,
-  `puzzles` tinyint NOT NULL,
-  `puzz` tinyint NOT NULL,
-  `chat_uid` tinyint NOT NULL,
-  `chat_name` tinyint NOT NULL,
-  `fullname` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
 
 --
 -- Final view structure for view `round_view`
@@ -377,12 +303,7 @@ END //
 
 DELIMITER ;
 
--- Add indexes for better performance
-ALTER TABLE puzzle ADD INDEX idx_puzzle_id (id);
-ALTER TABLE puzzle ADD INDEX idx_puzzle_round_id (round_id);
-ALTER TABLE round ADD INDEX idx_round_id (id);
-
--- Optimize puzzle_view while maintaining same interface
+-- Optimized puzzle_view
 DROP VIEW IF EXISTS puzzle_view;
 CREATE VIEW puzzle_view AS 
 SELECT 
