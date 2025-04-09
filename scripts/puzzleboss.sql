@@ -92,20 +92,6 @@ UNLOCK TABLES;
 -- Table structure for table `log`
 --
 
-DROP TABLE IF EXISTS `log`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `log` (
-  `version` int(11) NOT NULL AUTO_INCREMENT,
-  `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `user` varchar(500) DEFAULT NULL,
-  `module` enum('puzzles','rounds','solvers','locations') NOT NULL,
-  `name` varchar(500) DEFAULT NULL,
-  `id` int(11) DEFAULT NULL,
-  `part` varchar(30) DEFAULT NULL,
-  PRIMARY KEY (`version`)
-) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
-/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `privs`
@@ -160,50 +146,10 @@ DROP TABLE IF EXISTS `puzzle_cursolver_distinct`;
 DROP TABLE IF EXISTS `puzzle_cursolvers`;
 DROP TABLE IF EXISTS `puzzle_solver_distinct`;
 DROP TABLE IF EXISTS `puzzle_solvers`;
-
+DROP TABLE IF EXISTS `log`;
 DROP TABLE IF EXISTS `puzzle_view`;
-/*!50001 DROP VIEW IF EXISTS `puzzle_view`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `puzzle_view` (
-  `id` tinyint NOT NULL,
-  `name` tinyint NOT NULL,
-  `status` tinyint NOT NULL,
-  `answer` tinyint NOT NULL,
-  `roundname` tinyint NOT NULL,
-  `round_id` tinyint NOT NULL,
-  `comments` tinyint NOT NULL,
-  `locations` tinyint NOT NULL,
-  `drive_uri` tinyint NOT NULL,
-  `chat_channel_name` tinyint NOT NULL,
-  `drive_id` tinyint NOT NULL,
-  `linkid` tinyint NOT NULL,
-  `puzzle_uri` tinyint NOT NULL,
-  `activity` tinyint NOT NULL,
-  `solvers` tinyint NOT NULL,
-  `cursolvers` tinyint NOT NULL,
-  `xyzloc` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
-
---
--- Temporary table structure for view `round_view`
---
-
 DROP TABLE IF EXISTS `round_view`;
-/*!50001 DROP VIEW IF EXISTS `round_view`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `round_view` (
-  `id` tinyint NOT NULL,
-  `name` tinyint NOT NULL,
-  `round_uri` tinyint NOT NULL,
-  `drive_uri` tinyint NOT NULL,
-  `drive_id` tinyint NOT NULL,
-  `puzzles` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
-
+DROP TABLE IF EXISTS `solver_view`;
 
 --
 -- Table structure for table `round`
@@ -241,43 +187,6 @@ CREATE TABLE `solver` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 --
--- Temporary table structure for view `solver_view`
---
-
-DROP TABLE IF EXISTS `solver_view`;
-/*!50001 DROP VIEW IF EXISTS `solver_view`*/;
-SET @saved_cs_client     = @@character_set_client;
-SET character_set_client = utf8;
-/*!50001 CREATE TABLE `solver_view` (
-  `id` tinyint NOT NULL,
-  `name` tinyint NOT NULL,
-  `puzzles` tinyint NOT NULL,
-  `puzz` tinyint NOT NULL,
-  `chat_uid` tinyint NOT NULL,
-  `chat_name` tinyint NOT NULL,
-  `fullname` tinyint NOT NULL
-) ENGINE=INNODB */;
-SET character_set_client = @saved_cs_client;
-
---
--- Final view structure for view `puzzle_view`
---
-
-/*!50001 DROP TABLE IF EXISTS `puzzle_view`*/;
-/*!50001 DROP VIEW IF EXISTS `puzzle_view`*/;
-/*!50001 SET @saved_cs_client          = @@character_set_client */;
-/*!50001 SET @saved_cs_results         = @@character_set_results */;
-/*!50001 SET @saved_col_connection     = @@collation_connection */;
-/*!50001 SET character_set_client      = utf8 */;
-/*!50001 SET character_set_results     = utf8 */;
-/*!50001 SET collation_connection      = utf8_unicode_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `puzzle_view` AS select `puzzle`.`id` AS `id`,`puzzle`.`name` AS `name`,`puzzle`.`status` AS `status`,`puzzle`.`answer` AS `answer`,`round`.`name` AS `roundname`, `round`.`id` AS `round_id`, `puzzle`.`comments` AS `comments`, `puzzle`.`drive_uri` AS `drive_uri`,`puzzle`.`chat_channel_name` AS `chat_channel_name`,`puzzle`.`chat_channel_id` AS `chat_channel_id`,`puzzle`.`chat_channel_link` AS `chat_channel_link`,`puzzle`.`drive_id` AS `drive_id`,`puzzle`.`puzzle_uri` AS `puzzle_uri`, get_all_solvers(puzzle.id) AS `solvers`, get_current_solvers(puzzle.id) AS `cursolvers`,`puzzle`.`xyzloc` AS `xyzloc`, `puzzle`.`ismeta` AS `ismeta` from (`puzzle` join `round` on((`round`.`id` = `puzzle`.`round_id`))) */;
-/*!50001 SET character_set_client      = @saved_cs_client */;
-/*!50001 SET character_set_results     = @saved_cs_results */;
-/*!50001 SET collation_connection      = @saved_col_connection */;
-
---
 -- Final view structure for view `round_view`
 --
 
@@ -290,7 +199,7 @@ SET character_set_client = @saved_cs_client;
 /*!50001 SET character_set_results     = utf8 */;
 /*!50001 SET collation_connection      = utf8_unicode_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */;
+/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */; 
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
@@ -393,3 +302,45 @@ BEGIN
 END //
 
 DELIMITER ;
+
+-- Optimized puzzle_view
+DROP VIEW IF EXISTS puzzle_view;
+CREATE VIEW puzzle_view AS 
+SELECT 
+    p.id,
+    p.name,
+    p.status,
+    p.answer,
+    r.name AS roundname,
+    p.round_id,
+    p.comments,
+    p.drive_uri,
+    p.chat_channel_name,
+    p.chat_channel_id,
+    p.chat_channel_link,
+    p.drive_id,
+    p.puzzle_uri,
+    p.ismeta,
+    (
+        SELECT GROUP_CONCAT(DISTINCT s.name)
+        FROM JSON_TABLE(
+            p.solver_history,
+            '$.solvers[*]' COLUMNS (
+                solver_id INT PATH '$.solver_id'
+            )
+        ) AS jt
+        JOIN solver s ON s.id = jt.solver_id
+    ) AS solvers,
+    (
+        SELECT GROUP_CONCAT(DISTINCT s.name)
+        FROM JSON_TABLE(
+            p.current_solvers,
+            '$.solvers[*]' COLUMNS (
+                solver_id INT PATH '$.solver_id'
+            )
+        ) AS jt
+        JOIN solver s ON s.id = jt.solver_id
+    ) AS cursolvers,
+    p.xyzloc
+FROM puzzle p
+LEFT JOIN round r ON p.round_id = r.id;

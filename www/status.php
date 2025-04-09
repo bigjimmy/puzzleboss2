@@ -34,6 +34,14 @@ $rounds;
 $huntstruct = readapi("/all");
 $rounds = $huntstruct->rounds;
 
+// Create a cache of puzzle meta statuses
+$puzzle_meta_cache = [];
+foreach ($rounds as $round) {
+  foreach ($round->puzzles as $puzzle) {
+    $puzzle_meta_cache[$puzzle->id] = $puzzle->ismeta;
+  }
+}
+
 // Check for authenticated user
 $uid = getauthenticateduser();
 
@@ -50,8 +58,8 @@ function getroundnamefrompuzzid($puzzid) {
 }
 
 function ispuzzlemeta($puzzleid) {
-  $puzzleobj = readapi('/puzzles/' . $puzzleid);
-  return $puzzleobj->puzzle->ismeta;
+  global $puzzle_meta_cache;
+  return isset($puzzle_meta_cache[$puzzleid]) ? $puzzle_meta_cache[$puzzleid] : false;
 }
 
 foreach ($rounds as $round) {

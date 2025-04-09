@@ -1274,8 +1274,9 @@ def assign_solver_to_puzzle(puzzle_id, solver_id):
     cursor.execute("""
         SELECT current_solvers FROM puzzle WHERE id = %s
     """, (puzzle_id,))
-    current_solvers = json.loads(cursor.fetchone()['current_solvers']) or {'solvers': []}
-    
+    current_solvers_str = cursor.fetchone()['current_solvers'] or json.dumps({'solvers': []})
+    current_solvers = json.loads(current_solvers_str)
+        
     # Add new solver if not already present
     if not any(s['solver_id'] == solver_id for s in current_solvers['solvers']):
         current_solvers['solvers'].append({'solver_id': solver_id})
@@ -1289,8 +1290,9 @@ def assign_solver_to_puzzle(puzzle_id, solver_id):
     cursor.execute("""
         SELECT solver_history FROM puzzle WHERE id = %s
     """, (puzzle_id,))
-    history = json.loads(cursor.fetchone()['solver_history']) or {'solvers': []}
-    
+    history_str = cursor.fetchone()['solver_history'] or json.dumps({'solvers': []})
+    history = json.loads(history_str)
+        
     # Add to history if not already present
     if not any(s['solver_id'] == solver_id for s in history['solvers']):
         history['solvers'].append({'solver_id': solver_id})
@@ -1310,7 +1312,8 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id):
     cursor.execute("""
         SELECT current_solvers FROM puzzle WHERE id = %s
     """, (puzzle_id,))
-    current_solvers = json.loads(cursor.fetchone()['current_solvers']) or {'solvers': []}
+    current_solvers_str = cursor.fetchone()['current_solvers'] or json.dumps({'solvers': []})
+    current_solvers = json.loads(current_solvers_str)
     
     current_solvers['solvers'] = [
         s for s in current_solvers['solvers'] 
