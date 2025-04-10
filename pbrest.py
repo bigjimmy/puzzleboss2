@@ -1341,6 +1341,103 @@ def clear_puzzle_solvers(puzzle_id):
     
     conn.commit()
 
+@app.route("/puzzles/<id>/history/add", endpoint="add_solver_to_history", methods=["POST"])
+@swag_from("swag/addsolvertohistory.yaml", endpoint="add_solver_to_history", methods=["POST"])
+def add_solver_to_history(id):
+    debug_log(4, "start. id: %s" % id)
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+        solver_id = data["solver_id"]
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+    except KeyError:
+        raise Exception("Expected field (solver_id) missing.")
+
+    # Check if this is a legit puzzle
+    mypuzzle = get_one_puzzle(id)
+    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
+        raise Exception("Error looking up puzzle %s" % id)
+
+    # Check if this is a legit solver
+    mysolver = get_one_solver(solver_id)
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % solver_id)
+
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Get current history
+    cursor.execute("""
+        SELECT solver_history FROM puzzle WHERE id = %s
+    """, (id,))
+    history_str = cursor.fetchone()['solver_history'] or json.dumps({'solvers': []})
+    history = json.loads(history_str)
+    
+    # Add solver to history if not already present
+    if not any(s['solver_id'] == solver_id for s in history['solvers']):
+        history['solvers'].append({'solver_id': solver_id})
+        cursor.execute("""
+            UPDATE puzzle 
+            SET solver_history = %s 
+            WHERE id = %s
+        """, (json.dumps(history), id))
+        conn.commit()
+        debug_log(3, "Added solver %s to history for puzzle %s" % (solver_id, id))
+    else:
+        debug_log(3, "Solver %s already in history for puzzle %s" % (solver_id, id))
+
+    return {"status": "ok"}
+
+@app.route("/puzzles/<id>/history/remove", endpoint="remove_solver_from_history", methods=["POST"])
+@swag_from("swag/removesolverfromhistory.yaml", endpoint="remove_solver_from_history", methods=["POST"])
+def remove_solver_from_history(id):
+    debug_log(4, "start. id: %s" % id)
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+        solver_id = data["solver_id"]
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+    except KeyError:
+        raise Exception("Expected field (solver_id) missing.")
+
+    # Check if this is a legit puzzle
+    mypuzzle = get_one_puzzle(id)
+    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
+        raise Exception("Error looking up puzzle %s" % id)
+
+    # Check if this is a legit solver
+    mysolver = get_one_solver(solver_id)
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % solver_id)
+
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Get current history
+    cursor.execute("""
+        SELECT solver_history FROM puzzle WHERE id = %s
+    """, (id,))
+    history_str = cursor.fetchone()['solver_history'] or json.dumps({'solvers': []})
+    history = json.loads(history_str)
+    
+    # Remove solver from history if present
+    history['solvers'] = [
+        s for s in history['solvers'] 
+        if s['solver_id'] != solver_id
+    ]
+    
+    cursor.execute("""
+        UPDATE puzzle 
+        SET solver_history = %s 
+        WHERE id = %s
+    """, (json.dumps(history), id))
+    conn.commit()
+    debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
+
+    return {"status": "ok"}
+
 if __name__ == "__main__":
     if initdrive() != 0:
         debug_log(0, "Startup google drive initialization failed.")
