@@ -393,67 +393,6 @@ def update_solver_part(id, part):
     return {"status": "ok", "solver": {"id": id, part: value}}
 
 
-@app.route("/version", endpoint="version", methods=["GET"])
-@swag_from("swag/getversion.yaml", endpoint="version", methods=["GET"])
-def get_current_version():
-    debug_log(4, "start")
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT MAX(version) AS max_version from log")
-        rv = cursor.fetchone()["max_version"]
-    except:
-        raise Exception("Exception in fetching latest version from database")
-
-    debug_log(5, "fetched latest version number: %s from database" % str(rv))
-    return {"status": "ok", "version": rv}
-
-
-@app.route("/version/<fromver>/<tover>", endpoint="version_diff", methods=["GET"])
-@swag_from("swag/getversiondiff.yaml", endpoint="version_diff", methods=["GET"])
-def get_diff(fromver, tover):
-    debug_log(4, "start. fromver: %s, tover: %s" % (fromver, tover))
-
-    if fromver > tover:
-        raise Exception("Version numbers being compared must be in order.")
-
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT DISTINCT * FROM log WHERE version >= %s AND version <= %s",
-            (fromver, tover),
-        )
-        versionlist = cursor.fetchall()
-    except TypeError:
-        raise Exception(
-            "Exception fetching version diff from %s to %s from database"
-            % (
-                fromver,
-                tover,
-            )
-        )
-
-    debug_log(5, "fetched version diff from %s to %s" % (fromver, tover))
-    return {"status": "ok", "versions": versionlist}
-
-
-@app.route("/version/diff", endpoint="version_fulldiff", methods=["GET"])
-@swag_from("swag/getversionfulldiff.yaml", endpoint="version_fulldiff", methods=["GET"])
-def get_full_diff():
-    debug_log(4, "start")
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT * FROM log")
-        versionlist = cursor.fetchall()
-    except TypeError:
-        raise Exception("Exception fetching all-time version diff from database")
-
-    debug_log(5, "fetched all-time version diff")
-    return {"status": "ok", "versions": versionlist}
-
-
 @app.route("/config", endpoint="getconfig", methods=["GET"])
 # @swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
 def get_config():
