@@ -97,12 +97,24 @@ HTML;
   echo 'OK. config ' . $key . ' is ' . $configval;
   echo '<br><br>';
   echo '<div class="refresh-prompt">IMPORTANT: Press the button below to refresh the configuration. This is necessary for your change to take effect.</div>';
-  echo '<form action="' . $apiroot . '/config/refresh" method="post">';
+  echo '<form action="changeconfig.php" method="post">';
+  echo '<input type="hidden" name="refresh" value="yes">';
   echo '<input type="submit" class="refresh-button" value="Refresh Configuration">';
   echo '</form>';
   echo '<br><br>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
   echo '</div><br><hr>';
+
+  if (isset($_POST['refresh'])) {
+    try {
+      $responseobj = postapi("/config/refresh", array());
+      assert_api_success($responseobj);
+      echo '<div class="success">Configuration refreshed successfully!</div>';
+    } catch (Exception $e) {
+      exit_with_api_error($e);
+      throw $e;
+    }
+  }
 
 ?>
 
