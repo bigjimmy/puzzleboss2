@@ -2,8 +2,9 @@ import MySQLdb
 import sys
 import traceback
 from flask import Flask, request
-from flask_restx import Api, Resource, fields
+from flask_restful import Api, Resource
 from flask_mysqldb import MySQL
+from flask_restx import Api as RestXApi
 from pblib import *
 from pbgooglelib import *
 from pbdiscordlib import *
@@ -13,6 +14,7 @@ from pbldaplib import *
 from werkzeug.exceptions import HTTPException
 import json
 from api_models import *
+from flask_restx import fields
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -21,9 +23,7 @@ app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
-
-# Initialize Flask-RESTX API
-api = Api(app, version='1.0', title='PuzzleBoss API',
+api = RestXApi(app, version='1.0', title='PuzzleBoss API',
           description='API for managing puzzles, rounds, and solvers')
 
 # Add namespaces to API
