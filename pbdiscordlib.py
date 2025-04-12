@@ -64,7 +64,7 @@ def call_puzzcord(command):
     response = "error"
     # Send command to puzzcord
     try:
-        sock.sendall(bytes(command, "ascii"))
+        sock.sendall(bytes(command, "utf-8"))
         sock.shutdown(socket.SHUT_WR)
     except socket.error:
         debug_log(0, "Sending command to puzzcord FAILED. Is puzzcord client down?")
@@ -72,7 +72,7 @@ def call_puzzcord(command):
         return "error"
     # Await and record response from puzzcord
     try:
-        response = sock.recv(1024).decode("ascii")
+        response = sock.recv(1024).decode("utf-8")
         debug_log(4, "response from puzzcord call: %s" % response)
     except socket.timeout:
         debug_log(4, "done waiting for puzzcord return message.")
