@@ -59,6 +59,11 @@
   .refresh-button:hover {
     background-color: #45a049;
   }
+  .refresh-prompt {
+    font-weight: bold;
+    color: black;
+    margin-bottom: 10px;
+  }
   </style>
 </head>
 <body>
@@ -91,6 +96,7 @@ HTML;
   echo '<br><div class="success">';
   echo 'OK. config ' . $key . ' is ' . $configval;
   echo '<br><br>';
+  echo '<div class="refresh-prompt">IMPORTANT: Press the button below to refresh the configuration. This is necessary for your change to take effect.</div>';
   echo '<button class="refresh-button" onclick="refreshConfig()">Refresh Configuration</button>';
   echo '<br><br>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
