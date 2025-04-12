@@ -4,7 +4,7 @@ import traceback
 from flask import Flask, request
 from flask_restful import Api, Resource
 from flask_mysqldb import MySQL
-from flask_restx import Api as RestXApi, swag_from
+from flask_restx import Api as RestXApi
 from pblib import *
 from pbgooglelib import *
 from pbdiscordlib import *
@@ -47,7 +47,7 @@ def handle_error(e):
 
 
 @app.route("/all", endpoint="all", methods=["GET"])
-# @swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
+# @api.doc('get_all')
 def get_all_all():
     debug_log(4, "start")
     try:
@@ -632,7 +632,7 @@ class RefreshConfig(Resource):
 # POST/WRITE Operations
 
 @app.route("/rounds", endpoint="post_rounds", methods=["POST"])
-@swag_from("swag/putround.yaml", endpoint="post_rounds", methods=["POST"])
+# @api.doc('create_round')
 def create_round():
     debug_log(4, "start")
     try:
@@ -903,7 +903,7 @@ class DeleteAccount(Resource):
         return {"status": "ok"}
 
 @app.route("/deletepuzzle/<puzzlename>", endpoint="get_delete_puzzle", methods=["GET"])
-@swag_from("swag/getdeletepuzzle.yaml", endpoint="get_delete_puzzle", methods=["GET"])
+# @api.doc('delete_puzzle')
 def delete_puzzle(puzzlename):
     debug_log(4, "start. delete puzzle named %s" % puzzlename)
     puzzid = get_puzzle_id_by_name(puzzlename)
@@ -1217,7 +1217,7 @@ def clear_puzzle_solvers(puzzle_id):
     conn.commit()
 
 @app.route("/puzzles/<id>/history/add", endpoint="add_solver_to_history", methods=["POST"])
-@swag_from("swag/addsolvertohistory.yaml", endpoint="add_solver_to_history", methods=["POST"])
+# @api.doc('add_solver_to_history')
 def add_solver_to_history(id):
     debug_log(4, "start. id: %s" % id)
     try:
@@ -1265,7 +1265,7 @@ def add_solver_to_history(id):
     return {"status": "ok"}
 
 @app.route("/puzzles/<id>/history/remove", endpoint="remove_solver_from_history", methods=["POST"])
-@swag_from("swag/removesolverfromhistory.yaml", endpoint="remove_solver_from_history", methods=["POST"])
+# @api.doc('remove_solver_from_history')
 def remove_solver_from_history(id):
     debug_log(4, "start. id: %s" % id)
     try:
