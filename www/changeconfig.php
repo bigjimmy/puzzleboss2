@@ -106,8 +106,16 @@ HTML;
 
 <script>
 function refreshConfig() {
+    // Get the current page's base URL
+    const baseUrl = window.location.origin;
+    // Get the API root from the PHP variable
     const apiRoot = '<?php echo $apiroot; ?>';
-    fetch(apiRoot + '/config/refresh', {
+    // Construct the full URL
+    const fullUrl = baseUrl + apiRoot + '/config/refresh';
+    
+    console.log('Attempting to fetch from:', fullUrl); // Debug log
+    
+    fetch(fullUrl, {
         method: 'POST',
         headers: {
             'Accept': 'application/json',
@@ -116,7 +124,7 @@ function refreshConfig() {
     })
     .then(response => {
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            throw new Error('Network response was not ok: ' + response.status);
         }
         return response.json();
     })
@@ -128,6 +136,7 @@ function refreshConfig() {
         }
     })
     .catch(error => {
+        console.error('Fetch error:', error); // Debug log
         alert('Error refreshing configuration: ' + error.message);
     });
 }
