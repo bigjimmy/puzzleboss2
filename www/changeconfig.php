@@ -97,50 +97,14 @@ HTML;
   echo 'OK. config ' . $key . ' is ' . $configval;
   echo '<br><br>';
   echo '<div class="refresh-prompt">IMPORTANT: Press the button below to refresh the configuration. This is necessary for your change to take effect.</div>';
-  echo '<button class="refresh-button" onclick="refreshConfig()">Refresh Configuration</button>';
+  echo '<form action="' . $apiroot . '/config/refresh" method="post">';
+  echo '<input type="submit" class="refresh-button" value="Refresh Configuration">';
+  echo '</form>';
   echo '<br><br>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
   echo '</div><br><hr>';
 
 ?>
-
-<script>
-function refreshConfig() {
-    // Get the current page's base URL
-    const baseUrl = window.location.origin;
-    // Get the API root from the PHP variable
-    const apiRoot = '<?php echo $apiroot; ?>';
-    // Construct the full URL
-    const fullUrl = baseUrl + apiRoot + '/config/refresh';
-    
-    console.log('Attempting to fetch from:', fullUrl); // Debug log
-    
-    fetch(fullUrl, {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok: ' + response.status);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.status === 'ok') {
-            alert('Configuration refreshed successfully!');
-        } else {
-            alert('Error refreshing configuration: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Fetch error:', error); // Debug log
-        alert('Error refreshing configuration: ' + error.message);
-    });
-}
-</script>
 
 </main>
 
