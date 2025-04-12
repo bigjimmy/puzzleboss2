@@ -405,7 +405,7 @@ def get_config():
     except TypeError:
         raise Exception("Exception fetching config info from database")
 
-    debug_log(5, "fetched all-time version diff")
+    debug_log(5, "fetched all configuration values from database")
     return {"status": "ok", "config": config}
 
 
