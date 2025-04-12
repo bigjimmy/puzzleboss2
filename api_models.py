@@ -55,6 +55,19 @@ puzzle_model = puzzle_ns.model('Puzzle', {
     'lastact': fields.Nested(activity_model, description='Last activity performed on this puzzle')
 })
 
+# Model for POST operations (excludes read-only fields)
+puzzle_post_model = puzzle_ns.model('PuzzlePost', {
+    'name': fields.String(required=True, description='Puzzle name'),
+    'status': fields.String(description='Status category of puzzle', 
+        enum=['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', '[hidden]']),
+    'answer': fields.String(description='Answer of puzzle (if solved)'),
+    'round_id': fields.Integer(required=True, description='ID of round that puzzle is in'),
+    'comments': fields.String(description='Free-form comments field'),
+    'puzzle_uri': fields.String(description='URI pointing to the original puzzle page'),
+    'xyzloc': fields.String(description='Location where puzzle is being worked on'),
+    'ismeta': fields.Boolean(description='Whether this puzzle is a meta puzzle')
+})
+
 puzzle_list_model = puzzle_ns.model('PuzzleList', {
     'puzzles': fields.List(fields.Nested(puzzle_model))
 })
