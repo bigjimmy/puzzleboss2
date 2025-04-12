@@ -13,6 +13,9 @@ from email.message import EmailMessage
 config = None
 huntfolderid = "undefined"
 
+# Pre-initialize configstruct with default LOGLEVEL
+configstruct = {"LOGLEVEL": "4"}
+
 def debug_log(sev, message):
     # Levels:
     # 0 = emergency
