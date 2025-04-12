@@ -9,21 +9,37 @@ from flask_restful import Api
 from flask_mysqldb import MySQL
 from email.message import EmailMessage
 
-with open("puzzleboss.yaml") as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
-
+# Global config variable for YAML config
+config = None
 huntfolderid = "undefined"
 
-try:
-  db_connection = MySQLdb.connect(config["MYSQL"]["HOST"], config["MYSQL"]["USERNAME"], config["MYSQL"]["PASSWORD"], config["MYSQL"]["DATABASE"])
-  cursor = db_connection.cursor()
-  cursor.execute("SELECT * FROM config")
-  configdump = cursor.fetchall()
-  db_connection.close()
-  configstruct = dict(configdump)
-except Exception as e:
-  print("FATAL EXCEPTION reading and expanding configuration from database:  %s" % e)
+def refresh_config():
+    """Reload configuration from both YAML file and database"""
+    global configstruct, config
+    
+    # Reload YAML config
+    try:
+        with open("puzzleboss.yaml") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+        debug_log(3, "YAML configuration reloaded")
+    except Exception as e:
+        debug_log(0, f"FATAL EXCEPTION reading YAML configuration: {e}")
+        return
 
+    # Reload database config
+    try:
+        db_connection = MySQLdb.connect(config["MYSQL"]["HOST"], config["MYSQL"]["USERNAME"], config["MYSQL"]["PASSWORD"], config["MYSQL"]["DATABASE"])
+        cursor = db_connection.cursor()
+        cursor.execute("SELECT * FROM config")
+        configdump = cursor.fetchall()
+        db_connection.close()
+        configstruct = dict(configdump)
+        debug_log(3, "Database configuration reloaded")
+    except Exception as e:
+        debug_log(0, f"FATAL EXCEPTION reading database configuration: {e}")
+
+# Initial configuration load
+refresh_config()
 
 def debug_log(sev, message):
     # Levels:

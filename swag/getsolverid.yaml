@@ -1,41 +1,117 @@
+---
+tags:
+  - solver
+summary: Get solver details
+description: Retrieves detailed information about a specific solver, including their current puzzle assignment and activity history.
 parameters:
     - in: path
       name: id
-      type: int
+      type: integer
       required: true
+      description: The ID of the solver to retrieve
+      example: 1
 responses:
     200:
-      description: A single solver item
+      description: Detailed solver information
       schema:
-          id: solver
-          type: object
-          properties:
-           solver:
-             type: object
-             properties:
+        type: object
+        properties:
+          status:
+            type: string
+            example: "ok"
+          solver:
+            type: object
+            required: [id, name, fullname]
+            properties:
               id:
-                  type: integer
-                  description: Solver id number
+                type: integer
+                description: Solver ID
+                example: 1
               name:
-                  type: string
-                  description: Solver short name
+                type: string
+                description: Solver's username/handle
+                example: "jsmith"
               fullname:
-                  type: string
-                  description: Solver long name
+                type: string
+                description: Solver's full name
+                example: "John Smith"
               puzz:
-                  type: int
-                  description: ID number of puzzle solver is currently working on
+                type: integer
+                description: ID of puzzle solver is currently working on
+                example: 1
+              current_puzzle:
+                type: object
+                description: Details of the puzzle solver is currently working on
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  name:
+                    type: string
+                    example: "The Final Countdown"
+                  status:
+                    type: string
+                    example: "Being worked"
               puzzles:
-                  type: string
-                  description: Comma separated list of puzzle ids for all puzzles solver has worked on
+                type: string
+                description: Comma-separated list of puzzle IDs solver has worked on
+                example: "1,2,3,5,8"
+              puzzle_count:
+                type: integer
+                description: Total number of puzzles solver has worked on
+                example: 5
+              solved_count:
+                type: integer
+                description: Number of solved puzzles solver has worked on
+                example: 3
               chat_uid:
-                  type: string
-                  description: ID number for solver's chat presence
+                type: string
+                description: Chat service user ID
+                example: "U01234ABCDEF"
               chat_name:
-                  type: string
-                  description: Name of solver's chat presence
-                 
-              
+                type: string
+                description: Chat service display name
+                example: "@jsmith"
+              lastact:
+                type: object
+                description: Most recent solver activity
+                properties:
+                  puzzle_id:
+                    type: integer
+                    example: 1
+                  solver_id:
+                    type: integer
+                    example: 1
+                  source:
+                    type: string
+                    example: "apache"
+                  type:
+                    type: string
+                    example: "interact"
+                  time:
+                    type: string
+                    format: date-time
+                    example: "2024-03-20T15:45:00Z"
+              created_at:
+                type: string
+                format: date-time
+                description: When the solver account was created
+                example: "2024-03-20T10:00:00Z"
+              updated_at:
+                type: string
+                format: date-time
+                description: When the solver was last updated
+                example: "2024-03-20T15:45:00Z"
+    500:
+      description: Server error
+      schema:
+        type: object
+        properties:
+          error:
+            type: string
+            example: "Exception in fetching solver from database"
+security:
+  - api_key: []
                   
                   
                   

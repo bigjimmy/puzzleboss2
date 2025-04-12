@@ -1,17 +1,51 @@
+---
+tags:
+  - solver
+summary: Get all solvers
+description: Retrieves a list of all solvers in the system with basic information.
+parameters:
+  - in: query
+    name: limit
+    type: integer
+    required: false
+    description: Maximum number of solvers to return
+    default: 100
+  - in: query
+    name: offset
+    type: integer
+    required: false
+    description: Number of solvers to skip
+    default: 0
 responses:
     200:
-        description: Basic listing of all solvers
-        schema:
-               id: solvers
-               type: object
-               properties:
-                       solvers:
-                           type: array
-                           items:
-                                   type: object
-                                   properties:
-                                    id:
-                                        type: integer
-                                    name:      
-                                        type: string
-                                
+      description: List of all solvers
+      schema:
+        type: object
+        properties:
+          status:
+            type: string
+            example: "ok"
+          solvers:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  description: Solver ID
+                  example: 1
+                name:
+                  type: string
+                  description: Solver short name
+                  example: "jsmith"
+    500:
+      description: Server error
+      schema:
+        type: object
+        properties:
+          error:
+            type: string
+            example: "Exception in fetching solvers from database"
+security:
+  - api_key: []
+    

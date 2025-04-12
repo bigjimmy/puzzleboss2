@@ -46,6 +46,19 @@
     background-color: lightgreen;
     padding: 10px;
   }
+  .refresh-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .refresh-button:hover {
+    background-color: #45a049;
+  }
   </style>
 </head>
 <body>
@@ -77,10 +90,36 @@ HTML;
 
   echo '<br><div class="success">';
   echo 'OK. config ' . $key . ' is ' . $configval;
+  echo '<br><br>';
+  echo '<button class="refresh-button" onclick="refreshConfig()">Refresh Configuration</button>';
+  echo '<br><br>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
   echo '</div><br><hr>';
 
 ?>
+
+<script>
+function refreshConfig() {
+    fetch('<?php echo $apiroot; ?>/config/refresh', {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            alert('Configuration refreshed successfully!');
+        } else {
+            alert('Error refreshing configuration: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error refreshing configuration: ' + error);
+    });
+}
+</script>
 
 </main>
 

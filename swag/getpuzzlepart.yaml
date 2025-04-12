@@ -1,24 +1,65 @@
+---
+tags:
+  - puzzle
+summary: Get specific puzzle field
+description: Retrieves a single field from a puzzle's data. Useful for efficient updates and partial data retrieval.
 parameters:
     - in: path
       name: id
       type: integer
       required: true
+      description: The ID of the puzzle
+      example: 1
     - in: path
       name: part
-      description: The single part to look up (e.g. name, answer)
       type: string
       required: true
+      description: The field to retrieve
+      enum: 
+        - name
+        - status
+        - answer
+        - roundname
+        - round_id
+        - comments
+        - drive_uri
+        - chat_channel_name
+        - chat_channel_id
+        - chat_channel_link
+        - drive_id
+        - puzzle_uri
+        - cursolvers
+        - solvers
+        - xyzloc
+        - ismeta
+        - lastact
+      example: "status"
 responses:
     200:
-      description: A single puzzle part from one puzzle
+      description: The requested puzzle field
       schema:
-          id: puzzle
-          type: object
-          properties:
-           puzzle:
-             type: object
-             properties:
-               part:
-                   description: the part you asked for
-                   
-      
+        type: object
+        properties:
+          status:
+            type: string
+            example: "ok"
+          puzzle:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Puzzle ID
+                example: 1
+              value:
+                description: The value of the requested field. Type varies by field requested.
+                example: "Being worked"
+    500:
+      description: Server error
+      schema:
+        type: object
+        properties:
+          error:
+            type: string
+            example: "Exception in fetching puzzle part from database"
+security:
+  - api_key: []
