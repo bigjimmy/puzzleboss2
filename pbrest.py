@@ -14,6 +14,7 @@ from pbldaplib import *
 from werkzeug.exceptions import HTTPException
 import json
 from api_models import *
+from flask_restx import fields
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -47,8 +48,9 @@ def handle_error(e):
 
 
 @app.route("/all", endpoint="all", methods=["GET"])
-# @api.doc('get_all')
+@api.doc('get_all', description='Get all puzzles and rounds with their relationships')
 def get_all_all():
+    """Get all puzzles and rounds with their relationships"""
     debug_log(4, "start")
     try:
         conn = mysql.connection
@@ -903,7 +905,8 @@ class DeleteAccount(Resource):
         return {"status": "ok"}
 
 @app.route("/deletepuzzle/<puzzlename>", endpoint="get_delete_puzzle", methods=["GET"])
-# @api.doc('delete_puzzle')
+@api.doc('delete_puzzle', description='Delete a puzzle by name')
+@api.param('puzzlename', 'The name of the puzzle to delete')
 def delete_puzzle(puzzlename):
     debug_log(4, "start. delete puzzle named %s" % puzzlename)
     puzzid = get_puzzle_id_by_name(puzzlename)
@@ -1217,8 +1220,12 @@ def clear_puzzle_solvers(puzzle_id):
     conn.commit()
 
 @app.route("/puzzles/<id>/history/add", endpoint="add_solver_to_history", methods=["POST"])
-# @api.doc('add_solver_to_history')
+@api.doc('add_solver_to_history', description='Add a solver to a puzzle\'s history')
+@api.expect(api.model('SolverHistoryAdd', {
+    'solver_id': fields.Integer(required=True, description='ID of the solver to add to history')
+}))
 def add_solver_to_history(id):
+    """Add a solver to a puzzle's history"""
     debug_log(4, "start. id: %s" % id)
     try:
         data = request.get_json()
@@ -1265,8 +1272,12 @@ def add_solver_to_history(id):
     return {"status": "ok"}
 
 @app.route("/puzzles/<id>/history/remove", endpoint="remove_solver_from_history", methods=["POST"])
-# @api.doc('remove_solver_from_history')
+@api.doc('remove_solver_from_history', description='Remove a solver from a puzzle\'s history')
+@api.expect(api.model('SolverHistoryRemove', {
+    'solver_id': fields.Integer(required=True, description='ID of the solver to remove from history')
+}))
 def remove_solver_from_history(id):
+    """Remove a solver from a puzzle's history"""
     debug_log(4, "start. id: %s" % id)
     try:
         data = request.get_json()
@@ -1312,6 +1323,39 @@ def remove_solver_from_history(id):
     debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
 
     return {"status": "ok"}
+
+@puzzle_ns.route('/<int:id>/history/add')
+@puzzle_ns.param('id', 'The puzzle identifier')
+class PuzzleHistoryAdd(Resource):
+    @puzzle_ns.doc('add_solver_to_history', description='Add a solver to a puzzle\'s history')
+    @puzzle_ns.expect(puzzle_ns.model('SolverHistoryAdd', {
+        'solver_id': fields.Integer(required=True, description='ID of the solver to add to history')
+    }))
+    def post(self, id):
+        """Add a solver to a puzzle's history"""
+        debug_log(4, "start. id: %s" % id)
+        # ... existing code ...
+
+@puzzle_ns.route('/<int:id>/history/remove')
+@puzzle_ns.param('id', 'The puzzle identifier')
+class PuzzleHistoryRemove(Resource):
+    @puzzle_ns.doc('remove_solver_from_history', description='Remove a solver from a puzzle\'s history')
+    @puzzle_ns.expect(puzzle_ns.model('SolverHistoryRemove', {
+        'solver_id': fields.Integer(required=True, description='ID of the solver to remove from history')
+    }))
+    def post(self, id):
+        """Remove a solver from a puzzle's history"""
+        debug_log(4, "start. id: %s" % id)
+        # ... existing code ...
+
+@puzzle_ns.route('/delete/<string:puzzlename>')
+@puzzle_ns.param('puzzlename', 'The name of the puzzle to delete')
+class PuzzleDelete(Resource):
+    @puzzle_ns.doc('delete_puzzle', description='Delete a puzzle by name')
+    def get(self, puzzlename):
+        """Delete a puzzle by name"""
+        debug_log(4, "start. delete puzzle named %s" % puzzlename)
+        # ... existing code ...
 
 if __name__ == "__main__":
     if initdrive() != 0:
