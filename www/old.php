@@ -158,33 +158,35 @@ function print_rounds_table($rounds, $mypuzzle) {
         }
       }
     }
-    $round_title = sprintf(
-      '%s <span class="round-stats">(%d solved / %d open)</span>',
-      $round->name,
-      $num_solved,
-      $num_open,
-    );
-    if ($num_metas > 0) {
-      $round_title .= sprintf(' <span class="round-stats">(%d/%d metas solved)</span>', 
-        $num_metas_solved, 
-        $num_metas
-      );
-    }
+    $round_name = $round->name;
     // Add document link if drive_uri exists
     if (!empty($round->drive_uri)) {
-      $round_title .= sprintf(
+      $round_name .= sprintf(
         ' <a href="%s" title="Round Documents" target="_blank">%s</a>',
         $round->drive_uri,
         $use_text ? 'D' : '🗒️'
       );
     }
     // Add edit link
-    $round_title .= sprintf(
+    $round_name .= sprintf(
       ' <a href="editround.php?rid=%d" title="Edit Round">%s</a>',
       $round->id,
       $use_text ? '±' : '⚙️'
     );
-    echo sprintf('<th style="white-space: nowrap;">%s</th>', $round_title);
+
+    $round_stats = sprintf(
+      '<span class="round-stats">(%d solved / %d open)</span>',
+      $num_solved,
+      $num_open
+    );
+    if ($num_metas > 0) {
+      $round_stats .= sprintf(' <span class="round-stats">(%d/%d metas solved)</span>', 
+        $num_metas_solved, 
+        $num_metas
+      );
+    }
+
+    echo sprintf('<th><div>%s</div><div>%s</div></th>', $round_name, $round_stats);
   }
   echo '</tr><tr>';
   foreach ($rounds as $round) {
