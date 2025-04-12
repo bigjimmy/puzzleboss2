@@ -184,7 +184,7 @@ function print_rounds_table($rounds, $mypuzzle) {
       $round->id,
       $use_text ? '±' : '⚙️'
     );
-    echo sprintf('<th>%s</th>', $round_title);
+    echo sprintf('<th style="white-space: nowrap;">%s</th>', $round_title);
   }
   echo '</tr><tr>';
   foreach ($rounds as $round) {
