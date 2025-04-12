@@ -77,7 +77,7 @@ require('puzzlebosslib.php');
     try {
       $responseobj = postapi("/config/refresh", array());
       assert_api_success($responseobj);
-      echo '<div class="success">Configuration refreshed successfully!</div>';
+      echo '<div class="success">Configuration refreshed successfully. Only on this server. If this is in production clustered config you need to manually restart the entire cluster of webservers.</div>';
       echo '<br><br>';
       echo '<a href="javascript:window.history.back();">Go back</a>';
       echo '</div><br><hr>';
@@ -113,7 +113,7 @@ HTML;
   echo '<br><div class="success">';
   echo 'OK. config ' . $key . ' is ' . $configval;
   echo '<br><br>';
-  echo '<div class="refresh-prompt">IMPORTANT: Press the button below to refresh the configuration. This is necessary for your change to take effect.</div>';
+  echo '<div class="refresh-prompt">IMPORTANT: Press the button below to refresh the configuration if you are in single-server dev-mode. If you are in production clustered config you need to manually restart the entire cluster of webservers.</div>';
   echo '<form action="changeconfig.php" method="post">';
   echo '<input type="hidden" name="refresh" value="yes">';
   echo '<input type="submit" class="refresh-button" value="Refresh Configuration">';
