@@ -1,0 +1,36 @@
+summary: Refresh configuration
+description: Reload configuration from both YAML file and database
+tags:
+  - Config
+parameters: []
+responses:
+  200:
+    description: Configuration refreshed successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          example: ok
+        message:
+          type: string
+          example: Configuration refreshed successfully
+  500:
+    description: Error refreshing configuration
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: error
+        message:
+          type: string
+          example: FATAL EXCEPTION reading YAML configuration
+        error_type:
+          type: string
+          example: FileNotFoundError
+        traceback:
+          type: string
+          example: "Traceback (most recent call last):\n  File..."
