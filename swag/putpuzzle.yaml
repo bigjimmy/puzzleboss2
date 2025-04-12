@@ -15,12 +15,19 @@ parameters:
             name:
                 type: string
                 description: name of the puzzle
+                example: "Example Puzzle"
             round_id:
                 type: integer
                 description: ID number of round the puzzle is in
+                example: 1
             puzzle_uri:
                 type: string
                 description: URI for puzzle
+                example: "https://puzzlehunt.example.com/puzzles/example"
+            ismeta:
+                type: boolean
+                description: Whether this is a meta puzzle
+                example: false
 responses:
     200:
         description: Creation of puzzle OK
@@ -28,11 +35,43 @@ responses:
             type: object
             id: newpuzzlereturn
             properties:
+                status:
+                    type: string
+                    enum: [ok]
+                    example: ok
                 puzzle:
                     type: object
                     properties:
                         name:
                             type: string
+                            description: Name of the created puzzle
+                            example: "Example Puzzle"
                         id:
                             type: integer
                             description: ID number of puzzle created
+                            example: 42
+                        chat_channel_id:
+                            type: string
+                            description: ID of created chat channel
+                            example: "C1234567890"
+                        chat_link:
+                            type: string
+                            description: URL to chat channel
+                            example: "https://slack.com/archives/C1234567890"
+                        drive_uri:
+                            type: string
+                            description: URL to Google Drive folder
+                            example: "https://drive.google.com/drive/folders/abc123"
+    500:
+        description: Error creating puzzle
+        schema:
+            type: object
+            properties:
+                error:
+                    type: string
+                    example: "failed due to invalid JSON POST structure"
+                error_type:
+                    type: string
+                    example: "TypeError"
+                traceback:
+                    type: string

@@ -1,0 +1,33 @@
+summary: Get configuration
+description: Get all configuration key-value pairs from the database
+tags:
+  - Config
+parameters: []
+responses:
+  200:
+    description: Current configuration
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        config:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            LOGLEVEL: "4"
+            DOMAINNAME: "example.com"
+            SKIP_GOOGLE_API: "false"
+  500:
+    description: Error fetching configuration
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+        error_type:
+          type: string
+        traceback:
+          type: string

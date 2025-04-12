@@ -3,22 +3,86 @@ parameters:
       name: id
       type: integer
       required: true
+      description: ID of the puzzle
     - in: path
       name: part
-      description: The single part to look up (e.g. name, answer)
+      description: The part (field) to retrieve
       type: string
       required: true
+      enum:
+        - name
+        - status
+        - answer
+        - roundname
+        - round_id
+        - comments
+        - drive_uri
+        - drive_id
+        - chat_channel_id
+        - chat_channel_name
+        - chat_channel_link
+        - puzzle_uri
+        - ismeta
+        - solvers
+        - cursolvers
+        - xyzloc
+        - lastact
 responses:
     200:
-      description: A single puzzle part from one puzzle
+      description: The requested puzzle part
       schema:
-          id: puzzle
           type: object
           properties:
-           puzzle:
-             type: object
-             properties:
-               part:
-                   description: the part you asked for
-                   
-      
+            status:
+              type: string
+              enum: [ok]
+              example: ok
+            puzzle:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  description: ID of the puzzle
+                  example: 1
+                part:
+                  oneOf:
+                    - type: string
+                      description: String value for text fields
+                      example: "Example Puzzle"
+                    - type: integer
+                      description: Integer value for numeric fields
+                      example: 1
+                    - type: boolean
+                      description: Boolean value for ismeta field
+                      example: false
+                    - type: object
+                      description: Object value for lastact field
+                      properties:
+                        time:
+                          type: string
+                          format: date-time
+                          example: "2025-04-12T13:55:27-04:00"
+                        type:
+                          type: string
+                          enum: [create, open, revise, comment, interact]
+                          example: "comment"
+                        source:
+                          type: string
+                          enum: [google, pb_auto, pb_manual, bigjimmy, twiki, squid, apache, xmpp]
+                          example: "pb_manual"
+                        uri:
+                          type: string
+                          example: "https://example.com/activity/123"
+    500:
+      description: Error retrieving puzzle part
+      schema:
+        type: object
+        properties:
+          error:
+            type: string
+            example: "Puzzle 123 not found in database"
+          error_type:
+            type: string
+            example: "TypeError"
+          traceback:
+            type: string

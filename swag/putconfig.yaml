@@ -1,0 +1,42 @@
+summary: Update configuration
+description: Set a configuration key-value pair in the database
+tags:
+  - Config
+consumes:
+  - application/json
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - cfgkey
+        - cfgval
+      properties:
+        cfgkey:
+          type: string
+          description: Configuration key to set
+        cfgval:
+          type: string
+          description: Value to set for the configuration key
+responses:
+  200:
+    description: Configuration updated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+  500:
+    description: Error updating configuration
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+        error_type:
+          type: string
+        traceback:
+          type: string

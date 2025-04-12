@@ -1,42 +1,84 @@
+definitions:
+  Solver:
+    type: object
+    properties:
+      id:
+          type: integer
+          description: Solver id number
+          example: 42
+      name:
+          type: string
+          description: Solver short name (username)
+          example: "alice"
+      fullname:
+          type: string
+          description: Solver full name
+          example: "Alice Smith"
+      puzz:
+          type: string
+          description: Name of puzzle solver is currently working on (empty if none)
+          example: "Example Puzzle"
+      puzzles:
+          type: string
+          description: Comma-separated list of puzzle names solver has worked on
+          example: "Example Puzzle,Another Puzzle"
+      chat_uid:
+          type: string
+          description: ID number for solver's chat presence
+          example: "U1234567890"
+      chat_name:
+          type: string
+          description: Name of solver's chat presence
+          example: "@alice"
+      lastact:
+          type: object
+          description: Last activity by this solver
+          properties:
+            time:
+              type: string
+              format: date-time
+              example: "2025-04-12T13:55:27-04:00"
+            type:
+              type: string
+              enum: [create, open, revise, comment, interact]
+              example: "interact"
+            source:
+              type: string
+              enum: [google, pb_auto, pb_manual, bigjimmy, twiki, squid, apache, xmpp]
+              example: "apache"
+            uri:
+              type: string
+              example: "https://example.com/activity/123"
+
 parameters:
     - in: path
       name: id
-      type: int
+      type: integer
       required: true
+      description: ID of the solver to retrieve
+
 responses:
     200:
       description: A single solver item
       schema:
-          id: solver
-          type: object
-          properties:
-           solver:
-             type: object
-             properties:
-              id:
-                  type: integer
-                  description: Solver id number
-              name:
-                  type: string
-                  description: Solver short name
-              fullname:
-                  type: string
-                  description: Solver long name
-              puzz:
-                  type: int
-                  description: ID number of puzzle solver is currently working on
-              puzzles:
-                  type: string
-                  description: Comma separated list of puzzle ids for all puzzles solver has worked on
-              chat_uid:
-                  type: string
-                  description: ID number for solver's chat presence
-              chat_name:
-                  type: string
-                  description: Name of solver's chat presence
-                 
-              
-                  
-                  
-                  
-                  
+        type: object
+        properties:
+          status:
+            type: string
+            enum: [ok]
+            example: ok
+          solver:
+            $ref: '#/definitions/Solver'
+    500:
+      description: Error retrieving solver
+      schema:
+        type: object
+        properties:
+          error:
+            type: string
+            example: "Solver 123 not found in database"
+          error_type:
+            type: string
+            example: "IndexError"
+          traceback:
+            type: string

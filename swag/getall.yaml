@@ -1,0 +1,83 @@
+summary: Get all puzzles and rounds
+description: Get all puzzles organized by rounds with their complete information
+tags:
+  - Puzzles
+  - Rounds
+parameters: []
+responses:
+  200:
+    description: List of all rounds with their puzzles
+    schema:
+      type: object
+      properties:
+        rounds:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Round ID
+              name:
+                type: string
+                description: Round name
+              comments:
+                type: string
+                description: Round comments
+              puzzles:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      description: Puzzle ID
+                    name:
+                      type: string
+                      description: Puzzle name
+                    answer:
+                      type: string
+                      description: Puzzle answer if solved
+                    puzzle_uri:
+                      type: string
+                      description: URI to the puzzle
+                    chat_channel_id:
+                      type: string
+                      description: Discord channel ID
+                    chat_channel_url:
+                      type: string
+                      description: Discord channel URL
+                    sheet_id:
+                      type: string
+                      description: Google Sheet ID
+                    current_solvers:
+                      type: object
+                      properties:
+                        solvers:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              solver_id:
+                                type: integer
+                    solver_history:
+                      type: object
+                      properties:
+                        solvers:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              solver_id:
+                                type: integer
+  500:
+    description: Error retrieving data
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+        error_type:
+          type: string
+        traceback:
+          type: string

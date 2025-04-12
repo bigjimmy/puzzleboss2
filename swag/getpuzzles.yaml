@@ -1,18 +1,40 @@
+summary: Get all puzzles
+description: Get a list of all puzzles in the system with their basic information (id and name only)
+tags:
+  - Puzzles
 responses:
-    200:
-        description: Basic listing of all puzzles
-        schema:
-               id: puzzles
-               type: object
-               properties:
-                       puzzles:
-                           type: array
-                           items:
-                                   type: object
-                                   properties:
-                                    id:
-                                        type: integer
-                                    name:      
-                                        type: string
-                                
-            
+  200:
+    description: Basic listing of all puzzles
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          example: ok
+        puzzles:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Puzzle ID
+                example: 1
+              name:      
+                type: string
+                description: Puzzle name
+                example: "Example Puzzle"
+  500:
+    description: Error retrieving puzzles
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Exception in fetching all puzzles from database"
+        error_type:
+          type: string
+          example: "IndexError"
+        traceback:
+          type: string
