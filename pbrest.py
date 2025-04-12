@@ -14,21 +14,17 @@ from werkzeug.exceptions import HTTPException
 import json
 from api_models import *
 
-# Initialize Flask app
 app = Flask(__name__)
-app.config['RESTX_MASK_SWAGGER'] = False
-
-# Initialize Flask-RESTx
-api = Api(app, title='PuzzleBoss API',
-          description='API for managing puzzles, rounds, and solvers',
-          doc='/swagger/')
-
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
 app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
+
+# Initialize Flask-RESTX API
+api = Api(app, version='1.0', title='PuzzleBoss API',
+          description='API for managing puzzles, rounds, and solvers')
 
 # Add namespaces to API
 api.add_namespace(puzzle_ns)
