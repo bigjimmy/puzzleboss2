@@ -158,27 +158,41 @@ function print_rounds_table($rounds, $mypuzzle) {
         }
       }
     }
-    $round_title = sprintf(
-      '%s <span class="round-stats">(%d solved / %d open)</span>',
-      $round->name,
+    $round_name = $round->name;
+    // Add document link if drive_uri exists
+    if (!empty($round->drive_uri)) {
+      $round_name .= sprintf(
+        ' <a href="%s" title="Round Documents" target="_blank">%s</a>',
+        $round->drive_uri,
+        $use_text ? 'D' : '🗒️'
+      );
+    }
+    // Add edit link
+    $round_name .= sprintf(
+      ' <a href="editround.php?rid=%d" title="Edit Round">%s</a>',
+      $round->id,
+      $use_text ? '±' : '⚙️'
+    );
+
+    $round_stats = sprintf(
+      '<span class="round-stats">(%d solved / %d open)</span>',
       $num_solved,
-      $num_open,
+      $num_open
     );
     if ($num_metas > 0) {
-      $round_title .= sprintf(' <span class="round-stats">(%d/%d metas solved)</span>', 
+      $round_stats .= sprintf(' <span class="round-stats">(%d/%d metas solved)</span>', 
         $num_metas_solved, 
         $num_metas
       );
     }
-    echo sprintf('<th>%s</th>', $round_title);
+
+    echo sprintf('<th><div>%s</div><div>%s</div></th>', $round_name, $round_stats);
   }
   echo '</tr><tr>';
-  $min_hint_time = time() - 6 * 3600;
   foreach ($rounds as $round) {
     echo '<td style="vertical-align:top;">';
     $puzzlearray = $round->puzzles;
     $metapuzzle = $round->meta_id;
-
     echo '<table>';
     foreach ($puzzlearray as $puzzle) {
       if ($puzzle->status == '[hidden]') {
