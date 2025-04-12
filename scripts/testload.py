@@ -55,12 +55,25 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
     """Create test rounds and puzzles."""
     print("\nCreating rounds...")
     
-    # Create rounds
+    # Get existing rounds
+    response = requests.get(f"{base_url}/rounds")
+    if not response.ok:
+        print(f"Failed to get existing rounds: {response.text}")
+        return False
+        
+    existing_rounds = {round['name'] for round in response.json()['rounds']}
+    
+    # Create rounds that don't exist
     for i in range(1, num_rounds + 1):
+        round_name = f"Round{i}"
+        if round_name in existing_rounds:
+            print(f"Round {i} already exists, skipping...")
+            continue
+            
         print(f"Creating Round {i}...", end="", flush=True)
         response = requests.post(
             f"{base_url}/rounds",
-            json={"name": f"Round{i}"}
+            json={"name": round_name}
         )
         if not response.ok:
             print(f"\nFailed to create Round{i}: {response.text}")
@@ -69,8 +82,21 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
             
     print("\nCreating puzzles...")
     
+    # Get all rounds again to have their IDs
+    response = requests.get(f"{base_url}/rounds")
+    if not response.ok:
+        print(f"Failed to get rounds: {response.text}")
+        return False
+        
+    rounds = {round['name']: round['id'] for round in response.json()['rounds']}
+    
     # Create puzzles for each round
     for r in range(1, num_rounds + 1):
+        round_name = f"Round{r}"
+        if round_name not in rounds:
+            print(f"\nSkipping puzzles for Round {r} as it doesn't exist")
+            continue
+            
         print(f"\nCreating puzzles for Round {r}:")
         for p in range(1, puzzles_per_round + 1):
             print(f"  Creating puzzle {p}/{puzzles_per_round}...", end="", flush=True)
@@ -78,7 +104,7 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
                 f"{base_url}/puzzles",
                 json={
                     "name": f"R{r}Puzz{p}",
-                    "round_id": str(r),
+                    "round_id": str(rounds[round_name]),
                     "puzzle_uri": "http://www.google.com"
                 }
             )
