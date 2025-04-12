@@ -1,0 +1,23 @@
+description: Post New Round
+consumes:
+    - application/json
+parameters:
+    - name: body
+      in: body
+      required: true
+      schema:
+        id: newround
+        required:
+            - name
+            - round_uri
+        properties:
+            name:
+                type: string
+                description: name of the puzzle
+            round_uri:
+                type: string
+                description: URI for puzzle
+responses:
+    200:
+        description: Creation of round OK
+        

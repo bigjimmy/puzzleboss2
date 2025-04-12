@@ -1,0 +1,24 @@
+parameters:
+    - in: path
+      name: id
+      type: integer
+      required: true
+    - in: path
+      name: part
+      description: The single part to look up (e.g. name, answer)
+      type: string
+      required: true
+responses:
+    200:
+      description: A single puzzle part from one puzzle
+      schema:
+          id: puzzle
+          type: object
+          properties:
+           puzzle:
+             type: object
+             properties:
+               part:
+                   description: the part you asked for
+                   
+      

@@ -1,0 +1,44 @@
+description: Post Solver Part
+consumes:
+    - application/json
+parameters:
+    - name: part
+      in: path
+      type: string
+      description: Part of solver to change (e.g. puzz, chat_uid)
+    - name: id
+      in: path
+      type: integer
+      description: ID of solver to change
+    - name: body
+      in: body
+      required: true
+      schema:
+        id: solver_update
+        type: object
+        properties:
+              name:
+                  type: string
+                  description: Solver name
+              fullname:
+                  type: string
+                  description: Solver full name
+              puzz:
+                  type: integer
+                  description: ID of puzzle solver is currently working on
+              puzzles:
+                  type: string
+                  description: Comma separated list of all puzzles (IDs) solver has worked on
+              chat_uid:
+                  type: string
+                  description: Chat service UID for solver
+              chat_name:
+                  type: string
+                  description: Chat service name for solver
+                  
+                  
+
+                  
+responses:
+    200:
+        description: Update of solver OK

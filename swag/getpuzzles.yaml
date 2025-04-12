@@ -1,0 +1,18 @@
+responses:
+    200:
+        description: Basic listing of all puzzles
+        schema:
+               id: puzzles
+               type: object
+               properties:
+                       puzzles:
+                           type: array
+                           items:
+                                   type: object
+                                   properties:
+                                    id:
+                                        type: integer
+                                    name:      
+                                        type: string
+                                
+            

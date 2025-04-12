@@ -1,0 +1,38 @@
+description: Post New Puzzle
+consumes:
+    - application/json
+parameters:
+    - name: body
+      in: body
+      required: true
+      schema:
+        id: newpuzzle
+        required:
+            - name
+            - round_id
+            - puzzle_uri
+        properties:
+            name:
+                type: string
+                description: name of the puzzle
+            round_id:
+                type: integer
+                description: ID number of round the puzzle is in
+            puzzle_uri:
+                type: string
+                description: URI for puzzle
+responses:
+    200:
+        description: Creation of puzzle OK
+        schema:
+            type: object
+            id: newpuzzlereturn
+            properties:
+                puzzle:
+                    type: object
+                    properties:
+                        name:
+                            type: string
+                        id:
+                            type: integer
+                            description: ID number of puzzle created

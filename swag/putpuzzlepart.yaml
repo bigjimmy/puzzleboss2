@@ -1,0 +1,60 @@
+description: Post Puzzle Part
+consumes:
+    - application/json
+parameters:
+    - name: part
+      in: path
+      type: string
+      description: Part of puzzle to change (e.g. drive_uri, status)
+    - name: id
+      in: path
+      type: integer
+      description: ID of puzzle to change
+    - name: body
+      in: body
+      required: true
+      schema:
+        id: puzzle_update
+        type: object
+        properties:
+              name:
+                  type: string
+                  description: Puzzle name
+              status:
+                  type: string
+                  enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
+                  description: Status category of puzzle
+              answer:
+                  type: string
+                  description: Answer of puzzle (if solved)
+              round_id:
+                  type: integer
+                  description: ID of round that puzzle is in
+              comments:
+                  type: string
+                  description: free-form comments field
+              drive_uri:
+                  type: string
+                  description: URI of google sheet for puzzle
+              chat_channel_name:
+                  type: string
+                  description: Name of puzzle's chat channel
+              chat_channel_id:
+                  type: string
+                  description: ID number of puzzle's chat channel
+              chat_channel_link:
+                  type: string
+                  description: HTML A tag for linking to puzzle's chat channel
+              drive_id:
+                  type: string
+                  description: Google drive id string for puzzle's google sheet
+              puzzle_uri:
+                  type: string
+                  description: URI pointing to the original puzzle page
+              xyzloc:
+                  type: string
+                  description: Location where puzzle is being worked on
+        
+responses:
+    200:
+        description: Update of puzzle OK

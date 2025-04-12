@@ -1,0 +1,37 @@
+---
+tags:
+  - puzzle
+summary: Add a solver to a puzzle's historical solver list
+description: Adds a solver to the historical solver list for a puzzle. This is separate from the current solvers list.
+parameters:
+  - name: id
+    in: path
+    type: integer
+    required: true
+    description: The ID of the puzzle
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - solver_id
+      properties:
+        solver_id:
+          type: integer
+          description: The ID of the solver to add to history
+responses:
+  200:
+    description: Solver successfully added to history
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+  400:
+    description: Invalid input or missing required fields
+  404:
+    description: Puzzle or solver not found
+  500:
+    description: Server error 

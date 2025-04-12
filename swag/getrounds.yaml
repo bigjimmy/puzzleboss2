@@ -1,0 +1,17 @@
+responses:
+    200:
+        description: Basic listing of all rounds
+        schema:
+               id: rounds
+               type: object
+               properties:
+                       rounds:
+                           type: array
+                           items:
+                                   type: object
+                                   properties:
+                                    id:
+                                        type: integer
+                                    name:      
+                                        type: string
+                                
