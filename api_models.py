@@ -8,12 +8,34 @@ rbac_ns = Namespace('rbac', description='RBAC operations')
 account_ns = Namespace('account', description='Account operations')
 config_ns = Namespace('config', description='Configuration operations')
 
+# Sub-models
+solver_info_model = puzzle_ns.model('SolverInfo', {
+    'solver_id': fields.Integer(description='ID of the solver')
+})
+
+solvers_list_model = puzzle_ns.model('SolversList', {
+    'solvers': fields.List(fields.Nested(solver_info_model))
+})
+
+activity_model = puzzle_ns.model('Activity', {
+    'id': fields.Integer(description='Activity ID'),
+    'time': fields.DateTime(description='Timestamp of activity'),
+    'solver_id': fields.Integer(description='ID of solver who performed activity'),
+    'puzzle_id': fields.Integer(description='ID of puzzle activity was performed on'),
+    'source': fields.String(description='Source of activity', 
+        enum=['google', 'pb_auto', 'pb_manual', 'bigjimmy', 'twiki', 'squid', 'apache', 'xmpp']),
+    'type': fields.String(description='Type of activity',
+        enum=['create', 'open', 'revise', 'comment', 'interact']),
+    'uri': fields.String(description='URI associated with activity'),
+    'source_version': fields.Integer(description='Version of source')
+})
+
 # Models
 puzzle_model = puzzle_ns.model('Puzzle', {
     'id': fields.Integer(description='Puzzle ID'),
     'name': fields.String(description='Puzzle name'),
     'status': fields.String(description='Status category of puzzle', 
-        enum=['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']),
+        enum=['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', '[hidden]']),
     'answer': fields.String(description='Answer of puzzle (if solved)'),
     'roundname': fields.String(description='Name of round that puzzle is in'),
     'round_id': fields.Integer(description='ID of round that puzzle is in'),
@@ -26,7 +48,11 @@ puzzle_model = puzzle_ns.model('Puzzle', {
     'puzzle_uri': fields.String(description='URI pointing to the original puzzle page'),
     'cursolvers': fields.String(description='Comma-separated list of all solvers currently working on puzzle'),
     'solvers': fields.String(description='Comma-separated list of all solvers ever working on puzzle'),
-    'xyzloc': fields.String(description='Location where puzzle is being worked on')
+    'xyzloc': fields.String(description='Location where puzzle is being worked on'),
+    'current_solvers': fields.Nested(solvers_list_model, description='JSON structure of current solvers'),
+    'solver_history': fields.Nested(solvers_list_model, description='JSON structure of solver history'),
+    'ismeta': fields.Boolean(description='Whether this puzzle is a meta puzzle'),
+    'lastact': fields.Nested(activity_model, description='Last activity performed on this puzzle')
 })
 
 puzzle_list_model = puzzle_ns.model('PuzzleList', {
@@ -37,8 +63,12 @@ round_model = round_ns.model('Round', {
     'id': fields.Integer(description='Round ID'),
     'name': fields.String(description='Round name'),
     'drive_uri': fields.String(description='URI of google folder for round'),
+    'drive_id': fields.String(description='Google drive id string for round\'s folder'),
     'meta_id': fields.Integer(description='ID of puzzle that is this round\'s meta'),
     'round_uri': fields.String(description='URI of page where this round is'),
+    'comments': fields.String(description='Free-form comments field'),
+    'status': fields.String(description='Status of the round', 
+        enum=['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', '[hidden]']),
     'puzzles': fields.List(fields.Nested(puzzle_model))
 })
 
@@ -50,10 +80,11 @@ solver_model = solver_ns.model('Solver', {
     'id': fields.Integer(description='Solver ID'),
     'name': fields.String(description='Solver short name'),
     'fullname': fields.String(description='Solver long name'),
-    'puzz': fields.Integer(description='ID number of puzzle solver is currently working on'),
-    'puzzles': fields.String(description='Comma separated list of puzzle ids for all puzzles solver has worked on'),
+    'puzz': fields.String(description='Name of puzzle solver is currently working on'),
+    'puzzles': fields.String(description='Comma separated list of puzzle names for all puzzles solver has worked on'),
     'chat_uid': fields.String(description='ID number for solver\'s chat presence'),
-    'chat_name': fields.String(description='Name of solver\'s chat presence')
+    'chat_name': fields.String(description='Name of solver\'s chat presence'),
+    'lastact': fields.Nested(activity_model, description='Last activity performed by this solver')
 })
 
 solver_list_model = solver_ns.model('SolverList', {
