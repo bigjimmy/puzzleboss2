@@ -1,24 +1,40 @@
+---
+tags:
+  - solver
+summary: Get a specific field from a solver
+description: Retrieves a single field from a solver's record by ID and field name.
 parameters:
     - in: path
       name: id
       type: integer
       required: true
+      description: The ID of the solver to retrieve
     - in: path
       name: part
-      description: The single part to look up (e.g. name, fullname, puzz)
       type: string
       required: true
+      description: The field name to retrieve
+      enum: [name, fullname, puzz, puzzles, chat_uid, chat_name]
 responses:
     200:
-      description: A single round part from one solver
+      description: The requested solver field
       schema:
-          id: solver
-          type: object
-          properties:
-           solver:
-             type: object
-             properties:
-               part:
-                   description: the part you asked for
-                   
-      
+        type: object
+        properties:
+          status:
+            type: string
+            example: "ok"
+          value:
+            type: string
+            description: The value of the requested field
+            example: "jsmith"
+    500:
+      description: Server error
+      schema:
+        type: object
+        properties:
+          error:
+            type: string
+            example: "Exception in fetching solver part from database"
+security:
+  - api_key: []

@@ -29,9 +29,11 @@ responses:
         status:
           type: string
           example: ok
-  400:
-    description: Invalid input or missing required fields
-  404:
-    description: Puzzle or solver not found
   500:
-    description: Server error 
+    description: Server error
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Exception in removing solver from history" 

@@ -405,7 +405,7 @@ def get_config():
     except TypeError:
         raise Exception("Exception fetching config info from database")
 
-    debug_log(5, "fetched all-time version diff")
+    debug_log(5, "fetched all configuration values from database")
     return {"status": "ok", "config": config}
 
 
@@ -1376,6 +1376,19 @@ def remove_solver_from_history(id):
     debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
 
     return {"status": "ok"}
+
+@app.route("/config/refresh", endpoint="refresh_config", methods=["POST"])
+@swag_from("swag/refreshconfig.yaml", endpoint="refresh_config", methods=["POST"])
+def refresh_config():
+    """Reload configuration from both YAML file and database"""
+    debug_log(4, "Configuration refresh requested")
+    try:
+        from pblib import refresh_config
+        refresh_config()
+        return {"status": "ok", "message": "Configuration refreshed successfully"}
+    except Exception as e:
+        debug_log(0, f"Error refreshing configuration: {str(e)}")
+        return {"status": "error", "message": str(e)}, 500
 
 if __name__ == "__main__":
     if initdrive() != 0:

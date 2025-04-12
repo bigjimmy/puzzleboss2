@@ -1,4 +1,8 @@
-description: Post New Round
+---
+tags:
+  - round
+summary: Create new round
+description: Creates a new round in the system. This will automatically create associated resources like a Google Drive folder and chat announcements.
 consumes:
     - application/json
 parameters:
@@ -6,18 +10,57 @@ parameters:
       in: body
       required: true
       schema:
-        id: newround
+        type: object
         required:
             - name
             - round_uri
         properties:
             name:
                 type: string
-                description: name of the puzzle
+                description: Name of the round
+                example: "Music Round"
+                minLength: 1
             round_uri:
                 type: string
-                description: URI for puzzle
+                description: URI for the round's main page in the hunt
+                example: "https://hunt.example.com/rounds/music"
 responses:
     200:
-        description: Creation of round OK
+        description: Round successfully created
+        schema:
+            type: object
+            properties:
+                status:
+                    type: string
+                    example: "ok"
+                round:
+                    type: object
+                    properties:
+                        id:
+                            type: integer
+                            description: ID of the newly created round
+                            example: 1
+                        name:
+                            type: string
+                            description: Name of the round
+                            example: "Music Round"
+                        drive_uri:
+                            type: string
+                            description: URI of the automatically created Google Drive folder
+                            example: "https://drive.google.com/drive/folders/abc123xyz"
+                        created_at:
+                            type: string
+                            format: date-time
+                            description: When the round was created
+                            example: "2024-03-20T14:30:00Z"
+    500:
+        description: Server error
+        schema:
+            type: object
+            properties:
+                error:
+                    type: string
+                    example: "Exception in creating new round"
+security:
+  - api_key: []
         

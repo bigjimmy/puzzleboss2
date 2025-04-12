@@ -46,6 +46,24 @@
     background-color: lightgreen;
     padding: 10px;
   }
+  .refresh-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .refresh-button:hover {
+    background-color: #45a049;
+  }
+  .refresh-prompt {
+    font-weight: bold;
+    color: black;
+    margin-bottom: 10px;
+  }
   </style>
 </head>
 <body>
@@ -54,6 +72,23 @@
 
 require('puzzlebosslib.php');
 
+  // Handle refresh request first
+  if (isset($_POST['refresh'])) {
+    try {
+      $responseobj = postapi("/config/refresh", array());
+      assert_api_success($responseobj);
+      echo '<div class="success">Configuration refreshed successfully!</div>';
+      echo '<br><br>';
+      echo '<a href="javascript:window.history.back();">Go back</a>';
+      echo '</div><br><hr>';
+      exit;
+    } catch (Exception $e) {
+      exit_with_api_error($e);
+      throw $e;
+    }
+  }
+
+  // Only execute config change if this is not a refresh request
   $configval = $_POST['configval'];
   $key = $_POST['key'];
 
@@ -77,6 +112,13 @@ HTML;
 
   echo '<br><div class="success">';
   echo 'OK. config ' . $key . ' is ' . $configval;
+  echo '<br><br>';
+  echo '<div class="refresh-prompt">IMPORTANT: Press the button below to refresh the configuration. This is necessary for your change to take effect.</div>';
+  echo '<form action="changeconfig.php" method="post">';
+  echo '<input type="hidden" name="refresh" value="yes">';
+  echo '<input type="submit" class="refresh-button" value="Refresh Configuration">';
+  echo '</form>';
+  echo '<br><br>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
   echo '</div><br><hr>';
 
