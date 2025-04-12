@@ -5,7 +5,6 @@ import bleach
 import smtplib
 import MySQLdb
 from flask import Flask, request
-from flask_restful import Api
 from flask_mysqldb import MySQL
 from email.message import EmailMessage
 

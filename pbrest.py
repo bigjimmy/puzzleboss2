@@ -17,12 +17,10 @@ from api_models import *
 # Initialize Flask app
 app = Flask(__name__)
 app.config['RESTX_MASK_SWAGGER'] = False
+app.url_map.strict_slashes = False
 
 # Initialize Flask-RESTx
-api = Api(app, 
-          doc='/swagger/',
-          title='PuzzleBoss API',
-          description='API for managing puzzles, rounds, and solvers')
+api = Api(app)
 
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
