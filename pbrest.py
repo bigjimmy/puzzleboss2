@@ -98,9 +98,6 @@ def get_all_all():
 
 @puzzle_ns.route('/')
 class PuzzleList(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @puzzle_ns.doc('list_puzzles')
     @puzzle_ns.marshal_with(puzzle_list_model)
     def get(self):
@@ -194,9 +191,6 @@ class PuzzleList(Resource):
 @puzzle_ns.route('/<int:id>')
 @puzzle_ns.param('id', 'The puzzle identifier')
 class Puzzle(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @puzzle_ns.doc('get_puzzle')
     @puzzle_ns.marshal_with(puzzle_model)
     def get(self, id):
@@ -223,9 +217,6 @@ class Puzzle(Resource):
 @puzzle_ns.param('id', 'The puzzle identifier')
 @puzzle_ns.param('part', 'The part to update')
 class PuzzlePart(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @puzzle_ns.doc('get_puzzle_part')
     def get(self, id, part):
         """Get a specific part of a puzzle"""
@@ -286,9 +277,6 @@ class PuzzlePart(Resource):
 
 @round_ns.route('/')
 class RoundList(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @round_ns.doc('list_rounds')
     @round_ns.marshal_with(round_list_model)
     def get(self):
@@ -371,9 +359,6 @@ class RoundList(Resource):
 @round_ns.route('/<int:id>')
 @round_ns.param('id', 'The round identifier')
 class Round(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @round_ns.doc('get_round')
     @round_ns.marshal_with(round_model)
     def get(self, id):
@@ -400,9 +385,6 @@ class Round(Resource):
 @round_ns.param('id', 'The round identifier')
 @round_ns.param('part', 'The part to update')
 class RoundPart(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @round_ns.doc('get_round_part')
     def get(self, id, part):
         """Get a specific part of a round"""
@@ -459,9 +441,6 @@ class RoundPart(Resource):
 
 @solver_ns.route('/')
 class SolverList(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @solver_ns.doc('list_solvers')
     @solver_ns.marshal_with(solver_list_model)
     def get(self):
@@ -601,9 +580,6 @@ class SolverPart(Resource):
 
 @config_ns.route('/')
 class Config(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @config_ns.doc('get_config')
     def get(self):
         """Get all configuration values"""
@@ -643,9 +619,6 @@ class Config(Resource):
 
 @config_ns.route('/refresh')
 class RefreshConfig(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @config_ns.doc('refresh_config')
     def post(self):
         """Reload configuration from both YAML file and database"""
@@ -720,9 +693,6 @@ def create_round():
 @rbac_ns.param('priv', 'The privilege category')
 @rbac_ns.param('uid', 'The user ID')
 class RBAC(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @rbac_ns.doc('check_priv')
     def get(self, priv, uid):
         """Check if a user has a specific privilege"""
@@ -790,9 +760,6 @@ class RBAC(Resource):
 
 @account_ns.route('/')
 class Account(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @account_ns.doc('create_account')
     @account_ns.expect(new_account_model)
     def post(self):
@@ -871,9 +838,6 @@ class Account(Resource):
 @account_ns.route('/finish/<string:code>')
 @account_ns.param('code', 'The verification code')
 class FinishAccount(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @account_ns.doc('finish_account')
     def get(self, code):
         """Finish account registration with verification code"""
@@ -925,9 +889,6 @@ class FinishAccount(Resource):
 @account_ns.route('/delete/<string:username>')
 @account_ns.param('username', 'The username to delete')
 class DeleteAccount(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @account_ns.doc('delete_account')
     def get(self, username):
         """Delete an account"""
@@ -1366,9 +1327,6 @@ def remove_solver_from_history(id):
 @puzzle_ns.route('/<int:id>/history/add')
 @puzzle_ns.param('id', 'The puzzle identifier')
 class PuzzleHistoryAdd(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @puzzle_ns.doc('add_solver_to_history', description='Add a solver to a puzzle\'s history')
     @puzzle_ns.expect(puzzle_ns.model('SolverHistoryAdd', {
         'solver_id': fields.Integer(required=True, description='ID of the solver to add to history')
@@ -1381,9 +1339,6 @@ class PuzzleHistoryAdd(Resource):
 @puzzle_ns.route('/<int:id>/history/remove')
 @puzzle_ns.param('id', 'The puzzle identifier')
 class PuzzleHistoryRemove(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @puzzle_ns.doc('remove_solver_from_history', description='Remove a solver from a puzzle\'s history')
     @puzzle_ns.expect(puzzle_ns.model('SolverHistoryRemove', {
         'solver_id': fields.Integer(required=True, description='ID of the solver to remove from history')
@@ -1396,9 +1351,6 @@ class PuzzleHistoryRemove(Resource):
 @puzzle_ns.route('/delete/<string:puzzlename>')
 @puzzle_ns.param('puzzlename', 'The name of the puzzle to delete')
 class PuzzleDelete(Resource):
-    def __init__(self, api=None, *args, **kwargs):
-        super().__init__(api, *args, **kwargs)
-
     @puzzle_ns.doc('delete_puzzle', description='Delete a puzzle by name')
     def get(self, puzzlename):
         """Delete a puzzle by name"""
