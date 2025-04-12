@@ -458,7 +458,7 @@ class SolverList(Resource):
         return {"status": "ok", "solvers": solvers}
 
     @solver_ns.doc('create_solver')
-    @solver_ns.expect(solver_model)
+    @solver_ns.expect(solver_post_model)
     @solver_ns.marshal_with(solver_model)
     def post(self):
         """Create a new solver"""
@@ -543,7 +543,7 @@ class SolverPart(Resource):
         return {"status": "ok", "solver": {"id": id, part: answer}}
 
     @solver_ns.doc('update_solver_part')
-    @solver_ns.expect(solver_model)
+    @solver_ns.expect(solver_post_model)
     def post(self, id, part):
         """Update a specific part of a solver"""
         debug_log(4, "start. id: %s, part: %s" % (id, part))

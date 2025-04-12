@@ -100,6 +100,13 @@ solver_model = solver_ns.model('Solver', {
     'lastact': fields.Nested(activity_model, description='Last activity performed by this solver')
 })
 
+# Model for POST operations (excludes read-only fields)
+solver_post_model = solver_ns.model('SolverPost', {
+    'name': fields.String(required=True, description='Solver short name'),
+    'fullname': fields.String(required=True, description='Solver long name'),
+    'puzz': fields.String(description='Name of puzzle solver is currently working on')
+})
+
 solver_list_model = solver_ns.model('SolverList', {
     'solvers': fields.List(fields.Nested(solver_model))
 })
