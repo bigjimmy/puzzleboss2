@@ -1,20 +1,19 @@
 import MySQLdb
 import sys
-import flasgger
-import pblib
 import traceback
 from flask import Flask, request
 from flask_restful import Api
 from flask_mysqldb import MySQL
+from flask_restx import Api as RestXApi
 from pblib import *
 from pbgooglelib import *
 from pbdiscordlib import *
 from pandas.core.dtypes.generic import ABCIntervalIndex
 from secrets import token_hex
-from flasgger.utils import swag_from
 from pbldaplib import *
 from werkzeug.exceptions import HTTPException
 import json
+from api_models import *
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -23,8 +22,16 @@ app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
-api = Api(app)
-swagger = flasgger.Swagger(app)
+api = RestXApi(app, version='1.0', title='PuzzleBoss API',
+          description='API for managing puzzles, rounds, and solvers')
+
+# Add namespaces to API
+api.add_namespace(puzzle_ns)
+api.add_namespace(round_ns)
+api.add_namespace(solver_ns)
+api.add_namespace(rbac_ns)
+api.add_namespace(account_ns)
+api.add_namespace(config_ns)
 
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -87,476 +94,542 @@ def get_all_all():
     return {"rounds": rounds}
 
 
-@app.route("/puzzles", endpoint="puzzles", methods=["GET"])
-@swag_from("swag/getpuzzles.yaml", endpoint="puzzles", methods=["GET"])
-def get_all_puzzles():
-    debug_log(4, "start")
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name from puzzle")
-        puzzlist = cursor.fetchall()
-    except IndexError:
-        raise Exception("Exception in fetching all puzzles from database")
+@puzzle_ns.route('/')
+class PuzzleList(Resource):
+    @puzzle_ns.doc('list_puzzles')
+    @puzzle_ns.marshal_with(puzzle_list_model)
+    def get(self):
+        """List all puzzles"""
+        debug_log(4, "start")
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name from puzzle")
+            puzzlist = cursor.fetchall()
+        except IndexError:
+            raise Exception("Exception in fetching all puzzles from database")
 
-    debug_log(4, "listed all puzzles")
-    return {
-        "status": "ok",
-        "puzzles": puzzlist,
-    }
-
-@app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
-@swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
-def check_priv(priv,uid):
-    debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid, )) 
-        rv = cursor.fetchone()
-    except:
-        raise Exception("Exception querying database for privs)")
-
-    debug_log(3, "in database user %s ACL is %s" % (uid, rv))
-
-    if rv == None:
+        debug_log(4, "listed all puzzles")
         return {
             "status": "ok",
-            "allowed": False,
+            "puzzles": puzzlist,
         }
 
-    try:
-        privanswer = rv[priv]
-    except:
-        raise Exception(
-                "Exception in reading priv %s from user %s ACL. No such priv?"
-                % (
-                    priv,
-                    uid,
-                  )
-                )
+    @puzzle_ns.doc('create_puzzle')
+    @puzzle_ns.expect(puzzle_model)
+    @puzzle_ns.marshal_with(puzzle_model)
+    def post(self):
+        """Create a new puzzle"""
+        debug_log(4, "start")
+        try:
+            data = puzzle_ns.payload
+            puzname = sanitize_string(data["name"])
+            round_id = data["round_id"]
+            puzzle_uri = data["puzzle_uri"]
+            debug_log(5, "request data is - %s" % str(data))
+        except TypeError:
+            raise Exception("failed due to invalid JSON POST structure or empty POST")
+        except KeyError:
+            raise Exception("One or more expected fields (name, round_id, puzzle_uri) missing.")
 
-    if privanswer == "YES":
+        if not puzname or puzname == "":
+            raise Exception("Puzzle with empty name disallowed")
+
+        # Check for duplicate
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (puzname,))
+            existing_puzzle = cursor.fetchone()
+        except:
+            raise Exception("Exception checking database for duplicate puzzle before insert")
+
+        if existing_puzzle:
+            raise Exception("Duplicate puzzle name %s detected" % puzname)
+
+        chat_status = chat_announce_puzzle(puzname)
+        debug_log(4, "return from announcing puzzle in chat is - %s" % str(chat_status))
+
+        if chat_status == None:
+            raise Exception("Error in announcing new puzzle in chat")
+
+        debug_log(4, "Making call to create google drive sheet for puzzle")
+        drive_id = create_puzzle_sheet(puzname)
+        drive_uri = "https://drive.google.com/drive/u/1/folders/%s" % drive_id
+        debug_log(5, "Puzzle drive URI created: %s" % drive_uri)
+
+        # Actually insert into the database
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO puzzle (name, round_id, puzzle_uri, drive_uri) VALUES (%s, %s, %s, %s)",
+                (puzname, round_id, puzzle_uri, drive_uri),
+            )
+            conn.commit()
+            myid = cursor.lastrowid
+        except:
+            raise Exception("Exception in insertion of puzzle %s into database" % puzname)
+
+        debug_log(
+            3, "puzzle %s added to database! drive_uri: %s" % (puzname, drive_uri)
+        )
+
         return {
             "status": "ok",
-            "allowed": True,
+            "puzzle": {
+                "id": myid,
+                "name": puzname,
+                "chat_channel_id": chat_id,
+                "chat_link": chat_link,
+                "drive_uri": drive_uri,
+            },
         }
-    else:
-        return {
-            "status": "ok",
-            "allowed": False,
-        }   
 
-@app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
-@swag_from("swag/getpuzzleid.yaml", endpoint="puzzle_id", methods=["GET"])
-def get_one_puzzle(id):
-    debug_log(4, "start. id: %s" % id)
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-        cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
-        puzzle = cursor.fetchone()
-    except IndexError:
-        raise Exception("Puzzle %s not found in database" % id)
-    except:
-        raise Exception("Exception in fetching puzzle %s from database" % id)
-
-    debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
-    return {
-        "status": "ok",
-        "puzzle": puzzle,
-    }
-
-
-@app.route("/puzzles/<id>/<part>", endpoint="puzzle_part", methods=["GET"])
-@swag_from("swag/getpuzzlepart.yaml", endpoint="puzzle_part", methods=["GET"])
-def get_puzzle_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    if part == "lastact":
-        rv = get_last_activity_for_puzzle(id)
-    else:
+@puzzle_ns.route('/<int:id>')
+@puzzle_ns.param('id', 'The puzzle identifier')
+class Puzzle(Resource):
+    @puzzle_ns.doc('get_puzzle')
+    @puzzle_ns.marshal_with(puzzle_model)
+    def get(self, id):
+        """Fetch a puzzle given its identifier"""
+        debug_log(4, "start. id: %s" % id)
         try:
             conn = mysql.connection
             cursor = conn.cursor()
             cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-            cursor.execute(
-                f"SELECT {part} from puzzle_view where id = %s LIMIT 1", (id,)
-            )
-            rv = cursor.fetchone()[part]
+            cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
+            puzzle = cursor.fetchone()
+        except IndexError:
+            raise Exception("Puzzle %s not found in database" % id)
+        except:
+            raise Exception("Exception in fetching puzzle %s from database" % id)
+
+        debug_log(4, "fetched puzzle %s" % id)
+        return {
+            "status": "ok",
+            "puzzle": puzzle,
+        }
+
+@puzzle_ns.route('/<int:id>/<string:part>')
+@puzzle_ns.param('id', 'The puzzle identifier')
+@puzzle_ns.param('part', 'The part to update')
+class PuzzlePart(Resource):
+    @puzzle_ns.doc('get_puzzle_part')
+    def get(self, id, part):
+        """Get a specific part of a puzzle"""
+        debug_log(4, "start. id: %s, part: %s" % (id, part))
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT {part} from puzzle_view where id = %s", (id,))
+            answer = cursor.fetchone()[part]
         except TypeError:
             raise Exception("Puzzle %s not found in database" % id)
         except:
             raise Exception(
-                "Exception in fetching %s part for puzzle %s from database"
-                % (
-                    part,
-                    id,
-                )
+                "Exception in fetching %s part for puzzle %s from database" % (part, id)
             )
 
-    debug_log(4, "fetched puzzle part %s for %s" % (part, id))
-    return {"status": "ok", "puzzle": {"id": id, part: rv}}
+        if part == "puzzles":
+            answer = get_puzzles_from_list(answer)
 
+        debug_log(4, "fetched puzzle part %s for %s" % (part, id))
+        return {"status": "ok", "puzzle": {"id": id, part: answer}}
 
-@app.route("/rounds", endpoint="rounds", methods=["GET"])
-@swag_from("swag/getrounds.yaml", endpoint="rounds", methods=["GET"])
-def get_all_rounds():
-    debug_log(4, "start")
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name from round")
-        roundlist = cursor.fetchall()
-    except:
-        raise Exception("Exception in fetching all rounds from database")
+    @puzzle_ns.doc('update_puzzle_part')
+    @puzzle_ns.expect(puzzle_model)
+    def post(self, id, part):
+        """Update a specific part of a puzzle"""
+        debug_log(4, "start. id: %s, part: %s" % (id, part))
+        try:
+            data = puzzle_ns.payload
+            debug_log(5, "request data is - %s" % str(data))
+            value = data[part]
+        except TypeError:
+            raise Exception("failed due to invalid JSON POST structure or empty POST")
+        except KeyError:
+            raise Exception("Expected %s field missing" % part)
 
-    debug_log(4, "listed all rounds")
-    return {
-        "status": "ok",
-        "rounds": roundlist,
-    }
+        # Check if this is a legit puzzle
+        mypuzzle = get_one_puzzle(id)
+        debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
+        if "status" not in mypuzzle or mypuzzle["status"] != "ok":
+            raise Exception("Error looking up puzzle %s" % id)
 
-
-@app.route("/rounds/<id>", endpoint="round_id", methods=["GET"])
-@swag_from("swag/getroundid.yaml", endpoint="round_id", methods=["GET"])
-def get_one_round(id):
-    debug_log(4, "start. id: %s" % id)
-    rounds = get_all_all()["rounds"]
-    round = next((round for round in rounds if str(round["id"]) == str(id)), None)
-    if not round:
-        raise Exception("Round %s not found in database" % id)
-
-    debug_log(4, "fetched round %s" % id)
-    return {
-        "status": "ok",
-        "round": round,
-    }
-
-
-@app.route("/rounds/<id>/<part>", endpoint="round_part", methods=["GET"])
-@swag_from("swag/getroundpart.yaml", endpoint="round_part", methods=["GET"])
-def get_round_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(f"SELECT {part} from round_view where id = %s", (id,))
-        answer = cursor.fetchone()[part]
-    except TypeError:
-        raise Exception("Round %s not found in database" % id)
-    except:
-        raise Exception(
-            "Exception in fetching %s part for round %s from database" % (part, id)
-        )
-
-    if part == "puzzles":
-        answer = get_puzzles_from_list(answer)
-
-    debug_log(4, "fetched round part %s for %s" % (part, id))
-    return {"status": "ok", "round": {"id": id, part: answer}}
-
-
-@app.route("/solvers", endpoint="solvers", methods=["GET"])
-@swag_from("swag/getsolvers.yaml", endpoint="solvers", methods=["GET"])
-def get_all_solvers():
-    result = {}
-    debug_log(4, "start")
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, name from solver")
-        solvers = cursor.fetchall()
-    except:
-        raise Exception("Exception in fetching all solvers from database")
-
-    debug_log(4, "listed all solvers")
-    return {"status": "ok", "solvers": solvers}
-
-
-@app.route("/solvers/<id>", endpoint="solver_id", methods=["GET"])
-@swag_from("swag/getsolverid.yaml", endpoint="solver_id", methods=["GET"])
-def get_one_solver(id):
-    debug_log(4, "start. id: %s" % id)
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-        cursor.execute("SELECT * from solver_view where id = %s", (id,))
-        solver = cursor.fetchone()
-    except IndexError:
-        raise Exception("Solver %s not found in database" % id)
-    except:
-        raise Exception("Exception in fetching solver %s from database" % id)
-
-    solver["lastact"] = get_last_activity_for_solver(id)
-    debug_log(4, "fetched solver %s" % id)
-    return {
-        "status": "ok",
-        "solver": solver,
-    }
-
-
-@app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
-@swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
-def update_solver_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        value = data[part]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected %s field missing" % part)
-    # Check if this is a legit solver
-    mysolver = get_one_solver(id)
-    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
-    if "status" not in mysolver or mysolver["status"] != "ok":
-        raise Exception("Error looking up solver %s" % id)
-
-    # This is a change to the solver's claimed puzzle
-    if part == "puzz":
-        if value:
-            # Assigning puzzle, so check if puzzle is real
-            debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
-            mypuzz = get_one_puzzle(value)
-            debug_log(5, "return value from get_one_puzzle %s is %s" % (value, mypuzz))
-            if mypuzz["status"] != "ok":
-                raise Exception(
-                    "Error retrieving info on puzzle %s, which user %s is attempting to claim"
-                    % (value, id)
-                )
-            # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
-            if mypuzz["puzzle"]["status"] == "New":
-                debug_log(
-                    3,
-                    "Automatically marking puzzle id %s, name %s as being worked on."
-                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"]),
-                )
-                update_puzzle_part_in_db(value, "status", "Being worked")
-
-            # Assign the solver to the puzzle using the new JSON-based system
-            assign_solver_to_puzzle(value, id)
-        else:
-            # Puzz is empty, so this is a de-assignment
-            # Find the puzzle the solver is currently assigned to
+        # Actually insert into the database
+        try:
             conn = mysql.connection
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id FROM puzzle 
-                WHERE JSON_CONTAINS(current_solvers, 
-                    JSON_OBJECT('solver_id', %s), 
-                    '$.solvers'
-                )
-            """, (id,))
-            current_puzzle = cursor.fetchone()
-            if current_puzzle:
-                # Unassign the solver from their current puzzle
-                unassign_solver_from_puzzle(current_puzzle['id'], id)
+            cursor.execute(f"UPDATE puzzle SET {part} = %s WHERE id = %s", (value, id))
+            conn.commit()
+        except KeyError:
+            raise Exception(
+                "Exception in modifying %s of puzzle %s into database" % (part, id)
+            )
 
-        # Now log it in the activity table
+        debug_log(3, "puzzle %s %s updated to %s" % (id, part, value))
+
+        return {"status": "ok", "puzzle": {"id": id, part: value}}
+
+
+@round_ns.route('/')
+class RoundList(Resource):
+    @round_ns.doc('list_rounds')
+    @round_ns.marshal_with(round_list_model)
+    def get(self):
+        """List all rounds"""
+        debug_log(4, "start")
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name from round")
+            roundlist = cursor.fetchall()
+        except:
+            raise Exception("Exception in fetching all rounds from database")
+
+        debug_log(4, "listed all rounds")
+        return {
+            "status": "ok",
+            "rounds": roundlist,
+        }
+
+    @round_ns.doc('create_round')
+    @round_ns.expect(round_model)
+    @round_ns.marshal_with(round_model)
+    def post(self):
+        """Create a new round"""
+        debug_log(4, "start")
+        try:
+            data = round_ns.payload
+            roundname = sanitize_string(data["name"])
+            round_uri = data["round_uri"]
+            debug_log(5, "request data is - %s" % str(data))
+        except TypeError:
+            raise Exception("failed due to invalid JSON POST structure or empty POST")
+        except KeyError:
+            raise Exception("Expected field (name, round_uri) missing.")
+
+        if not roundname or roundname == "":
+            raise Exception("Round with empty name disallowed")
+
+        # Check for duplicate
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM round WHERE name = %s LIMIT 1", (roundname,))
+            existing_round = cursor.fetchone()
+        except:
+            raise Exception("Exception checking database for duplicate round before insert")
+
+        if existing_round:
+            raise Exception("Duplicate round name %s detected" % roundname)
+
+        chat_status = chat_announce_round(roundname)
+        debug_log(4, "return from announcing round in chat is - %s" % str(chat_status))
+
+        if chat_status == None:
+            raise Exception("Error in announcing new round in chat")
+
+        debug_log(4, "Making call to create google drive folder for round")
+        round_drive_id = create_round_folder(roundname)
+        round_drive_uri = "https://drive.google.com/drive/u/1/folders/%s" % round_drive_id
+        debug_log(5, "Round drive URI created: %s" % round_drive_uri)
+
+        # Actually insert into the database
         try:
             conn = mysql.connection
             cursor = conn.cursor()
             cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'apache', 'interact')
-                """,
-                (value, id),
+                "INSERT INTO round (name, drive_uri, round_uri) VALUES (%s, %s, %s)",
+                (roundname, round_drive_uri, round_uri),
             )
             conn.commit()
+        except:
+            raise Exception("Exception in insertion of round %s into database" % roundname)
+
+        debug_log(
+            3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri)
+        )
+
+        return {"status": "ok", "round": {"name": roundname}}
+
+@round_ns.route('/<int:id>')
+@round_ns.param('id', 'The round identifier')
+class Round(Resource):
+    @round_ns.doc('get_round')
+    @round_ns.marshal_with(round_model)
+    def get(self, id):
+        """Fetch a round given its identifier"""
+        debug_log(4, "start. id: %s" % id)
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+            cursor.execute("SELECT * from round_view where id = %s", (id,))
+            round = cursor.fetchone()
         except TypeError:
+            raise Exception("Round %s not found in database" % id)
+        except:
+            raise Exception("Exception in fetching round %s from database" % id)
+
+        debug_log(4, "fetched round %s" % id)
+        return {
+            "status": "ok",
+            "round": round,
+        }
+
+@round_ns.route('/<int:id>/<string:part>')
+@round_ns.param('id', 'The round identifier')
+@round_ns.param('part', 'The part to update')
+class RoundPart(Resource):
+    @round_ns.doc('get_round_part')
+    def get(self, id, part):
+        """Get a specific part of a round"""
+        debug_log(4, "start. id: %s, part: %s" % (id, part))
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT {part} from round_view where id = %s", (id,))
+            answer = cursor.fetchone()[part]
+        except TypeError:
+            raise Exception("Round %s not found in database" % id)
+        except:
             raise Exception(
-                "Exception in logging change to puzzle %s in activity table for solver %s in database"
-                % (value, id)
+                "Exception in fetching %s part for round %s from database" % (part, id)
             )
 
-        debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
+        if part == "puzzles":
+            answer = get_puzzles_from_list(answer)
+
+        debug_log(4, "fetched round part %s for %s" % (part, id))
+        return {"status": "ok", "round": {"id": id, part: answer}}
+
+    @round_ns.doc('update_round_part')
+    @round_ns.expect(round_model)
+    def post(self, id, part):
+        """Update a specific part of a round"""
+        debug_log(4, "start. id: %s, part: %s" % (id, part))
+        try:
+            data = round_ns.payload
+            value = data[part]
+            if value == "NULL":
+                value = None
+            debug_log(5, "request data is - %s" % str(data))
+        except TypeError:
+            raise Exception("failed due to invalid JSON POST structure or empty POST")
+        except KeyError:
+            raise Exception("Expected field (%s) missing." % part)
+
+        # Actually insert into the database
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
+            conn.commit()
+        except KeyError:
+            raise Exception(
+                "Exception in modifying %s of round %s into database" % (part, id)
+            )
+
+        debug_log(3, "round %s %s updated to %s" % (id, part, value))
+
+        return {"status": "ok", "round": {"id": id, part: value}}
+
+
+@solver_ns.route('/')
+class SolverList(Resource):
+    @solver_ns.doc('list_solvers')
+    @solver_ns.marshal_with(solver_list_model)
+    def get(self):
+        """List all solvers"""
+        debug_log(4, "start")
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name from solver")
+            solvers = cursor.fetchall()
+        except:
+            raise Exception("Exception in fetching all solvers from database")
+
+        debug_log(4, "listed all solvers")
+        return {"status": "ok", "solvers": solvers}
+
+    @solver_ns.doc('create_solver')
+    @solver_ns.expect(solver_model)
+    @solver_ns.marshal_with(solver_model)
+    def post(self):
+        """Create a new solver"""
+        debug_log(4, "start")
+        try:
+            data = solver_ns.payload
+            debug_log(5, "request data is - %s" % str(data))
+            name = sanitize_string(data["name"])
+            fullname = data["fullname"]
+        except TypeError:
+            raise Exception("failed due to invalid JSON POST structure or empty POST")
+        except KeyError:
+            raise Exception("One or more expected fields (name, fullname) missing.")
+
+        # Actually insert into the database
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO solver (name, fullname) VALUES (%s, %s)", (name, fullname)
+            )
+            conn.commit()
+        except MySQLdb._exceptions.IntegrityError:
+            raise Exception(
+                "MySQL integrity failure. Does another solver with the same name %s exist?"
+                % name
+            )
+        except:
+            raise Exception("Exception in insertion of solver %s into database" % name)
+
+        debug_log(3, "solver %s added to database!" % name)
+
+        return {"status": "ok", "solver": {"name": name, "fullname": fullname}}
+
+@solver_ns.route('/<int:id>')
+@solver_ns.param('id', 'The solver identifier')
+class Solver(Resource):
+    @solver_ns.doc('get_solver')
+    @solver_ns.marshal_with(solver_model)
+    def get(self, id):
+        """Fetch a solver given its identifier"""
+        debug_log(4, "start. id: %s" % id)
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+            cursor.execute("SELECT * from solver_view where id = %s", (id,))
+            solver = cursor.fetchone()
+        except IndexError:
+            raise Exception("Solver %s not found in database" % id)
+        except:
+            raise Exception("Exception in fetching solver %s from database" % id)
+
+        solver["lastact"] = get_last_activity_for_solver(id)
+        debug_log(4, "fetched solver %s" % id)
+        return {
+            "status": "ok",
+            "solver": solver,
+        }
+
+@solver_ns.route('/<int:id>/<string:part>')
+@solver_ns.param('id', 'The solver identifier')
+@solver_ns.param('part', 'The part to update')
+class SolverPart(Resource):
+    @solver_ns.doc('get_solver_part')
+    def get(self, id, part):
+        """Get a specific part of a solver"""
+        debug_log(4, "start. id: %s, part: %s" % (id, part))
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT {part} from solver_view where id = %s", (id,))
+            answer = cursor.fetchone()[part]
+        except TypeError:
+            raise Exception("Solver %s not found in database" % id)
+        except:
+            raise Exception(
+                "Exception in fetching %s part for solver %s from database" % (part, id)
+            )
+
+        debug_log(4, "fetched solver part %s for %s" % (part, id))
+        return {"status": "ok", "solver": {"id": id, part: answer}}
+
+    @solver_ns.doc('update_solver_part')
+    @solver_ns.expect(solver_model)
+    def post(self, id, part):
+        """Update a specific part of a solver"""
+        debug_log(4, "start. id: %s, part: %s" % (id, part))
+        try:
+            data = solver_ns.payload
+            debug_log(5, "request data is - %s" % str(data))
+            value = data[part]
+        except TypeError:
+            raise Exception("failed due to invalid JSON POST structure or empty POST")
+        except KeyError:
+            raise Exception("Expected %s field missing" % part)
+
+        # Check if this is a legit solver
+        mysolver = get_one_solver(id)
+        debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+        if "status" not in mysolver or mysolver["status"] != "ok":
+            raise Exception("Error looking up solver %s" % id)
+
+        # Actually insert into the database
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
+            conn.commit()
+        except KeyError:
+            raise Exception(
+                "Exception in modifying %s of solver %s into database" % (part, id)
+            )
+
+        debug_log(3, "solver %s %s updated to %s" % (id, part, value))
+
         return {"status": "ok", "solver": {"id": id, part: value}}
 
-    # This is actually a change to the solver's info
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
-        conn.commit()
-    except:
-        raise Exception(
-            "Exception in modifying %s of solver %s in database" % (part, id)
-        )
 
-    debug_log(3, "solver %s %s updated in database" % (id, part))
+@config_ns.route('/')
+class Config(Resource):
+    @config_ns.doc('get_config')
+    def get(self):
+        """Get all configuration values"""
+        debug_log(4, "start")
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM config")
+            config = {row["key"]: row["val"] for row in cursor.fetchall()}
+        except TypeError:
+            raise Exception("Exception fetching config info from database")
 
-    return {"status": "ok", "solver": {"id": id, part: value}}
+        debug_log(5, "fetched all configuration values from database")
+        return {"status": "ok", "config": config}
 
-
-@app.route("/config", endpoint="getconfig", methods=["GET"])
-# @swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
-def get_config():
-    debug_log(4, "start")
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM config")
-        config = {row["key"]: row["val"] for row in cursor.fetchall()}
-    except TypeError:
-        raise Exception("Exception fetching config info from database")
-
-    debug_log(5, "fetched all configuration values from database")
-    return {"status": "ok", "config": config}
-
-
-# POST/WRITE Operations
-
-@app.route("/config", endpoint="putconfig", methods=["POST"])
-# @swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
-def put_config():
-    debug_log(4, "start")
-    try:
-        data = request.get_json()
-        mykey = data["cfgkey"]
-        myval = data["cfgval"]
-        debug_log(3, "Config change attempt.  struct: %s key %s val %s" % (str(data), mykey, myval))
-    except Exception as e:
-        raise Exception("Exception Interpreting input data for config change: %s" % e)
-    conn = mysql.connection
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s", (mykey, myval, mykey, myval)
-    )
-    conn.commit()
-
-    debug_log(2, "Config value %s changed successfully" % mykey)
-    return {"status": "ok"}
-
-@app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
-@swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
-def create_puzzle():
-    debug_log(4, "start")
-    try:
-        data = request.get_json()
-        puzname = sanitize_string(data["name"])
-        puzuri = bleach.clean(data["puzzle_uri"])
-        roundid = int(data["round_id"])
-        ismeta = data.get("ismeta", False)
-        debug_log(5, "request data is - %s" % str(data))
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception(
-            "One or more expected fields (name, puzzle_uri, round_id) missing."
-        )
-
-    # Check for duplicate
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (puzname,))
-        existing_puzzle = cursor.fetchone()
-    except:
-        raise Exception(
-            "Exception checking database for duplicate puzzle before insert"
-        )
-
-    if existing_puzzle:
-        raise Exception("Duplicate puzzle name %s detected" % puzname)
-
-    # Get round drive link and name
-    round_drive_uri = get_round_part(roundid, "drive_uri")["round"]["drive_uri"]
-    round_name = get_round_part(roundid, "name")["round"]["name"]
-    round_drive_id = round_drive_uri.split("/")[-1]
-
-    # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
-    drive_uri = "%s/doc.php?pname=%s" % (configstruct["BIN_URI"], puzname)
-    chat_channel = chat_create_channel_for_puzzle(
-        puzname, round_name, puzuri, drive_uri
-    )
-    debug_log(4, "return from creating chat channel: %s" % str(chat_channel))
-
-    try:
-        chat_id = chat_channel[0]
-        chat_link = chat_channel[1]
-    except:
-        raise Exception("Error in creating chat channel for puzzle")
-
-    debug_log(4, "chat channel for puzzle %s is made" % puzname)
-
-    # Create google sheet
-    drive_id = create_puzzle_sheet(
-        round_drive_id,
-        {
-            "name": puzname,
-            "roundname": round_name,
-            "puzzle_uri": puzuri,
-            "chat_uri": chat_link,
-        },
-    )
-    drive_uri = "https://docs.google.com/spreadsheets/d/%s/edit#gid=1" % drive_id
-
-    # Actually insert into the database
-    try:
+    @config_ns.doc('update_config')
+    @config_ns.expect(config_model)
+    def post(self):
+        """Update a configuration value"""
+        debug_log(4, "start")
+        try:
+            data = config_ns.payload
+            mykey = data["cfgkey"]
+            myval = data["cfgval"]
+            debug_log(3, "Config change attempt.  struct: %s key %s val %s" % (str(data), mykey, myval))
+        except Exception as e:
+            raise Exception("Exception Interpreting input data for config change: %s" % e)
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(
-            """
-            INSERT INTO puzzle
-            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                puzname,
-                puzuri,
-                roundid,
-                chat_id,
-                chat_link,
-                puzname.lower(),
-                drive_id,
-                drive_uri,
-                ismeta,
-            ),
+            "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s", (mykey, myval, mykey, myval)
         )
         conn.commit()
-    except MySQLdb._exceptions.IntegrityError:
-        raise Exception(
-            "MySQL integrity failure. Does another puzzle with the same name %s exist?"
-            % puzname
-        )
-    except:
-        raise Exception("Exception in insertion of puzzle %s into database" % puzname)
 
-    # We need to figure out what the ID is that the puzzle got assigned
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM puzzle WHERE name = %s", (puzname,))
-        puzzle = cursor.fetchone()
-        myid = str(puzzle["id"])
-    except:
-        raise Exception("Exception checking database for puzzle after insert")
+        debug_log(2, "Config value %s changed successfully" % mykey)
+        return {"status": "ok"}
 
-    # Announce new puzzle in chat
-    chat_announce_new(puzname)
+@config_ns.route('/refresh')
+class RefreshConfig(Resource):
+    @config_ns.doc('refresh_config')
+    def post(self):
+        """Reload configuration from both YAML file and database"""
+        debug_log(4, "Configuration refresh requested")
+        try:
+            from pblib import refresh_config
+            refresh_config()
+            return {"status": "ok", "message": "Configuration refreshed successfully"}
+        except Exception as e:
+            debug_log(0, f"Error refreshing configuration: {str(e)}")
+            return {"status": "error", "message": str(e)}, 500
 
-    debug_log(
-        3,
-        "puzzle %s added to system fully (chat room, spreadsheet, database, etc.)!"
-        % puzname,
-    )
-
-    return {
-        "status": "ok",
-        "puzzle": {
-            "id": myid,
-            "name": puzname,
-            "chat_channel_id": chat_id,
-            "chat_link": chat_link,
-            "drive_uri": drive_uri,
-        },
-    }
-
+# POST/WRITE Operations
 
 @app.route("/rounds", endpoint="post_rounds", methods=["POST"])
 @swag_from("swag/putround.yaml", endpoint="post_rounds", methods=["POST"])
@@ -614,357 +687,220 @@ def create_round():
 
     return {"status": "ok", "round": {"name": roundname}}
 
-@app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
-@swag_from("swag/putrbacprivuid.yaml", endpoint="post_rbac_priv_uid", methods=["POST"])
-def set_priv(priv,uid):
-    debug_log(4, "start. priv: %s, uid %s" % (priv, uid))
-    try:
-        data = request.get_json()
-        debug_log(4, "post data: %s" % (data))
-        value = data["allowed"]
-        if ( value != "YES" and value != "NO"):
-            raise Exception("Improper privset allowed syntax. e.g. {'allowed':'YES'} or {'allowed':'NO'}")
-    except Exception as e:
-        raise Exception("Error interpreting privset JSON allowed field: %s" % (e))
-    debug_log(3, "Attempting privset of uid %s:  %s = %s" % (uid, priv, value))
+@rbac_ns.route('/<string:priv>/<int:uid>')
+@rbac_ns.param('priv', 'The privilege category')
+@rbac_ns.param('uid', 'The user ID')
+class RBAC(Resource):
+    @rbac_ns.doc('check_priv')
+    def get(self, priv, uid):
+        """Check if a user has a specific privilege"""
+        debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid,))
+            rv = cursor.fetchone()
+        except:
+            raise Exception("Exception querying database for privs)")
 
-    # Actually insert into the database
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(f"INSERT INTO privs (uid, {priv}) VALUES (%s, %s) ON DUPLICATE KEY UPDATE uid=%s, {priv}=%s", (uid, value, uid, value))
-        conn.commit()
-    except Exception as e:
-        raise Exception("Error modifying priv table for uid %s priv %s value %s. Is priv string valid?" % (uid, priv, value))
+        debug_log(3, "in database user %s ACL is %s" % (uid, rv))
 
-    return {"status": "ok"}
+        if rv == None:
+            return {
+                "status": "ok",
+                "allowed": False,
+            }
 
-
-@app.route("/rounds/<id>/<part>", endpoint="post_round_part", methods=["POST"])
-@swag_from("swag/putroundpart.yaml", endpoint="post_round_part", methods=["POST"])
-def update_round_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        data = request.get_json()
-        value = data[part]
-        if value == "NULL":
-            value = None
-        debug_log(5, "request data is - %s" % str(data))
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected field (%s) missing." % part)
-
-    # Actually insert into the database
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
-        conn.commit()
-    except KeyError:
-        raise Exception(
-            "Exception in modifying %s of round %s into database" % (part, id)
-        )
-
-    debug_log(3, "round %s %s updated to %s" % (id, part, value))
-
-    return {"status": "ok", "round": {"id": id, part: value}}
-
-
-@app.route("/solvers", endpoint="post_solver", methods=["POST"])
-@swag_from("swag/putsolver.yaml", endpoint="post_solver", methods=["POST"])
-def create_solver():
-    debug_log(4, "start")
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        name = sanitize_string(data["name"])
-        fullname = data["fullname"]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("One or more expected fields (name, fullname) missing.")
-
-    # Actually insert into the database
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO solver (name, fullname) VALUES (%s, %s)", (name, fullname)
-        )
-        conn.commit()
-    except MySQLdb._exceptions.IntegrityError:
-        raise Exception(
-            "MySQL integrity failure. Does another solver with the same name %s exist?"
-            % name
-        )
-    except:
-        raise Exception("Exception in insertion of solver %s into database" % name)
-
-    debug_log(3, "solver %s added to database!" % name)
-
-    return {"status": "ok", "solver": {"name": name, "fullname": fullname}}
-
-
-@app.route("/puzzles/<id>/<part>", endpoint="post_puzzle_part", methods=["POST"])
-@swag_from("swag/putpuzzlepart.yaml", endpoint="post_puzzle_part", methods=["POST"])
-def update_puzzle_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        value = data[part]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected %s field missing" % part)
-
-    # Check if this is a legit puzzle
-    mypuzzle = get_one_puzzle(id)
-    debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
-    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
-        raise Exception("Error looking up puzzle %s" % id)
-
-    if part == "lastact":
-        set_new_activity_for_puzzle(id, value)
-
-    elif part == "status":
-        debug_log(4, "part to update is status")
-        if value == "Solved":
-            if mypuzzle["puzzle"]["status"] == "Solved":
-                raise Exception(
-                    "Puzzle %s is already solved! Refusing to re-solve." % id
-                )
-            # Don't mark puzzle as solved if there is no answer filled in
-            if not mypuzzle["puzzle"]["answer"]:
-                raise Exception(
-                    "Puzzle %s has no answer! Refusing to mark as solved." % id
-                )
-            else:
-                debug_log(
-                    3,
-                    "Puzzle id %s name %s has been Solved!!!"
-                    % (id, mypuzzle["puzzle"]["name"]),
-                )
-                clear_puzzle_solvers(id)
-                update_puzzle_part_in_db(id, part, value)
-                chat_announce_solved(mypuzzle["puzzle"]["name"])
-                
-                # Check if this is a meta puzzle and if all metas in the round are solved
-                if mypuzzle["puzzle"]["ismeta"]:
-                    check_round_completion(mypuzzle["puzzle"]["round_id"])
-        elif (
-            value == "Needs eyes"
-            or value == "Critical"
-            or value == "Unnecessary"
-            or value == "WTF"
-            or value == "Being worked"
-        ):
-            update_puzzle_part_in_db(id, part, value)
-            chat_announce_attention(mypuzzle["puzzle"]["name"])
-
-    elif part == "ismeta":
-        # When setting a puzzle as meta, just update it directly
-        update_puzzle_part_in_db(id, part, value)
-        
-        # Check if this is a meta puzzle and if all metas in the round are solved
-        if value:
-            check_round_completion(mypuzzle["puzzle"]["round_id"])
-
-    elif part == "xyzloc":
-        update_puzzle_part_in_db(id, part, value)
-        if (value != None) and (value != ""):
-            chat_say_something(
-                mypuzzle["puzzle"]["chat_channel_id"],
-                "**ATTENTION:** %s is being worked on at %s"
-                % (mypuzzle["puzzle"]["name"], value),
-            )
-        else:
-            debug_log(3, "puzzle xyzloc removed. skipping discord announcement")
-
-    elif part == "answer":
-        if data != "" and data != None:
-            # Mark puzzle as solved automatically when answer is filled in
-            update_puzzle_part_in_db(id, "status", "Solved")
-            value = value.upper()
-            update_puzzle_part_in_db(id, part, value)
-            debug_log(
-                3,
-                "Puzzle id %s name %s has been Solved!!!"
-                % (id, mypuzzle["puzzle"]["name"]),
-            )
-            clear_puzzle_solvers(id)
-            chat_announce_solved(mypuzzle["puzzle"]["name"])
-            
-            # Check if this is a meta puzzle and if all metas in the round are solved
-            if mypuzzle["puzzle"]["ismeta"]:
-                check_round_completion(mypuzzle["puzzle"]["round_id"])
-
-    elif part == "comments":
-        update_puzzle_part_in_db(id, part, value)
-        chat_say_something(
-            mypuzzle["puzzle"]["chat_channel_id"],
-            "**ATTENTION** new comment for puzzle %s: %s"
-            % (mypuzzle["puzzle"]["name"], value),
-        )
-
-    elif part == "round":
-        update_puzzle_part_in_db(id, part, value)
-        # This obviously needs some sanity checking
-
-    else:
-        raise Exception("Invalid part name %s" % part)
-
-    debug_log(
-        3,
-        "puzzle name %s, id %s, part %s has been set to %s"
-        % (mypuzzle["puzzle"]["name"], id, part, value),
-    )
-
-    return {"status": "ok", "puzzle": {"id": id, part: value}}
-
-
-@app.route("/account", endpoint="post_new_account", methods=["POST"])
-@swag_from("swag/putnewaccount.yaml", endpoint="post_new_account", methods=["POST"])
-def new_account():
-    debug_log(4, "start.")
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        username = data["username"]
-        fullname = data["fullname"]
-        email = data["email"]
-        password = data["password"]
-        reset = data.get("reset")
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception(
-            "Expected field missing (username, fullname, email, or password)"
-        )
-
-    allusers = get_all_solvers()["solvers"]
-    userfound = False
-    for solver in allusers:
-        if solver["name"] == username:
-            if reset == "reset":
-                userfound = True
-                debug_log(3, "Password reset attempt detected for user %s" % username)
-            else:
-                raise Exception(
-                    "Username %s already exists. Pick another, or add reset flag."
-                    % username
-                )
-
-    if reset == "reset":
-        if not userfound:
-            raise Exception("Username %s not found in system to reset." % username)
-        if verify_email_for_user(email, username) != 1:
+        try:
+            privanswer = rv[priv]
+        except:
             raise Exception(
-                "Username %s does not match email %s in the system."
-                % (
-                    username,
-                    email,
-                )
+                "Exception in reading priv %s from user %s ACL. No such priv?"
+                % (priv, uid)
             )
 
-    # Generate the code
-    code = token_hex(4)
-    debug_log(4, "code picked: %s" % code)
+        if privanswer == "YES":
+            return {
+                "status": "ok",
+                "allowed": True,
+            }
+        else:
+            return {
+                "status": "ok",
+                "allowed": False,
+            }
 
-    # Actually insert into the database
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO newuser
-            (username, fullname, email, password, code)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (username, fullname, email, password, code),
-        )
-        conn.commit()
-    except TypeError:
-        raise Exception(
-            "Exception in insertion of unverified user request %s into database"
-            % username
-        )
+    @rbac_ns.doc('set_priv')
+    @rbac_ns.expect(rbac_model)
+    def post(self, priv, uid):
+        """Set a privilege for a user"""
+        debug_log(4, "start. priv: %s, uid %s" % (priv, uid))
+        try:
+            data = rbac_ns.payload
+            debug_log(4, "post data: %s" % (data))
+            value = data["allowed"]
+            if (value != "YES" and value != "NO"):
+                raise Exception("Improper privset allowed syntax. e.g. {'allowed':'YES'} or {'allowed':'NO'}")
+        except Exception as e:
+            raise Exception("Error interpreting privset JSON allowed field: %s" % (e))
+        debug_log(3, "Attempting privset of uid %s:  %s = %s" % (uid, priv, value))
 
-    if email_user_verification(email, code, fullname, username) == "OK":
-        debug_log(
-            3,
-            "unverified new user %s added to database with verification code %s. email sent."
-            % (username, code),
-        )
-        return {"status": "ok", "code": code}
+        # Actually insert into the database
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(f"INSERT INTO privs (uid, {priv}) VALUES (%s, %s) ON DUPLICATE KEY UPDATE uid=%s, {priv}=%s", (uid, value, uid, value))
+            conn.commit()
+        except Exception as e:
+            raise Exception("Error modifying priv table for uid %s priv %s value %s. Is priv string valid?" % (uid, priv, value))
 
-    raise Exception("some error emailing code to user")
-
-
-@app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
-@swag_from("swag/getfinishaccount.yaml", endpoint="get_finish_account", methods=["GET"])
-def finish_account(code):
-    debug_log(4, "start. code %s" % code)
-
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT username, fullname, email, password
-            FROM newuser
-            WHERE code = %s
-            """,
-            (code,),
-        )
-        newuser = cursor.fetchone()
-
-        debug_log(5, "query return: %s" % str(newuser))
-
-        username = newuser["username"]
-        fullname = newuser["fullname"]
-        email = newuser["email"]
-        password = newuser["password"]
-
-    except TypeError:
-        raise Exception("Code %s is not valid." % code)
-
-    debug_log(
-        4,
-        "valid code. username: %s fullname: %s email: %s password: REDACTED"
-        % (username, fullname, email),
-    )
-
-    firstname, lastname = fullname.split(maxsplit=1)
-
-    retcode = add_or_update_user(username, firstname, lastname, email, password)
-
-    if retcode == "OK":
-        # Delete code and preliminary entry now
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
-        conn.commit()
         return {"status": "ok"}
 
-    raise Exception(retcode)
+@account_ns.route('/')
+class Account(Resource):
+    @account_ns.doc('create_account')
+    @account_ns.expect(new_account_model)
+    def post(self):
+        """Create a new account"""
+        debug_log(4, "start.")
+        try:
+            data = account_ns.payload
+            debug_log(5, "request data is - %s" % str(data))
+            username = data["username"]
+            fullname = data["fullname"]
+            email = data["email"]
+            password = data["password"]
+            reset = data.get("reset")
+        except TypeError:
+            raise Exception("failed due to invalid JSON POST structure or empty POST")
+        except KeyError:
+            raise Exception(
+                "Expected field missing (username, fullname, email, or password)"
+            )
 
+        allusers = get_all_solvers()["solvers"]
+        userfound = False
+        for solver in allusers:
+            if solver["name"] == username:
+                if reset == "reset":
+                    userfound = True
+                    debug_log(3, "Password reset attempt detected for user %s" % username)
+                else:
+                    raise Exception(
+                        "Username %s already exists. Pick another, or add reset flag."
+                        % username
+                    )
 
-@app.route("/deleteuser/<username>", endpoint="get_delete_account", methods=["GET"])
-@swag_from("swag/getdeleteaccount.yaml", endpoint="get_delete_account", methods=["GET"])
-def delete_account(username):
-    debug_log(4, "start. code %s" % username)
+        if reset == "reset":
+            if not userfound:
+                raise Exception("Username %s not found in system to reset." % username)
+            if verify_email_for_user(email, username) != 1:
+                raise Exception(
+                    "Username %s does not match email %s in the system."
+                    % (username, email)
+                )
 
-    delete_pb_solver(username)
-    debug_log(3, "user %s deleted from solver db" % username)
+        # Generate the code
+        code = token_hex(4)
+        debug_log(4, "code picked: %s" % code)
 
-    errmsg = delete_user(username)
+        # Actually insert into the database
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO newuser
+                (username, fullname, email, password, code)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (username, fullname, email, password, code),
+            )
+            conn.commit()
+        except TypeError:
+            raise Exception(
+                "Exception in insertion of unverified user request %s into database"
+                % username
+            )
 
-    if errmsg != "OK":
-        raise Exception(errmsg)
+        if email_user_verification(email, code, fullname, username) == "OK":
+            debug_log(
+                3,
+                "unverified new user %s added to database with verification code %s. email sent."
+                % (username, code),
+            )
+            return {"status": "ok", "code": code}
 
-    return {"status": "ok"}
+        raise Exception("some error emailing code to user")
+
+@account_ns.route('/finish/<string:code>')
+@account_ns.param('code', 'The verification code')
+class FinishAccount(Resource):
+    @account_ns.doc('finish_account')
+    def get(self, code):
+        """Finish account registration with verification code"""
+        debug_log(4, "start. code %s" % code)
+
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT username, fullname, email, password
+                FROM newuser
+                WHERE code = %s
+                """,
+                (code,),
+            )
+            newuser = cursor.fetchone()
+
+            debug_log(5, "query return: %s" % str(newuser))
+
+            username = newuser["username"]
+            fullname = newuser["fullname"]
+            email = newuser["email"]
+            password = newuser["password"]
+
+        except TypeError:
+            raise Exception("Code %s is not valid." % code)
+
+        debug_log(
+            4,
+            "valid code. username: %s fullname: %s email: %s password: REDACTED"
+            % (username, fullname, email),
+        )
+
+        firstname, lastname = fullname.split(maxsplit=1)
+
+        retcode = add_or_update_user(username, firstname, lastname, email, password)
+
+        if retcode == "OK":
+            # Delete code and preliminary entry now
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
+            conn.commit()
+            return {"status": "ok"}
+
+        raise Exception(retcode)
+
+@account_ns.route('/delete/<string:username>')
+@account_ns.param('username', 'The username to delete')
+class DeleteAccount(Resource):
+    @account_ns.doc('delete_account')
+    def get(self, username):
+        """Delete an account"""
+        debug_log(4, "start. code %s" % username)
+
+        delete_pb_solver(username)
+        debug_log(3, "user %s deleted from solver db" % username)
+
+        errmsg = delete_user(username)
+
+        if errmsg != "OK":
+            raise Exception(errmsg)
+
+        return {"status": "ok"}
 
 @app.route("/deletepuzzle/<puzzlename>", endpoint="get_delete_puzzle", methods=["GET"])
 @swag_from("swag/getdeletepuzzle.yaml", endpoint="get_delete_puzzle", methods=["GET"])
@@ -1376,19 +1312,6 @@ def remove_solver_from_history(id):
     debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
 
     return {"status": "ok"}
-
-@app.route("/config/refresh", endpoint="refresh_config", methods=["POST"])
-@swag_from("swag/refreshconfig.yaml", endpoint="refresh_config", methods=["POST"])
-def refresh_config():
-    """Reload configuration from both YAML file and database"""
-    debug_log(4, "Configuration refresh requested")
-    try:
-        from pblib import refresh_config
-        refresh_config()
-        return {"status": "ok", "message": "Configuration refreshed successfully"}
-    except Exception as e:
-        debug_log(0, f"Error refreshing configuration: {str(e)}")
-        return {"status": "error", "message": str(e)}, 500
 
 if __name__ == "__main__":
     if initdrive() != 0:
