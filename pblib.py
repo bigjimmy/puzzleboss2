@@ -13,6 +13,24 @@ from email.message import EmailMessage
 config = None
 huntfolderid = "undefined"
 
+def debug_log(sev, message):
+    # Levels:
+    # 0 = emergency
+    # 1 = error
+    # 2 = warning
+    # 3 = info
+    # 4 = debug
+    # 5 = trace
+
+    if int(configstruct["LOGLEVEL"]) >= sev:
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+        print(
+            "[%s] [SEV%s] %s: %s"
+            % (timestamp, sev, inspect.currentframe().f_back.f_code.co_name, message),
+            flush=True,
+        )
+    return
+
 def refresh_config():
     """Reload configuration from both YAML file and database"""
     global configstruct, config
@@ -40,24 +58,6 @@ def refresh_config():
 
 # Initial configuration load
 refresh_config()
-
-def debug_log(sev, message):
-    # Levels:
-    # 0 = emergency
-    # 1 = error
-    # 2 = warning
-    # 3 = info
-    # 4 = debug
-    # 5 = trace
-
-    if int(configstruct["LOGLEVEL"]) >= sev:
-        timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
-        print(
-            "[%s] [SEV%s] %s: %s"
-            % (timestamp, sev, inspect.currentframe().f_back.f_code.co_name, message),
-            flush=True,
-        )
-    return
 
 def sanitize_string(mystring):
     outstring = "".join(e for e in mystring if e.isalnum())
