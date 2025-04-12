@@ -116,7 +116,7 @@ class PuzzleList(Resource):
         }
 
     @puzzle_ns.doc('create_puzzle')
-    @puzzle_ns.expect(puzzle_model)
+    @puzzle_ns.expect(puzzle_post_model)
     @puzzle_ns.marshal_with(puzzle_model)
     def post(self):
         """Create a new puzzle"""
@@ -163,8 +163,8 @@ class PuzzleList(Resource):
             conn = mysql.connection
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO puzzle (name, round_id, puzzle_uri, drive_uri) VALUES (%s, %s, %s, %s)",
-                (puzname, round_id, puzzle_uri, drive_uri),
+                "INSERT INTO puzzle (name, round_id, puzzle_uri, drive_uri, status, answer, comments, xyzloc, ismeta) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (puzname, round_id, puzzle_uri, drive_uri, data.get("status", "New"), data.get("answer", ""), data.get("comments", ""), data.get("xyzloc", ""), data.get("ismeta", False)),
             )
             conn.commit()
             myid = cursor.lastrowid
@@ -238,7 +238,7 @@ class PuzzlePart(Resource):
         return {"status": "ok", "puzzle": {"id": id, part: answer}}
 
     @puzzle_ns.doc('update_puzzle_part')
-    @puzzle_ns.expect(puzzle_model)
+    @puzzle_ns.expect(puzzle_post_model)
     def post(self, id, part):
         """Update a specific part of a puzzle"""
         debug_log(4, "start. id: %s, part: %s" % (id, part))

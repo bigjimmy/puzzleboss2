@@ -63,7 +63,7 @@ puzzle_post_model = puzzle_ns.model('PuzzlePost', {
     'answer': fields.String(description='Answer of puzzle (if solved)'),
     'round_id': fields.Integer(required=True, description='ID of round that puzzle is in'),
     'comments': fields.String(description='Free-form comments field'),
-    'puzzle_uri': fields.String(description='URI pointing to the original puzzle page'),
+    'puzzle_uri': fields.String(required=True, description='URI pointing to the original puzzle page'),
     'xyzloc': fields.String(description='Location where puzzle is being worked on'),
     'ismeta': fields.Boolean(description='Whether this puzzle is a meta puzzle')
 })
