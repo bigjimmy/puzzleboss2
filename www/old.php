@@ -170,15 +170,27 @@ function print_rounds_table($rounds, $mypuzzle) {
         $num_metas
       );
     }
+    // Add document link if drive_uri exists
+    if (!empty($round->drive_uri)) {
+      $round_title .= sprintf(
+        ' <a href="%s" title="Round Documents" target="_blank">%s</a>',
+        $round->drive_uri,
+        $use_text ? 'D' : '🗒️'
+      );
+    }
+    // Add edit link
+    $round_title .= sprintf(
+      ' <a href="editround.php?rid=%d" title="Edit Round">%s</a>',
+      $round->id,
+      $use_text ? '±' : '⚙️'
+    );
     echo sprintf('<th>%s</th>', $round_title);
   }
   echo '</tr><tr>';
-  $min_hint_time = time() - 6 * 3600;
   foreach ($rounds as $round) {
     echo '<td style="vertical-align:top;">';
     $puzzlearray = $round->puzzles;
     $metapuzzle = $round->meta_id;
-
     echo '<table>';
     foreach ($puzzlearray as $puzzle) {
       if ($puzzle->status == '[hidden]') {
