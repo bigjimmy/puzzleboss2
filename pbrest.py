@@ -19,11 +19,9 @@ app = Flask(__name__)
 app.config['RESTX_MASK_SWAGGER'] = False
 
 # Initialize Flask-RESTx
-api = Api(app, 
-          version='1.0',
-          doc='/swagger/',
-          title='PuzzleBoss API',
-          description='API for managing puzzles, rounds, and solvers')
+api = Api(app, title='PuzzleBoss API',
+          description='API for managing puzzles, rounds, and solvers',
+          doc='/swagger/')
 
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
