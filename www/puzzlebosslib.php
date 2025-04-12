@@ -5,10 +5,6 @@ global $pbroot;
 global $bookmarkuri;
 
 // Load YAML config first
-if (!extension_loaded('yaml')) {
-    die("Error: YAML extension not loaded. Please install the PHP YAML extension.");
-}
-
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 if ($yaml === false) {
     die("Error: Could not parse puzzleboss.yaml file");
