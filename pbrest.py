@@ -3,6 +3,11 @@ import sys
 import flasgger
 import pblib
 import traceback
+import yaml
+import inspect
+import datetime
+import bleach
+import smtplib
 from flask import Flask, request
 from flask_restful import Api
 from flask_mysqldb import MySQL
@@ -15,6 +20,7 @@ from flasgger.utils import swag_from
 from pbldaplib import *
 from werkzeug.exceptions import HTTPException
 import json
+import datetime
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -31,9 +37,15 @@ def handle_error(e):
     code = 500
     if isinstance(e, HTTPException):
         code = e.code
-    errmsg = str(e)
-    debug_log(0, errmsg)
-    return {"error": str(e)}, code
+    
+    error_details = {
+        "error": str(e),
+        "error_type": e.__class__.__name__,
+        "traceback": traceback.format_exc()
+    }
+    
+    debug_log(0, f"Error occurred: {error_details}")
+    return error_details, code
 
 
 # GET/READ Operations
