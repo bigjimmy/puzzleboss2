@@ -72,6 +72,23 @@
 
 require('puzzlebosslib.php');
 
+  // Handle refresh request first
+  if (isset($_POST['refresh'])) {
+    try {
+      $responseobj = postapi("/config/refresh", array());
+      assert_api_success($responseobj);
+      echo '<div class="success">Configuration refreshed successfully!</div>';
+      echo '<br><br>';
+      echo '<a href="javascript:window.history.back();">Go back</a>';
+      echo '</div><br><hr>';
+      exit;
+    } catch (Exception $e) {
+      exit_with_api_error($e);
+      throw $e;
+    }
+  }
+
+  // Only execute config change if this is not a refresh request
   $configval = $_POST['configval'];
   $key = $_POST['key'];
 
@@ -104,17 +121,6 @@ HTML;
   echo '<br><br>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
   echo '</div><br><hr>';
-
-  if (isset($_POST['refresh'])) {
-    try {
-      $responseobj = postapi("/config/refresh", array());
-      assert_api_success($responseobj);
-      echo '<div class="success">Configuration refreshed successfully!</div>';
-    } catch (Exception $e) {
-      exit_with_api_error($e);
-      throw $e;
-    }
-  }
 
 ?>
 
