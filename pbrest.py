@@ -20,7 +20,6 @@ app.config['RESTX_MASK_SWAGGER'] = False
 
 # Initialize Flask-RESTx
 api = Api(app, 
-          version='1.0',
           doc='/swagger/',
           title='PuzzleBoss API',
           description='API for managing puzzles, rounds, and solvers')
