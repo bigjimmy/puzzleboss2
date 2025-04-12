@@ -100,14 +100,20 @@ HTML;
 
 <script>
 function refreshConfig() {
-    fetch('<?php echo $apiroot; ?>/config/refresh', {
+    const apiRoot = '<?php echo $apiroot; ?>';
+    fetch(apiRoot + '/config/refresh', {
         method: 'POST',
         headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.status === 'ok') {
             alert('Configuration refreshed successfully!');
@@ -116,7 +122,7 @@ function refreshConfig() {
         }
     })
     .catch(error => {
-        alert('Error refreshing configuration: ' + error);
+        alert('Error refreshing configuration: ' + error.message);
     });
 }
 </script>
