@@ -2,7 +2,7 @@ import MySQLdb
 import sys
 import traceback
 from flask import Flask, request
-from flask_restful import Api
+from flask_restful import Api, Resource
 from flask_mysqldb import MySQL
 from flask_restx import Api as RestXApi
 from pblib import *
