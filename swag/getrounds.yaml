@@ -1,59 +1,17 @@
----
-tags:
-  - round
-summary: Get all rounds
-description: Retrieves a list of all rounds in the system with basic information.
-parameters:
-  - in: query
-    name: limit
-    type: integer
-    required: false
-    description: Maximum number of rounds to return
-    default: 100
-  - in: query
-    name: offset
-    type: integer
-    required: false
-    description: Number of rounds to skip
-    default: 0
 responses:
     200:
-      description: List of all rounds
-      schema:
-        type: object
-        properties:
-          status:
-            type: string
-            example: "ok"
-          rounds:
-            type: array
-            items:
-              type: object
-              properties:
-                id:
-                  type: integer
-                  description: Round ID
-                  example: 1
-                name:
-                  type: string
-                  description: Round name
-                  example: "Round 1"
-    400:
-      description: Invalid query parameters
-      schema:
-        type: object
-        properties:
-          error:
-            type: string
-            example: "Invalid limit or offset values"
-    500:
-      description: Server error
-      schema:
-        type: object
-        properties:
-          error:
-            type: string
-            example: "Exception in fetching rounds from database"
-security:
-  - api_key: []
-    
+        description: Basic listing of all rounds
+        schema:
+               id: rounds
+               type: object
+               properties:
+                       rounds:
+                           type: array
+                           items:
+                                   type: object
+                                   properties:
+                                    id:
+                                        type: integer
+                                    name:      
+                                        type: string
+                                

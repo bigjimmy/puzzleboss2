@@ -1,41 +1,20 @@
----
-tags:
-  - rbac
-summary: Check if a user has a specific privilege
-description: Checks if a user has a specific privilege in the system.
 parameters:
     - in: path
       name: priv
+      description: The privilege category we are checking for (e.g. puzztech)
       type: string
       required: true
-      description: The privilege category to check (e.g. puzztech)
-      example: "puzztech"
     - in: path
       name: uid
+      description: The UID of the solver we are checking
       type: integer
       required: true
-      description: The UID of the solver to check
-      example: 1
 responses:
     200:
-      description: Privilege check result
+      description: A boolean of whether user is allowed that privilege 
       schema:
-        type: object
-        properties:
-          status:
-            type: string
-            example: "ok"
-          allowed:
-            type: boolean
-            description: Whether the user has the requested privilege
-            example: true
-    500:
-      description: Server error
-      schema:
-        type: object
-        properties:
-          error:
-            type: string
-            example: "Exception in checking user privileges"
-security:
-  - api_key: []
+          id: answer
+          type: object
+          properties:
+           allowed:
+             type: boolean

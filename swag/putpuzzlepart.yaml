@@ -1,150 +1,60 @@
----
-tags:
-  - puzzle
-summary: Update puzzle field
-description: Updates a specific field of an existing puzzle. Some fields may trigger additional actions (e.g., marking as solved, chat announcements).
+description: Post Puzzle Part
 consumes:
     - application/json
 parameters:
-    - name: id
-      in: path
-      type: integer
-      required: true
-      description: ID of the puzzle to update
-      example: 1
     - name: part
       in: path
       type: string
-      required: true
-      description: Field to update
-      enum:
-        - name
-        - status
-        - answer
-        - round_id
-        - comments
-        - drive_uri
-        - chat_channel_name
-        - chat_channel_id
-        - chat_channel_link
-        - drive_id
-        - puzzle_uri
-        - xyzloc
-        - ismeta
-        - lastact
-      example: "status"
+      description: Part of puzzle to change (e.g. drive_uri, status)
+    - name: id
+      in: path
+      type: integer
+      description: ID of puzzle to change
     - name: body
       in: body
       required: true
       schema:
+        id: puzzle_update
         type: object
         properties:
-            name:
-                type: string
-                description: Puzzle name
-                example: "The Final Countdown"
-            status:
-                type: string
-                enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
-                description: Current status of the puzzle
-                example: "Being worked"
-            answer:
-                type: string
-                description: Answer of puzzle (if solved)
-                example: "EUROPE"
-            round_id:
-                type: integer
-                description: ID of round that puzzle is in
-                example: 1
-            comments:
-                type: string
-                description: Free-form comments field for puzzle notes
-                example: "Need someone who knows music theory"
-                nullable: true
-            drive_uri:
-                type: string
-                description: URI of Google sheet for puzzle collaboration
-                example: "https://docs.google.com/spreadsheets/d/abc123/edit"
-            chat_channel_name:
-                type: string
-                description: Name of puzzle's chat channel
-                example: "puzzle-final-countdown"
-            chat_channel_id:
-                type: string
-                description: ID number of puzzle's chat channel
-                example: "C01234ABCDEF"
-            chat_channel_link:
-                type: string
-                description: HTML A tag for linking to puzzle's chat channel
-                example: "<a href='https://slack.com/archives/C01234ABCDEF'>puzzle-final-countdown</a>"
-            drive_id:
-                type: string
-                description: Google Drive ID for puzzle's spreadsheet
-                example: "abc123xyz789"
-            puzzle_uri:
-                type: string
-                description: URI pointing to the original puzzle page
-                example: "https://hunt.example.com/puzzles/final-countdown"
-            xyzloc:
-                type: string
-                description: Physical location where puzzle is being worked on
-                example: "Conference Room A"
-                nullable: true
-            ismeta:
-                type: boolean
-                description: Whether this puzzle is a meta puzzle
-                example: false
-            lastact:
-                type: object
-                description: Most recent activity record
-                properties:
-                    solver_id:
-                        type: integer
-                        description: ID of solver who performed the action
-                        example: 1
-                    source:
-                        type: string
-                        description: Source of the activity
-                        example: "apache"
-                    type:
-                        type: string
-                        description: Type of activity
-                        example: "interact"
+              name:
+                  type: string
+                  description: Puzzle name
+              status:
+                  type: string
+                  enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
+                  description: Status category of puzzle
+              answer:
+                  type: string
+                  description: Answer of puzzle (if solved)
+              round_id:
+                  type: integer
+                  description: ID of round that puzzle is in
+              comments:
+                  type: string
+                  description: free-form comments field
+              drive_uri:
+                  type: string
+                  description: URI of google sheet for puzzle
+              chat_channel_name:
+                  type: string
+                  description: Name of puzzle's chat channel
+              chat_channel_id:
+                  type: string
+                  description: ID number of puzzle's chat channel
+              chat_channel_link:
+                  type: string
+                  description: HTML A tag for linking to puzzle's chat channel
+              drive_id:
+                  type: string
+                  description: Google drive id string for puzzle's google sheet
+              puzzle_uri:
+                  type: string
+                  description: URI pointing to the original puzzle page
+              xyzloc:
+                  type: string
+                  description: Location where puzzle is being worked on
+        
 responses:
     200:
-        description: Puzzle field successfully updated
-        schema:
-            type: object
-            properties:
-                status:
-                    type: string
-                    example: "ok"
-                puzzle:
-                    type: object
-                    properties:
-                        id:
-                            type: integer
-                            description: Puzzle ID
-                            example: 1
-                        part:
-                            type: string
-                            description: Name of the updated field
-                            example: "status"
-                        value:
-                            description: New value of the updated field (type varies by field)
-                            example: "Being worked"
-                        updated_at:
-                            type: string
-                            format: date-time
-                            description: When the puzzle was updated
-                            example: "2024-03-20T15:45:00Z"
-    500:
-        description: Server error
-        schema:
-            type: object
-            properties:
-                error:
-                    type: string
-                    example: "Exception in updating puzzle field"
-security:
-  - api_key: []
+        description: Update of puzzle OK

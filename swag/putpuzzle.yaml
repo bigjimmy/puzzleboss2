@@ -1,8 +1,4 @@
----
-tags:
-  - puzzle
-summary: Create new puzzle
-description: Creates a new puzzle in the system. This will automatically create associated resources like a Google Drive sheet and chat channel.
+description: Post New Puzzle
 consumes:
     - application/json
 parameters:
@@ -10,7 +6,7 @@ parameters:
       in: body
       required: true
       schema:
-        type: object
+        id: newpuzzle
         required:
             - name
             - round_id
@@ -18,66 +14,25 @@ parameters:
         properties:
             name:
                 type: string
-                description: Name of the puzzle
-                example: "The Final Countdown"
-                minLength: 1
+                description: name of the puzzle
             round_id:
                 type: integer
-                description: ID of round the puzzle is in
-                example: 1
+                description: ID number of round the puzzle is in
             puzzle_uri:
                 type: string
-                description: URI for the puzzle's main page in the hunt
-                example: "https://hunt.example.com/puzzles/final-countdown"
-            ismeta:
-                type: boolean
-                description: Whether this puzzle is a meta puzzle
-                example: false
-                default: false
+                description: URI for puzzle
 responses:
     200:
-        description: Puzzle successfully created
+        description: Creation of puzzle OK
         schema:
             type: object
+            id: newpuzzlereturn
             properties:
-                status:
-                    type: string
-                    example: "ok"
                 puzzle:
                     type: object
                     properties:
-                        id:
-                            type: integer
-                            description: ID of the newly created puzzle
-                            example: 1
                         name:
                             type: string
-                            description: Name of the puzzle
-                            example: "The Final Countdown"
-                        chat_channel_id:
-                            type: string
-                            description: ID of the automatically created chat channel
-                            example: "C01234ABCDEF"
-                        chat_link:
-                            type: string
-                            description: Link to the puzzle's chat channel
-                            example: "<a href='https://slack.com/archives/C01234ABCDEF'>puzzle-final-countdown</a>"
-                        drive_uri:
-                            type: string
-                            description: URI of the automatically created Google Drive sheet
-                            example: "https://docs.google.com/spreadsheets/d/abc123/edit"
-                        created_at:
-                            type: string
-                            format: date-time
-                            description: When the puzzle was created
-                            example: "2024-03-20T14:30:00Z"
-    500:
-        description: Server error
-        schema:
-            type: object
-            properties:
-                error:
-                    type: string
-                    example: "Exception in creating new puzzle"
-security:
-  - api_key: []
+                        id:
+                            type: integer
+                            description: ID number of puzzle created

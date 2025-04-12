@@ -1,31 +1,3 @@
----
-tags:
-  - puzzle
-summary: Delete a puzzle
-description: Permanently deletes a puzzle and all its associated resources (Google Drive sheet, chat channel, etc.).
-parameters:
-    - in: path
-      name: puzzlename
-      type: string
-      required: true
-      description: The name of the puzzle to delete
-      example: "The Final Countdown"
 responses:
     200:
-        description: Puzzle successfully deleted
-        schema:
-          type: object
-          properties:
-            status:
-              type: string
-              example: "ok"
-    500:
-        description: Server error
-        schema:
-          type: object
-          properties:
-            error:
-              type: string
-              example: "Exception in deleting puzzle"
-security:
-  - api_key: []
+        description: Puzzle deleted

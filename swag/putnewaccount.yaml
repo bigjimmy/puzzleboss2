@@ -1,8 +1,4 @@
----
-tags:
-  - account
-summary: Start New Account Registration
-description: Initiates the process of creating a new user account. A verification code will be sent to the provided email address.
+description: Start New Account Registration
 consumes:
     - application/json
 parameters:
@@ -10,7 +6,7 @@ parameters:
       in: body
       required: true
       schema:
-        type: object
+        id: newuser
         required:
             - username
             - fullname
@@ -19,63 +15,20 @@ parameters:
         properties:
             username:
                 type: string
-                description: Desired username for the new account
-                example: "jsmith"
             fullname:
                 type: string
-                description: Full name of the user
-                example: "John Smith"
             email:
                 type: string
-                format: email
-                description: Email address for account verification
-                example: "john.smith@example.com"
             password:
                 type: string
-                format: password
-                description: Desired password for the account
-                example: "securepassword123"
-            reset:
-                type: string
-                description: Optional flag to indicate password reset
-                enum: ["reset"]
-                example: "reset"
+            
 responses:
     200:
         description: New account ready for verification
         schema:
+          id: usercode
           type: object
           properties:
-            status:
-              type: string
-              example: "ok"
-            code:
-              type: string
-              description: Verification code to complete registration
-              example: "a1b2c3d4"
-    400:
-        description: Invalid input or missing required fields
-        schema:
-          type: object
-          properties:
-            error:
-              type: string
-              example: "One or more required fields missing"
-    409:
-        description: Username already exists
-        schema:
-          type: object
-          properties:
-            error:
-              type: string
-              example: "Username jsmith already exists"
-    500:
-        description: Server error
-        schema:
-          type: object
-          properties:
-            error:
-              type: string
-              example: "Exception in creating new account"
-security:
-  - api_key: []
+           code:
+             type: string
+             description: Verification code to complete registration

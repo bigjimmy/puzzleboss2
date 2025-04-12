@@ -1,114 +1,64 @@
----
-tags:
-  - puzzle
-summary: Get puzzle details
-description: Retrieves detailed information about a specific puzzle, including its current status, solvers, and associated resources.
 parameters:
     - in: path
       name: id
       type: integer
       required: true
-      description: The ID of the puzzle to retrieve
-      example: 1
 responses:
     200:
-      description: Detailed puzzle information
+      description: A single puzzle item
       schema:
-        type: object
-        properties:
-          status:
-            type: string
-            example: "ok"
-          puzzle:
-            type: object
-            required: [id, name, status, round_id]
-            properties:
+          id: puzzle
+          type: object
+          properties:
+           puzzle:
+             type: object
+             properties:
               id:
-                type: integer
-                description: Puzzle ID
-                example: 1
+                  type: integer
+                  description: Puzzle id number
               name:
-                type: string
-                description: Puzzle name
-                example: "The Final Countdown"
+                  type: string
+                  description: Puzzle name
               status:
-                type: string
-                enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
-                description: Current status of the puzzle
-                example: "Being worked"
+                  type: string
+                  enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
+                  description: Status category of puzzle
               answer:
-                type: string
-                description: Answer of puzzle (if solved)
-                example: "EUROPE"
+                  type: string
+                  description: Answer of puzzle (if solved)
               roundname:
-                type: string
-                description: Name of round that puzzle is in
-                example: "Music Round"
+                  type: string
+                  description: Name of round that puzzle is in
               round_id:
-                type: integer
-                description: ID of round that puzzle is in
-                example: 1
+                  type: integer
+                  description: ID of round that puzzle is in
               comments:
-                type: string
-                description: Free-form comments field for puzzle notes
-                example: "Need someone who knows music theory"
+                  type: string
+                  description: free-form comments field
               drive_uri:
-                type: string
-                description: URI of Google sheet for puzzle collaboration
-                example: "https://docs.google.com/spreadsheets/d/abc123/edit"
+                  type: string
+                  description: URI of google sheet for puzzle
               chat_channel_name:
-                type: string
-                description: Name of puzzle's chat channel
-                example: "puzzle-final-countdown"
+                  type: string
+                  description: Name of puzzle's chat channel
               chat_channel_id:
-                type: string
-                description: ID number of puzzle's chat channel
-                example: "C01234ABCDEF"
+                  type: string
+                  description: ID number of puzzle's chat channel
               chat_channel_link:
-                type: string
-                description: HTML A tag for linking to puzzle's chat channel
-                example: "<a href='https://slack.com/archives/C01234ABCDEF'>puzzle-final-countdown</a>"
+                  type: string
+                  description: HTML A tag for linking to puzzle's chat channel
               drive_id:
-                type: string
-                description: Google Drive ID for puzzle's spreadsheet
-                example: "abc123xyz789"
+                  type: string
+                  description: Google drive id string for puzzle's google sheet
               puzzle_uri:
-                type: string
-                description: URI pointing to the original puzzle page
-                example: "https://hunt.example.com/puzzles/final-countdown"
+                  type: string
+                  description: URI pointing to the original puzzle page
               cursolvers:
-                type: string
-                description: Comma-separated list of all solvers currently working on puzzle
-                example: "jsmith,awhite,rjones"
+                  type: string
+                  description: Comma-separated list of all solvers currently working on puzzle
               solvers:
-                type: string
-                description: Comma-separated list of all solvers who have worked on puzzle
-                example: "jsmith,awhite,rjones,mgreen"
+                  type: string
+                  description: Comma-separated list of all solvers ever working on puzzle
               xyzloc:
-                type: string
-                description: Physical location where puzzle is being worked on
-                example: "Conference Room A"
-              ismeta:
-                type: boolean
-                description: Whether this puzzle is a meta puzzle
-                example: false
-              created_at:
-                type: string
-                format: date-time
-                description: When the puzzle was created
-                example: "2024-03-20T14:30:00Z"
-              updated_at:
-                type: string
-                format: date-time
-                description: When the puzzle was last updated
-                example: "2024-03-20T15:45:00Z"
-    500:
-      description: Server error
-      schema:
-        type: object
-        properties:
-          error:
-            type: string
-            example: "Exception in fetching puzzle from database"
-security:
-  - api_key: []
+                  type: string
+                  description: Location where puzzle is being worked on
