@@ -33,9 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Apply updates
     foreach ($updates as $update) {
-        $response = postapi("/rounds/$rid/{$update['part']}", [$update['part'] => $update['value']]);
-        if ($response->status !== 'ok') {
-            die("Error updating round: " . ($response->error ?? 'Unknown error'));
+        try {
+            $response = postapi("/rounds/$rid/{$update['part']}", [$update['part'] => $update['value']]);
+            assert_api_success($response);
+            echo '<div class="success">OK. Round ' . $update['part'] . ' updated.</div>';
+        } catch (Exception $e) {
+            exit_with_api_error($e);
         }
     }
     
