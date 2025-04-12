@@ -4,31 +4,13 @@ global $noremoteusertestmode;
 global $pbroot;
 global $bookmarkuri;
 
-// Load YAML config first
 $yaml = yaml_parse_file('../puzzleboss.yaml');
-if ($yaml === false) {
-    die("Error: Could not parse puzzleboss.yaml file");
-}
-
-// Set basic configuration
-$apiroot = $yaml['API']['APIURI'] ?? null;
-if (!$apiroot) {
-    die("Error: APIURI not found in puzzleboss.yaml");
-}
-
+$apiroot = $yaml['API']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
 $noremoteusertestmode = "true"; //TODO: eliminate this
 
-// Now that API root is set, we can read the config
-try {
-    $config = readapi('/config')->config;
-    if (!$config) {
-        die("Error: Could not read configuration from API");
-    }
-} catch (Exception $e) {
-    die("Error reading configuration: " . $e->getMessage());
-}
-
+//TODO: add error handling here for mandatory config values. should direct user to admin page for config editing.
+$config = readapi('/config')->config;
 $bookmarkuri = $config->bookmarklet_js;
 $pbroot = $config->BIN_URI;
 
