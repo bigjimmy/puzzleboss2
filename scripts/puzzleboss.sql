@@ -211,18 +211,6 @@ CREATE TABLE `solver` (
 
 /*!50001 DROP TABLE IF EXISTS `solver_view`*/;
 /*!50001 DROP VIEW IF EXISTS `solver_view`*/;
-/*!50001 SET @saved_cs_client          = @@character_set_client */;
-/*!50001 SET @saved_cs_results         = @@character_set_results */;
-/*!50001 SET @saved_col_connection     = @@collation_connection */;
-/*!50001 SET character_set_client      = utf8 */;
-/*!50001 SET character_set_results     = utf8 */;
-/*!50001 SET collation_connection      = utf8_unicode_ci */;
-/*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `solver_view` AS select `solver`.`id` AS `id`,`solver`.`name` AS `name`, get_all_puzzles(solver.id) AS `puzzles`, get_current_puzzle(solver.id) AS `puzz`,`solver`.`fullname` AS `fullname`,`solver`.`chat_uid` AS `chat_uid`, `solver`.`chat_name` as `chat_name` from `solver` */;
-/*!50001 SET character_set_client      = @saved_cs_client */;
-/*!50001 SET character_set_results     = @saved_cs_results */;
-/*!50001 SET collation_connection      = @saved_col_connection */;
-/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
 /*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
@@ -280,10 +268,10 @@ BEGIN
 END //
 
 CREATE FUNCTION get_current_puzzle(solver_id INT) 
-RETURNS TEXT
+RETURNS TEXT CHARACTER SET utf8mb4
 DETERMINISTIC
 BEGIN
-    DECLARE result TEXT;
+    DECLARE result TEXT CHARACTER SET utf8mb4;
     SELECT p.name INTO result
     FROM puzzle p
     WHERE JSON_SEARCH(p.current_solvers, 'one', solver_id, NULL, '$.solvers[*].solver_id') IS NOT NULL
@@ -292,10 +280,10 @@ BEGIN
 END //
 
 CREATE FUNCTION get_all_puzzles(solver_id INT) 
-RETURNS TEXT
+RETURNS TEXT CHARACTER SET utf8mb4
 DETERMINISTIC
 BEGIN
-    DECLARE result TEXT;
+    DECLARE result TEXT CHARACTER SET utf8mb4;
     SELECT GROUP_CONCAT(DISTINCT p.name) INTO result
     FROM puzzle p
     WHERE JSON_SEARCH(p.solver_history, 'one', solver_id, NULL, '$.solvers[*].solver_id') IS NOT NULL;
@@ -345,3 +333,16 @@ SELECT
     p.xyzloc
 FROM puzzle p
 LEFT JOIN round r ON p.round_id = r.id;
+
+-- Final view structure for view `solver_view`
+DROP VIEW IF EXISTS solver_view;
+CREATE VIEW solver_view AS 
+SELECT 
+    solver.id,
+    solver.name,
+    get_all_puzzles(solver.id) AS puzzles,
+    get_current_puzzle(solver.id) AS puzz,
+    solver.fullname,
+    solver.chat_uid,
+    solver.chat_name
+FROM solver;
