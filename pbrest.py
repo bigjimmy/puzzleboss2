@@ -21,6 +21,7 @@ from pbldaplib import *
 from werkzeug.exceptions import HTTPException
 import json
 import datetime
+import re
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -512,6 +513,10 @@ def create_puzzle():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        
+        # Store the full puzzle name in UTF-8 as the chat channel name
+        # The Discord bot will handle creating a proper channel
+        
         cursor.execute(
             """
             INSERT INTO puzzle
@@ -524,7 +529,7 @@ def create_puzzle():
                 roundid,
                 chat_id,
                 chat_link,
-                puzname.lower(),
+                puzname, # Store the full name with emojis intact
                 drive_id,
                 drive_uri,
                 ismeta,

@@ -63,8 +63,14 @@ def refresh_config():
 refresh_config()
 
 def sanitize_string(mystring):
-    outstring = "".join(e for e in mystring if e.isalnum())
-    return outstring
+    import re
+    if mystring is None:
+        return ""
+    # Keep alphanumeric, emoji, spaces, and common punctuation
+    # But remove control chars and problematic URL/filename chars
+    sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?*]', '', mystring)
+    # Trim whitespace
+    return sanitized.strip()
 
 
 def email_user_verification(email, code, fullname, username):
