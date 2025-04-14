@@ -29,6 +29,7 @@ app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
 app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
+app.config["MYSQL_CHARSET"] = "utf8mb4"
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
