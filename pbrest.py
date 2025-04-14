@@ -452,7 +452,7 @@ def create_puzzle():
     debug_log(4, "start")
     try:
         data = request.get_json()
-        puzname = sanitize_string(data["name"])
+        puzname = sanitize_puzzle_name(data["name"])
         puzuri = bleach.clean(data["puzzle_uri"])
         roundid = int(data["round_id"])
         ismeta = data.get("ismeta", False)
@@ -582,7 +582,7 @@ def create_round():
     debug_log(4, "start")
     try:
         data = request.get_json()
-        roundname = sanitize_string(data["name"])
+        roundname = sanitize_puzzle_name(data["name"])
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
@@ -696,7 +696,7 @@ def create_solver():
     try:
         data = request.get_json()
         debug_log(5, "request data is - %s" % str(data))
-        name = sanitize_string(data["name"])
+        name = sanitize_puzzle_name(data["name"])
         fullname = data["fullname"]
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")

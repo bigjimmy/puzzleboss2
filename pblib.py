@@ -72,6 +72,15 @@ def sanitize_string(mystring):
     # Trim whitespace
     return sanitized.strip()
 
+def sanitize_puzzle_name(mystring):
+    import re
+    if mystring is None:
+        return ""
+    # Keep alphanumeric, emoji, and common punctuation
+    # Remove spaces and problematic URL/filename chars
+    sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?* ]', '', mystring)
+    # Trim whitespace
+    return sanitized.strip()
 
 def email_user_verification(email, code, fullname, username):
     debug_log(4, "start for email: %s" % email)
