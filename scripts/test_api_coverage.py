@@ -221,12 +221,13 @@ class TestRunner:
             # Find the round we just created
             round_data = None
             for round in rounds_data["rounds"]:
-                if round["name"] == name:
+                if str(round["name"]).strip() == str(name).strip():
                     round_data = round
                     break
                     
             if not round_data:
                 self.logger.log_error(f"Could not find newly created round {name} in rounds list")
+                self.logger.log_error(f"Available rounds: {[r['name'] for r in rounds_data['rounds']]}")
                 raise Exception(f"Could not find newly created round {name} in rounds list")
                 
             self.logger.log_operation(f"Created round {name} with id {round_data['id']}")
