@@ -455,12 +455,22 @@ class TestRunner:
             self.rounds = response.json()["rounds"]
             self.logger.log_operation(f"Found {len(self.rounds)} rounds")
             
+            # Get puzzles with their full details
+            self.puzzles = []
             response = requests.get(f"{self.base_url}/puzzles")
             if not response.ok:
                 result.fail("Failed to fetch puzzles")
                 return
-            self.puzzles = response.json()["puzzles"]
-            self.logger.log_operation(f"Found {len(self.puzzles)} puzzles")
+            
+            # For each puzzle, get its full details
+            for puzzle in response.json()["puzzles"]:
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
+                if puzzle_details:
+                    self.puzzles.append(puzzle_details)
+                else:
+                    self.logger.log_warning(f"Could not get details for puzzle {puzzle['id']}")
+            
+            self.logger.log_operation(f"Found {len(self.puzzles)} puzzles with full details")
             
             # Debug: Print first puzzle's structure
             if self.puzzles:
@@ -472,7 +482,7 @@ class TestRunner:
             if not self.rounds or not self.puzzles:
                 result.fail("No rounds or puzzles found for testing")
                 return
-                
+            
         except Exception as e:
             result.fail(f"Error fetching test data: {str(e)}")
             return
@@ -557,21 +567,47 @@ class TestRunner:
         """Test solver assignment functionality"""
         self.logger.log_operation("Testing solver assignments")
         
-        # Select 2 random puzzles from each round for testing
-        test_puzzles = []
-        for round_data in self.rounds:
-            round_puzzles = [p for p in self.puzzles if p["round_id"] == round_data["id"]]
-            if len(round_puzzles) < 2:
-                self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
-                continue
-            selected_puzzles = random.sample(round_puzzles, 2)
-            test_puzzles.extend(selected_puzzles)
-            self.logger.log_operation(f"Selected puzzles from round {round_data['name']}: {', '.join(p['name'] for p in selected_puzzles)}")
-        
-        if not test_puzzles:
-            result.fail("No puzzles available for testing")
-            return
+        # Get all solvers and puzzles first
+        try:
+            response = requests.get(f"{self.base_url}/solvers")
+            if not response.ok:
+                result.fail("Failed to fetch solvers")
+                return
+            self.solvers = response.json()["solvers"]
+            self.logger.log_operation(f"Found {len(self.solvers)} solvers")
             
+            # Get puzzles with their full details
+            self.puzzles = []
+            response = requests.get(f"{self.base_url}/puzzles")
+            if not response.ok:
+                result.fail("Failed to fetch puzzles")
+                return
+            
+            # For each puzzle, get its full details
+            for puzzle in response.json()["puzzles"]:
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
+                if puzzle_details:
+                    self.puzzles.append(puzzle_details)
+                else:
+                    self.logger.log_warning(f"Could not get details for puzzle {puzzle['id']}")
+            
+            self.logger.log_operation(f"Found {len(self.puzzles)} puzzles with full details")
+            
+            # Debug: Print first puzzle's structure
+            if self.puzzles:
+                first_puzzle = self.puzzles[0]
+                self.logger.log_operation(f"First puzzle structure: {first_puzzle}")
+                self.logger.log_operation(f"First puzzle round_id: {first_puzzle.get('round_id')}")
+                self.logger.log_operation(f"First puzzle keys: {list(first_puzzle.keys())}")
+            
+            if not self.solvers or not self.puzzles:
+                result.fail("No solvers or puzzles found for testing")
+                return
+            
+        except Exception as e:
+            result.fail(f"Error fetching test data: {str(e)}")
+            return
+        
         # Select 10 random solvers for testing
         if len(self.solvers) < 10:
             result.fail("Not enough solvers available for testing")
@@ -579,7 +615,7 @@ class TestRunner:
         test_solvers = random.sample(self.solvers, 10)
         self.logger.log_operation(f"Selected test solvers: {', '.join(s['name'] for s in test_solvers)}")
         
-        self.logger.log_operation(f"Testing assignments with {len(test_solvers)} solvers and {len(test_puzzles)} puzzles")
+        self.logger.log_operation(f"Testing assignments with {len(test_solvers)} solvers and {len(self.puzzles)} puzzles")
         
         # Track which puzzles each solver has been assigned to
         solver_history = {solver["id"]: [] for solver in test_solvers}
@@ -588,7 +624,7 @@ class TestRunner:
         for solver in test_solvers:
             self.logger.log_operation(f"\nTesting assignments for solver {solver['name']}")
             
-            for puzzle in test_puzzles:
+            for puzzle in self.puzzles:
                 # Assign solver to puzzle
                 self.logger.log_operation(f"Assigning solver {solver['name']} to puzzle {puzzle['name']}")
                 if not self.assign_solver_to_puzzle(solver["id"], puzzle["id"]):
