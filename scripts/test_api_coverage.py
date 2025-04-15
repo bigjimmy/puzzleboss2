@@ -324,7 +324,7 @@ class TestRunner:
                 round_name = f"Round{round_num}_{timestamp}_{random_str}"
                 round_comment = f"Test round {round_num} comment"
                 if random.random() < 0.5:  # 50% chance to add emoji
-                    round_comment += f" {self.get_emoji_string()}"
+                    round_comment += f" {self.get_emoji_string(round_comment)}"
                 
                 round_data = self.create_round(round_name, round_comment)
                 if not round_data:
@@ -334,7 +334,7 @@ class TestRunner:
                 # Add round comment with optional emoji
                 round_comment = f"Test comment for {round_name}"
                 if random.random() < 0.5:  # 50% chance to add emoji
-                    round_comment += f" {self.get_emoji_string()}"
+                    round_comment += f" {self.get_emoji_string(round_comment)}"
                 
                 self.update_round(round_data["id"], {"comment": round_comment})
                 
@@ -347,7 +347,7 @@ class TestRunner:
                 for puzzle_num in range(1, 6):
                     puzzle_name = f"R{round_num}Puzzle{puzzle_num}"
                     if random.random() < 0.5:  # 50% chance to add emoji
-                        puzzle_name += f" {self.get_emoji_string()}"
+                        puzzle_name += f" {self.get_emoji_string(puzzle_name)}"
                     
                     puzzle_data = self.create_puzzle(round_data["id"], puzzle_name)
                     if not puzzle_data:
