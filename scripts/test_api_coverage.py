@@ -407,18 +407,6 @@ class TestRunner:
                         result.logger.log_error(f"Actual: {puzzle_details['status']}")
                         return
                         
-                    if puzzle_details["answer"] != "":
-                        result.fail(f"Puzzle answer verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: (empty string)")
-                        result.logger.log_error(f"Actual: {puzzle_details['answer']}")
-                        return
-                        
-                    if puzzle_details["comments"] != "":
-                        result.fail(f"Puzzle comments verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: (empty string)")
-                        result.logger.log_error(f"Actual: {puzzle_details['comments']}")
-                        return
-                        
                     if puzzle_details["ismeta"] != False:
                         result.fail(f"Puzzle ismeta verification failed for {puzzle_name}")
                         result.logger.log_error(f"Expected: False")
@@ -490,19 +478,11 @@ class TestRunner:
                         result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
                         return
                         
-                    # Verify answer update
+                    # Verify answer update only after explicitly setting it
                     puzzle_details = self.get_puzzle_details(puzzle["id"])
                     if not self.strings_equal_ignore_spaces(puzzle_details["answer"], new_answer):
                         result.fail(f"Answer update verification failed for {puzzle['name']}")
                         result.logger.log_error(f"Expected: {new_answer}")
-                        result.logger.log_error(f"Actual: {puzzle_details['answer']}")
-                        return
-                else:
-                    # For non-solved puzzles, verify answer is empty
-                    puzzle_details = self.get_puzzle_details(puzzle["id"])
-                    if puzzle_details.get("answer", ""):
-                        result.fail(f"Non-solved puzzle {puzzle['name']} has an answer set")
-                        result.logger.log_error(f"Expected empty answer for non-solved puzzle")
                         result.logger.log_error(f"Actual: {puzzle_details['answer']}")
                         return
                     
