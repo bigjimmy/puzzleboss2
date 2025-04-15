@@ -80,7 +80,12 @@ def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
 
 def get_puzzle_solver_history(puzzle_id: str) -> List[str]:
     """Get the solver history for a puzzle."""
+    print(f"\nDEBUG - Getting puzzle solver history for puzzle {puzzle_id}")
     puzzle = get_puzzle_details(puzzle_id)
+    print(f"DEBUG - Puzzle details: {puzzle}")
+    if "solvers" not in puzzle:
+        print(f"Error: 'solvers' key not found in puzzle details: {puzzle}")
+        return []
     return puzzle.get("solvers", "").split(",") if puzzle.get("solvers") else []
 
 def verify_answer(puzzle_id: str, answer: str) -> bool:
@@ -178,7 +183,9 @@ def main():
             # Assign solver to the new puzzle - NOTE: parameters are in correct order here
             if assign_solver_to_puzzle(target_puzzle["id"], solver["id"]):
                 # Update history count for the puzzle
+                print(f"DEBUG - Getting history for puzzle {target_puzzle['id']}")
                 history = get_puzzle_solver_history(target_puzzle["id"])
+                print(f"DEBUG - History for puzzle {target_puzzle['id']}: {history}")
                 puzzle_history_counts[target_puzzle["id"]] = len(history)
                 
                 print(f"Assigned solver {solver['name']} to puzzle {target_puzzle['name']} "
