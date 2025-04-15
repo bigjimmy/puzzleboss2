@@ -127,7 +127,9 @@ def verify_answer(puzzle_id: str, answer: str) -> bool:
 
 def test_answer_verification(self, result: TestResult):
     """Test answer verification functionality."""
-    print("\nTesting answer verification...")
+    print("\n" + "="*50)
+    print("Testing answer verification...")
+    print("="*50)
     
     # Get a puzzle to test
     puzzles = get_all_puzzles()
@@ -136,11 +138,12 @@ def test_answer_verification(self, result: TestResult):
         return
         
     test_puzzle = puzzles[0]
-    print(f"Testing with puzzle: {test_puzzle['name']} (ID: {test_puzzle['id']})")
+    print(f"\nTesting with puzzle: {test_puzzle['name']} (ID: {test_puzzle['id']})")
     print(f"DEBUG - Full puzzle details: {test_puzzle}")
     
     # Test incorrect answer
-    print("\nTesting incorrect answer...")
+    print("\n" + "-"*50)
+    print("Testing incorrect answer...")
     incorrect_result = verify_answer(test_puzzle["id"], "WRONGANSWER")
     print(f"Result: {'Accepted' if incorrect_result else 'Rejected'}")
     if incorrect_result:
@@ -149,7 +152,8 @@ def test_answer_verification(self, result: TestResult):
         return
         
     # Test correct answer
-    print("\nTesting correct answer...")
+    print("\n" + "-"*50)
+    print("Testing correct answer...")
     correct_answer = test_puzzle.get("answer", "CORRECTANSWER")
     print(f"DEBUG - Correct answer to test: {correct_answer}")
     print(f"DEBUG - Answer type: {type(correct_answer)}")
@@ -164,7 +168,9 @@ def test_answer_verification(self, result: TestResult):
         result.fail()
         return
         
-    print("\nAnswer verification test passed!")
+    print("\n" + "="*50)
+    print("Answer verification test passed!")
+    print("="*50)
     result.pass_()
 
 def main():
