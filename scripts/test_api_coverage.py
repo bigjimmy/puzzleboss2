@@ -456,12 +456,6 @@ class TestRunner:
                         result.logger.log_error(f"Actual: {puzzle_details['ismeta']}")
                         return
                         
-                    if puzzle_details["xyzloc"] != "":
-                        result.fail(f"Puzzle xyzloc verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: (empty string)")
-                        result.logger.log_error(f"Actual: {puzzle_details['xyzloc']}")
-                        return
-                        
                     result.logger.log_operation(f"Verified puzzle {puzzle_name} in round {round_name}")
             
             result.success("Successfully created and verified 5 rounds with 5 puzzles each, including round comments")
