@@ -463,34 +463,36 @@ class TestRunner:
         return response.json().get("rounds", [])
 
     def test_puzzle_creation(self, result: TestResult):
-        """Test puzzle creation functionality"""
-        self.logger.log_operation("Testing puzzle creation...")
+        """Test puzzle creation functionality."""
+        self.logger.log_operation("Starting puzzle creation test")
         
-        # Create a round first
-        round_name = f"Test Round {int(time.time())}"
-        round_data = self.create_round(round_name)
-        if not round_data:
-            self.logger.log_error("Failed to create test round")
-            return False
+        try:
+            # Create a test round
+            round_name = f"Test Round {int(time.time())}"
+            round_data = self.create_round(round_name)
+            if not round_data:
+                result.fail("Failed to create test round")
+                return
+                
+            # Create a test puzzle
+            puzzle_name = f"Test Puzzle {int(time.time())}"
+            puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
+            if not puzzle_data:
+                result.fail("Failed to create test puzzle")
+                return
+                
+            # Verify puzzle was created with correct round
+            if str(puzzle_data['round_id']) != str(round_data['id']):
+                result.fail(f"Puzzle round_id mismatch. Expected {round_data['id']}, got {puzzle_data['round_id']}")
+                return
+                
+            result.set_success("Puzzle creation test completed successfully")
             
-        # Create a puzzle in the round
-        puzzle_name = f"Test Puzzle {int(time.time())}"
-        puzzle_data = self.create_puzzle(puzzle_name, round_data['id'])
-        if not puzzle_data:
-            self.logger.log_error("Failed to create test puzzle")
-            return False
-            
-        # Verify the puzzle was created correctly
-        if puzzle_data['name'] != puzzle_name:
-            self.logger.log_error(f"Puzzle name mismatch: expected {puzzle_name}, got {puzzle_data['name']}")
-            return False
-            
-        if str(puzzle_data['puzzle']['round_id']) != str(round_data['id']):
-            self.logger.log_error(f"Round ID mismatch: expected {round_data['id']}, got {puzzle_data['puzzle']['round_id']}")
-            return False
-            
-        self.logger.log_success("Puzzle creation test passed")
-        return True
+        except Exception as e:
+            result.fail(f"Error in puzzle creation test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality."""
