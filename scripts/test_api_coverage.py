@@ -462,6 +462,13 @@ class TestRunner:
             self.puzzles = response.json()["puzzles"]
             self.logger.log_operation(f"Found {len(self.puzzles)} puzzles")
             
+            # Debug: Print first puzzle's structure
+            if self.puzzles:
+                first_puzzle = self.puzzles[0]
+                self.logger.log_operation(f"First puzzle structure: {first_puzzle}")
+                self.logger.log_operation(f"First puzzle round_id: {first_puzzle.get('round_id')}")
+                self.logger.log_operation(f"First puzzle keys: {list(first_puzzle.keys())}")
+            
             if not self.rounds or not self.puzzles:
                 result.fail("No rounds or puzzles found for testing")
                 return
@@ -473,7 +480,15 @@ class TestRunner:
         # Select 2 random puzzles from each round for testing
         for round_data in self.rounds:
             self.logger.log_operation(f"\nTesting puzzles in round {round_data['name']} (ID: {round_data['id']}):")
-            round_puzzles = [p for p in self.puzzles if str(p["round_id"]) == str(round_data["id"])]
+            
+            # Debug: Print all puzzles and their round_ids
+            self.logger.log_operation("All puzzles and their round_ids:")
+            for p in self.puzzles:
+                self.logger.log_operation(f"Puzzle {p['name']}: round_id={p.get('round_id')}")
+            
+            round_puzzles = [p for p in self.puzzles if str(p.get("round_id")) == str(round_data["id"])]
+            self.logger.log_operation(f"Found {len(round_puzzles)} puzzles in this round")
+            
             if len(round_puzzles) < 2:
                 self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
                 continue
