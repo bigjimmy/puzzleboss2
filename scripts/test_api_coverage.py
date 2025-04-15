@@ -249,12 +249,14 @@ class TestRunner:
             raise
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
-        """Create a new puzzle."""
+        """Create a new puzzle with detailed error handling"""
         try:
-            # Convert round_id to integer
+            self.logger.log_operation(f"Creating puzzle: {name} in round {round_id}")
+            
+            # Convert round_id to integer for the API
             round_id_int = int(round_id)
             
-            # Prepare the request data with puzzle data nested under "puzzle" key
+            # Prepare request data
             request_data = {
                 "puzzle": {
                     "name": name,
@@ -264,29 +266,76 @@ class TestRunner:
                 }
             }
             
-            self.logger.log_operation(f"Creating puzzle: {name} in round {round_id_int}")
-            
-            # Log the exact request being sent
             self.logger.log_operation(f"Request data: {json.dumps(request_data)}")
             
             response = requests.post(
-                f"{self.base_url}/puzzles",
-                json=request_data,
-                headers={'Content-Type': 'application/json'}
+                f"{BASE_URL}/puzzles",
+                json=request_data
             )
             
-            if response.ok:
-                return response.json()['puzzle']
-            else:
-                self.logger.log_error(f"Failed to create puzzle: {response.text}")
-                self.logger.log_error(f"Request data: {json.dumps(request_data)}")
-                return None
-        except ValueError as e:
-            self.logger.log_error(f"Invalid round_id format: {str(e)}")
-            return None
+            if not response.ok:
+                self.logger.log_error(f"HTTP error creating puzzle {name}: {response.status_code}")
+                self.logger.log_error(f"Response text: {response.text}")
+                raise Exception(f"HTTP error creating puzzle: {response.status_code} - {response.text}")
+            
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError as e:
+                self.logger.log_error(f"Failed to parse JSON response for puzzle {name}")
+                self.logger.log_error(f"Response text: {response.text}")
+                self.logger.log_error(f"JSON decode error: {str(e)}")
+                raise Exception(f"JSON decode error: {str(e)}")
+            
+            if "status" not in response_data or response_data["status"] != "ok":
+                self.logger.log_error(f"Unexpected response format creating puzzle {name}")
+                self.logger.log_error(f"Full response: {response_data}")
+                raise Exception(f"Unexpected response format: {response_data}")
+            
+            # Get the puzzle details to verify creation
+            puzzles_response = requests.get(f"{BASE_URL}/puzzles")
+            if not puzzles_response.ok:
+                self.logger.log_error(f"Failed to get puzzles list: {puzzles_response.text}")
+                raise Exception(f"Failed to get puzzles list: {puzzles_response.text}")
+                
+            puzzles_data = puzzles_response.json()
+            if "puzzles" not in puzzles_data:
+                self.logger.log_error(f"Unexpected format in puzzles list: {puzzles_data}")
+                raise Exception(f"Unexpected format in puzzles list: {puzzles_data}")
+                
+            # Find the puzzle we just created
+            puzzle_data = None
+            for puzzle in puzzles_data["puzzles"]:
+                if puzzle["name"] == name:
+                    puzzle_data = puzzle
+                    break
+                    
+            if not puzzle_data:
+                self.logger.log_error(f"Could not find newly created puzzle {name} in puzzles list")
+                self.logger.log_error(f"Available puzzles: {[p['name'] for p in puzzles_data['puzzles']]}")
+                raise Exception(f"Could not find newly created puzzle {name} in puzzles list")
+                
+            # Get full puzzle details
+            puzzle_details = self.get_puzzle_details(puzzle_data["id"])
+            if not puzzle_details:
+                self.logger.log_error(f"Failed to get details for puzzle {name}")
+                raise Exception(f"Failed to get details for puzzle {name}")
+                
+            self.logger.log_operation(f"Created puzzle {name} with id {puzzle_data['id']}")
+            return puzzle_details
+            
+        except requests.RequestException as e:
+            self.logger.log_error(f"Request exception creating puzzle {name}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+            raise Exception(f"Request exception: {str(e)}")
+            
         except Exception as e:
-            self.logger.log_error(f"Error creating puzzle: {str(e)}")
-            return None
+            self.logger.log_error(f"Unexpected error creating puzzle {name}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+            raise
 
     def update_puzzle(self, puzzle_id: str, field: str, value: str) -> bool:
         self.logger.log_operation(f"Updating puzzle {puzzle_id}: {field} = {value}")
