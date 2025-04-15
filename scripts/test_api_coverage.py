@@ -446,6 +446,28 @@ class TestRunner:
         """Test puzzle modification functionality"""
         self.logger.log_operation("Testing puzzle modification")
         
+        # Get all rounds and puzzles first
+        try:
+            response = requests.get(f"{self.base_url}/rounds")
+            if not response.ok:
+                result.fail("Failed to fetch rounds")
+                return
+            self.rounds = response.json()["rounds"]
+            
+            response = requests.get(f"{self.base_url}/puzzles")
+            if not response.ok:
+                result.fail("Failed to fetch puzzles")
+                return
+            self.puzzles = response.json()["puzzles"]
+            
+            if not self.rounds or not self.puzzles:
+                result.fail("No rounds or puzzles found for testing")
+                return
+                
+        except Exception as e:
+            result.fail(f"Error fetching test data: {str(e)}")
+            return
+        
         # Select 2 random puzzles from each round for testing
         for round_data in self.rounds:
             round_puzzles = [p for p in self.puzzles if p["round_id"] == round_data["id"]]
@@ -454,11 +476,15 @@ class TestRunner:
                 continue
                 
             test_puzzles = random.sample(round_puzzles, 2)
-            self.logger.log_operation(f"Selected {len(test_puzzles)} puzzles from round {round_data['name']}")
+            self.logger.log_operation(f"\nTesting puzzles in round {round_data['name']}:")
+            self.logger.log_operation(f"Selected puzzles: {', '.join(p['name'] for p in test_puzzles)}")
             
             for puzzle in test_puzzles:
+                self.logger.log_operation(f"\nModifying puzzle {puzzle['name']}:")
+                
                 # Update status first
                 new_status = random.choice(["Being worked", "Needs eyes", "Solved", "Critical", "WTF"])
+                self.logger.log_operation(f"Updating status to: {new_status}")
                 if not self.update_puzzle(puzzle["id"], "status", new_status):
                     result.fail(f"Failed to update status for puzzle {puzzle['name']}")
                     return
@@ -470,12 +496,14 @@ class TestRunner:
                     result.logger.log_error(f"Expected: {new_status}")
                     result.logger.log_error(f"Actual: {puzzle_details['status']}")
                     return
+                self.logger.log_operation(f"Status update verified: {new_status}")
 
                 # Only set and verify answer if puzzle is marked as solved
                 if new_status == "Solved":
                     # Update answer with optional emoji
                     use_emoji = random.choice([True, False])
                     new_answer = self.get_emoji_string(f"Answer for {puzzle['name']}", use_emoji)
+                    self.logger.log_operation(f"Updating answer to: {new_answer}")
                     if not self.update_puzzle(puzzle["id"], "answer", new_answer):
                         result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
                         return
@@ -487,10 +515,12 @@ class TestRunner:
                         result.logger.log_error(f"Expected: {new_answer}")
                         result.logger.log_error(f"Actual: {puzzle_details['answer']}")
                         return
+                    self.logger.log_operation(f"Answer update verified: {new_answer}")
                     
                 # Update comments with optional emoji
                 use_emoji = random.choice([True, False])
                 new_comments = self.get_emoji_string(f"Comments for {puzzle['name']}", use_emoji)
+                self.logger.log_operation(f"Updating comments to: {new_comments}")
                 if not self.update_puzzle(puzzle["id"], "comments", new_comments):
                     result.fail(f"Failed to update comments for puzzle {puzzle['name']}")
                     return
@@ -502,6 +532,7 @@ class TestRunner:
                     result.logger.log_error(f"Expected: {new_comments}")
                     result.logger.log_error(f"Actual: {puzzle_details['comments']}")
                     return
+                self.logger.log_operation(f"Comments update verified: {new_comments}")
         
         result.message = "Successfully tested puzzle modification with emoji support"
 
@@ -516,7 +547,9 @@ class TestRunner:
             if len(round_puzzles) < 2:
                 self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
                 continue
-            test_puzzles.extend(random.sample(round_puzzles, 2))
+            selected_puzzles = random.sample(round_puzzles, 2)
+            test_puzzles.extend(selected_puzzles)
+            self.logger.log_operation(f"Selected puzzles from round {round_data['name']}: {', '.join(p['name'] for p in selected_puzzles)}")
         
         if not test_puzzles:
             result.fail("No puzzles available for testing")
@@ -527,6 +560,7 @@ class TestRunner:
             result.fail("Not enough solvers available for testing")
             return
         test_solvers = random.sample(self.solvers, 10)
+        self.logger.log_operation(f"Selected test solvers: {', '.join(s['name'] for s in test_solvers)}")
         
         self.logger.log_operation(f"Testing assignments with {len(test_solvers)} solvers and {len(test_puzzles)} puzzles")
         
@@ -535,7 +569,7 @@ class TestRunner:
         
         # Assign each solver to each puzzle in sequence
         for solver in test_solvers:
-            self.logger.log_operation(f"Testing assignments for solver {solver['name']}")
+            self.logger.log_operation(f"\nTesting assignments for solver {solver['name']}")
             
             for puzzle in test_puzzles:
                 # Assign solver to puzzle
@@ -559,6 +593,7 @@ class TestRunner:
                 
                 # Track this assignment in history
                 solver_history[solver["id"]].append(puzzle["id"])
+                self.logger.log_operation(f"Successfully assigned solver {solver['name']} to puzzle {puzzle['name']}")
                 
                 # For all previous puzzles this solver was assigned to:
                 for prev_puzzle_id in solver_history[solver["id"]][:-1]:
@@ -574,6 +609,7 @@ class TestRunner:
                     if solver["id"] not in prev_history_solvers:
                         result.fail(f"Solver {solver['id']} not in history for previous puzzle {prev_puzzle_id}")
                         return
+                    self.logger.log_operation(f"Verified solver {solver['name']} history for puzzle {prev_puzzle['name']}")
         
         result.message = "Successfully tested solver assignments and history tracking with 10 solvers"
 
@@ -582,12 +618,14 @@ class TestRunner:
         test_puzzles = []
         for round_data in self.rounds:
             round_puzzles = [p for p in self.puzzles if p["round_id"] == round_data["id"]]
-            test_puzzles.extend(random.sample(round_puzzles, min(2, len(round_puzzles))))
+            selected_puzzles = random.sample(round_puzzles, min(2, len(round_puzzles)))
+            test_puzzles.extend(selected_puzzles)
+            self.logger.log_operation(f"Selected puzzles from round {round_data['name']}: {', '.join(p['name'] for p in selected_puzzles)}")
         
-        self.logger.log_operation(f"Selected {len(test_puzzles)} puzzles for testing (2 from each round)")
+        self.logger.log_operation(f"\nTesting activity tracking for {len(test_puzzles)} puzzles")
         
         for i, puzzle in enumerate(test_puzzles, 1):
-            self.logger.log_operation(f"Checking activity tracking for puzzle {i}/{len(test_puzzles)}: {puzzle['name']} (Round {puzzle['round_id']})")
+            self.logger.log_operation(f"\nChecking activity tracking for puzzle {i}/{len(test_puzzles)}: {puzzle['name']} (Round {puzzle['round_id']})")
             
             # Get initial activity
             initial_puzzle = self.get_puzzle_details(puzzle["id"])
@@ -615,6 +653,7 @@ class TestRunner:
                 return
                 
             self.logger.log_operation(f"New activity recorded: {new_activity}")
+            self.logger.log_operation(f"Activity tracking verified for puzzle {puzzle['name']}")
         
         result.message = f"Activity tracking verified for {len(test_puzzles)} puzzles (2 from each round)"
 
@@ -624,7 +663,7 @@ class TestRunner:
         
         # For each round, set multiple puzzles as meta and test completion
         for round_data in self.rounds:
-            self.logger.log_operation(f"Testing round {round_data['name']}")
+            self.logger.log_operation(f"\nTesting round {round_data['name']}")
             
             # Get all puzzles in this round
             round_puzzles = [p for p in self.puzzles if p["round_id"] == round_data["id"]]
@@ -635,11 +674,11 @@ class TestRunner:
             # Select 2 random puzzles as meta (or 1 if only 3 puzzles)
             num_metas = min(2, len(round_puzzles) - 1)
             meta_puzzles = random.sample(round_puzzles, num_metas)
-            self.logger.log_operation(f"Setting {num_metas} puzzles as meta")
+            self.logger.log_operation(f"Setting {num_metas} puzzles as meta: {', '.join(p['name'] for p in meta_puzzles)}")
             
             # Set meta status and verify
             for meta_puzzle in meta_puzzles:
-                self.logger.log_operation(f"Setting puzzle {meta_puzzle['name']} as meta")
+                self.logger.log_operation(f"\nSetting puzzle {meta_puzzle['name']} as meta")
                 self.update_puzzle(meta_puzzle["id"], "ismeta", "true")
                 
                 # Verify meta status
@@ -647,13 +686,14 @@ class TestRunner:
                 if not updated_puzzle.get("ismeta", False):
                     result.fail(f"Failed to set puzzle {meta_puzzle['id']} as meta")
                     return
-            self.logger.log_operation("All meta statuses verified")
+                self.logger.log_operation(f"Meta status verified for puzzle {meta_puzzle['name']}")
             
             # Set some non-meta puzzles to solved (but not all)
             non_meta_puzzles = [p for p in round_puzzles if p not in meta_puzzles]
             if non_meta_puzzles:
                 # Leave at least one non-meta puzzle unsolved
                 puzzles_to_solve = non_meta_puzzles[:-1]
+                self.logger.log_operation(f"\nSetting non-meta puzzles to solved: {', '.join(p['name'] for p in puzzles_to_solve)}")
                 for puzzle in puzzles_to_solve:
                     self.logger.log_operation(f"Setting puzzle {puzzle['name']} to solved")
                     self.update_puzzle(puzzle["id"], "status", "Solved")
@@ -663,9 +703,10 @@ class TestRunner:
                     if updated_puzzle["status"] != "Solved":
                         result.fail(f"Failed to set puzzle {puzzle['id']} to solved")
                         return
+                    self.logger.log_operation(f"Solve status verified for puzzle {puzzle['name']}")
             
             # Verify round is not complete yet (metas still unsolved)
-            self.logger.log_operation("Verifying round is not complete (metas unsolved)")
+            self.logger.log_operation("\nVerifying round is not complete (metas unsolved)")
             round_details = requests.get(f"{BASE_URL}/rounds/{round_data['id']}").json()["round"]
             if round_details.get("complete", False):
                 result.fail(f"Round {round_data['id']} marked as complete before metas solved")
@@ -674,7 +715,7 @@ class TestRunner:
             
             # Solve all but one meta puzzle
             for i, meta_puzzle in enumerate(meta_puzzles[:-1]):
-                self.logger.log_operation(f"Setting meta puzzle {meta_puzzle['name']} to solved")
+                self.logger.log_operation(f"\nSetting meta puzzle {meta_puzzle['name']} to solved")
                 self.update_puzzle(meta_puzzle["id"], "status", "Solved")
                 
                 # Verify solve status
@@ -682,6 +723,7 @@ class TestRunner:
                 if updated_puzzle["status"] != "Solved":
                     result.fail(f"Failed to set meta puzzle {meta_puzzle['id']} to solved")
                     return
+                self.logger.log_operation(f"Solve status verified for meta puzzle {meta_puzzle['name']}")
                 
                 # Verify round is still not complete
                 self.logger.log_operation("Verifying round is still incomplete")
@@ -693,47 +735,52 @@ class TestRunner:
             
             # Solve the last meta puzzle
             last_meta = meta_puzzles[-1]
-            self.logger.log_operation(f"Setting final meta puzzle {last_meta['name']} to solved")
+            self.logger.log_operation(f"\nSetting final meta puzzle {last_meta['name']} to solved")
             self.update_puzzle(last_meta["id"], "status", "Solved")
             
-            # Verify last meta is solved
+            # Verify solve status
             updated_puzzle = self.get_puzzle_details(last_meta["id"])
             if updated_puzzle["status"] != "Solved":
                 result.fail(f"Failed to set final meta puzzle {last_meta['id']} to solved")
                 return
+            self.logger.log_operation(f"Solve status verified for final meta puzzle {last_meta['name']}")
             
             # Verify round is now complete
-            self.logger.log_operation("Verifying round is complete")
+            self.logger.log_operation("Verifying round is now complete")
             round_details = requests.get(f"{BASE_URL}/rounds/{round_data['id']}").json()["round"]
             if not round_details.get("complete", False):
                 result.fail(f"Round {round_data['id']} not marked as complete after all metas solved")
                 return
             self.logger.log_operation("Round correctly marked as complete")
-            
-            # Reset meta status for next test
-            self.logger.log_operation("Resetting meta statuses")
-            for meta_puzzle in meta_puzzles:
-                self.update_puzzle(meta_puzzle["id"], "ismeta", "false")
-            
-        result.message = "Successfully tested meta puzzles and round completion logic with multiple metas"
+        
+        result.message = "Successfully tested meta puzzles and round completion logic"
 
     def run_all_tests(self):
-        """Run all tests and report results"""
-        self.logger.log("Starting API test suite")
+        """Run all tests in sequence."""
+        self.logger.start_test("Full Test Suite")
         
-        # Get initial solver list
-        self.solvers = self.get_all_solvers()
-        self.logger.log(f"Found {len(self.solvers)} solvers in the system")
+        # Create initial test data first
+        initial_result = TestResult("Initial Setup", self.logger)
+        self.test_puzzle_creation(initial_result)
+        if not initial_result.success:
+            self.logger.log_error("Initial setup failed, aborting remaining tests")
+            return
+            
+        # Now run the remaining tests
+        tests = [
+            ("Solver Listing", self.test_solver_listing),
+            ("Puzzle Modification", self.test_puzzle_modification),
+            ("Solver Assignments", self.test_solver_assignments),
+            ("Activity Tracking", self.test_activity_tracking),
+            ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion)
+        ]
         
-        # Run each test
-        self.run_test("Solver Listing", self.test_solver_listing)
-        self.run_test("Puzzle Creation", self.test_puzzle_creation)
-        self.run_test("Puzzle Modification", self.test_puzzle_modification)
-        self.run_test("Solver Assignments", self.test_solver_assignments)
-        self.run_test("Activity Tracking", self.test_activity_tracking)
-        self.run_test("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion)
-        
-        # Print results
+        for name, test_func in tests:
+            result = self.run_test(name, test_func)
+            if not result.success:
+                self.logger.log_error(f"Test {name} failed, aborting remaining tests")
+                break
+                
         self.print_results()
 
 if __name__ == "__main__":
