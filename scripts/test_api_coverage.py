@@ -419,7 +419,37 @@ class TestRunner:
                         result.logger.log_error(f"Expected: None")
                         result.logger.log_error(f"Actual: {puzzle_details['solvers']}")
                         return
-                        
+
+                    # Verify fields that should be None on creation
+                    fields_to_check = {
+                        "xyzloc": "Location",
+                        "answer": "Answer",
+                        "comments": "Comments"
+                    }
+
+                    for field, description in fields_to_check.items():
+                        if puzzle_details[field] is not None:
+                            result.fail(f"Puzzle {description} should be None for newly created puzzle {puzzle_name}")
+                            result.logger.log_error(f"Expected: None")
+                            result.logger.log_error(f"Actual: {puzzle_details[field]}")
+                            return
+
+                    # Verify fields that should be populated on creation
+                    required_fields = {
+                        "drive_uri": "Drive URI",
+                        "chat_channel_name": "Chat Channel Name",
+                        "chat_channel_id": "Chat Channel ID",
+                        "chat_channel_link": "Chat Channel Link",
+                        "drive_id": "Drive ID"
+                    }
+
+                    for field, description in required_fields.items():
+                        if puzzle_details[field] is None:
+                            result.fail(f"Puzzle {description} should be populated for newly created puzzle {puzzle_name}")
+                            result.logger.log_error(f"Expected: Non-None value")
+                            result.logger.log_error(f"Actual: None")
+                            return
+
                     if puzzle_details["ismeta"] != False:
                         result.fail(f"Puzzle ismeta verification failed for {puzzle_name}")
                         result.logger.log_error(f"Expected: False")
