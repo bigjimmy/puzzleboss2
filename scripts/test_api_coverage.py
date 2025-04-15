@@ -305,6 +305,21 @@ class TestRunner:
             except Exception as e:
                 result.logger.log_error(f"Warning: Could not fetch existing rounds: {str(e)}")
             
+            # Get existing puzzles to avoid name collisions
+            try:
+                response = requests.get(f"{BASE_URL}/puzzles")
+                if response.ok:
+                    existing_puzzles = {puzzle['name'] for puzzle in response.json()['puzzles']}
+                else:
+                    result.logger.log(f"Warning: Could not fetch existing puzzles: {response.text}", "WARNING")
+                    existing_puzzles = set()
+            except Exception as e:
+                result.logger.log(f"Warning: Could not fetch existing puzzles: {str(e)}", "WARNING")
+                existing_puzzles = set()
+            
+            # Add our newly created round names to the set
+            existing_puzzles.update(existing_rounds)
+            
             # Create 5 rounds with 5 puzzles each
             for r in range(1, 6):
                 # Generate unique round name using timestamp and random number
@@ -334,9 +349,24 @@ class TestRunner:
                     return
                 
                 for p in range(1, 6):
-                    # Create puzzle with optional emoji in name
+                    # Generate unique puzzle name with timestamp and random suffix
+                    timestamp = int(time.time())
+                    random_suffix = random.randint(1000, 9999)
+                    base_name = f"TestPuzzle_{timestamp}_{random_suffix}"
+                    
+                    # Ensure name is unique
+                    while base_name in existing_puzzles:
+                        random_suffix = random.randint(1000, 9999)
+                        base_name = f"TestPuzzle_{timestamp}_{random_suffix}"
+                    
+                    # Add optional emoji to the unique name
                     use_emoji = random.choice([True, False])
-                    puzzle_name = self.get_emoji_string(f"R{r}Puzzle{p}", use_emoji)
+                    puzzle_name = self.get_emoji_string(base_name, use_emoji)
+                    
+                    # Add to our tracking set
+                    existing_puzzles.add(base_name)
+                    
+                    result.logger.log(f"Creating puzzle: {puzzle_name}")
                     puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
                     
                     # Verify puzzle was created with correct data
