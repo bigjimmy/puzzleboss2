@@ -822,14 +822,21 @@ class TestRunner:
                         result.fail(f"Activity record for puzzle {puzzle['name']} missing required field: {field}")
                         continue
                         
-                # Verify activity type is valid and appropriate for solver assignment
+                # Verify time field is a valid RFC 1123 date
+                try:
+                    datetime.datetime.strptime(last_activity['time'], '%a, %d %b %Y %H:%M:%S %Z')
+                except ValueError:
+                    result.fail(f"Invalid date format in activity record for puzzle {puzzle['name']}: {last_activity['time']}")
+                    continue
+                    
+                # Verify type and source are valid
                 valid_types = ['create', 'open', 'revise', 'comment', 'interact']
+                valid_sources = ['google', 'pb_auto', 'pb_manual', 'bigjimmy', 'twiki', 'squid', 'apache', 'xmpp']
+                
                 if last_activity['type'] not in valid_types:
                     result.fail(f"Invalid activity type for puzzle {puzzle['name']}: {last_activity['type']}")
                     continue
                     
-                # Verify activity source is valid and appropriate for solver assignment
-                valid_sources = ['google', 'pb_auto', 'pb_manual', 'bigjimmy', 'twiki', 'squid', 'apache', 'xmpp']
                 if last_activity['source'] not in valid_sources:
                     result.fail(f"Invalid activity source for puzzle {puzzle['name']}: {last_activity['source']}")
                     continue
