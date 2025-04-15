@@ -137,6 +137,7 @@ def test_answer_verification(self, result: TestResult):
         
     test_puzzle = puzzles[0]
     print(f"Testing with puzzle: {test_puzzle['name']} (ID: {test_puzzle['id']})")
+    print(f"DEBUG - Puzzle details: {test_puzzle}")
     
     # Test incorrect answer
     print("\nTesting incorrect answer...")
@@ -149,10 +150,14 @@ def test_answer_verification(self, result: TestResult):
         
     # Test correct answer
     print("\nTesting correct answer...")
-    correct_result = verify_answer(test_puzzle["id"], test_puzzle.get("answer", "CORRECTANSWER"))
+    correct_answer = test_puzzle.get("answer", "CORRECTANSWER")
+    print(f"DEBUG - Correct answer to test: {correct_answer}")
+    correct_result = verify_answer(test_puzzle["id"], correct_answer)
     print(f"Result: {'Accepted' if correct_result else 'Rejected'}")
     if not correct_result:
         print("ERROR: Correct answer was rejected!")
+        print(f"DEBUG - Puzzle answer: {test_puzzle.get('answer')}")
+        print(f"DEBUG - Tested answer: {correct_answer}")
         result.fail()
         return
         
