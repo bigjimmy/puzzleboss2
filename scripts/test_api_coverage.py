@@ -247,54 +247,38 @@ class TestRunner:
             raise
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
-        """Create a new puzzle with detailed error handling"""
-        try:
-            self.logger.log_operation(f"Creating puzzle {name} in round {round_id}")
-            
-            # Prepare the request data according to the API spec
-            puzzle_data = {
+        """Create a new puzzle."""
+        self.logger.log_operation(f"Creating puzzle: {name} in round {round_id}")
+        
+        # Print request details for debugging
+        request_uri = f"{self.base_url}/puzzles"
+        print(f"\nMaking POST request to: {request_uri}")
+        
+        puzzle_data = {
+            "puzzle": {
                 "name": name,
                 "round_id": round_id,
-                "puzzle_uri": "http://example.com/puzzle"  # Required field
+                "puzzle_uri": "http://example.com/puzzle"
             }
-            
-            # Print request details for debugging
-            request_uri = f"{self.base_url}/puzzles"
-            print(f"\nMaking POST request to: {request_uri}")
-            print(f"Request JSON data: {json.dumps(puzzle_data, indent=2)}")
-            
-            response = requests.post(
-                request_uri,
-                json=puzzle_data
-            )
-            
+        }
+        print(f"Request JSON data: {json.dumps(puzzle_data, indent=2)}")
+        
+        try:
+            response = requests.post(request_uri, json=puzzle_data)
             if not response.ok:
-                self.logger.log_error(f"HTTP error creating puzzle {name}: {response.status_code}")
-                self.logger.log_error(f"Response text: {response.text}")
-                raise Exception(f"HTTP error creating puzzle: {response.status_code} - {response.text}")
+                print(f"Error response: {response.status_code} - {response.text}")
+                return None
+                
+            response_data = response.json()
+            if not response_data.get("status") == "ok":
+                print(f"Error in response: {response_data}")
+                return None
+                
+            return response_data.get("puzzle", {})
             
-            try:
-                response_data = response.json()
-            except json.JSONDecodeError as e:
-                self.logger.log_error(f"Failed to parse JSON response for puzzle {name}")
-                self.logger.log_error(f"Response text: {response.text}")
-                self.logger.log_error(f"JSON decode error: {str(e)}")
-                raise Exception(f"JSON decode error: {str(e)}")
-            
-            if "status" not in response_data or response_data["status"] != "ok":
-                self.logger.log_error(f"Unexpected response format creating puzzle {name}")
-                self.logger.log_error(f"Full response: {response_data}")
-                raise Exception(f"Unexpected response format: {response_data}")
-            
-            if "puzzle" not in response_data:
-                self.logger.log_error(f"Missing puzzle data in response for {name}")
-                self.logger.log_error(f"Full response: {response_data}")
-                raise Exception("Missing puzzle data in response")
-            
-            return response_data["puzzle"]
         except Exception as e:
-            self.logger.log_error(f"Error creating puzzle {name}: {str(e)}")
-            raise
+            print(f"Exception creating puzzle: {str(e)}")
+            return None
 
     def update_puzzle(self, puzzle_id: str, field: str, value: str) -> bool:
         self.logger.log_operation(f"Updating puzzle {puzzle_id}: {field} = {value}")
@@ -416,13 +400,13 @@ class TestRunner:
                     if random.random() < 0.5:  # 50% chance to add emoji
                         puzzle_name += f" {self.get_emoji_string(puzzle_name)}"
                     
-                    puzzle_data = self.create_puzzle(round_data["id"], puzzle_name)
+                    puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
                     if not puzzle_data:
                         result.fail(f"Failed to create puzzle {puzzle_name}")
                         return
 
                     # Verify puzzle was created with correct attributes
-                    puzzle_info = self.get_puzzle(puzzle_data["id"])
+                    puzzle_info = self.get_puzzle_details(puzzle_data["id"])
                     if not puzzle_info:
                         result.fail(f"Failed to get puzzle {puzzle_name}")
                         return
