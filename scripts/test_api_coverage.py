@@ -881,9 +881,8 @@ class TestRunner:
                 return
                 
             # Verify round is not solved when non-meta puzzle is solved but metas are not
-            round_status = self.get_round_status(test_round['id'])
-            if round_status == 'Solved':
-                result.fail("Round marked solved before meta puzzles were solved")
+            if self.is_round_complete(test_round['id']):
+                result.fail("Round marked complete before meta puzzles were solved")
                 return
                 
             # Solve first meta puzzle
@@ -892,9 +891,8 @@ class TestRunner:
                 return
                 
             # Verify round is still not solved
-            round_status = self.get_round_status(test_round['id'])
-            if round_status == 'Solved':
-                result.fail("Round marked solved when only one meta puzzle was solved")
+            if self.is_round_complete(test_round['id']):
+                result.fail("Round marked complete when only one meta puzzle was solved")
                 return
                 
             # Solve the second meta puzzle
@@ -903,9 +901,8 @@ class TestRunner:
                 return
                 
             # Verify round is now solved
-            round_status = self.get_round_status(test_round['id'])
-            if round_status != 'Solved':
-                result.fail("Round not marked solved after all meta puzzles were solved")
+            if not self.is_round_complete(test_round['id']):
+                result.fail("Round not marked complete after all meta puzzles were solved")
                 return
                 
             result.set_success("Meta puzzles and round completion test completed successfully")
@@ -915,6 +912,17 @@ class TestRunner:
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+            
+    def is_round_complete(self, round_id: int) -> bool:
+        """Check if a round is complete by making an API call to check round completion."""
+        try:
+            response = requests.get(f"{self.base_url}/rounds/{round_id}/check_completion")
+            if response.ok:
+                return response.json().get('complete', False)
+            return False
+        except Exception as e:
+            self.logger.log_error(f"Error checking round completion: {str(e)}")
+            return False
 
     def get_round_status(self, round_id: int) -> str:
         """Get the status of a round."""
@@ -984,43 +992,73 @@ class TestRunner:
             puzzles = self.get_all_puzzles()
             solvers = self.get_all_solvers()
             
-            if not puzzles or not solvers:
-                result.fail("No puzzles or solvers found for testing")
+            if not puzzles or len(puzzles) < 2:
+                result.fail("Need at least 2 puzzles for reassignment test")
+                return
+                
+            if not solvers or len(solvers) < 2:
+                result.fail("Need at least 2 solvers for reassignment test")
                 return
                 
             # Select two random puzzles and two random solvers
-            puzzle1 = random.choice(puzzles)
-            puzzle2 = random.choice([p for p in puzzles if p['id'] != puzzle1['id']])
-            solver1 = random.choice(solvers)
-            solver2 = random.choice([s for s in solvers if s['id'] != solver1['id']])
+            puzzle1, puzzle2 = random.sample(puzzles, 2)
+            solver1, solver2 = random.sample(solvers, 2)
             
             self.logger.log_operation(f"Selected puzzles: {puzzle1['name']}, {puzzle2['name']}")
             self.logger.log_operation(f"Selected solvers: {solver1['name']}, {solver2['name']}")
             
-            # First assign solvers to puzzles
-            if not self.assign_solver_to_puzzle(solver1['id'], puzzle1['id']):
-                result.fail(f"Failed to assign solver {solver1['name']} to puzzle {puzzle1['name']}")
-                return
-                
-            if not self.assign_solver_to_puzzle(solver2['id'], puzzle1['id']):
-                result.fail(f"Failed to assign solver {solver2['name']} to puzzle {puzzle1['name']}")
-                return
-                
+            # Assign both solvers to first puzzle
+            for solver in [solver1, solver2]:
+                if not self.assign_solver_to_puzzle(solver['id'], puzzle1['id']):
+                    result.fail(f"Failed to assign solver {solver['name']} to puzzle {puzzle1['name']}")
+                    return
+                    
             # Verify initial assignments
-            puzzle_details = self.get_puzzle_details(puzzle1['id'])
-            if not puzzle_details.get('cursolvers'):
-                result.fail("No solvers found on puzzle after assignment")
+            puzzle1_details = self.get_puzzle_details(puzzle1['id'])
+            if not puzzle1_details:
+                result.fail(f"Failed to get details for puzzle {puzzle1['name']}")
                 return
                 
-            # Now test reassignment
+            current_solvers = puzzle1_details.get('cursolvers', '').split(',')
+            if solver1['name'] not in current_solvers or solver2['name'] not in current_solvers:
+                result.fail(f"Solvers not properly assigned to puzzle {puzzle1['name']}")
+                return
+                
+            # Reassign first solver to second puzzle
             if not self.update_solver_puzzle(solver1['id'], puzzle2['id']):
                 result.fail(f"Failed to reassign solver {solver1['name']} to puzzle {puzzle2['name']}")
                 return
                 
             # Verify reassignment
-            solver_details = self.get_solver_details(solver1['id'])
-            if solver_details.get('puzz') != puzzle2['name']:
-                result.fail(f"Solver {solver1['name']} not reassigned to puzzle {puzzle2['name']}")
+            puzzle1_details = self.get_puzzle_details(puzzle1['id'])
+            puzzle2_details = self.get_puzzle_details(puzzle2['id'])
+            
+            if not puzzle1_details or not puzzle2_details:
+                result.fail("Failed to get puzzle details after reassignment")
+                return
+                
+            # Check solver is no longer assigned to old puzzle
+            current_solvers = puzzle1_details.get('cursolvers', '').split(',')
+            if solver1['name'] in current_solvers:
+                result.fail(f"Solver {solver1['name']} still assigned to old puzzle {puzzle1['name']}")
+                return
+                
+            # Check solver is assigned to new puzzle
+            current_solvers = puzzle2_details.get('cursolvers', '').split(',')
+            if solver1['name'] not in current_solvers:
+                result.fail(f"Solver {solver1['name']} not assigned to new puzzle {puzzle2['name']}")
+                return
+                
+            # Check solver is in historical solvers list for old puzzle
+            historical_solvers = puzzle1_details.get('solvers', '').split(',')
+            if solver1['name'] not in historical_solvers:
+                result.fail(f"Solver {solver1['name']} not in historical solvers list for puzzle {puzzle1['name']}")
+                return
+                
+            # Verify second solver is still assigned to first puzzle
+            current_solvers = puzzle1_details.get('cursolvers', '').split(',')
+            if solver2['name'] not in current_solvers:
+                result.fail(f"Solver {solver2['name']} no longer assigned to puzzle {puzzle1['name']}")
                 return
                 
             result.set_success("Solver reassignment test completed successfully")
