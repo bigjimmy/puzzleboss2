@@ -236,10 +236,30 @@ def get_all_rounds():
 @swag_from("swag/getroundid.yaml", endpoint="round_id", methods=["GET"])
 def get_one_round(id):
     debug_log(4, "start. id: %s" % id)
-    rounds = get_all_all()["rounds"]
-    round = next((round for round in rounds if str(round["id"]) == str(id)), None)
-    if not round:
-        raise Exception("Round %s not found in database" % id)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.id, r.name, r.round_uri, r.drive_uri, r.drive_id, r.status, r.comments,
+                   GROUP_CONCAT(p.id) as puzzles
+            FROM round r
+            LEFT JOIN puzzle p ON p.round_id = r.id
+            WHERE r.id = %s
+            GROUP BY r.id
+        """, (id,))
+        round = cursor.fetchone()
+        if not round:
+            raise Exception("Round %s not found in database" % id)
+            
+        # Convert puzzles string to list of puzzle objects
+        puzzle_ids = round['puzzles'].split(',') if round['puzzles'] else []
+        puzzles = []
+        for pid in puzzle_ids:
+            if pid:  # Skip empty strings
+                puzzles.append(get_one_puzzle(pid)['puzzle'])
+        round['puzzles'] = puzzles
+    except:
+        raise Exception("Exception in fetching round %s from database" % id)
 
     debug_log(4, "fetched round %s" % id)
     return {
@@ -255,8 +275,12 @@ def get_round_part(id, part):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute(f"SELECT {part} from round_view where id = %s", (id,))
-        answer = cursor.fetchone()[part]
+        # Use round table directly instead of round_view to get status
+        cursor.execute(f"SELECT {part} from round where id = %s", (id,))
+        answer = cursor.fetchone()
+        if not answer:
+            raise Exception("Round %s not found in database" % id)
+        answer = answer[part]
     except TypeError:
         raise Exception("Round %s not found in database" % id)
     except:
