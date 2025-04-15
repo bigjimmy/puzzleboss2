@@ -550,7 +550,8 @@ class TestRunner:
                 
                 # Verify puzzle's current solvers
                 puzzle_details = self.get_puzzle_details(puzzle["id"])
-                if solver["id"] not in puzzle_details["cursolvers"].split(","):
+                current_solvers = puzzle_details["cursolvers"].split(",") if puzzle_details["cursolvers"] else []
+                if solver["id"] not in current_solvers:
                     result.fail(f"Solver {solver['id']} not in current solvers list for puzzle {puzzle['id']}")
                     return
                 
@@ -562,10 +563,13 @@ class TestRunner:
                     prev_puzzle = self.get_puzzle_details(prev_puzzle_id)
                     
                     # Verify solver is in history but not current solvers
-                    if solver["id"] in prev_puzzle["cursolvers"].split(","):
+                    prev_current_solvers = prev_puzzle["cursolvers"].split(",") if prev_puzzle["cursolvers"] else []
+                    prev_history_solvers = prev_puzzle["solvers"].split(",") if prev_puzzle["solvers"] else []
+                    
+                    if solver["id"] in prev_current_solvers:
                         result.fail(f"Solver {solver['id']} still in current solvers for previous puzzle {prev_puzzle_id}")
                         return
-                    if solver["id"] not in prev_puzzle["solvers"].split(","):
+                    if solver["id"] not in prev_history_solvers:
                         result.fail(f"Solver {solver['id']} not in history for previous puzzle {prev_puzzle_id}")
                         return
         
