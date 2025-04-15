@@ -326,21 +326,18 @@ class TestRunner:
                 if random.random() < 0.5:  # 50% chance to add emoji
                     round_comment += f" {self.get_emoji_string(round_comment)}"
                 
-                round_data = self.create_round(round_name, round_comment)
+                # First create the round with just the name
+                round_data = self.create_round(round_name)
                 if not round_data:
                     result.fail(f"Failed to create round {round_name}")
                     return
 
-                # Add round comment with optional emoji
-                round_comment = f"Test comment for {round_name}"
-                if random.random() < 0.5:  # 50% chance to add emoji
-                    round_comment += f" {self.get_emoji_string(round_comment)}"
-                
-                self.update_round(round_data["id"], {"comment": round_comment})
+                # Then update the round with the comment
+                self.update_round(round_data["id"], {"comments": round_comment})
                 
                 # Verify round comment was set
                 round_info = self.get_round(round_data["id"])
-                if round_info.get("comment") != round_comment:
+                if round_info.get("comments") != round_comment:
                     result.fail(f"Round comment verification failed for {round_name}")
                     return
 
