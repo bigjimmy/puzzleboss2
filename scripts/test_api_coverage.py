@@ -139,19 +139,34 @@ class TestRunner:
         return round_data
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
-        self.logger.log_operation(f"Creating puzzle: {name} in round {round_id}")
+        """Create a new puzzle"""
         response = requests.post(
             f"{BASE_URL}/puzzles",
             json={
                 "name": name,
                 "round_id": round_id,
-                "puzzle_uri": "http://www.example.com/puzzle"
+                "puzzle_uri": "http://example.com"
             }
         )
         if not response.ok:
-            raise Exception(f"Failed to create puzzle {name}: {response.text}")
-        puzzle_data = response.json()["puzzle"]
-        self.logger.log_operation(f"Created puzzle {name} with ID {puzzle_data['id']}")
+            self.logger.log_error(f"Failed to create puzzle {name}: {response.text}")
+            raise Exception(f"Failed to create puzzle: {response.text}")
+            
+        response_data = response.json()
+        if "status" not in response_data or response_data["status"] != "ok":
+            self.logger.log_error(f"Unexpected response format creating puzzle {name}: {response_data}")
+            raise Exception(f"Unexpected response format: {response_data}")
+            
+        if "puzzle" not in response_data:
+            self.logger.log_error(f"Missing puzzle data in response for {name}: {response_data}")
+            raise Exception(f"Missing puzzle data in response: {response_data}")
+            
+        puzzle_data = response_data["puzzle"]
+        if "id" not in puzzle_data:
+            self.logger.log_error(f"Missing id in puzzle data for {name}: {puzzle_data}")
+            raise Exception(f"Missing id in puzzle data: {puzzle_data}")
+            
+        self.logger.log_operation(f"Created puzzle {name} with id {puzzle_data['id']}")
         return puzzle_data
 
     def update_puzzle(self, puzzle_id: str, field: str, value: str) -> bool:
