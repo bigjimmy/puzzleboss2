@@ -294,43 +294,109 @@ class TestRunner:
         result.message = f"Found {len(solvers)} solvers"
 
     def test_puzzle_creation(self, result: TestResult):
-        """Test puzzle creation functionality"""
-        self.logger.log_operation("Creating test rounds and puzzles")
-        
-        # Create 5 rounds with 5 puzzles each
-        for i in range(1, 6):
-            round_name = f"TestRound{i}"
-            self.logger.log_operation(f"Creating round {round_name}")
-            round_data = self.create_round(round_name)
-            self.rounds.append(round_data)
-            
-            # Add round comments with emoji
-            use_emoji = random.choice([True, False])
-            round_comment = self.get_emoji_string(f"Test comment for {round_name}", use_emoji)
-            self.logger.log_operation(f"Setting comment for round {round_name}")
-            if not self.update_round(round_data["id"], "comments", round_comment):
-                result.fail(f"Failed to set comment for round {round_data['id']}")
-                return
-            
-            # Verify round comment
-            response = requests.get(f"{BASE_URL}/rounds/{round_data['id']}")
-            if not response.ok:
-                result.fail(f"Failed to get round {round_data['id']} for comment verification")
-                return
-            if response.json()["round"]["comments"] != round_comment:
-                result.fail(f"Round comment verification failed for round {round_data['id']}")
-                return
-            
-            # Create 5 puzzles for this round
-            for j in range(1, 6):
-                # Randomly decide if this puzzle should have emoji
+        """Test creating puzzles with verification of all fields"""
+        try:
+            # Create 5 rounds with 5 puzzles each
+            for r in range(1, 6):
+                round_name = f"TestRound{r}"
+                round_data = self.create_round(round_name)
+                
+                # Add round comments with optional emoji
                 use_emoji = random.choice([True, False])
-                puzzle_name = self.get_emoji_string(f"R{i}Puzzle{j}", use_emoji)
-                self.logger.log_operation(f"Creating puzzle {puzzle_name}")
-                puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
-                self.puzzles.append(puzzle_data)
-        
-        result.message = "Successfully created 5 rounds with 5 puzzles each and verified round comments"
+                round_comment = self.get_emoji_string(f"Test comment for {round_name}", use_emoji)
+                self.update_round(round_data["id"], "comments", round_comment)
+                
+                # Verify round comments
+                round_details = requests.get(f"{BASE_URL}/rounds/{round_data['id']}").json()
+                if round_details["round"]["comments"] != round_comment:
+                    result.fail(f"Round comments verification failed for {round_name}")
+                    result.logger.log_error(f"Expected: {round_comment}")
+                    result.logger.log_error(f"Actual: {round_details['round']['comments']}")
+                    return
+                
+                for p in range(1, 6):
+                    # Create puzzle with optional emoji in name
+                    use_emoji = random.choice([True, False])
+                    puzzle_name = self.get_emoji_string(f"R{r}Puzzle{p}", use_emoji)
+                    puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
+                    
+                    # Verify puzzle was created with correct data
+                    if puzzle_data["name"] != puzzle_name:
+                        result.fail(f"Puzzle name verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: {puzzle_name}")
+                        result.logger.log_error(f"Actual: {puzzle_data['name']}")
+                        return
+                        
+                    if puzzle_data["round_id"] != round_data["id"]:
+                        result.fail(f"Puzzle round_id verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: {round_data['id']}")
+                        result.logger.log_error(f"Actual: {puzzle_data['round_id']}")
+                        return
+                        
+                    # Verify puzzle details from API
+                    puzzle_details = self.get_puzzle_details(puzzle_data["id"])
+                    if puzzle_details["name"] != puzzle_name:
+                        result.fail(f"Puzzle name API verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: {puzzle_name}")
+                        result.logger.log_error(f"Actual: {puzzle_details['name']}")
+                        return
+                        
+                    if puzzle_details["round_id"] != round_data["id"]:
+                        result.fail(f"Puzzle round_id API verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: {round_data['id']}")
+                        result.logger.log_error(f"Actual: {puzzle_details['round_id']}")
+                        return
+                        
+                    if puzzle_details["status"] != "New":
+                        result.fail(f"Puzzle status verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: New")
+                        result.logger.log_error(f"Actual: {puzzle_details['status']}")
+                        return
+                        
+                    if puzzle_details["answer"] != "":
+                        result.fail(f"Puzzle answer verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: (empty string)")
+                        result.logger.log_error(f"Actual: {puzzle_details['answer']}")
+                        return
+                        
+                    if puzzle_details["comments"] != "":
+                        result.fail(f"Puzzle comments verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: (empty string)")
+                        result.logger.log_error(f"Actual: {puzzle_details['comments']}")
+                        return
+                        
+                    if puzzle_details["ismeta"] != False:
+                        result.fail(f"Puzzle ismeta verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: False")
+                        result.logger.log_error(f"Actual: {puzzle_details['ismeta']}")
+                        return
+                        
+                    if puzzle_details["solvers"] != "":
+                        result.fail(f"Puzzle solvers verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: (empty string)")
+                        result.logger.log_error(f"Actual: {puzzle_details['solvers']}")
+                        return
+                        
+                    if puzzle_details["cursolvers"] != "":
+                        result.fail(f"Puzzle cursolvers verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: (empty string)")
+                        result.logger.log_error(f"Actual: {puzzle_details['cursolvers']}")
+                        return
+                        
+                    if puzzle_details["xyzloc"] != "":
+                        result.fail(f"Puzzle xyzloc verification failed for {puzzle_name}")
+                        result.logger.log_error(f"Expected: (empty string)")
+                        result.logger.log_error(f"Actual: {puzzle_details['xyzloc']}")
+                        return
+                        
+                    result.logger.log_operation(f"Verified puzzle {puzzle_name} in round {round_name}")
+            
+            result.success("Successfully created and verified 5 rounds with 5 puzzles each, including round comments")
+            
+        except Exception as e:
+            result.fail(f"Puzzle creation test failed: {str(e)}")
+            result.logger.log_error(f"Exception type: {type(e).__name__}")
+            result.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality"""
