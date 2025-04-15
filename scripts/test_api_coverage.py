@@ -159,12 +159,28 @@ class TestRunner:
                 self.logger.log_error(f"Full response: {response_data}")
                 raise Exception(f"Missing round data in response: {response_data}")
             
-            round_data = response_data["round"]
-            if "id" not in round_data:
-                self.logger.log_error(f"Missing id in round data for {name}")
-                self.logger.log_error(f"Round data: {round_data}")
-                raise Exception(f"Missing id in round data: {round_data}")
-            
+            # Get the round ID by querying the round by name
+            rounds_response = requests.get(f"{BASE_URL}/rounds")
+            if not rounds_response.ok:
+                self.logger.log_error(f"Failed to get rounds list: {rounds_response.text}")
+                raise Exception(f"Failed to get rounds list: {rounds_response.text}")
+                
+            rounds_data = rounds_response.json()
+            if "rounds" not in rounds_data:
+                self.logger.log_error(f"Unexpected format in rounds list: {rounds_data}")
+                raise Exception(f"Unexpected format in rounds list: {rounds_data}")
+                
+            # Find the round we just created
+            round_data = None
+            for round in rounds_data["rounds"]:
+                if round["name"] == name:
+                    round_data = round
+                    break
+                    
+            if not round_data:
+                self.logger.log_error(f"Could not find newly created round {name} in rounds list")
+                raise Exception(f"Could not find newly created round {name} in rounds list")
+                
             self.logger.log_operation(f"Created round {name} with id {round_data['id']}")
             return round_data
             
