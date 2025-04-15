@@ -296,9 +296,29 @@ class TestRunner:
     def test_puzzle_creation(self, result: TestResult):
         """Test creating puzzles with verification of all fields"""
         try:
+            # Get existing rounds to avoid name collisions
+            existing_rounds = set()
+            try:
+                response = requests.get(f"{BASE_URL}/rounds")
+                if response.ok:
+                    existing_rounds = {round["name"] for round in response.json()["rounds"]}
+            except Exception as e:
+                result.logger.log_error(f"Warning: Could not fetch existing rounds: {str(e)}")
+            
             # Create 5 rounds with 5 puzzles each
             for r in range(1, 6):
-                round_name = f"TestRound{r}"
+                # Generate unique round name using timestamp and random number
+                timestamp = int(time.time())
+                random_suffix = random.randint(1000, 9999)
+                round_name = f"TestRound_{timestamp}_{random_suffix}"
+                
+                # Ensure name is unique
+                while round_name in existing_rounds:
+                    random_suffix = random.randint(1000, 9999)
+                    round_name = f"TestRound_{timestamp}_{random_suffix}"
+                
+                existing_rounds.add(round_name)  # Add to our set to prevent duplicates in this test
+                
                 round_data = self.create_round(round_name)
                 
                 # Add round comments without emoji
