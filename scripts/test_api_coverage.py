@@ -841,20 +841,19 @@ class TestRunner:
             test_round = random.choice(rounds)
             self.logger.log_operation(f"Selected round for testing: {test_round['name']}")
             
-            # Get puzzles in this round
-            puzzles = self.get_puzzle_details(test_round['id'])['puzzles']
-            if len(puzzles) < 3:
-                result.fail(f"Need at least 3 puzzles in round {test_round['name']} for testing")
+            # Create two new puzzles for testing
+            timestamp = str(int(time.time()))
+            meta_puzzle1 = self.create_puzzle(f"Test Meta Puzzle 1 {timestamp}", test_round['id'])
+            meta_puzzle2 = self.create_puzzle(f"Test Meta Puzzle 2 {timestamp}", test_round['id'])
+            
+            if not meta_puzzle1 or not meta_puzzle2:
+                result.fail("Failed to create test meta puzzles")
                 return
                 
-            self.logger.log_operation(f"Found {len(puzzles)} puzzles in round")
-            
-            # Select 2 random puzzles to be meta puzzles
-            meta_puzzles = random.sample(puzzles, 2)
-            self.logger.log_operation(f"Selected meta puzzles: {', '.join(p['name'] for p in meta_puzzles)}")
+            self.logger.log_operation(f"Created test meta puzzles: {meta_puzzle1['name']}, {meta_puzzle2['name']}")
             
             # Set puzzles as meta
-            for meta_puzzle in meta_puzzles:
+            for meta_puzzle in [meta_puzzle1, meta_puzzle2]:
                 if not self.update_puzzle(meta_puzzle['id'], 'ismeta', True):
                     result.fail(f"Failed to set puzzle {meta_puzzle['name']} as meta")
                     return
@@ -865,28 +864,31 @@ class TestRunner:
                     result.fail(f"Puzzle {meta_puzzle['name']} not marked as meta after update")
                     return
                     
-            # Set some non-meta puzzles to solved by setting their answers
-            non_meta_puzzles = [p for p in puzzles if p not in meta_puzzles]
-            for puzzle in non_meta_puzzles[:-1]:  # Leave one non-meta puzzle unsolved
-                if not self.update_puzzle(puzzle['id'], 'answer', 'TEST ANSWER'):
-                    result.fail(f"Failed to set answer for puzzle {puzzle['name']}")
-                    return
-                    
-                # Verify answer was set
-                puzzle_details = self.get_puzzle_details(puzzle['id'])
-                if puzzle_details.get('answer') != 'TEST ANSWER':
-                    result.fail(f"Answer not set for puzzle {puzzle['name']}")
-                    return
-                    
-            # Verify round is not complete when all non-meta puzzles are solved but metas are not
+            # Create a non-meta puzzle and solve it
+            non_meta_puzzle = self.create_puzzle(f"Test Non-Meta Puzzle {timestamp}", test_round['id'])
+            if not non_meta_puzzle:
+                result.fail("Failed to create test non-meta puzzle")
+                return
+                
+            if not self.update_puzzle(non_meta_puzzle['id'], 'answer', 'TEST ANSWER'):
+                result.fail(f"Failed to set answer for puzzle {non_meta_puzzle['name']}")
+                return
+                
+            # Verify answer was set
+            puzzle_details = self.get_puzzle_details(non_meta_puzzle['id'])
+            if puzzle_details.get('answer') != 'TEST ANSWER':
+                result.fail(f"Answer not set for puzzle {non_meta_puzzle['name']}")
+                return
+                
+            # Verify round is not complete when non-meta puzzle is solved but metas are not
             round_details = self.get_round(test_round['id'])
             if round_details.get('complete'):
                 result.fail("Round marked complete before meta puzzles were solved")
                 return
                 
-            # Solve one meta puzzle
-            if not self.update_puzzle(meta_puzzles[0]['id'], 'answer', 'META ANSWER 1'):
-                result.fail(f"Failed to set answer for meta puzzle {meta_puzzles[0]['name']}")
+            # Solve first meta puzzle
+            if not self.update_puzzle(meta_puzzle1['id'], 'answer', 'META ANSWER 1'):
+                result.fail(f"Failed to set answer for meta puzzle {meta_puzzle1['name']}")
                 return
                 
             # Verify round is still not complete
@@ -895,9 +897,9 @@ class TestRunner:
                 result.fail("Round marked complete when only one meta puzzle was solved")
                 return
                 
-            # Solve the last meta puzzle
-            if not self.update_puzzle(meta_puzzles[1]['id'], 'answer', 'META ANSWER 2'):
-                result.fail(f"Failed to set answer for meta puzzle {meta_puzzles[1]['name']}")
+            # Solve the second meta puzzle
+            if not self.update_puzzle(meta_puzzle2['id'], 'answer', 'META ANSWER 2'):
+                result.fail(f"Failed to set answer for meta puzzle {meta_puzzle2['name']}")
                 return
                 
             # Verify round is now complete
