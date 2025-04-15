@@ -829,127 +829,87 @@ class TestRunner:
 
     def test_meta_puzzles_and_round_completion(self, result: TestResult):
         """Test meta puzzle functionality and round completion logic."""
-        self.logger.log_operation("Starting meta puzzle and round completion test")
+        self.logger.log_operation("Starting meta puzzles and round completion test")
         
         try:
-            # Get all rounds
+            # Get all rounds and select one for testing
             rounds = self.get_all_rounds()
             if not rounds:
-                result.fail("No rounds found to test meta puzzles")
+                result.fail("No rounds found for testing")
                 return
                 
-            # Select a round for testing
-            round_data = random.choice(rounds)
-            self.logger.log_operation(f"Selected round {round_data['name']} for testing")
+            test_round = random.choice(rounds)
+            self.logger.log_operation(f"Selected round for testing: {test_round['name']}")
             
-            # Get puzzles in this round by fetching full puzzle details
-            self.logger.log_operation("Fetching puzzles with full details")
-            round_puzzles = []
-            for puzzle in self.get_all_puzzles():
-                try:
-                    puzzle_details = self.get_puzzle_details(puzzle['id'])
-                    if str(puzzle_details['round_id']) == str(round_data['id']):
-                        round_puzzles.append(puzzle_details)
-                except Exception as e:
-                    self.logger.log_error(f"Error fetching details for puzzle {puzzle['id']}: {str(e)}")
-                    continue
-                    
-            if len(round_puzzles) < 3:
-                result.fail(f"Round {round_data['name']} has fewer than 3 puzzles, cannot test meta functionality")
+            # Get puzzles in this round
+            puzzles = self.get_puzzle_details(test_round['id'])['puzzles']
+            if len(puzzles) < 3:
+                result.fail(f"Need at least 3 puzzles in round {test_round['name']} for testing")
                 return
                 
-            self.logger.log_operation(f"Found {len(round_puzzles)} puzzles in round {round_data['name']}")
+            self.logger.log_operation(f"Found {len(puzzles)} puzzles in round")
             
-            # Select 2 random puzzles as meta (or 1 if only 3 puzzles)
-            num_metas = min(2, len(round_puzzles) - 1)
-            meta_puzzles = random.sample(round_puzzles, num_metas)
-            self.logger.log_operation(f"Setting {num_metas} puzzles as meta: {', '.join(p['name'] for p in meta_puzzles)}")
+            # Select 2 random puzzles to be meta puzzles
+            meta_puzzles = random.sample(puzzles, 2)
+            self.logger.log_operation(f"Selected meta puzzles: {', '.join(p['name'] for p in meta_puzzles)}")
             
-            # Set meta status and verify
+            # Set puzzles as meta
             for meta_puzzle in meta_puzzles:
-                self.logger.log_operation(f"\nSetting puzzle {meta_puzzle['name']} as meta")
-                
-                # Set ismeta=true on the puzzle
-                if not self.update_puzzle(meta_puzzle["id"], "ismeta", True):
-                    result.fail(f"Failed to set ismeta=true for puzzle {meta_puzzle['id']}")
+                if not self.update_puzzle(meta_puzzle['id'], 'ismeta', True):
+                    result.fail(f"Failed to set puzzle {meta_puzzle['name']} as meta")
                     return
-                
+                    
                 # Verify meta status
-                updated_puzzle = self.get_puzzle_details(meta_puzzle["id"])
-                if not updated_puzzle.get("ismeta", False):
-                    result.fail(f"Puzzle {meta_puzzle['id']} ismeta field not set to true")
+                puzzle_details = self.get_puzzle_details(meta_puzzle['id'])
+                if not puzzle_details.get('ismeta'):
+                    result.fail(f"Puzzle {meta_puzzle['name']} not marked as meta after update")
                     return
                     
-                self.logger.log_operation(f"Meta status verified for puzzle {meta_puzzle['name']}")
-            
-            # Set some non-meta puzzles to solved (but not all)
-            non_meta_puzzles = [p for p in round_puzzles if p not in meta_puzzles]
-            if non_meta_puzzles:
-                # Leave at least one non-meta puzzle unsolved
-                puzzles_to_solve = non_meta_puzzles[:-1]
-                self.logger.log_operation(f"\nSetting non-meta puzzles to solved: {', '.join(p['name'] for p in puzzles_to_solve)}")
-                for puzzle in puzzles_to_solve:
-                    self.logger.log_operation(f"Setting puzzle {puzzle['name']} to solved")
-                    self.update_puzzle(puzzle["id"], "status", "Solved")
+            # Set some non-meta puzzles to solved by setting their answers
+            non_meta_puzzles = [p for p in puzzles if p not in meta_puzzles]
+            for puzzle in non_meta_puzzles[:-1]:  # Leave one non-meta puzzle unsolved
+                if not self.update_puzzle(puzzle['id'], 'answer', 'TEST ANSWER'):
+                    result.fail(f"Failed to set answer for puzzle {puzzle['name']}")
+                    return
                     
-                    # Verify solve status
-                    updated_puzzle = self.get_puzzle_details(puzzle["id"])
-                    if updated_puzzle["status"] != "Solved":
-                        result.fail(f"Failed to set puzzle {puzzle['id']} to solved")
-                        return
-                    self.logger.log_operation(f"Solve status verified for puzzle {puzzle['name']}")
-            
-            # Verify round is not complete yet (metas still unsolved)
-            self.logger.log_operation("\nVerifying round is not complete (metas unsolved)")
-            round_details = self.get_round(round_data['id'])
-            if round_details.get("status") == "Solved":
-                result.fail(f"Round {round_data['id']} marked as complete before metas solved")
+                # Verify answer was set
+                puzzle_details = self.get_puzzle_details(puzzle['id'])
+                if puzzle_details.get('answer') != 'TEST ANSWER':
+                    result.fail(f"Answer not set for puzzle {puzzle['name']}")
+                    return
+                    
+            # Verify round is not complete when all non-meta puzzles are solved but metas are not
+            round_details = self.get_round(test_round['id'])
+            if round_details.get('complete'):
+                result.fail("Round marked complete before meta puzzles were solved")
                 return
-            self.logger.log_operation("Round correctly marked as incomplete")
-            
-            # Solve all but one meta puzzle
-            for i, meta_puzzle in enumerate(meta_puzzles[:-1]):
-                self.logger.log_operation(f"\nSetting meta puzzle {meta_puzzle['name']} to solved")
-                self.update_puzzle(meta_puzzle["id"], "status", "Solved")
                 
-                # Verify solve status
-                updated_puzzle = self.get_puzzle_details(meta_puzzle["id"])
-                if updated_puzzle["status"] != "Solved":
-                    result.fail(f"Failed to set meta puzzle {meta_puzzle['id']} to solved")
-                    return
-                self.logger.log_operation(f"Solve status verified for meta puzzle {meta_puzzle['name']}")
+            # Solve one meta puzzle
+            if not self.update_puzzle(meta_puzzles[0]['id'], 'answer', 'META ANSWER 1'):
+                result.fail(f"Failed to set answer for meta puzzle {meta_puzzles[0]['name']}")
+                return
                 
-                # Verify round is still not complete
-                round_details = self.get_round(round_data['id'])
-                if round_details.get("status") == "Solved":
-                    result.fail(f"Round {round_data['id']} marked as complete before all metas solved")
-                    return
-                self.logger.log_operation("Round correctly remains incomplete")
-            
+            # Verify round is still not complete
+            round_details = self.get_round(test_round['id'])
+            if round_details.get('complete'):
+                result.fail("Round marked complete when only one meta puzzle was solved")
+                return
+                
             # Solve the last meta puzzle
-            last_meta = meta_puzzles[-1]
-            self.logger.log_operation(f"\nSetting final meta puzzle {last_meta['name']} to solved")
-            self.update_puzzle(last_meta["id"], "status", "Solved")
-            
-            # Verify solve status
-            updated_puzzle = self.get_puzzle_details(last_meta["id"])
-            if updated_puzzle["status"] != "Solved":
-                result.fail(f"Failed to set final meta puzzle {last_meta['id']} to solved")
+            if not self.update_puzzle(meta_puzzles[1]['id'], 'answer', 'META ANSWER 2'):
+                result.fail(f"Failed to set answer for meta puzzle {meta_puzzles[1]['name']}")
                 return
-            self.logger.log_operation(f"Solve status verified for final meta puzzle {last_meta['name']}")
-            
+                
             # Verify round is now complete
-            self.logger.log_operation("Verifying round is now complete")
-            round_details = self.get_round(round_data['id'])
-            if round_details.get("status") != "Solved":
-                result.fail(f"Round {round_data['id']} not marked as complete after all metas solved")
+            round_details = self.get_round(test_round['id'])
+            if not round_details.get('complete'):
+                result.fail("Round not marked complete after all meta puzzles were solved")
                 return
-            self.logger.log_operation("Round correctly marked as complete")
-            
-            result.set_success("Meta puzzle and round completion test completed successfully")
+                
+            result.set_success("Meta puzzles and round completion test completed successfully")
             
         except Exception as e:
-            result.fail(f"Error in meta puzzle and round completion test: {str(e)}")
+            result.fail(f"Error in meta puzzles and round completion test: {str(e)}")
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
