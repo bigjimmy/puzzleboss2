@@ -7,6 +7,7 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta
 import json
 import sys
+import traceback
 
 BASE_URL = "http://localhost:5000"
 
@@ -127,16 +128,59 @@ class TestRunner:
         return response.json()["puzzle"]
 
     def create_round(self, name: str) -> Dict:
-        self.logger.log_operation(f"Creating round: {name}")
-        response = requests.post(
-            f"{BASE_URL}/rounds",
-            json={"name": name}
-        )
-        if not response.ok:
-            raise Exception(f"Failed to create round {name}: {response.text}")
-        round_data = response.json()["round"]
-        self.logger.log_operation(f"Created round {name} with ID {round_data['id']}")
-        return round_data
+        """Create a new round with detailed error handling"""
+        try:
+            self.logger.log_operation(f"Creating round: {name}")
+            response = requests.post(
+                f"{BASE_URL}/rounds",
+                json={"name": name}
+            )
+            
+            if not response.ok:
+                self.logger.log_error(f"HTTP error creating round {name}: {response.status_code}")
+                self.logger.log_error(f"Response text: {response.text}")
+                raise Exception(f"HTTP error creating round: {response.status_code} - {response.text}")
+            
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError as e:
+                self.logger.log_error(f"Failed to parse JSON response for round {name}")
+                self.logger.log_error(f"Response text: {response.text}")
+                self.logger.log_error(f"JSON decode error: {str(e)}")
+                raise Exception(f"JSON decode error: {str(e)}")
+            
+            if "status" not in response_data or response_data["status"] != "ok":
+                self.logger.log_error(f"Unexpected response format creating round {name}")
+                self.logger.log_error(f"Full response: {response_data}")
+                raise Exception(f"Unexpected response format: {response_data}")
+            
+            if "round" not in response_data:
+                self.logger.log_error(f"Missing round data in response for {name}")
+                self.logger.log_error(f"Full response: {response_data}")
+                raise Exception(f"Missing round data in response: {response_data}")
+            
+            round_data = response_data["round"]
+            if "id" not in round_data:
+                self.logger.log_error(f"Missing id in round data for {name}")
+                self.logger.log_error(f"Round data: {round_data}")
+                raise Exception(f"Missing id in round data: {round_data}")
+            
+            self.logger.log_operation(f"Created round {name} with id {round_data['id']}")
+            return round_data
+            
+        except requests.RequestException as e:
+            self.logger.log_error(f"Request exception creating round {name}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+            raise Exception(f"Request exception: {str(e)}")
+            
+        except Exception as e:
+            self.logger.log_error(f"Unexpected error creating round {name}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+            raise
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
         """Create a new puzzle"""
