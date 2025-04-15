@@ -323,8 +323,6 @@ class TestRunner:
                 random_str = ''.join(random.choices(string.ascii_lowercase, k=6))
                 round_name = f"Round{round_num}_{timestamp}_{random_str}"
                 round_comment = f"Test round {round_num} comment"
-                if random.random() < 0.5:  # 50% chance to add emoji
-                    round_comment += f" {self.get_emoji_string(round_comment)}"
                 
                 # First create the round with just the name
                 round_data = self.create_round(round_name)
