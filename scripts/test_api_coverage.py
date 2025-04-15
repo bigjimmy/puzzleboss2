@@ -914,7 +914,7 @@ class TestRunner:
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
             
     def is_round_complete(self, round_id: int) -> bool:
-        """Check if a round is complete by making an API call to check round completion."""
+        """Check if a round is complete by calling the check_completion endpoint."""
         try:
             response = requests.get(f"{self.base_url}/rounds/{round_id}/check_completion")
             if response.ok:
@@ -925,11 +925,11 @@ class TestRunner:
             return False
 
     def get_round_status(self, round_id: int) -> str:
-        """Get the status of a round."""
+        """Get the status of a round by calling the check_completion endpoint."""
         try:
-            response = requests.get(f"{self.base_url}/rounds/{round_id}/status")
-            if response.status_code == 200:
-                return response.json().get('status', '')
+            response = requests.get(f"{self.base_url}/rounds/{round_id}/check_completion")
+            if response.ok:
+                return 'Solved' if response.json().get('complete', False) else 'Unsolved'
             return ''
         except Exception as e:
             self.logger.log_error(f"Error getting round status: {str(e)}")
@@ -1116,18 +1116,22 @@ class TestRunner:
     def run_all_tests(self):
         """Run all tests and print results."""
         tests = [
+            ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
             ("Solver Listing", self.test_solver_listing),
             ("Puzzle Creation", self.test_puzzle_creation),
             ("Puzzle Modification", self.test_puzzle_modification),
             ("Solver Assignments", self.test_solver_assignments),
             ("Activity Tracking", self.test_activity_tracking),
-            ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
             ("Solver Reassignment", self.test_solver_reassignment),
             ("Answer Verification", self.test_answer_verification)
         ]
         
         for name, test in tests:
-            self.run_test(name, test)
+            result = self.run_test(name, test)
+            # If meta puzzles test fails, stop execution
+            if name == "Meta Puzzles and Round Completion" and not result.success:
+                self.logger.log_error("Meta puzzles test failed - stopping test execution")
+                break
             
         self.print_results()
 
