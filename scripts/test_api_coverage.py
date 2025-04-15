@@ -868,13 +868,29 @@ class TestRunner:
             # Set meta status and verify
             for meta_puzzle in meta_puzzles:
                 self.logger.log_operation(f"\nSetting puzzle {meta_puzzle['name']} as meta")
-                self.update_puzzle(meta_puzzle["id"], "ismeta", "true")
                 
-                # Verify meta status
+                # Set ismeta=true on the puzzle
+                if not self.update_puzzle(meta_puzzle["id"], "ismeta", True):
+                    result.fail(f"Failed to set ismeta=true for puzzle {meta_puzzle['id']}")
+                    return
+                    
+                # Set meta_id in the round
+                if not self.update_round(round_data['id'], {"meta_id": meta_puzzle["id"]}):
+                    result.fail(f"Failed to set meta_id={meta_puzzle['id']} for round {round_data['id']}")
+                    return
+                
+                # Verify meta status in puzzle table
                 updated_puzzle = self.get_puzzle_details(meta_puzzle["id"])
                 if not updated_puzzle.get("ismeta", False):
-                    result.fail(f"Failed to set puzzle {meta_puzzle['id']} as meta")
+                    result.fail(f"Puzzle {meta_puzzle['id']} ismeta field not set to true")
                     return
+                    
+                # Verify meta status in round table
+                updated_round = self.get_round(round_data['id'])
+                if str(updated_round.get("meta_id")) != str(meta_puzzle["id"]):
+                    result.fail(f"Round {round_data['id']} meta_id not set to {meta_puzzle['id']}")
+                    return
+                    
                 self.logger.log_operation(f"Meta status verified for puzzle {meta_puzzle['name']}")
             
             # Set some non-meta puzzles to solved (but not all)
@@ -896,8 +912,8 @@ class TestRunner:
             
             # Verify round is not complete yet (metas still unsolved)
             self.logger.log_operation("\nVerifying round is not complete (metas unsolved)")
-            round_details = requests.get(f"{self.base_url}/rounds/{round_data['id']}").json()["round"]
-            if round_details.get("complete", False):
+            round_details = self.get_round(round_data['id'])
+            if round_details.get("status") == "Solved":
                 result.fail(f"Round {round_data['id']} marked as complete before metas solved")
                 return
             self.logger.log_operation("Round correctly marked as incomplete")
@@ -915,9 +931,8 @@ class TestRunner:
                 self.logger.log_operation(f"Solve status verified for meta puzzle {meta_puzzle['name']}")
                 
                 # Verify round is still not complete
-                self.logger.log_operation("Verifying round is still incomplete")
-                round_details = requests.get(f"{self.base_url}/rounds/{round_data['id']}").json()["round"]
-                if round_details.get("complete", False):
+                round_details = self.get_round(round_data['id'])
+                if round_details.get("status") == "Solved":
                     result.fail(f"Round {round_data['id']} marked as complete before all metas solved")
                     return
                 self.logger.log_operation("Round correctly remains incomplete")
@@ -936,8 +951,8 @@ class TestRunner:
             
             # Verify round is now complete
             self.logger.log_operation("Verifying round is now complete")
-            round_details = requests.get(f"{self.base_url}/rounds/{round_data['id']}").json()["round"]
-            if not round_details.get("complete", False):
+            round_details = self.get_round(round_data['id'])
+            if round_details.get("status") != "Solved":
                 result.fail(f"Round {round_data['id']} not marked as complete after all metas solved")
                 return
             self.logger.log_operation("Round correctly marked as complete")
@@ -1042,26 +1057,29 @@ class TestRunner:
                 for solver_id in solver_ids:
                     self.logger.log_operation(f"Reassigning solver {solver_id}")
                     
-                    # Unassign from current puzzle
-                    if not self.update_puzzle(puzzle['id'], 'cursolvers', ''):
-                        result.fail(f"Failed to unassign solver {solver_id} from puzzle {puzzle['id']}")
-                        return
-                        
-                    # Assign to new puzzle
-                    if not self.assign_solver_to_puzzle(solver_id, target_puzzle['id']):
+                    # Update solver's puzz field to the new puzzle
+                    if not self.update_solver_puzzle(solver_id, target_puzzle['id']):
                         result.fail(f"Failed to assign solver {solver_id} to puzzle {target_puzzle['id']}")
                         return
                         
                     # Verify the reassignment
                     old_puzzle_details = self.get_puzzle_details(puzzle['id'])
                     new_puzzle_details = self.get_puzzle_details(target_puzzle['id'])
+                    solver_details = self.get_solver_details(solver_id)
                     
+                    # Check that solver is no longer in old puzzle's cursolvers
                     if solver_id in old_puzzle_details.get('cursolvers', ''):
                         result.fail(f"Solver {solver_id} still assigned to original puzzle {puzzle['id']}")
                         return
                         
+                    # Check that solver is now in new puzzle's cursolvers
                     if solver_id not in new_puzzle_details.get('cursolvers', ''):
                         result.fail(f"Solver {solver_id} not assigned to new puzzle {target_puzzle['id']}")
+                        return
+                        
+                    # Check that solver's puzz field points to new puzzle
+                    if solver_details.get('puzz') != target_puzzle['id']:
+                        result.fail(f"Solver {solver_id}'s puzz field not updated to {target_puzzle['id']}")
                         return
                         
                     self.logger.log_operation(f"Successfully reassigned solver {solver_id}")
@@ -1073,6 +1091,18 @@ class TestRunner:
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
+    def update_solver_puzzle(self, solver_id: str, puzzle_id: str) -> bool:
+        """Update a solver's current puzzle assignment."""
+        try:
+            response = requests.post(
+                f"{self.base_url}/solvers/{solver_id}/puzz",
+                json={"puzz": puzzle_id}
+            )
+            return response.ok
+        except Exception as e:
+            self.logger.log_error(f"Error updating solver puzzle: {str(e)}")
+            return False
 
     def run_all_tests(self):
         """Run all tests and print results."""
