@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import json
 import sys
 import traceback
+import string
 
 BASE_URL = "http://localhost:5000"
 
@@ -314,12 +315,18 @@ class TestRunner:
 
     def test_puzzle_creation(self, result: TestResult):
         start_time = time.time()
-
         try:
-            # Create 5 rounds with 5 puzzles each
-            for round_num in range(1, 6):
-                round_name = f"TestRound_{round_num}"
-                round_data = self.create_round(round_name)
+            # Create 3 rounds with randomized names
+            for round_num in range(1, 4):
+                # Generate a unique round name with timestamp and random string
+                timestamp = int(time.time())
+                random_str = ''.join(random.choices(string.ascii_lowercase, k=6))
+                round_name = f"Round{round_num}_{timestamp}_{random_str}"
+                round_comment = f"Test round {round_num} comment"
+                if random.random() < 0.5:  # 50% chance to add emoji
+                    round_comment += f" {self.get_emoji_string()}"
+                
+                round_data = self.create_round(round_name, round_comment)
                 if not round_data:
                     result.fail(f"Failed to create round {round_name}")
                     return
