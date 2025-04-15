@@ -522,7 +522,6 @@ class TestRunner:
             # Test solving the puzzle by setting answer
             answer = f"ANSWER_{puzzle['name']}"
             self.logger.log_operation(f"Solving puzzle with answer '{answer}'")
-            self.logger.log_operation(f"DEBUG - Puzzle before answer update: {puzzle}")
             if not self.update_puzzle(puzzle["id"], "answer", answer):
                 result.fail(f"Failed to set answer for puzzle {puzzle['name']}")
                 continue
@@ -532,15 +531,22 @@ class TestRunner:
             if not updated_puzzle:
                 result.fail(f"Failed to verify puzzle solve for puzzle {puzzle['name']}")
                 continue
-                
-            self.logger.log_operation(f"DEBUG - Updated puzzle after answer set: {updated_puzzle}")
-            self.logger.log_operation(f"DEBUG - Expected answer: {answer}")
-            self.logger.log_operation(f"DEBUG - Actual answer: {updated_puzzle.get('answer')}")
-            self.logger.log_operation(f"DEBUG - Answer comparison: {answer == updated_puzzle.get('answer')}")
             
-            if updated_puzzle["answer"] != answer:
+            # Convert both to uppercase for comparison
+            expected_upper = answer.upper()
+            actual_upper = updated_puzzle.get('answer', '').upper()
+            
+            if expected_upper != actual_upper:
+                self.logger.log_error(f"DEBUG - Puzzle before answer update: {puzzle}")
+                self.logger.log_error(f"DEBUG - Updated puzzle after answer set: {updated_puzzle}")
+                self.logger.log_error(f"DEBUG - Expected answer: {answer}")
+                self.logger.log_error(f"DEBUG - Actual answer: {updated_puzzle.get('answer')}")
+                self.logger.log_error(f"DEBUG - Expected (upper): {expected_upper}")
+                self.logger.log_error(f"DEBUG - Actual (upper): {actual_upper}")
+                self.logger.log_error(f"DEBUG - Answer comparison: {expected_upper == actual_upper}")
                 result.fail(f"Answer verification failed for puzzle {puzzle['name']}")
                 continue
+                
             if updated_puzzle["status"] != "Solved":
                 result.fail(f"Status not automatically set to 'Solved' for puzzle {puzzle['name']}")
                 continue
