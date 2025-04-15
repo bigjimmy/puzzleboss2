@@ -248,37 +248,22 @@ class TestRunner:
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
         """Create a new puzzle."""
-        self.logger.log_operation(f"Creating puzzle: {name} in round {round_id}")
-        
-        # Print request details for debugging
-        request_uri = f"{self.base_url}/puzzles"
-        print(f"\nMaking POST request to: {request_uri}")
-        
         puzzle_data = {
-            "puzzle": {
-                "name": name,
-                "round_id": round_id,
-                "puzzle_uri": "http://example.com/puzzle"
-            }
+            "name": name,
+            "round_id": round_id,
+            "puzzle_uri": "http://example.com/puzzle"
         }
-        print(f"Request JSON data: {json.dumps(puzzle_data, indent=2)}")
         
-        try:
-            response = requests.post(request_uri, json=puzzle_data)
-            if not response.ok:
-                print(f"Error response: {response.status_code} - {response.text}")
-                return None
-                
-            response_data = response.json()
-            if not response_data.get("status") == "ok":
-                print(f"Error in response: {response_data}")
-                return None
-                
-            return response_data.get("puzzle", {})
-            
-        except Exception as e:
-            print(f"Exception creating puzzle: {str(e)}")
+        response = requests.post(
+            f"{self.base_url}/puzzles",
+            json=puzzle_data
+        )
+        
+        if not response.ok:
+            self.logger.log_error(f"Failed to create puzzle: {response.text}")
             return None
+            
+        return response.json().get("puzzle")
 
     def update_puzzle(self, puzzle_id: str, field: str, value: str) -> bool:
         self.logger.log_operation(f"Updating puzzle {puzzle_id}: {field} = {value}")
@@ -664,7 +649,8 @@ class TestRunner:
                             result.fail(f"Failed to get puzzle details for {history_puzzle['name']}")
                             continue
                             
-                        if solver['name'] in puzzle_details.get('solvers', ''):
+                        solvers_history = puzzle_details.get('solvers', '') or ''
+                        if solver['name'] in solvers_history:
                             result.fail(f"Solver {solver['name']} still found in history for puzzle {history_puzzle['name']}")
                             continue
                             
