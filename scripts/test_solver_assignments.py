@@ -137,7 +137,7 @@ def test_answer_verification(self, result: TestResult):
         
     test_puzzle = puzzles[0]
     print(f"Testing with puzzle: {test_puzzle['name']} (ID: {test_puzzle['id']})")
-    print(f"DEBUG - Puzzle details: {test_puzzle}")
+    print(f"DEBUG - Full puzzle details: {test_puzzle}")
     
     # Test incorrect answer
     print("\nTesting incorrect answer...")
@@ -152,12 +152,15 @@ def test_answer_verification(self, result: TestResult):
     print("\nTesting correct answer...")
     correct_answer = test_puzzle.get("answer", "CORRECTANSWER")
     print(f"DEBUG - Correct answer to test: {correct_answer}")
+    print(f"DEBUG - Answer type: {type(correct_answer)}")
+    print(f"DEBUG - Answer length: {len(correct_answer) if correct_answer else 0}")
     correct_result = verify_answer(test_puzzle["id"], correct_answer)
     print(f"Result: {'Accepted' if correct_result else 'Rejected'}")
     if not correct_result:
         print("ERROR: Correct answer was rejected!")
         print(f"DEBUG - Puzzle answer: {test_puzzle.get('answer')}")
         print(f"DEBUG - Tested answer: {correct_answer}")
+        print(f"DEBUG - Answer comparison: {test_puzzle.get('answer') == correct_answer}")
         result.fail()
         return
         
@@ -198,34 +201,21 @@ def main():
             if not available_puzzles:
                 continue
                 
-            target_puzzle = random.choice(available_puzzles)
+            puzzle = random.choice(available_puzzles)
+            print(f"\nAssigning solver {solver['name']} (ID: {solver['id']}) to puzzle {puzzle['name']} (ID: {puzzle['id']})")
             
-            # Print debug info before assignment
-            print(f"\nDEBUG - Assignment attempt:")
-            print(f"  Solver: {solver['name']} (ID: {solver['id']})")
-            print(f"  Puzzle: {target_puzzle['name']} (ID: {target_puzzle['id']})")
-            
-            # Assign solver to the new puzzle - NOTE: parameters are in correct order here
-            if assign_solver_to_puzzle(target_puzzle["id"], solver["id"]):
-                # Update history count for the puzzle
-                print(f"DEBUG - Getting history for puzzle {target_puzzle['id']}")
-                history = get_puzzle_solver_history(target_puzzle["id"])
-                print(f"DEBUG - History for puzzle {target_puzzle['id']}: {history}")
-                puzzle_history_counts[target_puzzle["id"]] = len(history)
+            # Assign solver to puzzle
+            if assign_solver_to_puzzle(puzzle["id"], solver["id"]):
+                puzzle_history_counts[puzzle["id"]] += 1
+                print(f"Successfully assigned solver to puzzle. History count: {puzzle_history_counts[puzzle['id']]}")
+            else:
+                print("Failed to assign solver to puzzle!")
                 
-                print(f"Assigned solver {solver['name']} to puzzle {target_puzzle['name']} "
-                      f"(History count: {puzzle_history_counts[target_puzzle['id']]})")
-                
-                time.sleep(0.1)  # Small delay to prevent rate limiting
-        
-        # Print current status
-        print("\nCurrent puzzle solver history counts:")
-        for puzzle in puzzles:
-            print(f"Puzzle {puzzle['name']}: {puzzle_history_counts[puzzle['id']]} solvers")
-        print("\n" + "="*50 + "\n")
-        
-        # Wait before next round
-        time.sleep(1)
+    # Run answer verification test
+    print("\nRunning answer verification test...")
+    result = TestResult()
+    test_answer_verification(result)
+    print(f"\nAnswer verification test result: {'PASS' if result.passed else 'FAIL'}")
 
 if __name__ == "__main__":
     main() 
