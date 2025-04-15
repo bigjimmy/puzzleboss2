@@ -220,8 +220,9 @@ class TestRunner:
                 
             # Find the round we just created
             round_data = None
+            sanitized_name = name.replace(" ", "")
             for round in rounds_data["rounds"]:
-                if str(round["name"]).strip() == str(name).strip():
+                if round["name"].replace(" ", "") == sanitized_name:
                     round_data = round
                     break
                     
