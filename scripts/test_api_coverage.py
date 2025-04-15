@@ -453,12 +453,14 @@ class TestRunner:
                 result.fail("Failed to fetch rounds")
                 return
             self.rounds = response.json()["rounds"]
+            self.logger.log_operation(f"Found {len(self.rounds)} rounds")
             
             response = requests.get(f"{self.base_url}/puzzles")
             if not response.ok:
                 result.fail("Failed to fetch puzzles")
                 return
             self.puzzles = response.json()["puzzles"]
+            self.logger.log_operation(f"Found {len(self.puzzles)} puzzles")
             
             if not self.rounds or not self.puzzles:
                 result.fail("No rounds or puzzles found for testing")
@@ -470,17 +472,17 @@ class TestRunner:
         
         # Select 2 random puzzles from each round for testing
         for round_data in self.rounds:
-            round_puzzles = [p for p in self.puzzles if p["round_id"] == round_data["id"]]
+            self.logger.log_operation(f"\nTesting puzzles in round {round_data['name']} (ID: {round_data['id']}):")
+            round_puzzles = [p for p in self.puzzles if str(p["round_id"]) == str(round_data["id"])]
             if len(round_puzzles) < 2:
                 self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
                 continue
-                
+            
             test_puzzles = random.sample(round_puzzles, 2)
-            self.logger.log_operation(f"\nTesting puzzles in round {round_data['name']}:")
             self.logger.log_operation(f"Selected puzzles: {', '.join(p['name'] for p in test_puzzles)}")
             
             for puzzle in test_puzzles:
-                self.logger.log_operation(f"\nModifying puzzle {puzzle['name']}:")
+                self.logger.log_operation(f"\nModifying puzzle {puzzle['name']} (ID: {puzzle['id']}):")
                 
                 # Update status first
                 new_status = random.choice(["Being worked", "Needs eyes", "Solved", "Critical", "WTF"])
