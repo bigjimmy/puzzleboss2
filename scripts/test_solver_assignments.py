@@ -9,17 +9,27 @@ BASE_URL = "http://localhost:5000"
 
 def get_all_solvers() -> List[Dict]:
     """Get all solvers from the system."""
+    print("\nDEBUG - Getting all solvers...")
     response = requests.get(f"{BASE_URL}/solvers")
     if not response.ok:
         raise Exception(f"Failed to get solvers: {response.text}")
-    return response.json()["solvers"]
+    solvers = response.json()["solvers"]
+    print("DEBUG - Retrieved solvers:")
+    for solver in solvers:
+        print(f"  Solver: {solver['name']} (ID: {solver['id']})")
+    return solvers
 
 def get_all_puzzles() -> List[Dict]:
     """Get all puzzles from the system."""
+    print("\nDEBUG - Getting all puzzles...")
     response = requests.get(f"{BASE_URL}/puzzles")
     if not response.ok:
         raise Exception(f"Failed to get puzzles: {response.text}")
-    return response.json()["puzzles"]
+    puzzles = response.json()["puzzles"]
+    print("DEBUG - Retrieved puzzles:")
+    for puzzle in puzzles:
+        print(f"  Puzzle: {puzzle['name']} (ID: {puzzle['id']})")
+    return puzzles
 
 def get_puzzle_details(puzzle_id: str) -> Dict:
     """Get detailed information about a specific puzzle."""
