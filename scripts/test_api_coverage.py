@@ -825,6 +825,54 @@ class TestRunner:
         
         result.message = "Successfully tested meta puzzles and round completion logic"
 
+    def test_answer_verification(self, result: TestResult):
+        """Test answer verification functionality."""
+        print("\n" + "="*50)
+        print("Testing answer verification...")
+        print("="*50)
+        
+        # Get a puzzle to test
+        puzzles = self.get_all_puzzles()
+        if not puzzles:
+            print("No puzzles found to test!")
+            return
+            
+        test_puzzle = puzzles[0]
+        print(f"\nTesting with puzzle: {test_puzzle['name']} (ID: {test_puzzle['id']})")
+        print(f"DEBUG - Full puzzle details: {test_puzzle}")
+        
+        # Test incorrect answer
+        print("\n" + "-"*50)
+        print("Testing incorrect answer...")
+        incorrect_result = self.update_puzzle(test_puzzle["id"], "answer", "WRONGANSWER")
+        print(f"Result: {'Accepted' if incorrect_result else 'Rejected'}")
+        if incorrect_result:
+            print("ERROR: Incorrect answer was accepted!")
+            result.fail()
+            return
+            
+        # Test correct answer
+        print("\n" + "-"*50)
+        print("Testing correct answer...")
+        correct_answer = test_puzzle.get("answer", "CORRECTANSWER")
+        print(f"DEBUG - Correct answer to test: {correct_answer}")
+        print(f"DEBUG - Answer type: {type(correct_answer)}")
+        print(f"DEBUG - Answer length: {len(correct_answer) if correct_answer else 0}")
+        correct_result = self.update_puzzle(test_puzzle["id"], "answer", correct_answer)
+        print(f"Result: {'Accepted' if correct_result else 'Rejected'}")
+        if not correct_result:
+            print("ERROR: Correct answer was rejected!")
+            print(f"DEBUG - Puzzle answer: {test_puzzle.get('answer')}")
+            print(f"DEBUG - Tested answer: {correct_answer}")
+            print(f"DEBUG - Answer comparison: {test_puzzle.get('answer') == correct_answer}")
+            result.fail()
+            return
+            
+        print("\n" + "="*50)
+        print("Answer verification test passed!")
+        print("="*50)
+        result.set_success("Answer verification test passed")
+
     def run_all_tests(self):
         """Run all tests in sequence."""
         self.logger.start_test("Full Test Suite")
@@ -842,7 +890,8 @@ class TestRunner:
             ("Puzzle Modification", self.test_puzzle_modification),
             ("Solver Assignments", self.test_solver_assignments),
             ("Activity Tracking", self.test_activity_tracking),
-            ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion)
+            ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
+            ("Answer Verification", self.test_answer_verification)
         ]
         
         for name, test_func in tests:
