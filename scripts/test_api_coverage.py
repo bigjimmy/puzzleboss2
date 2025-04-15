@@ -950,38 +950,34 @@ class TestRunner:
         for puzzle in selected_puzzles:
             self.logger.log_operation(f"Testing answer verification for puzzle {puzzle['name']}")
             
-            # Generate a random answer
-            test_answer = f"Test Answer {random.randint(1000, 9999)}"
+            # Generate a random answer with spaces and emoji
+            test_answer = f"Test Answer {random.randint(1000, 9999)} 🎯"
             
             # Update the puzzle's answer
             if not self.update_puzzle(puzzle['id'], 'answer', test_answer):
                 result.fail(f"Failed to set answer for puzzle {puzzle['name']}")
                 continue
                 
-            # Verify the answer was set
+            # Verify the answer was set and status changed to solved
             puzzle_details = self.get_puzzle_details(puzzle['id'])
             if not puzzle_details:
                 result.fail(f"Failed to get puzzle details for {puzzle['name']}")
                 continue
                 
-            # Any answer value is acceptable
+            # Check that answer was set (spaces may be stripped)
             if 'answer' not in puzzle_details:
                 result.fail(f"Answer field missing for puzzle {puzzle['name']}")
                 continue
                 
-            # Clear the answer
-            if not self.update_puzzle(puzzle['id'], 'answer', ''):
-                result.fail(f"Failed to clear answer for puzzle {puzzle['name']}")
+            # Verify the answer was set correctly (spaces removed but emoji preserved)
+            expected_answer = test_answer.replace(" ", "")
+            if puzzle_details['answer'] != expected_answer:
+                result.fail(f"Answer not set correctly for puzzle {puzzle['name']}. Expected: {expected_answer}, Got: {puzzle_details['answer']}")
                 continue
                 
-            # Verify the answer was cleared
-            puzzle_details = self.get_puzzle_details(puzzle['id'])
-            if not puzzle_details:
-                result.fail(f"Failed to get puzzle details for {puzzle['name']}")
-                continue
-                
-            if puzzle_details.get('answer', '') != '':
-                result.fail(f"Answer not cleared for puzzle {puzzle['name']}")
+            # Check that status was changed to solved
+            if puzzle_details.get('status') != 'Solved':
+                result.fail(f"Status not changed to 'Solved' for puzzle {puzzle['name']}")
                 continue
                 
         result.set_success("Answer verification test completed successfully")
