@@ -463,10 +463,6 @@ def create_puzzle():
         debug_log(5, "request data is - %s" % str(puzzle))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception(
-            "One or more expected fields (name, puzzle_uri, round_id) missing."
-        )
 
     # Check for duplicate
     try:
