@@ -636,7 +636,7 @@ class TestRunner:
                 # Assign first solver
                 solver1 = test_solvers[0]
                 self.logger.log_operation(f"Assigning solver {solver1['name']} (ID: {solver1['id']}) to puzzle {puzzle['name']} (ID: {puzzle['id']})")
-                if not self.assign_solver_to_puzzle(puzzle["id"], solver1["id"]):
+                if not self.assign_solver_to_puzzle(solver1["id"], puzzle["id"]):
                     result.fail(f"Failed to assign solver {solver1['name']} to puzzle {puzzle['name']}")
                     continue
                 
