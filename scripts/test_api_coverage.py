@@ -800,16 +800,13 @@ class TestRunner:
                     result.fail(f"Failed to get details for puzzle {puzzle['name']}")
                     continue
                     
-                # Print full puzzle structure for debugging
-                self.logger.log_operation(f"Full puzzle structure for {puzzle['name']}:")
-                self.logger.log_operation(json.dumps(puzzle_details, indent=2))
-                    
-                # Verify activity was recorded
-                if 'lastact' not in puzzle_details:
-                    result.fail(f"Puzzle {puzzle['name']} missing activity after solver assignment")
+                # Get lastact specifically using the puzzle part endpoint
+                response = requests.get(f"{self.base_url}/puzzles/{puzzle['id']}/lastact")
+                if not response.ok:
+                    result.fail(f"Failed to get lastact for puzzle {puzzle['name']}: {response.text}")
                     continue
                     
-                last_activity = puzzle_details['lastact']
+                last_activity = response.json().get('puzzle', {}).get('lastact')
                 if not last_activity:
                     result.fail(f"Puzzle {puzzle['name']} has empty activity record")
                     continue
