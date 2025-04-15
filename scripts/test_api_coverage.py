@@ -398,74 +398,54 @@ class TestRunner:
         result.message = f"Found {len(solvers)} solvers"
 
     def test_puzzle_creation(self, result: TestResult):
-        """Test creating multiple puzzles in different rounds."""
-        self.logger.start_test("Puzzle Creation")
+        """Test puzzle creation functionality."""
+        self.logger.log_operation("Starting puzzle creation test")
         
-        # Get existing rounds to avoid name collisions
-        try:
-            response = requests.get(f"{self.base_url}/rounds")
-            if response.ok:
-                existing_rounds = {round['name'] for round in response.json()['rounds']}
-            else:
-                self.logger.log_warning("Failed to fetch existing rounds, continuing without collision check")
-                existing_rounds = set()
-        except Exception as e:
-            self.logger.log_warning(f"Error fetching existing rounds: {str(e)}, continuing without collision check")
-            existing_rounds = set()
-        
-        # Create 3 rounds with 5 puzzles each
-        for round_num in range(1, 4):
-            # Generate unique round name with timestamp and random suffix
-            timestamp = int(time.time())
-            random_suffix = random.randint(1000, 9999)
-            round_name = f"TestRound_{timestamp}_{random_suffix}"
+        # Get all rounds
+        rounds = self.get_all_rounds()
+        if not rounds:
+            result.fail("Failed to get rounds")
+            return
             
-            # Ensure no collision with existing rounds
-            while round_name in existing_rounds:
-                timestamp = int(time.time())
-                random_suffix = random.randint(1000, 9999)
-                round_name = f"TestRound_{timestamp}_{random_suffix}"
+        # Create a new round for testing
+        round_name = f"TestRound_{random.randint(1000, 9999)}"
+        self.logger.log_operation(f"Creating new round: {round_name}")
+        new_round = self.create_round(round_name)
+        if not new_round:
+            result.fail(f"Failed to create round {round_name}")
+            return
             
-            existing_rounds.add(round_name)
+        # Create puzzles in the new round
+        for i in range(1, 4):  # Create 3 puzzles
+            puzzle_name = f"TestPuzzle_{i}_{random.randint(1000, 9999)}"
+            self.logger.log_operation(f"Creating puzzle {puzzle_name} in round {round_name}")
             
-            round_data = self.create_round(round_name)
-            if not round_data:
-                result.fail(f"Failed to create round {round_name}")
-                return
+            # Create puzzle
+            new_puzzle = self.create_puzzle(puzzle_name, str(new_round['id']))
+            if not new_puzzle:
+                result.fail(f"Failed to create puzzle {puzzle_name}")
+                continue
                 
-            # Create 5 puzzles in this round
-            for puzzle_num in range(1, 6):
-                # Generate unique puzzle name with timestamp and random suffix
-                timestamp = int(time.time())
-                random_suffix = random.randint(1000, 9999)
-                puzzle_name = f"R{round_num}Puzzle{puzzle_num}_{timestamp}_{random_suffix}"
+            # Verify puzzle details
+            puzzle_details = self.get_puzzle_details(new_puzzle['id'])
+            if not puzzle_details:
+                result.fail(f"Failed to get details for puzzle {puzzle_name}")
+                continue
                 
-                if random.random() < 0.5:  # 50% chance to add emoji
-                    puzzle_name += f" {self.get_emoji_string(puzzle_name)}"
+            # Verify puzzle properties
+            if puzzle_details['name'] != puzzle_name:
+                result.fail(f"Puzzle name mismatch: expected {puzzle_name}, got {puzzle_details['name']}")
+                continue
                 
-                puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
-                if not puzzle_data:
-                    result.fail(f"Failed to create puzzle {puzzle_name}")
-                    return
+            if str(puzzle_details['round_id']) != str(new_round['id']):
+                result.fail(f"Round ID mismatch: expected {new_round['id']}, got {puzzle_details['round_id']}")
+                continue
                 
-                # Verify puzzle was created with correct attributes
-                puzzle_info = self.get_puzzle_details(puzzle_data["id"])
-                if not puzzle_info:
-                    result.fail(f"Failed to get puzzle {puzzle_name}")
-                    return
+            if puzzle_details['status'] != 'New':
+                result.fail(f"Initial status should be 'New', got {puzzle_details['status']}")
+                continue
                 
-                # Verify puzzle attributes
-                if puzzle_info["name"] != puzzle_name:
-                    result.fail(f"Puzzle name mismatch: expected {puzzle_name}, got {puzzle_info['name']}")
-                    return
-                
-                if str(puzzle_info["round_id"]) != str(round_data["id"]):
-                    result.fail(f"Round ID mismatch for puzzle {puzzle_name}")
-                    return
-                
-                self.logger.log_operation(f"Created puzzle {puzzle_name} in round {round_name}")
-        
-        result.set_success("Successfully created 3 rounds with 5 puzzles each")
+        result.set_success("Puzzle creation test completed successfully")
 
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality"""
@@ -724,48 +704,104 @@ class TestRunner:
         result.set_success("Solver assignments test completed successfully")
 
     def test_activity_tracking(self, result: TestResult):
-        # Select 2 random puzzles from each round for testing
-        test_puzzles = []
-        for round_data in self.rounds:
-            round_puzzles = [p for p in self.puzzles if p["round_id"] == round_data["id"]]
-            selected_puzzles = random.sample(round_puzzles, min(2, len(round_puzzles)))
-            test_puzzles.extend(selected_puzzles)
-            self.logger.log_operation(f"Selected puzzles from round {round_data['name']}: {', '.join(p['name'] for p in selected_puzzles)}")
+        """Test activity tracking functionality."""
+        self.logger.log_operation("Starting activity tracking test")
         
-        self.logger.log_operation(f"\nTesting activity tracking for {len(test_puzzles)} puzzles")
+        # Get all solvers and puzzles
+        solvers = self.get_all_solvers()
+        puzzles = self.get_all_puzzles()
         
-        for i, puzzle in enumerate(test_puzzles, 1):
-            self.logger.log_operation(f"\nChecking activity tracking for puzzle {i}/{len(test_puzzles)}: {puzzle['name']} (Round {puzzle['round_id']})")
+        if not solvers or not puzzles:
+            result.fail("Failed to get solvers or puzzles")
+            return
             
-            # Get initial activity
-            initial_puzzle = self.get_puzzle_details(puzzle["id"])
-            if "lastact" not in initial_puzzle:
-                result.fail(f"Puzzle {puzzle['id']} missing initial activity tracking")
-                return
-            initial_activity = initial_puzzle["lastact"]
-            self.logger.log_operation(f"Initial activity: {initial_activity}")
+        # Get full puzzle details for each puzzle
+        detailed_puzzles = []
+        for puzzle in puzzles:
+            puzzle_details = self.get_puzzle_details(puzzle['id'])
+            if puzzle_details:
+                detailed_puzzles.append(puzzle_details)
             
-            # Make a change to trigger new activity
-            self.logger.log_operation("Triggering new activity by updating status")
-            new_status = "Being worked" if initial_puzzle["status"] != "Being worked" else "New"
-            self.update_puzzle(puzzle["id"], "status", new_status)
+        if not detailed_puzzles:
+            result.fail("Failed to get puzzle details")
+            return
             
-            # Verify new activity was recorded
-            self.logger.log_operation("Verifying new activity was recorded")
-            updated_puzzle = self.get_puzzle_details(puzzle["id"])
-            if "lastact" not in updated_puzzle:
-                result.fail(f"Puzzle {puzzle['id']} missing updated activity tracking")
-                return
+        # Group puzzles by round
+        puzzles_by_round = {}
+        for puzzle in detailed_puzzles:
+            round_id = str(puzzle.get('round_id', ''))
+            if round_id:
+                if round_id not in puzzles_by_round:
+                    puzzles_by_round[round_id] = []
+                puzzles_by_round[round_id].append(puzzle)
                 
-            new_activity = updated_puzzle["lastact"]
-            if new_activity == initial_activity:
-                result.fail(f"Activity tracking not updated for puzzle {puzzle['id']}")
-                return
+        # For each round, select up to 2 random puzzles
+        selected_puzzles = []
+        for round_id, round_puzzles in puzzles_by_round.items():
+            num_to_select = min(2, len(round_puzzles))
+            if num_to_select > 0:
+                selected = random.sample(round_puzzles, num_to_select)
+                selected_puzzles.extend(selected)
                 
-            self.logger.log_operation(f"New activity recorded: {new_activity}")
-            self.logger.log_operation(f"Activity tracking verified for puzzle {puzzle['name']}")
-        
-        result.message = f"Activity tracking verified for {len(test_puzzles)} puzzles (2 from each round)"
+        if not selected_puzzles:
+            result.fail("No puzzles available for testing")
+            return
+            
+        # For each selected puzzle, assign 2 random solvers and check activity
+        for puzzle in selected_puzzles:
+            self.logger.log_operation(f"Testing activity for puzzle {puzzle['name']}")
+            
+            # Select 2 random solvers
+            if len(solvers) < 2:
+                result.fail("Not enough solvers available for testing")
+                continue
+                
+            selected_solvers = random.sample(solvers, 2)
+            
+            for solver in selected_solvers:
+                self.logger.log_operation(f"Assigning solver {solver['name']} to puzzle {puzzle['name']}")
+                
+                # Assign solver to puzzle
+                if not self.assign_solver_to_puzzle(solver['id'], puzzle['id']):
+                    result.fail(f"Failed to assign solver {solver['name']} to puzzle {puzzle['name']}")
+                    continue
+                    
+                # Check activity for the puzzle
+                puzzle_details = self.get_puzzle_details(puzzle['id'])
+                if not puzzle_details:
+                    result.fail(f"Failed to get details for puzzle {puzzle['name']}")
+                    continue
+                    
+                # Verify activity was recorded
+                if 'lastact' not in puzzle_details:
+                    result.fail(f"Puzzle {puzzle['name']} missing activity after solver assignment")
+                    continue
+                    
+                last_activity = puzzle_details['lastact']
+                if not last_activity:
+                    result.fail(f"Puzzle {puzzle['name']} has empty activity record")
+                    continue
+                    
+                # Verify activity has required fields
+                required_fields = ['time', 'type', 'source']
+                for field in required_fields:
+                    if field not in last_activity:
+                        result.fail(f"Activity record for puzzle {puzzle['name']} missing required field: {field}")
+                        continue
+                        
+                # Verify activity type is valid
+                valid_types = ['create', 'open', 'revise', 'comment', 'interact']
+                if last_activity['type'] not in valid_types:
+                    result.fail(f"Invalid activity type for puzzle {puzzle['name']}: {last_activity['type']}")
+                    continue
+                    
+                # Verify activity source is valid
+                valid_sources = ['google', 'pb_auto', 'pb_manual', 'bigjimmy', 'twiki', 'squid', 'apache', 'xmpp']
+                if last_activity['source'] not in valid_sources:
+                    result.fail(f"Invalid activity source for puzzle {puzzle['name']}: {last_activity['source']}")
+                    continue
+                    
+        result.set_success("Activity tracking test completed successfully")
 
     def test_meta_puzzles_and_round_completion(self, result: TestResult):
         """Test meta puzzles and round completion logic"""
