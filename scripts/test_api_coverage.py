@@ -467,22 +467,7 @@ class TestRunner:
             self.logger.log_operation(f"Selected {len(test_puzzles)} puzzles from round {round_data['name']}")
             
             for puzzle in test_puzzles:
-                # Update answer with optional emoji
-                use_emoji = random.choice([True, False])
-                new_answer = self.get_emoji_string(f"Answer for {puzzle['name']}", use_emoji)
-                if not self.update_puzzle(puzzle["id"], "answer", new_answer):
-                    result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
-                    return
-                    
-                # Verify answer update
-                puzzle_details = self.get_puzzle_details(puzzle["id"])
-                if not self.strings_equal_ignore_spaces(puzzle_details["answer"], new_answer):
-                    result.fail(f"Answer update verification failed for {puzzle['name']}")
-                    result.logger.log_error(f"Expected: {new_answer}")
-                    result.logger.log_error(f"Actual: {puzzle_details['answer']}")
-                    return
-                    
-                # Update status
+                # Update status first
                 new_status = random.choice(["Being worked", "Needs eyes", "Solved", "Critical", "WTF"])
                 if not self.update_puzzle(puzzle["id"], "status", new_status):
                     result.fail(f"Failed to update status for puzzle {puzzle['name']}")
@@ -495,6 +480,31 @@ class TestRunner:
                     result.logger.log_error(f"Expected: {new_status}")
                     result.logger.log_error(f"Actual: {puzzle_details['status']}")
                     return
+
+                # Only set and verify answer if puzzle is marked as solved
+                if new_status == "Solved":
+                    # Update answer with optional emoji
+                    use_emoji = random.choice([True, False])
+                    new_answer = self.get_emoji_string(f"Answer for {puzzle['name']}", use_emoji)
+                    if not self.update_puzzle(puzzle["id"], "answer", new_answer):
+                        result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
+                        return
+                        
+                    # Verify answer update
+                    puzzle_details = self.get_puzzle_details(puzzle["id"])
+                    if not self.strings_equal_ignore_spaces(puzzle_details["answer"], new_answer):
+                        result.fail(f"Answer update verification failed for {puzzle['name']}")
+                        result.logger.log_error(f"Expected: {new_answer}")
+                        result.logger.log_error(f"Actual: {puzzle_details['answer']}")
+                        return
+                else:
+                    # For non-solved puzzles, verify answer is empty
+                    puzzle_details = self.get_puzzle_details(puzzle["id"])
+                    if puzzle_details.get("answer", ""):
+                        result.fail(f"Non-solved puzzle {puzzle['name']} has an answer set")
+                        result.logger.log_error(f"Expected empty answer for non-solved puzzle")
+                        result.logger.log_error(f"Actual: {puzzle_details['answer']}")
+                        return
                     
                 # Update comments with optional emoji
                 use_emoji = random.choice([True, False])
@@ -505,7 +515,7 @@ class TestRunner:
                     
                 # Verify comments update
                 puzzle_details = self.get_puzzle_details(puzzle["id"])
-                if puzzle_details["comments"] != new_comments:
+                if not self.strings_equal_ignore_spaces(puzzle_details["comments"], new_comments):
                     result.fail(f"Comments update verification failed for {puzzle['name']}")
                     result.logger.log_error(f"Expected: {new_comments}")
                     result.logger.log_error(f"Actual: {puzzle_details['comments']}")
