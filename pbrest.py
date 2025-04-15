@@ -21,6 +21,7 @@ from pbldaplib import *
 from werkzeug.exceptions import HTTPException
 import json
 import datetime
+import re
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -28,6 +29,7 @@ app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
 app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
+app.config["MYSQL_CHARSET"] = "utf8mb4"
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
@@ -450,7 +452,7 @@ def create_puzzle():
     debug_log(4, "start")
     try:
         data = request.get_json()
-        puzname = sanitize_string(data["name"])
+        puzname = sanitize_puzzle_name(data["name"])
         puzuri = bleach.clean(data["puzzle_uri"])
         roundid = int(data["round_id"])
         ismeta = data.get("ismeta", False)
@@ -512,6 +514,10 @@ def create_puzzle():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        
+        # Store the full puzzle name in UTF-8 as the chat channel name
+        # The Discord bot will handle creating a proper channel
+        
         cursor.execute(
             """
             INSERT INTO puzzle
@@ -524,7 +530,7 @@ def create_puzzle():
                 roundid,
                 chat_id,
                 chat_link,
-                puzname.lower(),
+                puzname, # Store the full name with emojis intact
                 drive_id,
                 drive_uri,
                 ismeta,
@@ -576,7 +582,7 @@ def create_round():
     debug_log(4, "start")
     try:
         data = request.get_json()
-        roundname = sanitize_string(data["name"])
+        roundname = sanitize_puzzle_name(data["name"])
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
@@ -690,7 +696,7 @@ def create_solver():
     try:
         data = request.get_json()
         debug_log(5, "request data is - %s" % str(data))
-        name = sanitize_string(data["name"])
+        name = sanitize_puzzle_name(data["name"])
         fullname = data["fullname"]
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")

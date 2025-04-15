@@ -133,7 +133,23 @@ function getauthenticateduser() {
 // Mirrors pblib.py implementation
 // TOOD: Stop doing this
 function sanitize_string($str) {
-  return preg_replace('/[^A-Za-z0-9]/', '', $str);
+  if (empty($str)) {
+    return "";
+  }
+  // Remove control characters and characters problematic for URLs/filenames
+  $sanitized = preg_replace('/[\x00-\x1F\x7F<>:"\/\\\\|?*]/', '', $str);
+  // Trim whitespace
+  return trim($sanitized);
+}
+
+function sanitize_puzzle_name($str) {
+  if (empty($str)) {
+    return "";
+  }
+  // Remove control characters, spaces, and characters problematic for URLs/filenames
+  $sanitized = preg_replace('/[\x00-\x1F\x7F<>:"\/\\\\|?* ]/', '', $str);
+  // Trim whitespace
+  return trim($sanitized);
 }
 
 function idx($container, $key, $default=null) {
