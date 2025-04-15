@@ -611,24 +611,45 @@ class TestRunner:
             result.fail("Failed to get solvers or puzzles")
             return
             
+        # Get full puzzle details for each puzzle
+        detailed_puzzles = []
+        for puzzle in puzzles:
+            puzzle_details = self.get_puzzle_details(puzzle['id'])
+            if puzzle_details:
+                detailed_puzzles.append(puzzle_details)
+                self.logger.log_operation(f"Got details for puzzle {puzzle_details['name']} (ID: {puzzle_details['id']}, Round: {puzzle_details.get('round_id')})")
+            
+        if not detailed_puzzles:
+            result.fail("Failed to get puzzle details")
+            return
+            
         # Group puzzles by round
         puzzles_by_round = {}
-        for puzzle in puzzles:
-            round_id = puzzle.get('round_id')
+        for puzzle in detailed_puzzles:
+            round_id = str(puzzle.get('round_id', ''))  # Convert to string for consistent comparison
             if round_id:
                 if round_id not in puzzles_by_round:
                     puzzles_by_round[round_id] = []
                 puzzles_by_round[round_id].append(puzzle)
                 
-        # For each round, select 2 random puzzles
+        self.logger.log_operation(f"Found {len(puzzles_by_round)} rounds with puzzles")
+        for round_id, round_puzzles in puzzles_by_round.items():
+            self.logger.log_operation(f"Round {round_id}: {len(round_puzzles)} puzzles")
+                
+        # For each round, select up to 2 random puzzles
         selected_puzzles = []
         for round_id, round_puzzles in puzzles_by_round.items():
-            if len(round_puzzles) >= 2:
-                selected_puzzles.extend(random.sample(round_puzzles, 2))
+            num_to_select = min(2, len(round_puzzles))
+            if num_to_select > 0:
+                selected = random.sample(round_puzzles, num_to_select)
+                selected_puzzles.extend(selected)
+                self.logger.log_operation(f"Selected {num_to_select} puzzles from round {round_id}")
                 
         if not selected_puzzles:
             result.fail("No puzzles available for testing")
             return
+            
+        self.logger.log_operation(f"Selected {len(selected_puzzles)} total puzzles for testing")
             
         # For each selected puzzle, assign 2 random solvers
         for puzzle in selected_puzzles:
