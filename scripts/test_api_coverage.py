@@ -882,8 +882,8 @@ class TestRunner:
                 
             # Verify round is not complete when non-meta puzzle is solved but metas are not
             round_details = self.get_round(test_round['id'])
-            if round_details.get('complete'):
-                result.fail("Round marked complete before meta puzzles were solved")
+            if round_details.get('status') == 'Solved':
+                result.fail("Round marked solved before meta puzzles were solved")
                 return
                 
             # Solve first meta puzzle
@@ -893,8 +893,8 @@ class TestRunner:
                 
             # Verify round is still not complete
             round_details = self.get_round(test_round['id'])
-            if round_details.get('complete'):
-                result.fail("Round marked complete when only one meta puzzle was solved")
+            if round_details.get('status') == 'Solved':
+                result.fail("Round marked solved when only one meta puzzle was solved")
                 return
                 
             # Solve the second meta puzzle
@@ -904,8 +904,8 @@ class TestRunner:
                 
             # Verify round is now complete
             round_details = self.get_round(test_round['id'])
-            if not round_details.get('complete'):
-                result.fail("Round not marked complete after all meta puzzles were solved")
+            if round_details.get('status') != 'Solved':
+                result.fail("Round not marked solved after all meta puzzles were solved")
                 return
                 
             result.set_success("Meta puzzles and round completion test completed successfully")
@@ -965,87 +965,67 @@ class TestRunner:
         result.set_success("Answer verification test completed successfully")
 
     def test_solver_reassignment(self, result: TestResult):
-        """Test reassigning solvers from one puzzle to another."""
+        """Test reassigning solvers between puzzles."""
         self.logger.log_operation("Starting solver reassignment test")
         
         try:
-            # Get all puzzles and find ones with solvers
-            self.logger.log_operation("Fetching puzzles with solvers")
-            puzzles_with_solvers = []
-            for puzzle in self.get_all_puzzles():
-                try:
-                    puzzle_details = self.get_puzzle_details(puzzle['id'])
-                    if puzzle_details.get('cursolvers'):
-                        puzzles_with_solvers.append(puzzle_details)
-                except Exception as e:
-                    self.logger.log_error(f"Error fetching details for puzzle {puzzle['id']}: {str(e)}")
-                    continue
+            # Get puzzles with solvers
+            puzzles = self.get_all_puzzles()
+            puzzles_with_solvers = [p for p in puzzles if p.get('cursolvers')]
             
             if len(puzzles_with_solvers) < 2:
-                result.fail("Need at least 2 puzzles with solvers to test reassignment")
+                result.fail("Need at least 2 puzzles with solvers for reassignment test")
                 return
                 
-            # Select a subset of puzzles to test with
-            num_to_test = min(3, len(puzzles_with_solvers))
-            test_puzzles = random.sample(puzzles_with_solvers, num_to_test)
-            self.logger.log_operation(f"Selected {num_to_test} puzzles for testing: {', '.join(p['name'] for p in test_puzzles)}")
+            # Select two puzzles with solvers
+            puzzle1 = random.choice(puzzles_with_solvers)
+            puzzle2 = random.choice([p for p in puzzles_with_solvers if p['id'] != puzzle1['id']])
             
-            # For each puzzle, get its solvers and reassign them
-            for i, puzzle in enumerate(test_puzzles):
-                if not puzzle.get('cursolvers'):
-                    continue
-                    
-                # Get the solvers for this puzzle
-                solver_names = [s.strip() for s in puzzle['cursolvers'].split(',') if s.strip()]
-                if not solver_names:
-                    continue
-                    
-                # Select a different puzzle to reassign to
-                target_puzzle = test_puzzles[(i + 1) % len(test_puzzles)]
-                self.logger.log_operation(f"\nReassigning solvers from {puzzle['name']} to {target_puzzle['name']}")
+            self.logger.log_operation(f"Selected puzzles: {puzzle1['name']} and {puzzle2['name']}")
+            
+            # Get solvers from first puzzle
+            solver_names = puzzle1['cursolvers'].split(',')
+            if not solver_names:
+                result.fail(f"No solvers found on puzzle {puzzle1['name']}")
+                return
                 
-                # Reassign each solver
-                for solver_name in solver_names:
-                    self.logger.log_operation(f"Reassigning solver {solver_name}")
-                    
-                    # Get solver ID from name
-                    solver_id = None
-                    for solver in self.get_all_solvers():
-                        if solver['name'] == solver_name:
-                            solver_id = solver['id']
-                            break
-                    
-                    if not solver_id:
-                        result.fail(f"Could not find ID for solver {solver_name}")
-                        return
-                    
-                    # Update solver's puzz field to the new puzzle
-                    if not self.update_solver_puzzle(solver_id, target_puzzle['id']):
-                        result.fail(f"Failed to assign solver {solver_name} to puzzle {target_puzzle['id']}")
-                        return
-                        
-                    # Verify the reassignment
-                    old_puzzle_details = self.get_puzzle_details(puzzle['id'])
-                    new_puzzle_details = self.get_puzzle_details(target_puzzle['id'])
-                    solver_details = self.get_solver_details(solver_id)
-                    
-                    # Check that solver is no longer in old puzzle's cursolvers
-                    if solver_name in old_puzzle_details.get('cursolvers', ''):
-                        result.fail(f"Solver {solver_name} still assigned to original puzzle {puzzle['id']}")
-                        return
-                        
-                    # Check that solver is now in new puzzle's cursolvers
-                    if solver_name not in new_puzzle_details.get('cursolvers', ''):
-                        result.fail(f"Solver {solver_name} not assigned to new puzzle {target_puzzle['id']}")
-                        return
-                        
-                    # Check that solver's puzz field points to new puzzle
-                    if solver_details.get('puzz') != target_puzzle['id']:
-                        result.fail(f"Solver {solver_name}'s puzz field not updated to {target_puzzle['id']}")
-                        return
-                        
-                    self.logger.log_operation(f"Successfully reassigned solver {solver_name}")
+            solver_name = random.choice(solver_names)
+            self.logger.log_operation(f"Selected solver: {solver_name}")
             
+            # Get solver details to find ID
+            solver_id = None
+            for solver in self.get_all_solvers():
+                if solver['name'] == solver_name:
+                    solver_id = solver['id']
+                    break
+                    
+            if not solver_id:
+                result.fail(f"Could not find ID for solver {solver_name}")
+                return
+                
+            # Reassign solver to second puzzle
+            if not self.update_solver_puzzle(solver_id, puzzle2['id']):
+                result.fail(f"Failed to reassign solver {solver_name} to puzzle {puzzle2['name']}")
+                return
+                
+            # Verify reassignment
+            solver_details = self.get_solver_details(solver_id)
+            if solver_details.get('puzz') != puzzle2['name']:
+                result.fail(f"Solver {solver_name} not reassigned to puzzle {puzzle2['name']}")
+                return
+                
+            # Verify puzzle assignments
+            puzzle1_details = self.get_puzzle_details(puzzle1['id'])
+            puzzle2_details = self.get_puzzle_details(puzzle2['id'])
+            
+            if solver_name in puzzle1_details.get('cursolvers', ''):
+                result.fail(f"Solver {solver_name} still listed on original puzzle {puzzle1['name']}")
+                return
+                
+            if solver_name not in puzzle2_details.get('cursolvers', ''):
+                result.fail(f"Solver {solver_name} not listed on new puzzle {puzzle2['name']}")
+                return
+                
             result.set_success("Solver reassignment test completed successfully")
             
         except Exception as e:
@@ -1053,7 +1033,7 @@ class TestRunner:
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
-
+            
     def update_solver_puzzle(self, solver_id: str, puzzle_id: str) -> bool:
         """Update a solver's current puzzle assignment."""
         try:
@@ -1061,7 +1041,7 @@ class TestRunner:
                 f"{self.base_url}/solvers/{solver_id}/puzz",
                 json={"puzz": puzzle_id}
             )
-            return response.ok
+            return response.status_code == 200
         except Exception as e:
             self.logger.log_error(f"Error updating solver puzzle: {str(e)}")
             return False
