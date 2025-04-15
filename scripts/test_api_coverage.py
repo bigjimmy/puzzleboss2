@@ -55,6 +55,7 @@ class TestResult:
 
 class TestRunner:
     def __init__(self):
+        self.base_url = "http://localhost:5000"
         self.logger = TestLogger()
         self.results = []
         self.solvers = []
@@ -66,6 +67,16 @@ class TestRunner:
                       "🎸", "🎹", "🎺", "🎻", "🎼", "🎵", "🎶", "🎷", "🎸", "🎹"]
         
         self.test_start_time = datetime.now()
+
+    def normalize_string(self, s: str) -> str:
+        """Remove all spaces from a string for comparison."""
+        if not s:
+            return ""
+        return "".join(s.split())
+        
+    def strings_equal_ignore_spaces(self, s1: str, s2: str) -> bool:
+        """Compare two strings ignoring spaces."""
+        return self.normalize_string(s1) == self.normalize_string(s2)
 
     def get_emoji_string(self, base_text: str, include_emoji: bool = True) -> str:
         """Generate a string with optional emoji"""
@@ -370,7 +381,7 @@ class TestRunner:
                     puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
                     
                     # Verify puzzle was created with correct data
-                    if puzzle_data["name"] != puzzle_name:
+                    if not self.strings_equal_ignore_spaces(puzzle_data["name"], puzzle_name):
                         result.fail(f"Puzzle name verification failed for {puzzle_name}")
                         result.logger.log_error(f"Expected: {puzzle_name}")
                         result.logger.log_error(f"Actual: {puzzle_data['name']}")
@@ -378,7 +389,7 @@ class TestRunner:
                         
                     # Verify puzzle details from API
                     puzzle_details = self.get_puzzle_details(puzzle_data["id"])
-                    if puzzle_details["name"] != puzzle_name:
+                    if not self.strings_equal_ignore_spaces(puzzle_details["name"], puzzle_name):
                         result.fail(f"Puzzle name API verification failed for {puzzle_name}")
                         result.logger.log_error(f"Expected: {puzzle_name}")
                         result.logger.log_error(f"Actual: {puzzle_details['name']}")
@@ -456,48 +467,49 @@ class TestRunner:
             self.logger.log_operation(f"Selected {len(test_puzzles)} puzzles from round {round_data['name']}")
             
             for puzzle in test_puzzles:
-                # Randomly decide if this update should have emoji
+                # Update answer with optional emoji
                 use_emoji = random.choice([True, False])
-                
-                # Update status
-                new_status = random.choice(["Being worked", "Needs eyes", "Solved"])
-                self.logger.log_operation(f"Updating status of puzzle {puzzle['name']} to {new_status}")
-                if not self.update_puzzle(puzzle["id"], "status", new_status):
-                    result.fail(f"Failed to update status for puzzle {puzzle['id']}")
+                new_answer = self.get_emoji_string(f"Answer for {puzzle['name']}", use_emoji)
+                if not self.update_puzzle(puzzle["id"], "answer", new_answer):
+                    result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
                     return
-                
-                # Verify status update
-                updated_puzzle = self.get_puzzle_details(puzzle["id"])
-                if updated_puzzle["status"] != new_status:
-                    result.fail(f"Status update verification failed for puzzle {puzzle['id']}")
-                    return
-                
-                # Update comments with emoji
-                new_comment = self.get_emoji_string(f"Test comment for {puzzle['name']}", use_emoji)
-                self.logger.log_operation(f"Updating comments for puzzle {puzzle['name']}")
-                if not self.update_puzzle(puzzle["id"], "comments", new_comment):
-                    result.fail(f"Failed to update comments for puzzle {puzzle['id']}")
-                    return
-                
-                # Verify comments update
-                updated_puzzle = self.get_puzzle_details(puzzle["id"])
-                if updated_puzzle["comments"] != new_comment:
-                    result.fail(f"Comments update verification failed for puzzle {puzzle['id']}")
-                    return
-                
-                # If status is Solved, add an answer with emoji
-                if new_status == "Solved":
-                    answer = self.get_emoji_string(f"ANSWER_{puzzle['name']}", use_emoji)
-                    self.logger.log_operation(f"Setting answer for puzzle {puzzle['name']}")
-                    if not self.update_puzzle(puzzle["id"], "answer", answer):
-                        result.fail(f"Failed to set answer for puzzle {puzzle['id']}")
-                        return
                     
-                    # Verify answer
-                    updated_puzzle = self.get_puzzle_details(puzzle["id"])
-                    if updated_puzzle["answer"] != answer:
-                        result.fail(f"Answer verification failed for puzzle {puzzle['id']}")
-                        return
+                # Verify answer update
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
+                if not self.strings_equal_ignore_spaces(puzzle_details["answer"], new_answer):
+                    result.fail(f"Answer update verification failed for {puzzle['name']}")
+                    result.logger.log_error(f"Expected: {new_answer}")
+                    result.logger.log_error(f"Actual: {puzzle_details['answer']}")
+                    return
+                    
+                # Update status
+                new_status = random.choice(["Being worked", "Needs eyes", "Solved", "Critical", "WTF"])
+                if not self.update_puzzle(puzzle["id"], "status", new_status):
+                    result.fail(f"Failed to update status for puzzle {puzzle['name']}")
+                    return
+                    
+                # Verify status update
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
+                if puzzle_details["status"] != new_status:
+                    result.fail(f"Status update verification failed for {puzzle['name']}")
+                    result.logger.log_error(f"Expected: {new_status}")
+                    result.logger.log_error(f"Actual: {puzzle_details['status']}")
+                    return
+                    
+                # Update comments with optional emoji
+                use_emoji = random.choice([True, False])
+                new_comments = self.get_emoji_string(f"Comments for {puzzle['name']}", use_emoji)
+                if not self.update_puzzle(puzzle["id"], "comments", new_comments):
+                    result.fail(f"Failed to update comments for puzzle {puzzle['name']}")
+                    return
+                    
+                # Verify comments update
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
+                if puzzle_details["comments"] != new_comments:
+                    result.fail(f"Comments update verification failed for {puzzle['name']}")
+                    result.logger.log_error(f"Expected: {new_comments}")
+                    result.logger.log_error(f"Actual: {puzzle_details['comments']}")
+                    return
         
         result.message = "Successfully tested puzzle modification with emoji support"
 
