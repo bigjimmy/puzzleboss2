@@ -288,13 +288,17 @@ class TestRunner:
         self.logger.log_operation(f"Successfully removed solver {solver_id} from puzzle {puzzle_id} history")
         return True
 
-    def update_round(self, round_id: str, field: str, value: str) -> bool:
-        """Update a round field"""
+    def update_round(self, round_id: str, updates: Dict[str, str]) -> bool:
+        """Update a round's fields"""
+        self.logger.log_operation(f"Updating round {round_id} with {updates}")
         response = requests.post(
-            f"{BASE_URL}/rounds/{round_id}/{field}",
-            json={field: value}
+            f"{self.base_url}/rounds/{round_id}",
+            json=updates
         )
-        return response.ok
+        if not response.ok:
+            self.logger.log_error(f"Failed to update round {round_id}: {response.text}")
+            return False
+        return True
 
     def test_solver_listing(self, result: TestResult):
         solvers = self.get_all_solvers()
