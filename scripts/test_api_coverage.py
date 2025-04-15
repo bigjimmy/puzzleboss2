@@ -448,68 +448,50 @@ class TestRunner:
         result.set_success("Puzzle creation test completed successfully")
 
     def test_puzzle_modification(self, result: TestResult):
-        """Test puzzle modification functionality"""
-        self.logger.log_operation("Testing puzzle modification")
+        """Test puzzle modification functionality."""
+        self.logger.log_operation("Starting puzzle modification test")
         
-        # Get all rounds and puzzles first
-        try:
-            response = requests.get(f"{self.base_url}/rounds")
-            if not response.ok:
-                result.fail("Failed to fetch rounds")
-                return
-            self.rounds = response.json()["rounds"]
-            self.logger.log_operation(f"Found {len(self.rounds)} rounds")
-            
-            # Get puzzles with their full details
-            self.puzzles = []
-            response = requests.get(f"{self.base_url}/puzzles")
-            if not response.ok:
-                result.fail("Failed to fetch puzzles")
-                return
-            
-            # For each puzzle, get its full details
-            for puzzle in response.json()["puzzles"]:
-                puzzle_details = self.get_puzzle_details(puzzle["id"])
-                if puzzle_details:
-                    self.puzzles.append(puzzle_details)
-                else:
-                    self.logger.log_warning(f"Could not get details for puzzle {puzzle['id']}")
-            
-            self.logger.log_operation(f"Found {len(self.puzzles)} puzzles with full details")
-            
-            # Debug: Print first puzzle's structure
-            if self.puzzles:
-                first_puzzle = self.puzzles[0]
-                self.logger.log_operation(f"First puzzle structure: {first_puzzle}")
-                self.logger.log_operation(f"First puzzle round_id: {first_puzzle.get('round_id')}")
-                self.logger.log_operation(f"First puzzle keys: {list(first_puzzle.keys())}")
-            
-            if not self.rounds or not self.puzzles:
-                result.fail("No rounds or puzzles found for testing")
-                return
-            
-        except Exception as e:
-            result.fail(f"Error fetching test data: {str(e)}")
+        # Get all puzzles
+        puzzles = self.get_all_puzzles()
+        if not puzzles:
+            result.fail("Failed to get puzzles")
             return
-        
-        # Select 2 random puzzles from each round for testing
-        test_puzzles = []
-        for round_data in self.rounds:
-            round_puzzles = [p for p in self.puzzles if str(p["round_id"]) == str(round_data["id"])]
-            if len(round_puzzles) < 2:
-                self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
-                continue
-            selected_puzzles = random.sample(round_puzzles, 2)
-            test_puzzles.extend(selected_puzzles)
-            self.logger.log_operation(f"Selected puzzles from round {round_data['name']}: {', '.join(p['name'] for p in selected_puzzles)}")
-        
-        if not test_puzzles:
+            
+        # Get full puzzle details for each puzzle
+        detailed_puzzles = []
+        for puzzle in puzzles:
+            puzzle_details = self.get_puzzle_details(puzzle['id'])
+            if puzzle_details:
+                detailed_puzzles.append(puzzle_details)
+            
+        if not detailed_puzzles:
+            result.fail("Failed to get puzzle details")
+            return
+            
+        # Group puzzles by round
+        puzzles_by_round = {}
+        for puzzle in detailed_puzzles:
+            round_id = str(puzzle.get('round_id', ''))
+            if round_id:
+                if round_id not in puzzles_by_round:
+                    puzzles_by_round[round_id] = []
+                puzzles_by_round[round_id].append(puzzle)
+                
+        # For each round, select up to 2 random puzzles
+        selected_puzzles = []
+        for round_id, round_puzzles in puzzles_by_round.items():
+            num_to_select = min(2, len(round_puzzles))
+            if num_to_select > 0:
+                selected = random.sample(round_puzzles, num_to_select)
+                selected_puzzles.extend(selected)
+                
+        if not selected_puzzles:
             result.fail("No puzzles available for testing")
             return
-        
-        # Test modifications on each puzzle
-        for puzzle in test_puzzles:
-            self.logger.log_operation(f"\nTesting modifications for puzzle {puzzle['name']}")
+            
+        # For each selected puzzle, test modifications
+        for puzzle in selected_puzzles:
+            self.logger.log_operation(f"Testing modifications for puzzle {puzzle['name']}")
             
             # Test status update
             new_status = "Being worked"
@@ -517,29 +499,30 @@ class TestRunner:
             if not self.update_puzzle(puzzle["id"], "status", new_status):
                 result.fail(f"Failed to update status for puzzle {puzzle['name']}")
                 continue
-            
+                
             # Verify status update
             updated_puzzle = self.get_puzzle_details(puzzle["id"])
             if not updated_puzzle:
                 result.fail(f"Failed to verify status update for puzzle {puzzle['name']}")
                 continue
+                
             if updated_puzzle["status"] != new_status:
-                result.fail(f"Status update verification failed for puzzle {puzzle['name']}")
+                result.fail(f"Status not updated for puzzle {puzzle['name']}")
                 continue
-            
-            # Test solving the puzzle by setting answer
-            answer = f"ANSWER_{puzzle['name']}"
-            self.logger.log_operation(f"Solving puzzle with answer '{answer}'")
+                
+            # Test answer update
+            answer = "TESTANSWER"
+            self.logger.log_operation(f"Updating answer to '{answer}'")
             if not self.update_puzzle(puzzle["id"], "answer", answer):
-                result.fail(f"Failed to set answer for puzzle {puzzle['name']}")
+                result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
                 continue
-            
+                
             # Verify puzzle is solved
             updated_puzzle = self.get_puzzle_details(puzzle["id"])
             if not updated_puzzle:
                 result.fail(f"Failed to verify puzzle solve for puzzle {puzzle['name']}")
                 continue
-            
+                
             # Convert both to uppercase for comparison
             expected_upper = answer.upper()
             actual_upper = updated_puzzle.get('answer', '').upper()
@@ -558,26 +541,25 @@ class TestRunner:
             if updated_puzzle["status"] != "Solved":
                 result.fail(f"Status not automatically set to 'Solved' for puzzle {puzzle['name']}")
                 continue
-            
+                
             # Test comments update
             new_comments = f"Test comments for {puzzle['name']}"
             self.logger.log_operation(f"Updating comments to '{new_comments}'")
             if not self.update_puzzle(puzzle["id"], "comments", new_comments):
                 result.fail(f"Failed to update comments for puzzle {puzzle['name']}")
                 continue
-            
+                
             # Verify comments update
             updated_puzzle = self.get_puzzle_details(puzzle["id"])
             if not updated_puzzle:
                 result.fail(f"Failed to verify comments update for puzzle {puzzle['name']}")
                 continue
+                
             if updated_puzzle["comments"] != new_comments:
-                result.fail(f"Comments update verification failed for puzzle {puzzle['name']}")
+                result.fail(f"Comments not updated for puzzle {puzzle['name']}")
                 continue
-            
-            self.logger.log_operation(f"All modifications successful for puzzle {puzzle['name']}")
-        
-        result.set_success("All puzzle modifications completed successfully")
+                
+        result.set_success("Puzzle modification test completed successfully")
 
     def test_solver_assignments(self, result: TestResult):
         """Test solver assignment functionality."""
@@ -591,6 +573,8 @@ class TestRunner:
             result.fail("Failed to get solvers or puzzles")
             return
             
+        self.logger.log_operation(f"Found {len(solvers)} solvers and {len(puzzles)} puzzles")
+        
         # Get full puzzle details for each puzzle
         detailed_puzzles = []
         for puzzle in puzzles:
@@ -605,34 +589,32 @@ class TestRunner:
         # Group puzzles by round
         puzzles_by_round = {}
         for puzzle in detailed_puzzles:
-            round_id = str(puzzle.get('round_id', ''))  # Convert to string for consistent comparison
+            round_id = str(puzzle.get('round_id', ''))
             if round_id:
                 if round_id not in puzzles_by_round:
                     puzzles_by_round[round_id] = []
                 puzzles_by_round[round_id].append(puzzle)
                 
         self.logger.log_operation(f"Found {len(puzzles_by_round)} rounds with puzzles")
-        for round_id, round_puzzles in puzzles_by_round.items():
-            self.logger.log_operation(f"Round {round_id}: {len(round_puzzles)} puzzles")
-                
-        # For each round, select up to 3 random puzzles (2 for assignment, 1 for history)
+        
+        # For each round, select up to 3 random puzzles
         selected_puzzles = []
         history_puzzles = []
         for round_id, round_puzzles in puzzles_by_round.items():
             num_to_select = min(3, len(round_puzzles))
             if num_to_select > 0:
                 selected = random.sample(round_puzzles, num_to_select)
-                selected_puzzles.extend(selected[:2])  # First 2 for assignment
+                selected_puzzles.extend(selected[:2])  # First 2 for assignment testing
                 if num_to_select > 2:
-                    history_puzzles.extend(selected[2:])  # Remaining for history
-                self.logger.log_operation(f"Selected {num_to_select} puzzles from round {round_id}")
+                    history_puzzles.extend(selected[2:])  # Third for history testing
                 
         if not selected_puzzles:
             result.fail("No puzzles available for testing")
             return
             
         self.logger.log_operation(f"Selected {len(selected_puzzles)} puzzles for assignment testing")
-        self.logger.log_operation(f"Selected {len(history_puzzles)} puzzles for history testing")
+        if history_puzzles:
+            self.logger.log_operation(f"Selected {len(history_puzzles)} puzzles for history testing")
             
         # For each selected puzzle, assign 2 random solvers
         for puzzle in selected_puzzles:
@@ -653,54 +635,52 @@ class TestRunner:
                     result.fail(f"Failed to assign solver {solver['name']} to puzzle {puzzle['name']}")
                     continue
                     
-                # Verify assignment by checking solver details
+                # Verify assignment
                 solver_details = self.get_solver_details(solver['id'])
                 if not solver_details:
                     result.fail(f"Failed to get solver details for {solver['name']}")
                     continue
                     
-                # Check if the solver's current puzzle matches what we just assigned
                 if solver_details.get('puzz') != puzzle['name']:
-                    result.fail(f"Solver {solver['name']} not assigned to puzzle {puzzle['name']}")
+                    result.fail(f"Solver {solver['name']} not properly assigned to puzzle {puzzle['name']}")
                     continue
                     
                 # Test history operations with a different puzzle
                 if history_puzzles:
                     history_puzzle = random.choice(history_puzzles)
-                    self.logger.log_operation(f"Testing history operations with puzzle {history_puzzle['name']}")
-                    
-                    # Add to history
-                    if not self.add_solver_to_history(history_puzzle['id'], solver['id']):
-                        result.fail(f"Failed to add solver {solver['name']} to history for puzzle {history_puzzle['name']}")
-                        continue
+                    if history_puzzle['id'] != puzzle['id']:  # Ensure it's a different puzzle
+                        self.logger.log_operation(f"Testing history operations with puzzle {history_puzzle['name']}")
                         
-                    # Verify history
-                    puzzle_details = self.get_puzzle_details(history_puzzle['id'])
-                    if not puzzle_details:
-                        result.fail(f"Failed to get puzzle details for {history_puzzle['name']}")
-                        continue
-                        
-                    history_solvers = puzzle_details.get('solvers', '').split(',') if puzzle_details.get('solvers') else []
-                    if solver['name'] not in history_solvers:
-                        result.fail(f"Solver {solver['name']} not found in history solvers list")
-                        continue
-                        
-                    # Remove from history
-                    if not self.remove_solver_from_history(history_puzzle['id'], solver['id']):
-                        result.fail(f"Failed to remove solver {solver['name']} from history for puzzle {history_puzzle['name']}")
-                        continue
-                        
-                    # Verify removal
-                    puzzle_details = self.get_puzzle_details(history_puzzle['id'])
-                    if not puzzle_details:
-                        result.fail(f"Failed to get puzzle details for {history_puzzle['name']}")
-                        continue
-                        
-                    history_solvers = puzzle_details.get('solvers', '').split(',') if puzzle_details.get('solvers') else []
-                    if solver['name'] in history_solvers:
-                        result.fail(f"Solver {solver['name']} still found in history solvers list after removal")
-                        continue
-                    
+                        # Add to history
+                        if not self.add_solver_to_history(history_puzzle['id'], solver['id']):
+                            result.fail(f"Failed to add solver {solver['name']} to history for puzzle {history_puzzle['name']}")
+                            continue
+                            
+                        # Verify history addition
+                        puzzle_details = self.get_puzzle_details(history_puzzle['id'])
+                        if not puzzle_details:
+                            result.fail(f"Failed to get puzzle details for {history_puzzle['name']}")
+                            continue
+                            
+                        if solver['name'] not in puzzle_details.get('solvers', ''):
+                            result.fail(f"Solver {solver['name']} not found in history for puzzle {history_puzzle['name']}")
+                            continue
+                            
+                        # Remove from history
+                        if not self.remove_solver_from_history(history_puzzle['id'], solver['id']):
+                            result.fail(f"Failed to remove solver {solver['name']} from history for puzzle {history_puzzle['name']}")
+                            continue
+                            
+                        # Verify history removal
+                        puzzle_details = self.get_puzzle_details(history_puzzle['id'])
+                        if not puzzle_details:
+                            result.fail(f"Failed to get puzzle details for {history_puzzle['name']}")
+                            continue
+                            
+                        if solver['name'] in puzzle_details.get('solvers', ''):
+                            result.fail(f"Solver {solver['name']} still found in history for puzzle {history_puzzle['name']}")
+                            continue
+                            
         result.set_success("Solver assignments test completed successfully")
 
     def test_activity_tracking(self, result: TestResult):
