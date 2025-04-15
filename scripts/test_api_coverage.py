@@ -478,11 +478,11 @@ class TestRunner:
                 rounds.append(round_data)
                 
             # Create 4 puzzles in each round
-            for round_data in rounds:
+            for round_idx, round_data in enumerate(rounds):
                 self.logger.log_operation(f"Creating puzzles for round {round_data['name']}")
                 puzzles = []
-                for i in range(4):
-                    puzzle_name = f"Test Puzzle {int(time.time()) + i}"
+                for puzzle_idx in range(4):
+                    puzzle_name = f"Test Puzzle R{round_idx+1}P{puzzle_idx+1} {int(time.time())}"
                     puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
                     if not puzzle_data:
                         result.fail(f"Failed to create puzzle {puzzle_name}")
