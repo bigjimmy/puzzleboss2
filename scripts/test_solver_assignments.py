@@ -94,9 +94,11 @@ def get_puzzle_solver_history(puzzle_id: str) -> List[str]:
 
 def verify_answer(puzzle_id: str, answer: str) -> bool:
     """Verify a puzzle answer."""
-    print(f"\nDEBUG - Verifying answer for puzzle {puzzle_id}")
+    print("\n" + "="*50)
+    print(f"DEBUG - Verifying answer for puzzle {puzzle_id}")
     print(f"DEBUG - Answer to verify: {answer}")
     try:
+        print(f"DEBUG - Making request to {BASE_URL}/puzzles/{puzzle_id}/answer")
         response = requests.post(
             f"{BASE_URL}/puzzles/{puzzle_id}/answer",
             json={"answer": answer}
@@ -104,19 +106,20 @@ def verify_answer(puzzle_id: str, answer: str) -> bool:
         print(f"DEBUG - Response status: {response.status_code}")
         print(f"DEBUG - Response body: {response.text}")
         if not response.ok:
-            print(f"Error verifying answer: {response.text}")
+            print(f"DEBUG - Error verifying answer: {response.text}")
             return False
             
         result = response.json()
         print(f"DEBUG - Parsed response: {result}")
         if result.get("status") != "ok":
-            print(f"Answer verification failed for puzzle {puzzle_id}:")
-            print(f"  Expected status: 'ok'")
-            print(f"  Actual status: '{result.get('status')}'")
-            print(f"  Error message: {result.get('error', 'No error message')}")
-            print(f"  Submitted answer: '{answer}'")
+            print(f"DEBUG - Answer verification failed for puzzle {puzzle_id}:")
+            print(f"DEBUG -   Expected status: 'ok'")
+            print(f"DEBUG -   Actual status: '{result.get('status')}'")
+            print(f"DEBUG -   Error message: {result.get('error', 'No error message')}")
+            print(f"DEBUG -   Submitted answer: '{answer}'")
             return False
             
+        print("DEBUG - Answer verification successful!")
         return True
     except Exception as e:
         print(f"DEBUG - Exception during answer verification: {str(e)}")
