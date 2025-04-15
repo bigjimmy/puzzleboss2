@@ -142,7 +142,12 @@ def main():
                 
             target_puzzle = random.choice(available_puzzles)
             
-            # Assign solver to the new puzzle
+            # Print debug info before assignment
+            print(f"\nDEBUG - Assignment attempt:")
+            print(f"  Solver: {solver['name']} (ID: {solver['id']})")
+            print(f"  Puzzle: {target_puzzle['name']} (ID: {target_puzzle['id']})")
+            
+            # Assign solver to the new puzzle - NOTE: parameters are in correct order here
             if assign_solver_to_puzzle(target_puzzle["id"], solver["id"]):
                 # Update history count for the puzzle
                 history = get_puzzle_solver_history(target_puzzle["id"])
