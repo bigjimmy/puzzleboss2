@@ -600,129 +600,104 @@ class TestRunner:
         result.set_success("All puzzle modifications completed successfully")
 
     def test_solver_assignments(self, result: TestResult):
-        """Test solver assignment functionality"""
-        self.logger.log_operation("Testing solver assignments")
+        """Test solver assignment functionality."""
+        self.logger.log_operation("Starting solver assignments test")
         
-        # Get all solvers and puzzles first
-        try:
-            response = requests.get(f"{self.base_url}/solvers")
-            if not response.ok:
-                result.fail("Failed to fetch solvers")
-                return
-            self.solvers = response.json()["solvers"]
-            self.logger.log_operation(f"Found {len(self.solvers)} solvers")
-            
-            # Get puzzles with their full details
-            self.puzzles = []
-            response = requests.get(f"{self.base_url}/puzzles")
-            if not response.ok:
-                result.fail("Failed to fetch puzzles")
-                return
-            
-            # For each puzzle, get its full details
-            for puzzle in response.json()["puzzles"]:
-                puzzle_details = self.get_puzzle_details(puzzle["id"])
-                if puzzle_details:
-                    self.puzzles.append(puzzle_details)
-                else:
-                    self.logger.log_warning(f"Could not get details for puzzle {puzzle['id']}")
-            
-            self.logger.log_operation(f"Found {len(self.puzzles)} puzzles with full details")
-            
-            # Debug: Print first puzzle's structure
-            if self.puzzles:
-                first_puzzle = self.puzzles[0]
-                self.logger.log_operation(f"First puzzle structure: {first_puzzle}")
-                self.logger.log_operation(f"First puzzle round_id: {first_puzzle.get('round_id')}")
-                self.logger.log_operation(f"First puzzle keys: {list(first_puzzle.keys())}")
-            
-            if not self.solvers or not self.puzzles:
-                result.fail("No solvers or puzzles found for testing")
-                return
-            
-            # Select 2 random solvers for testing
-            if len(self.solvers) < 2:
-                result.fail("Not enough solvers for testing (need at least 2)")
-                return
-            test_solvers = random.sample(self.solvers, 2)
-            self.logger.log_operation(f"Selected test solvers: {', '.join(s['name'] for s in test_solvers)}")
-            
-            # Verify solver details before proceeding
-            for solver in test_solvers:
-                solver_details = self.get_solver_details(solver["id"])
-                if not solver_details:
-                    result.fail(f"Failed to get details for solver {solver['name']} (ID: {solver['id']})")
-                    return
-                self.logger.log_operation(f"Solver {solver['name']} details: {solver_details}")
-            
-            # Select 2 random puzzles from each round for testing
-            test_puzzles = []
-            for round_data in self.rounds:
-                round_puzzles = [p for p in self.puzzles if str(p["round_id"]) == str(round_data["id"])]
-                if len(round_puzzles) < 2:
-                    self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
-                    continue
-                selected_puzzles = random.sample(round_puzzles, 2)
-                test_puzzles.extend(selected_puzzles)
-                self.logger.log_operation(f"Selected puzzles from round {round_data['name']}: {', '.join(p['name'] for p in selected_puzzles)}")
-            
-            if not test_puzzles:
-                result.fail("No puzzles available for testing")
-                return
-            
-            # Test assignments for each puzzle
-            for puzzle in test_puzzles:
-                self.logger.log_operation(f"\nTesting assignments for puzzle {puzzle['name']}")
-                
-                # Assign first solver
-                solver1 = test_solvers[0]
-                self.logger.log_operation(f"Assigning solver {solver1['name']} (ID: {solver1['id']}) to puzzle {puzzle['name']} (ID: {puzzle['id']})")
-                if not self.assign_solver_to_puzzle(solver1["id"], puzzle["id"]):
-                    result.fail(f"Failed to assign solver {solver1['name']} to puzzle {puzzle['name']}")
-                    continue
-                
-                # Verify assignment
-                updated_puzzle = self.get_puzzle_details(puzzle["id"])
-                if not updated_puzzle:
-                    result.fail(f"Failed to verify solver assignment for puzzle {puzzle['name']}")
-                    continue
-                if updated_puzzle["solver"] != solver1["name"]:
-                    result.fail(f"Solver assignment verification failed for puzzle {puzzle['name']}")
-                    continue
-                
-                # Assign second solver
-                solver2 = test_solvers[1]
-                self.logger.log_operation(f"Assigning solver {solver2['name']} (ID: {solver2['id']}) to puzzle {puzzle['name']} (ID: {puzzle['id']})")
-                if not self.assign_solver_to_puzzle(puzzle["id"], solver2["id"]):
-                    result.fail(f"Failed to assign solver {solver2['name']} to puzzle {puzzle['name']}")
-                    continue
-                
-                # Verify assignment
-                updated_puzzle = self.get_puzzle_details(puzzle["id"])
-                if not updated_puzzle:
-                    result.fail(f"Failed to verify solver assignment for puzzle {puzzle['name']}")
-                    continue
-                if updated_puzzle["solver"] != solver2["name"]:
-                    result.fail(f"Solver assignment verification failed for puzzle {puzzle['name']}")
-                    continue
-                
-                # Verify solver history
-                solver_details = self.get_solver_details(solver2["id"])
-                if not solver_details:
-                    result.fail(f"Failed to get solver details for {solver2['name']}")
-                    continue
-                
-                if puzzle["name"] not in solver_details.get("puzzles", []):
-                    result.fail(f"Puzzle {puzzle['name']} not found in solver {solver2['name']}'s history")
-                    continue
-                
-                self.logger.log_operation(f"All assignments successful for puzzle {puzzle['name']}")
-            
-            result.set_success("All solver assignments completed successfully")
-            
-        except Exception as e:
-            result.fail(f"Error in solver assignments test: {str(e)}")
+        # Get all solvers and puzzles
+        solvers = self.get_all_solvers()
+        puzzles = self.get_all_puzzles()
+        
+        if not solvers or not puzzles:
+            result.fail("Failed to get solvers or puzzles")
             return
+            
+        # Group puzzles by round
+        puzzles_by_round = {}
+        for puzzle in puzzles:
+            round_id = puzzle.get('round_id')
+            if round_id:
+                if round_id not in puzzles_by_round:
+                    puzzles_by_round[round_id] = []
+                puzzles_by_round[round_id].append(puzzle)
+                
+        # For each round, select 2 random puzzles
+        selected_puzzles = []
+        for round_id, round_puzzles in puzzles_by_round.items():
+            if len(round_puzzles) >= 2:
+                selected_puzzles.extend(random.sample(round_puzzles, 2))
+                
+        if not selected_puzzles:
+            result.fail("No puzzles available for testing")
+            return
+            
+        # For each selected puzzle, assign 2 random solvers
+        for puzzle in selected_puzzles:
+            self.logger.log_operation(f"Testing assignments for puzzle {puzzle['name']}")
+            
+            # Select 2 random solvers
+            if len(solvers) < 2:
+                result.fail("Not enough solvers available for testing")
+                continue
+                
+            selected_solvers = random.sample(solvers, 2)
+            
+            for solver in selected_solvers:
+                self.logger.log_operation(f"Assigning solver {solver['name']} (ID: {solver['id']}) to puzzle {puzzle['name']} (ID: {puzzle['id']})")
+                
+                # Assign solver to puzzle
+                if not self.assign_solver_to_puzzle(solver['id'], puzzle['id']):
+                    result.fail(f"Failed to assign solver {solver['name']} to puzzle {puzzle['name']}")
+                    continue
+                    
+                # Verify assignment by checking solver details
+                solver_details = self.get_solver_details(solver['id'])
+                if not solver_details:
+                    result.fail(f"Failed to get solver details for {solver['name']}")
+                    continue
+                    
+                # Check if the solver's current puzzle matches what we just assigned
+                if str(solver_details.get('puzz')) != str(puzzle['id']):
+                    self.logger.log_error(f"DEBUG - Solver details: {solver_details}")
+                    self.logger.log_error(f"DEBUG - Expected puzzle: {puzzle['id']}")
+                    result.fail(f"Solver {solver['name']} not assigned to puzzle {puzzle['name']}")
+                    continue
+                    
+                # Add to history
+                if not self.add_solver_to_history(puzzle['id'], solver['id']):
+                    result.fail(f"Failed to add solver {solver['name']} to history for puzzle {puzzle['name']}")
+                    continue
+                    
+                # Verify history
+                puzzle_details = self.get_puzzle_details(puzzle['id'])
+                if not puzzle_details:
+                    result.fail(f"Failed to get puzzle details for {puzzle['name']}")
+                    continue
+                    
+                history_solvers = puzzle_details.get('solvers', '').split(',') if puzzle_details.get('solvers') else []
+                if solver['name'] not in history_solvers:
+                    self.logger.log_error(f"DEBUG - Puzzle details: {puzzle_details}")
+                    self.logger.log_error(f"DEBUG - History solvers: {history_solvers}")
+                    result.fail(f"Solver {solver['name']} not found in history solvers list")
+                    continue
+                    
+                # Remove from history
+                if not self.remove_solver_from_history(puzzle['id'], solver['id']):
+                    result.fail(f"Failed to remove solver {solver['name']} from history for puzzle {puzzle['name']}")
+                    continue
+                    
+                # Verify removal
+                puzzle_details = self.get_puzzle_details(puzzle['id'])
+                if not puzzle_details:
+                    result.fail(f"Failed to get puzzle details for {puzzle['name']}")
+                    continue
+                    
+                history_solvers = puzzle_details.get('solvers', '').split(',') if puzzle_details.get('solvers') else []
+                if solver['name'] in history_solvers:
+                    self.logger.log_error(f"DEBUG - Puzzle details after removal: {puzzle_details}")
+                    result.fail(f"Solver {solver['name']} still found in history solvers list after removal")
+                    continue
+                    
+        result.set_success("Solver assignments test completed successfully")
 
     def test_activity_tracking(self, result: TestResult):
         # Select 2 random puzzles from each round for testing
