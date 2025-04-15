@@ -916,7 +916,7 @@ class TestRunner:
     def is_round_complete(self, round_id: int) -> bool:
         """Check if a round is complete by making an API call to check round completion."""
         try:
-            response = requests.get(f"{self.base_url}/rounds/{round_id}/check_completion")
+            response = requests.get(f"{self.base_url}/rounds/{round_id}/status")
             if response.ok:
                 return response.json().get('complete', False)
             return False
@@ -1019,11 +1019,19 @@ class TestRunner:
                 result.fail(f"Failed to get details for puzzle {puzzle1['name']}")
                 return
                 
+            # Check puzzle's current solvers
             current_solvers = puzzle1_details.get('cursolvers', '').split(',')
             if solver1['name'] not in current_solvers or solver2['name'] not in current_solvers:
                 result.fail(f"Solvers not properly assigned to puzzle {puzzle1['name']}")
                 return
                 
+            # Check solvers' current puzzles
+            for solver in [solver1, solver2]:
+                solver_details = self.get_solver_details(solver['id'])
+                if solver_details.get('puzz') != puzzle1['name']:
+                    result.fail(f"Solver {solver['name']} not properly assigned to puzzle {puzzle1['name']}")
+                    return
+                    
             # Reassign first solver to second puzzle
             if not self.update_solver_puzzle(solver1['id'], puzzle2['id']):
                 result.fail(f"Failed to reassign solver {solver1['name']} to puzzle {puzzle2['name']}")
@@ -1032,34 +1040,58 @@ class TestRunner:
             # Verify reassignment
             puzzle1_details = self.get_puzzle_details(puzzle1['id'])
             puzzle2_details = self.get_puzzle_details(puzzle2['id'])
+            solver1_details = self.get_solver_details(solver1['id'])
             
-            if not puzzle1_details or not puzzle2_details:
-                result.fail("Failed to get puzzle details after reassignment")
+            if not puzzle1_details or not puzzle2_details or not solver1_details:
+                result.fail("Failed to get details after reassignment")
                 return
                 
             # Check solver is no longer assigned to old puzzle
             current_solvers = puzzle1_details.get('cursolvers', '').split(',')
+            self.logger.log_operation(f"Checking solver {solver1['name']} is no longer in old puzzle's cursolvers: {current_solvers}")
             if solver1['name'] in current_solvers:
                 result.fail(f"Solver {solver1['name']} still assigned to old puzzle {puzzle1['name']}")
                 return
+            self.logger.log_operation(f"Confirmed solver {solver1['name']} is no longer assigned to puzzle {puzzle1['name']}")
                 
             # Check solver is assigned to new puzzle
             current_solvers = puzzle2_details.get('cursolvers', '').split(',')
+            self.logger.log_operation(f"Checking solver {solver1['name']} is in new puzzle's cursolvers: {current_solvers}")
             if solver1['name'] not in current_solvers:
                 result.fail(f"Solver {solver1['name']} not assigned to new puzzle {puzzle2['name']}")
                 return
+            self.logger.log_operation(f"Confirmed solver {solver1['name']} is now assigned to puzzle {puzzle2['name']}")
+                
+            # Check solver's current puzzle is updated
+            self.logger.log_operation(f"Checking solver {solver1['name']}'s puzz field is updated to {puzzle2['name']}")
+            if solver1_details.get('puzz') != puzzle2['name']:
+                result.fail(f"Solver {solver1['name']} not properly reassigned to puzzle {puzzle2['name']}")
+                return
+            self.logger.log_operation(f"Confirmed solver {solver1['name']}'s puzz field is updated to {puzzle2['name']}")
                 
             # Check solver is in historical solvers list for old puzzle
             historical_solvers = puzzle1_details.get('solvers', '').split(',')
+            self.logger.log_operation(f"Checking solver {solver1['name']} is in old puzzle's historical solvers: {historical_solvers}")
             if solver1['name'] not in historical_solvers:
                 result.fail(f"Solver {solver1['name']} not in historical solvers list for puzzle {puzzle1['name']}")
                 return
+            self.logger.log_operation(f"Confirmed solver {solver1['name']} is in historical solvers list for puzzle {puzzle1['name']}")
                 
             # Verify second solver is still assigned to first puzzle
             current_solvers = puzzle1_details.get('cursolvers', '').split(',')
+            self.logger.log_operation(f"Checking solver {solver2['name']} is still in puzzle {puzzle1['name']}'s cursolvers: {current_solvers}")
             if solver2['name'] not in current_solvers:
                 result.fail(f"Solver {solver2['name']} no longer assigned to puzzle {puzzle1['name']}")
                 return
+            self.logger.log_operation(f"Confirmed solver {solver2['name']} is still assigned to puzzle {puzzle1['name']}")
+                
+            # Verify second solver's current puzzle is unchanged
+            solver2_details = self.get_solver_details(solver2['id'])
+            self.logger.log_operation(f"Checking solver {solver2['name']}'s puzz field is still {puzzle1['name']}")
+            if solver2_details.get('puzz') != puzzle1['name']:
+                result.fail(f"Solver {solver2['name']} no longer properly assigned to puzzle {puzzle1['name']}")
+                return
+            self.logger.log_operation(f"Confirmed solver {solver2['name']}'s puzz field is still {puzzle1['name']}")
                 
             result.set_success("Solver reassignment test completed successfully")
             
