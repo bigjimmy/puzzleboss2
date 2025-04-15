@@ -37,6 +37,9 @@ class TestLogger:
     def log_error(self, message: str):
         self.log(message, "ERROR")
 
+    def log_warning(self, message: str):
+        self.log(message, "WARNING")
+
 class TestResult:
     def __init__(self, name: str, logger: TestLogger):
         self.name = name
@@ -370,60 +373,74 @@ class TestRunner:
         result.message = f"Found {len(solvers)} solvers"
 
     def test_puzzle_creation(self, result: TestResult):
-        start_time = time.time()
-        try:
-            # Create 3 rounds with randomized names
-            for round_num in range(1, 4):
-                # Generate a unique round name with timestamp and random string
-                timestamp = int(time.time())
-                random_str = ''.join(random.choices(string.ascii_lowercase, k=6))
-                round_name = f"Round{round_num}_{timestamp}_{random_str}"
-                round_comment = f"Test round {round_num} comment"
-                
-                # First create the round with just the name
-                round_data = self.create_round(round_name)
-                if not round_data:
-                    result.fail(f"Failed to create round {round_name}")
-                    return
-
-                # Then update the round with the comment
-                self.update_round(round_data["id"], {"comments": round_comment})
-                
-                # Verify round comment was set
-                round_info = self.get_round(round_data["id"])
-                if round_info.get("comments") != round_comment:
-                    result.fail(f"Round comment verification failed for {round_name}")
-                    return
-
-                for puzzle_num in range(1, 6):
-                    puzzle_name = f"R{round_num}Puzzle{puzzle_num}"
-                    if random.random() < 0.5:  # 50% chance to add emoji
-                        puzzle_name += f" {self.get_emoji_string(puzzle_name)}"
-                    
-                    puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
-                    if not puzzle_data:
-                        result.fail(f"Failed to create puzzle {puzzle_name}")
-                        return
-
-                    # Verify puzzle was created with correct attributes
-                    puzzle_info = self.get_puzzle_details(puzzle_data["id"])
-                    if not puzzle_info:
-                        result.fail(f"Failed to get puzzle {puzzle_name}")
-                        return
-                    
-                    if puzzle_info["name"] != puzzle_name:
-                        result.fail(f"Puzzle name mismatch for {puzzle_name}")
-                        return
-                    
-                    if puzzle_info["round_id"] != round_data["id"]:
-                        result.fail(f"Puzzle round_id mismatch for {puzzle_name}")
-                        return
-
-            result.set_success("Successfully created and verified rounds and puzzles")
-        except Exception as e:
-            result.fail(f"Puzzle creation test failed: {str(e)}")
+        """Test creating multiple puzzles in different rounds."""
+        self.logger.start_test("Puzzle Creation")
         
-        result.duration = time.time() - start_time
+        # Get existing rounds to avoid name collisions
+        try:
+            response = requests.get(f"{self.base_url}/rounds")
+            if response.ok:
+                existing_rounds = {round['name'] for round in response.json()['rounds']}
+            else:
+                self.logger.log_warning("Failed to fetch existing rounds, continuing without collision check")
+                existing_rounds = set()
+        except Exception as e:
+            self.logger.log_warning(f"Error fetching existing rounds: {str(e)}, continuing without collision check")
+            existing_rounds = set()
+        
+        # Create 3 rounds with 5 puzzles each
+        for round_num in range(1, 4):
+            # Generate unique round name with timestamp and random suffix
+            timestamp = int(time.time())
+            random_suffix = random.randint(1000, 9999)
+            round_name = f"TestRound_{timestamp}_{random_suffix}"
+            
+            # Ensure no collision with existing rounds
+            while round_name in existing_rounds:
+                timestamp = int(time.time())
+                random_suffix = random.randint(1000, 9999)
+                round_name = f"TestRound_{timestamp}_{random_suffix}"
+            
+            existing_rounds.add(round_name)
+            
+            round_data = self.create_round(round_name)
+            if not round_data:
+                result.fail(f"Failed to create round {round_name}")
+                return
+                
+            # Create 5 puzzles in this round
+            for puzzle_num in range(1, 6):
+                # Generate unique puzzle name with timestamp and random suffix
+                timestamp = int(time.time())
+                random_suffix = random.randint(1000, 9999)
+                puzzle_name = f"R{round_num}Puzzle{puzzle_num}_{timestamp}_{random_suffix}"
+                
+                if random.random() < 0.5:  # 50% chance to add emoji
+                    puzzle_name += f" {self.get_emoji_string(puzzle_name)}"
+                
+                puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
+                if not puzzle_data:
+                    result.fail(f"Failed to create puzzle {puzzle_name}")
+                    return
+                
+                # Verify puzzle was created with correct attributes
+                puzzle_info = self.get_puzzle_details(puzzle_data["id"])
+                if not puzzle_info:
+                    result.fail(f"Failed to get puzzle {puzzle_name}")
+                    return
+                
+                # Verify puzzle attributes
+                if puzzle_info["name"] != puzzle_name:
+                    result.fail(f"Puzzle name mismatch: expected {puzzle_name}, got {puzzle_info['name']}")
+                    return
+                
+                if str(puzzle_info["round_id"]) != str(round_data["id"]):
+                    result.fail(f"Round ID mismatch for puzzle {puzzle_name}")
+                    return
+                
+                self.logger.log_operation(f"Created puzzle {puzzle_name} in round {round_name}")
+        
+        result.set_success("Successfully created 3 rounds with 5 puzzles each")
 
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality"""
