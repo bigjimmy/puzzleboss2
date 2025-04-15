@@ -916,7 +916,7 @@ class TestRunner:
     def is_round_complete(self, round_id: int) -> bool:
         """Check if a round is complete by making an API call to check round completion."""
         try:
-            response = requests.get(f"{self.base_url}/rounds/{round_id}/status")
+            response = requests.get(f"{self.base_url}/rounds/{round_id}/check_completion")
             if response.ok:
                 return response.json().get('complete', False)
             return False
