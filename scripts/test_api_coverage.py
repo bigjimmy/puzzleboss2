@@ -292,15 +292,43 @@ class TestRunner:
         return True
 
     def assign_solver_to_puzzle(self, solver_id: str, puzzle_id: str) -> bool:
-        self.logger.log_operation(f"Assigning solver {solver_id} to puzzle {puzzle_id}")
-        response = requests.post(
-            f"{BASE_URL}/solvers/{solver_id}/puzz",
-            json={"puzz": puzzle_id}
-        )
-        if not response.ok:
-            raise Exception(f"Failed to assign solver {solver_id} to puzzle {puzzle_id}: {response.text}")
-        self.logger.log_operation(f"Successfully assigned solver {solver_id} to puzzle {puzzle_id}")
-        return True
+        """Assign a solver to a puzzle."""
+        try:
+            self.logger.log_operation(f"Assigning solver {solver_id} to puzzle {puzzle_id}")
+            response = requests.post(
+                f"{self.base_url}/solvers/{solver_id}/puzz",
+                json={"puzz": puzzle_id}
+            )
+            
+            # Log the complete response for debugging
+            self.logger.log_operation(f"Response status: {response.status_code}")
+            self.logger.log_operation(f"Response body: {response.text}")
+            
+            if not response.ok:
+                self.logger.log_error(f"Failed to assign solver. Status: {response.status_code}")
+                self.logger.log_error(f"Response: {response.text}")
+                return False
+                
+            response_data = response.json()
+            if not isinstance(response_data, dict):
+                self.logger.log_error(f"Unexpected response format: {response_data}")
+                return False
+                
+            if 'status' not in response_data:
+                self.logger.log_error(f"Response missing 'status' field: {response_data}")
+                return False
+                
+            if response_data['status'] != 'ok':
+                self.logger.log_error(f"Response status not 'ok': {response_data}")
+                return False
+                
+            self.logger.log_operation("Successfully assigned solver")
+            return True
+            
+        except Exception as e:
+            self.logger.log_error(f"Exception in assign_solver_to_puzzle: {str(e)}")
+            self.logger.log_error(f"Traceback: {traceback.format_exc()}")
+            return False
 
     def add_solver_to_history(self, puzzle_id: str, solver_id: str) -> bool:
         self.logger.log_operation(f"Adding solver {solver_id} to puzzle {puzzle_id} history")
