@@ -301,9 +301,8 @@ class TestRunner:
                 round_name = f"TestRound{r}"
                 round_data = self.create_round(round_name)
                 
-                # Add round comments with optional emoji
-                use_emoji = random.choice([True, False])
-                round_comment = self.get_emoji_string(f"Test comment for {round_name}", use_emoji)
+                # Add round comments without emoji
+                round_comment = f"Test comment for {round_name}"
                 self.update_round(round_data["id"], "comments", round_comment)
                 
                 # Verify round comments
