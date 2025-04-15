@@ -44,21 +44,39 @@ def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
     print(f"  Puzzle ID: {puzzle_id}")
     print(f"  Solver ID: {solver_id}")
     
-    response = requests.post(
-        f"{BASE_URL}/solvers/{solver_id}/puzz",
-        json={"puzz": puzzle_id}
-    )
-    
-    print(f"DEBUG - After API call:")
-    print(f"  Request URL: {BASE_URL}/solvers/{solver_id}/puzz")
-    print(f"  Request Body: {{'puzz': {puzzle_id}}}")
-    print(f"  Response Status: {response.status_code}")
-    print(f"  Response Body: {response.text}")
-    
-    if not response.ok:
-        print(f"Failed to assign solver {solver_id} to puzzle {puzzle_id}: {response.text}")
+    try:
+        response = requests.post(
+            f"{BASE_URL}/solvers/{solver_id}/puzz",
+            json={"puzz": puzzle_id}
+        )
+        
+        print(f"DEBUG - After API call:")
+        print(f"  Request URL: {BASE_URL}/solvers/{solver_id}/puzz")
+        print(f"  Request Body: {{'puzz': {puzzle_id}}}")
+        print(f"  Response Status: {response.status_code}")
+        print(f"  Response Body: {response.text}")
+        
+        if not response.ok:
+            print(f"Failed to assign solver {solver_id} to puzzle {puzzle_id}: {response.text}")
+            return False
+            
+        # Check response structure
+        response_data = response.json()
+        if "status" not in response_data:
+            print(f"Error: Response missing 'status' field: {response_data}")
+            return False
+            
+        if response_data["status"] != "ok":
+            print(f"Error: Response status is not 'ok': {response_data}")
+            return False
+            
+        return True
+        
+    except Exception as e:
+        print(f"Exception during solver assignment: {str(e)}")
+        print(f"  Puzzle ID: {puzzle_id}")
+        print(f"  Solver ID: {solver_id}")
         return False
-    return True
 
 def get_puzzle_solver_history(puzzle_id: str) -> List[str]:
     """Get the solver history for a puzzle."""
