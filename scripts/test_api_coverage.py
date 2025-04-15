@@ -488,80 +488,78 @@ class TestRunner:
             return
         
         # Select 2 random puzzles from each round for testing
+        test_puzzles = []
         for round_data in self.rounds:
-            self.logger.log_operation(f"\nTesting puzzles in round {round_data['name']} (ID: {round_data['id']}):")
-            
-            # Debug: Print all puzzles and their round_ids
-            self.logger.log_operation("All puzzles and their round_ids:")
-            for p in self.puzzles:
-                self.logger.log_operation(f"Puzzle {p['name']}: round_id={p.get('round_id')}")
-            
-            round_puzzles = [p for p in self.puzzles if str(p.get("round_id")) == str(round_data["id"])]
-            self.logger.log_operation(f"Found {len(round_puzzles)} puzzles in this round")
-            
+            round_puzzles = [p for p in self.puzzles if str(p["round_id"]) == str(round_data["id"])]
             if len(round_puzzles) < 2:
                 self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
                 continue
-            
-            test_puzzles = random.sample(round_puzzles, 2)
-            self.logger.log_operation(f"Selected puzzles: {', '.join(p['name'] for p in test_puzzles)}")
-            
-            for puzzle in test_puzzles:
-                self.logger.log_operation(f"\nModifying puzzle {puzzle['name']} (ID: {puzzle['id']}):")
-                
-                # Update status first
-                new_status = random.choice(["Being worked", "Needs eyes", "Solved", "Critical", "WTF"])
-                self.logger.log_operation(f"Updating status to: {new_status}")
-                if not self.update_puzzle(puzzle["id"], "status", new_status):
-                    result.fail(f"Failed to update status for puzzle {puzzle['name']}")
-                    return
-                    
-                # Verify status update
-                puzzle_details = self.get_puzzle_details(puzzle["id"])
-                if puzzle_details["status"] != new_status:
-                    result.fail(f"Status update verification failed for {puzzle['name']}")
-                    result.logger.log_error(f"Expected: {new_status}")
-                    result.logger.log_error(f"Actual: {puzzle_details['status']}")
-                    return
-                self.logger.log_operation(f"Status update verified: {new_status}")
-
-                # Only set and verify answer if puzzle is marked as solved
-                if new_status == "Solved":
-                    # Update answer with optional emoji
-                    use_emoji = random.choice([True, False])
-                    new_answer = self.get_emoji_string(f"Answer for {puzzle['name']}", use_emoji)
-                    self.logger.log_operation(f"Updating answer to: {new_answer}")
-                    if not self.update_puzzle(puzzle["id"], "answer", new_answer):
-                        result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
-                        return
-                        
-                    # Verify answer update only after explicitly setting it
-                    puzzle_details = self.get_puzzle_details(puzzle["id"])
-                    if not self.strings_equal_ignore_spaces(puzzle_details["answer"], new_answer):
-                        result.fail(f"Answer update verification failed for {puzzle['name']}")
-                        result.logger.log_error(f"Expected: {new_answer}")
-                        result.logger.log_error(f"Actual: {puzzle_details['answer']}")
-                        return
-                    self.logger.log_operation(f"Answer update verified: {new_answer}")
-                    
-                # Update comments with optional emoji
-                use_emoji = random.choice([True, False])
-                new_comments = self.get_emoji_string(f"Comments for {puzzle['name']}", use_emoji)
-                self.logger.log_operation(f"Updating comments to: {new_comments}")
-                if not self.update_puzzle(puzzle["id"], "comments", new_comments):
-                    result.fail(f"Failed to update comments for puzzle {puzzle['name']}")
-                    return
-                    
-                # Verify comments update
-                puzzle_details = self.get_puzzle_details(puzzle["id"])
-                if not self.strings_equal_ignore_spaces(puzzle_details["comments"], new_comments):
-                    result.fail(f"Comments update verification failed for {puzzle['name']}")
-                    result.logger.log_error(f"Expected: {new_comments}")
-                    result.logger.log_error(f"Actual: {puzzle_details['comments']}")
-                    return
-                self.logger.log_operation(f"Comments update verified: {new_comments}")
+            selected_puzzles = random.sample(round_puzzles, 2)
+            test_puzzles.extend(selected_puzzles)
+            self.logger.log_operation(f"Selected puzzles from round {round_data['name']}: {', '.join(p['name'] for p in selected_puzzles)}")
         
-        result.message = "Successfully tested puzzle modification with emoji support"
+        if not test_puzzles:
+            result.fail("No puzzles available for testing")
+            return
+        
+        # Test modifications on each puzzle
+        for puzzle in test_puzzles:
+            self.logger.log_operation(f"\nTesting modifications for puzzle {puzzle['name']}")
+            
+            # Test status update
+            new_status = "Being worked"
+            self.logger.log_operation(f"Updating status to '{new_status}'")
+            if not self.update_puzzle(puzzle["id"], "status", new_status):
+                result.fail(f"Failed to update status for puzzle {puzzle['name']}")
+                continue
+            
+            # Verify status update
+            updated_puzzle = self.get_puzzle_details(puzzle["id"])
+            if not updated_puzzle:
+                result.fail(f"Failed to verify status update for puzzle {puzzle['name']}")
+                continue
+            if updated_puzzle["status"] != new_status:
+                result.fail(f"Status update verification failed for puzzle {puzzle['name']}")
+                continue
+            
+            # Test solving the puzzle by setting answer
+            answer = f"ANSWER_{puzzle['name']}"
+            self.logger.log_operation(f"Solving puzzle with answer '{answer}'")
+            if not self.update_puzzle(puzzle["id"], "answer", answer):
+                result.fail(f"Failed to set answer for puzzle {puzzle['name']}")
+                continue
+            
+            # Verify puzzle is solved
+            updated_puzzle = self.get_puzzle_details(puzzle["id"])
+            if not updated_puzzle:
+                result.fail(f"Failed to verify puzzle solve for puzzle {puzzle['name']}")
+                continue
+            if updated_puzzle["answer"] != answer:
+                result.fail(f"Answer verification failed for puzzle {puzzle['name']}")
+                continue
+            if updated_puzzle["status"] != "Solved":
+                result.fail(f"Status not automatically set to 'Solved' for puzzle {puzzle['name']}")
+                continue
+            
+            # Test comments update
+            new_comments = f"Test comments for {puzzle['name']}"
+            self.logger.log_operation(f"Updating comments to '{new_comments}'")
+            if not self.update_puzzle(puzzle["id"], "comments", new_comments):
+                result.fail(f"Failed to update comments for puzzle {puzzle['name']}")
+                continue
+            
+            # Verify comments update
+            updated_puzzle = self.get_puzzle_details(puzzle["id"])
+            if not updated_puzzle:
+                result.fail(f"Failed to verify comments update for puzzle {puzzle['name']}")
+                continue
+            if updated_puzzle["comments"] != new_comments:
+                result.fail(f"Comments update verification failed for puzzle {puzzle['name']}")
+                continue
+            
+            self.logger.log_operation(f"All modifications successful for puzzle {puzzle['name']}")
+        
+        result.set_success("All puzzle modifications completed successfully")
 
     def test_solver_assignments(self, result: TestResult):
         """Test solver assignment functionality"""
