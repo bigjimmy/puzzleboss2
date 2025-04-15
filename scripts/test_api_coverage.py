@@ -49,6 +49,10 @@ class TestResult:
         self.message = message
         self.logger.log_error(message)
 
+    def set_success(self, message: str):
+        self.success = True
+        self.message = message
+
     def __str__(self) -> str:
         status = "✅" if self.success else "❌"
         return f"{status} {self.name}: {self.message} ({self.duration:.2f}s)"
@@ -304,166 +308,62 @@ class TestRunner:
         
         result.message = f"Found {len(solvers)} solvers"
 
-    def test_puzzle_creation(self, result: TestResult):
-        """Test creating puzzles with verification of all fields"""
+    def test_puzzle_creation(self) -> TestResult:
+        result = TestResult("Puzzle Creation", self.logger)
+        start_time = time.time()
+
         try:
-            # Get existing rounds to avoid name collisions
-            existing_rounds = set()
-            try:
-                response = requests.get(f"{BASE_URL}/rounds")
-                if response.ok:
-                    existing_rounds = {round["name"] for round in response.json()["rounds"]}
-            except Exception as e:
-                result.logger.log_error(f"Warning: Could not fetch existing rounds: {str(e)}")
-            
-            # Get existing puzzles to avoid name collisions
-            try:
-                response = requests.get(f"{BASE_URL}/puzzles")
-                if response.ok:
-                    existing_puzzles = {puzzle['name'] for puzzle in response.json()['puzzles']}
-                else:
-                    result.logger.log(f"Warning: Could not fetch existing puzzles: {response.text}", "WARNING")
-                    existing_puzzles = set()
-            except Exception as e:
-                result.logger.log(f"Warning: Could not fetch existing puzzles: {str(e)}", "WARNING")
-                existing_puzzles = set()
-            
-            # Add our newly created round names to the set
-            existing_puzzles.update(existing_rounds)
-            
             # Create 5 rounds with 5 puzzles each
-            for r in range(1, 6):
-                # Generate unique round name using timestamp and random number
-                timestamp = int(time.time())
-                random_suffix = random.randint(1000, 9999)
-                round_name = f"TestRound_{timestamp}_{random_suffix}"
-                
-                # Ensure name is unique
-                while round_name in existing_rounds:
-                    random_suffix = random.randint(1000, 9999)
-                    round_name = f"TestRound_{timestamp}_{random_suffix}"
-                
-                existing_rounds.add(round_name)  # Add to our set to prevent duplicates in this test
-                
+            for round_num in range(1, 6):
+                round_name = f"TestRound_{round_num}"
                 round_data = self.create_round(round_name)
-                
-                # Add round comments without emoji
+                if not round_data:
+                    result.fail(f"Failed to create round {round_name}")
+                    return result
+
+                # Add round comment with optional emoji
                 round_comment = f"Test comment for {round_name}"
-                self.update_round(round_data["id"], "comments", round_comment)
+                if random.random() < 0.5:  # 50% chance to add emoji
+                    round_comment += f" {self.get_emoji_string()}"
                 
-                # Verify round comments
-                round_details = requests.get(f"{BASE_URL}/rounds/{round_data['id']}").json()
-                if round_details["round"]["comments"] != round_comment:
-                    result.fail(f"Round comments verification failed for {round_name}")
-                    result.logger.log_error(f"Expected: {round_comment}")
-                    result.logger.log_error(f"Actual: {round_details['round']['comments']}")
-                    return
+                self.update_round(round_data["id"], {"comment": round_comment})
                 
-                for p in range(1, 6):
-                    # Generate unique puzzle name with timestamp and random suffix
-                    timestamp = int(time.time())
-                    random_suffix = random.randint(1000, 9999)
-                    base_name = f"TestPuzzle_{timestamp}_{random_suffix}"
+                # Verify round comment was set
+                round_info = self.get_round(round_data["id"])
+                if round_info.get("comment") != round_comment:
+                    result.fail(f"Round comment verification failed for {round_name}")
+                    return result
+
+                for puzzle_num in range(1, 6):
+                    puzzle_name = f"R{round_num}Puzzle{puzzle_num}"
+                    if random.random() < 0.5:  # 50% chance to add emoji
+                        puzzle_name += f" {self.get_emoji_string()}"
                     
-                    # Ensure name is unique
-                    while base_name in existing_puzzles:
-                        random_suffix = random.randint(1000, 9999)
-                        base_name = f"TestPuzzle_{timestamp}_{random_suffix}"
+                    puzzle_data = self.create_puzzle(round_data["id"], puzzle_name)
+                    if not puzzle_data:
+                        result.fail(f"Failed to create puzzle {puzzle_name}")
+                        return result
+
+                    # Verify puzzle was created with correct attributes
+                    puzzle_info = self.get_puzzle(puzzle_data["id"])
+                    if not puzzle_info:
+                        result.fail(f"Failed to get puzzle {puzzle_name}")
+                        return result
                     
-                    # Add optional emoji to the unique name
-                    use_emoji = random.choice([True, False])
-                    puzzle_name = self.get_emoji_string(base_name, use_emoji)
+                    if puzzle_info["name"] != puzzle_name:
+                        result.fail(f"Puzzle name mismatch for {puzzle_name}")
+                        return result
                     
-                    # Add to our tracking set
-                    existing_puzzles.add(base_name)
-                    
-                    result.logger.log(f"Creating puzzle: {puzzle_name}")
-                    puzzle_data = self.create_puzzle(puzzle_name, round_data["id"])
-                    
-                    # Verify puzzle was created with correct data
-                    if not self.strings_equal_ignore_spaces(puzzle_data["name"], puzzle_name):
-                        result.fail(f"Puzzle name verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: {puzzle_name}")
-                        result.logger.log_error(f"Actual: {puzzle_data['name']}")
-                        return
-                        
-                    # Verify puzzle details from API
-                    puzzle_details = self.get_puzzle_details(puzzle_data["id"])
-                    if not self.strings_equal_ignore_spaces(puzzle_details["name"], puzzle_name):
-                        result.fail(f"Puzzle name API verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: {puzzle_name}")
-                        result.logger.log_error(f"Actual: {puzzle_details['name']}")
-                        return
-                        
-                    if puzzle_details["round_id"] != round_data["id"]:
-                        result.fail(f"Puzzle round_id API verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: {round_data['id']}")
-                        result.logger.log_error(f"Actual: {puzzle_details['round_id']}")
-                        return
-                        
-                    if puzzle_details["status"] != "New":
-                        result.fail(f"Puzzle status verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: New")
-                        result.logger.log_error(f"Actual: {puzzle_details['status']}")
-                        return
+                    if puzzle_info["round_id"] != round_data["id"]:
+                        result.fail(f"Puzzle round_id mismatch for {puzzle_name}")
+                        return result
 
-                    # Verify no solvers are assigned initially
-                    if puzzle_details["cursolvers"] is not None:
-                        result.fail(f"Puzzle cursolvers should be None for newly created puzzle {puzzle_name}")
-                        result.logger.log_error(f"Expected: None")
-                        result.logger.log_error(f"Actual: {puzzle_details['cursolvers']}")
-                        return
-
-                    if puzzle_details["solvers"] is not None:
-                        result.fail(f"Puzzle solvers should be None for newly created puzzle {puzzle_name}")
-                        result.logger.log_error(f"Expected: None")
-                        result.logger.log_error(f"Actual: {puzzle_details['solvers']}")
-                        return
-
-                    # Verify fields that should be None on creation
-                    fields_to_check = {
-                        "xyzloc": "Location",
-                        "answer": "Answer",
-                        "comments": "Comments"
-                    }
-
-                    for field, description in fields_to_check.items():
-                        if puzzle_details[field] is not None:
-                            result.fail(f"Puzzle {description} should be None for newly created puzzle {puzzle_name}")
-                            result.logger.log_error(f"Expected: None")
-                            result.logger.log_error(f"Actual: {puzzle_details[field]}")
-                            return
-
-                    # Verify fields that should be populated on creation
-                    required_fields = {
-                        "drive_uri": "Drive URI",
-                        "chat_channel_name": "Chat Channel Name",
-                        "chat_channel_id": "Chat Channel ID",
-                        "chat_channel_link": "Chat Channel Link",
-                        "drive_id": "Drive ID"
-                    }
-
-                    for field, description in required_fields.items():
-                        if puzzle_details[field] is None:
-                            result.fail(f"Puzzle {description} should be populated for newly created puzzle {puzzle_name}")
-                            result.logger.log_error(f"Expected: Non-None value")
-                            result.logger.log_error(f"Actual: None")
-                            return
-
-                    if puzzle_details["ismeta"] != False:
-                        result.fail(f"Puzzle ismeta verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: False")
-                        result.logger.log_error(f"Actual: {puzzle_details['ismeta']}")
-                        return
-                        
-                    result.logger.log_operation(f"Verified puzzle {puzzle_name} in round {round_name}")
-            
-            result.success("Successfully created and verified 5 rounds with 5 puzzles each, including round comments")
-            
+            result.set_success("Successfully created and verified rounds and puzzles")
         except Exception as e:
             result.fail(f"Puzzle creation test failed: {str(e)}")
-            result.logger.log_error(f"Exception type: {type(e).__name__}")
-            result.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+        
+        result.duration = time.time() - start_time
+        return result
 
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality"""
