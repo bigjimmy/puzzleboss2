@@ -406,23 +406,24 @@ class TestRunner:
                         result.logger.log_error(f"Expected: New")
                         result.logger.log_error(f"Actual: {puzzle_details['status']}")
                         return
+
+                    # Verify no solvers are assigned initially
+                    if puzzle_details["cursolvers"] is not None:
+                        result.fail(f"Puzzle cursolvers should be None for newly created puzzle {puzzle_name}")
+                        result.logger.log_error(f"Expected: None")
+                        result.logger.log_error(f"Actual: {puzzle_details['cursolvers']}")
+                        return
+
+                    if puzzle_details["solvers"] is not None:
+                        result.fail(f"Puzzle solvers should be None for newly created puzzle {puzzle_name}")
+                        result.logger.log_error(f"Expected: None")
+                        result.logger.log_error(f"Actual: {puzzle_details['solvers']}")
+                        return
                         
                     if puzzle_details["ismeta"] != False:
                         result.fail(f"Puzzle ismeta verification failed for {puzzle_name}")
                         result.logger.log_error(f"Expected: False")
                         result.logger.log_error(f"Actual: {puzzle_details['ismeta']}")
-                        return
-                        
-                    if puzzle_details["solvers"] != "":
-                        result.fail(f"Puzzle solvers verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: (empty string)")
-                        result.logger.log_error(f"Actual: {puzzle_details['solvers']}")
-                        return
-                        
-                    if puzzle_details["cursolvers"] != "":
-                        result.fail(f"Puzzle cursolvers verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: (empty string)")
-                        result.logger.log_error(f"Actual: {puzzle_details['cursolvers']}")
                         return
                         
                     if puzzle_details["xyzloc"] != "":
