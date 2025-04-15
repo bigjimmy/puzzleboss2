@@ -606,6 +606,14 @@ class TestRunner:
             test_solvers = random.sample(self.solvers, 2)
             self.logger.log_operation(f"Selected test solvers: {', '.join(s['name'] for s in test_solvers)}")
             
+            # Verify solver details before proceeding
+            for solver in test_solvers:
+                solver_details = self.get_solver_details(solver["id"])
+                if not solver_details:
+                    result.fail(f"Failed to get details for solver {solver['name']} (ID: {solver['id']})")
+                    return
+                self.logger.log_operation(f"Solver {solver['name']} details: {solver_details}")
+            
             # Select 2 random puzzles from each round for testing
             test_puzzles = []
             for round_data in self.rounds:
@@ -627,7 +635,7 @@ class TestRunner:
                 
                 # Assign first solver
                 solver1 = test_solvers[0]
-                self.logger.log_operation(f"Assigning solver {solver1['name']}")
+                self.logger.log_operation(f"Assigning solver {solver1['name']} (ID: {solver1['id']}) to puzzle {puzzle['name']} (ID: {puzzle['id']})")
                 if not self.assign_solver_to_puzzle(puzzle["id"], solver1["id"]):
                     result.fail(f"Failed to assign solver {solver1['name']} to puzzle {puzzle['name']}")
                     continue
@@ -643,7 +651,7 @@ class TestRunner:
                 
                 # Assign second solver
                 solver2 = test_solvers[1]
-                self.logger.log_operation(f"Assigning solver {solver2['name']}")
+                self.logger.log_operation(f"Assigning solver {solver2['name']} (ID: {solver2['id']}) to puzzle {puzzle['name']} (ID: {puzzle['id']})")
                 if not self.assign_solver_to_puzzle(puzzle["id"], solver2["id"]):
                     result.fail(f"Failed to assign solver {solver2['name']} to puzzle {puzzle['name']}")
                     continue
