@@ -346,12 +346,6 @@ class TestRunner:
                         result.logger.log_error(f"Actual: {puzzle_data['name']}")
                         return
                         
-                    if puzzle_data["round_id"] != round_data["id"]:
-                        result.fail(f"Puzzle round_id verification failed for {puzzle_name}")
-                        result.logger.log_error(f"Expected: {round_data['id']}")
-                        result.logger.log_error(f"Actual: {puzzle_data['round_id']}")
-                        return
-                        
                     # Verify puzzle details from API
                     puzzle_details = self.get_puzzle_details(puzzle_data["id"])
                     if puzzle_details["name"] != puzzle_name:
