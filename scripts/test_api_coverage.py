@@ -248,22 +248,25 @@ class TestRunner:
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
         """Create a new puzzle."""
-        puzzle_data = {
-            "name": name,
-            "round_id": round_id,
-            "puzzle_uri": "http://example.com/puzzle"
-        }
-        
-        response = requests.post(
-            f"{self.base_url}/puzzles",
-            json=puzzle_data
-        )
-        
-        if not response.ok:
-            self.logger.log_error(f"Failed to create puzzle: {response.text}")
+        self.logger.log_operation(f"Creating puzzle: {name}")
+        try:
+            response = requests.post(
+                f"{self.base_url}/puzzles",
+                json={
+                    "name": name,
+                    "round_id": round_id,
+                    "puzzle_uri": "http://example.com/puzzle",
+                    "ismeta": False
+                }
+            )
+            if response.ok:
+                return response.json()['puzzle']
+            else:
+                self.logger.log_error(f"Failed to create puzzle: {response.text}")
+                return None
+        except Exception as e:
+            self.logger.log_error(f"Error creating puzzle: {str(e)}")
             return None
-            
-        return response.json().get("puzzle")
 
     def update_puzzle(self, puzzle_id: str, field: str, value: str) -> bool:
         self.logger.log_operation(f"Updating puzzle {puzzle_id}: {field} = {value}")
