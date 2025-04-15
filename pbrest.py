@@ -298,6 +298,8 @@ def get_one_solver(id):
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from solver_view where id = %s", (id,))
         solver = cursor.fetchone()
+        if solver is None:
+            raise Exception("Solver %s not found in database" % id)
     except IndexError:
         raise Exception("Solver %s not found in database" % id)
     except:

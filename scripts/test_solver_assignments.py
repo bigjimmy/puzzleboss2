@@ -28,11 +28,11 @@ def get_puzzle_details(puzzle_id: str) -> Dict:
         raise Exception(f"Failed to get puzzle {puzzle_id}: {response.text}")
     return response.json()["puzzle"]
 
-def assign_solver_to_puzzle(solver_id: str, puzzle_id: str) -> bool:
+def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
     """Assign a solver to a puzzle."""
     response = requests.post(
-        f"{BASE_URL}/solvers/{solver_id}/puzz",
-        json={"puzz": puzzle_id}
+        f"{BASE_URL}/puzzles/{puzzle_id}/solvers",
+        json={"solver_id": solver_id}
     )
     if not response.ok:
         print(f"Failed to assign solver {solver_id} to puzzle {puzzle_id}: {response.text}")
@@ -81,7 +81,7 @@ def main():
             target_puzzle = random.choice(available_puzzles)
             
             # Assign solver to the new puzzle
-            if assign_solver_to_puzzle(solver["id"], target_puzzle["id"]):
+            if assign_solver_to_puzzle(target_puzzle["id"], solver["id"]):
                 # Update history count for the puzzle
                 history = get_puzzle_solver_history(target_puzzle["id"])
                 puzzle_history_counts[target_puzzle["id"]] = len(history)
