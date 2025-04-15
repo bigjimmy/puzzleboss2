@@ -289,17 +289,38 @@ class TestRunner:
         self.logger.log_operation(f"Successfully removed solver {solver_id} from puzzle {puzzle_id} history")
         return True
 
-    def update_round(self, round_id: str, updates: Dict[str, str]) -> bool:
-        """Update a round's fields"""
-        self.logger.log_operation(f"Updating round {round_id} with {updates}")
-        response = requests.post(
-            f"{self.base_url}/rounds/{round_id}",
-            json=updates
-        )
-        if not response.ok:
-            self.logger.log_error(f"Failed to update round {round_id}: {response.text}")
-            return False
-        return True
+    def update_round(self, round_id: int, updates: Dict) -> Dict:
+        """Update a round with the given updates"""
+        try:
+            self.logger.log_operation(f"Updating round {round_id} with {updates}")
+            for part, value in updates.items():
+                response = requests.post(
+                    f"{BASE_URL}/rounds/{round_id}/{part}",
+                    json={part: value}
+                )
+                
+                if not response.ok:
+                    self.logger.log_error(f"HTTP error updating round {round_id} {part}: {response.status_code}")
+                    self.logger.log_error(f"Response text: {response.text}")
+                    raise Exception(f"HTTP error updating round: {response.status_code} - {response.text}")
+                
+                try:
+                    response_data = response.json()
+                except json.JSONDecodeError as e:
+                    self.logger.log_error(f"Failed to parse JSON response for round {round_id} {part}")
+                    self.logger.log_error(f"Response text: {response.text}")
+                    self.logger.log_error(f"JSON decode error: {str(e)}")
+                    raise Exception(f"JSON decode error: {str(e)}")
+                
+                if "status" not in response_data or response_data["status"] != "ok":
+                    self.logger.log_error(f"Unexpected response format updating round {round_id} {part}")
+                    self.logger.log_error(f"Full response: {response_data}")
+                    raise Exception(f"Unexpected response format: {response_data}")
+            
+            return self.get_round(round_id)
+        except Exception as e:
+            self.logger.log_error(f"Error updating round {round_id}: {str(e)}")
+            raise
 
     def test_solver_listing(self, result: TestResult):
         solvers = self.get_all_solvers()
