@@ -842,8 +842,18 @@ class TestRunner:
             round_data = random.choice(rounds)
             self.logger.log_operation(f"Selected round {round_data['name']} for testing")
             
-            # Get puzzles in this round
-            round_puzzles = [p for p in self.get_all_puzzles() if str(p['round_id']) == str(round_data['id'])]
+            # Get puzzles in this round by fetching full puzzle details
+            self.logger.log_operation("Fetching puzzles with full details")
+            round_puzzles = []
+            for puzzle in self.get_all_puzzles():
+                try:
+                    puzzle_details = self.get_puzzle_details(puzzle['id'])
+                    if str(puzzle_details['round_id']) == str(round_data['id']):
+                        round_puzzles.append(puzzle_details)
+                except Exception as e:
+                    self.logger.log_error(f"Error fetching details for puzzle {puzzle['id']}: {str(e)}")
+                    continue
+                    
             if len(round_puzzles) < 3:
                 result.fail(f"Round {round_data['name']} has fewer than 3 puzzles, cannot test meta functionality")
                 return
@@ -988,33 +998,98 @@ class TestRunner:
                 
         result.set_success("Answer verification test completed successfully")
 
-    def run_all_tests(self):
-        """Run all tests in sequence."""
-        self.logger.start_test("Full Test Suite")
+    def test_solver_reassignment(self, result: TestResult):
+        """Test reassigning solvers from one puzzle to another."""
+        self.logger.log_operation("Starting solver reassignment test")
         
-        # Create initial test data first
-        initial_result = TestResult("Initial Setup", self.logger)
-        self.test_puzzle_creation(initial_result)
-        if not initial_result.success:
-            self.logger.log_error("Initial setup failed, aborting remaining tests")
-            return
+        try:
+            # Get all puzzles and find ones with solvers
+            self.logger.log_operation("Fetching puzzles with solvers")
+            puzzles_with_solvers = []
+            for puzzle in self.get_all_puzzles():
+                try:
+                    puzzle_details = self.get_puzzle_details(puzzle['id'])
+                    if puzzle_details.get('cursolvers'):
+                        puzzles_with_solvers.append(puzzle_details)
+                except Exception as e:
+                    self.logger.log_error(f"Error fetching details for puzzle {puzzle['id']}: {str(e)}")
+                    continue
             
-        # Now run the remaining tests
+            if len(puzzles_with_solvers) < 2:
+                result.fail("Need at least 2 puzzles with solvers to test reassignment")
+                return
+                
+            # Select a subset of puzzles to test with
+            num_to_test = min(3, len(puzzles_with_solvers))
+            test_puzzles = random.sample(puzzles_with_solvers, num_to_test)
+            self.logger.log_operation(f"Selected {num_to_test} puzzles for testing: {', '.join(p['name'] for p in test_puzzles)}")
+            
+            # For each puzzle, get its solvers and reassign them
+            for i, puzzle in enumerate(test_puzzles):
+                if not puzzle.get('cursolvers'):
+                    continue
+                    
+                # Get the solvers for this puzzle
+                solver_ids = [s.strip() for s in puzzle['cursolvers'].split(',') if s.strip()]
+                if not solver_ids:
+                    continue
+                    
+                # Select a different puzzle to reassign to
+                target_puzzle = test_puzzles[(i + 1) % len(test_puzzles)]
+                self.logger.log_operation(f"\nReassigning solvers from {puzzle['name']} to {target_puzzle['name']}")
+                
+                # Reassign each solver
+                for solver_id in solver_ids:
+                    self.logger.log_operation(f"Reassigning solver {solver_id}")
+                    
+                    # Unassign from current puzzle
+                    if not self.update_puzzle(puzzle['id'], 'cursolvers', ''):
+                        result.fail(f"Failed to unassign solver {solver_id} from puzzle {puzzle['id']}")
+                        return
+                        
+                    # Assign to new puzzle
+                    if not self.assign_solver_to_puzzle(solver_id, target_puzzle['id']):
+                        result.fail(f"Failed to assign solver {solver_id} to puzzle {target_puzzle['id']}")
+                        return
+                        
+                    # Verify the reassignment
+                    old_puzzle_details = self.get_puzzle_details(puzzle['id'])
+                    new_puzzle_details = self.get_puzzle_details(target_puzzle['id'])
+                    
+                    if solver_id in old_puzzle_details.get('cursolvers', ''):
+                        result.fail(f"Solver {solver_id} still assigned to original puzzle {puzzle['id']}")
+                        return
+                        
+                    if solver_id not in new_puzzle_details.get('cursolvers', ''):
+                        result.fail(f"Solver {solver_id} not assigned to new puzzle {target_puzzle['id']}")
+                        return
+                        
+                    self.logger.log_operation(f"Successfully reassigned solver {solver_id}")
+            
+            result.set_success("Solver reassignment test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in solver reassignment test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
+    def run_all_tests(self):
+        """Run all tests and print results."""
         tests = [
             ("Solver Listing", self.test_solver_listing),
+            ("Puzzle Creation", self.test_puzzle_creation),
             ("Puzzle Modification", self.test_puzzle_modification),
             ("Solver Assignments", self.test_solver_assignments),
             ("Activity Tracking", self.test_activity_tracking),
             ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
+            ("Solver Reassignment", self.test_solver_reassignment),
             ("Answer Verification", self.test_answer_verification)
         ]
         
-        for name, test_func in tests:
-            result = self.run_test(name, test_func)
-            if not result.success:
-                self.logger.log_error(f"Test {name} failed, aborting remaining tests")
-                break
-                
+        for name, test in tests:
+            self.run_test(name, test)
+            
         self.print_results()
 
 if __name__ == "__main__":
