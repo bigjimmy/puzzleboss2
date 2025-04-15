@@ -252,26 +252,32 @@ class TestRunner:
             # Convert round_id to integer
             round_id_int = int(round_id)
             
-            # Prepare the request data
-            puzzle_data = {
-                "name": name,
-                "round_id": round_id_int,
-                "puzzle_uri": "http://example.com/puzzle",
-                "ismeta": False
+            # Prepare the request data with puzzle data nested under "puzzle" key
+            request_data = {
+                "puzzle": {
+                    "name": name,
+                    "round_id": round_id_int,
+                    "puzzle_uri": "http://example.com/puzzle",
+                    "ismeta": False
+                }
             }
             
             self.logger.log_operation(f"Creating puzzle: {name} in round {round_id_int}")
             
+            # Log the exact request being sent
+            self.logger.log_operation(f"Request data: {json.dumps(request_data)}")
+            
             response = requests.post(
                 f"{self.base_url}/puzzles",
-                json=puzzle_data
+                json=request_data,
+                headers={'Content-Type': 'application/json'}
             )
             
             if response.ok:
                 return response.json()['puzzle']
             else:
                 self.logger.log_error(f"Failed to create puzzle: {response.text}")
-                self.logger.log_error(f"Request data: {puzzle_data}")
+                self.logger.log_error(f"Request data: {json.dumps(request_data)}")
                 return None
         except ValueError as e:
             self.logger.log_error(f"Invalid round_id format: {str(e)}")

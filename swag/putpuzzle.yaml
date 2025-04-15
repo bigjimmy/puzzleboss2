@@ -8,26 +8,31 @@ parameters:
       schema:
         id: newpuzzle
         required:
-            - name
-            - round_id
-            - puzzle_uri
+            - puzzle
         properties:
-            name:
-                type: string
-                description: name of the puzzle
-                example: "Example Puzzle"
-            round_id:
-                type: integer
-                description: ID number of round the puzzle is in
-                example: 1
-            puzzle_uri:
-                type: string
-                description: URI for puzzle
-                example: "https://puzzlehunt.example.com/puzzles/example"
-            ismeta:
-                type: boolean
-                description: Whether this is a meta puzzle
-                example: false
+            puzzle:
+                type: object
+                required:
+                    - name
+                    - round_id
+                    - puzzle_uri
+                properties:
+                    name:
+                        type: string
+                        description: name of the puzzle
+                        example: "Example Puzzle"
+                    round_id:
+                        type: integer
+                        description: ID number of round the puzzle is in
+                        example: 1
+                    puzzle_uri:
+                        type: string
+                        description: URI for puzzle
+                        example: "https://puzzlehunt.example.com/puzzles/example"
+                    ismeta:
+                        type: boolean
+                        description: Whether this is a meta puzzle
+                        example: false
 responses:
     200:
         description: Creation of puzzle OK
