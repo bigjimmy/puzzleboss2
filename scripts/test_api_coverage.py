@@ -255,12 +255,16 @@ class TestRunner:
             puzzle_data = {
                 "name": name,
                 "round_id": round_id,
-                "puzzle_uri": "http://example.com/puzzle",  # Required field
-                "ismeta": False  # Optional field with default value
+                "puzzle_uri": "http://example.com/puzzle"  # Required field
             }
             
+            # Print request details for debugging
+            request_uri = f"{self.base_url}/puzzles"
+            print(f"\nMaking POST request to: {request_uri}")
+            print(f"Request JSON data: {json.dumps(puzzle_data, indent=2)}")
+            
             response = requests.post(
-                f"{self.base_url}/puzzles",
+                request_uri,
                 json=puzzle_data
             )
             
