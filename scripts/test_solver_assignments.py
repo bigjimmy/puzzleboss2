@@ -96,27 +96,34 @@ def verify_answer(puzzle_id: str, answer: str) -> bool:
     """Verify a puzzle answer."""
     print(f"\nDEBUG - Verifying answer for puzzle {puzzle_id}")
     print(f"DEBUG - Answer to verify: {answer}")
-    response = requests.post(
-        f"{BASE_URL}/puzzles/{puzzle_id}/answer",
-        json={"answer": answer}
-    )
-    print(f"DEBUG - Response status: {response.status_code}")
-    print(f"DEBUG - Response body: {response.text}")
-    if not response.ok:
-        print(f"Error verifying answer: {response.text}")
+    try:
+        response = requests.post(
+            f"{BASE_URL}/puzzles/{puzzle_id}/answer",
+            json={"answer": answer}
+        )
+        print(f"DEBUG - Response status: {response.status_code}")
+        print(f"DEBUG - Response body: {response.text}")
+        if not response.ok:
+            print(f"Error verifying answer: {response.text}")
+            return False
+            
+        result = response.json()
+        print(f"DEBUG - Parsed response: {result}")
+        if result.get("status") != "ok":
+            print(f"Answer verification failed for puzzle {puzzle_id}:")
+            print(f"  Expected status: 'ok'")
+            print(f"  Actual status: '{result.get('status')}'")
+            print(f"  Error message: {result.get('error', 'No error message')}")
+            print(f"  Submitted answer: '{answer}'")
+            return False
+            
+        return True
+    except Exception as e:
+        print(f"DEBUG - Exception during answer verification: {str(e)}")
+        print(f"DEBUG - Exception type: {type(e).__name__}")
+        import traceback
+        print(f"DEBUG - Traceback: {traceback.format_exc()}")
         return False
-        
-    result = response.json()
-    print(f"DEBUG - Parsed response: {result}")
-    if result.get("status") != "ok":
-        print(f"Answer verification failed for puzzle {puzzle_id}:")
-        print(f"  Expected status: 'ok'")
-        print(f"  Actual status: '{result.get('status')}'")
-        print(f"  Error message: {result.get('error', 'No error message')}")
-        print(f"  Submitted answer: '{answer}'")
-        return False
-        
-    return True
 
 def test_answer_verification(self, result: TestResult):
     """Test answer verification functionality."""
