@@ -474,18 +474,22 @@ class TestRunner:
                 result.fail("Failed to create test round")
                 return
                 
-            # Create a test puzzle
-            puzzle_name = f"Test Puzzle {int(time.time())}"
-            puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
-            if not puzzle_data:
-                result.fail("Failed to create test puzzle")
-                return
+            # Create 4 puzzles in the round
+            puzzles = []
+            for i in range(4):
+                puzzle_name = f"Test Puzzle {int(time.time()) + i}"
+                puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
+                if not puzzle_data:
+                    result.fail(f"Failed to create puzzle {puzzle_name}")
+                    return
+                puzzles.append(puzzle_data)
                 
-            # Verify puzzle was created with correct round
-            if str(puzzle_data['round_id']) != str(round_data['id']):
-                result.fail(f"Puzzle round_id mismatch. Expected {round_data['id']}, got {puzzle_data['round_id']}")
-                return
-                
+            # Verify all puzzles were created in the correct round
+            for puzzle in puzzles:
+                if str(puzzle['round_id']) != str(round_data['id']):
+                    result.fail(f"Puzzle {puzzle['name']} created in wrong round")
+                    return
+                    
             result.set_success("Puzzle creation test completed successfully")
             
         except Exception as e:
@@ -964,13 +968,13 @@ class TestRunner:
                 result.fail(f"Failed to get puzzle details for {puzzle['name']}")
                 continue
                 
-            # Check that answer was set (spaces may be stripped)
+            # Check that answer was set
             if 'answer' not in puzzle_details:
                 result.fail(f"Answer field missing for puzzle {puzzle['name']}")
                 continue
                 
-            # Verify the answer was set correctly (spaces removed but emoji preserved)
-            expected_answer = test_answer.replace(" ", "")
+            # Verify the answer was set correctly (converted to all caps but spaces preserved)
+            expected_answer = test_answer.upper()
             if puzzle_details['answer'] != expected_answer:
                 result.fail(f"Answer not set correctly for puzzle {puzzle['name']}. Expected: {expected_answer}, Got: {puzzle_details['answer']}")
                 continue
