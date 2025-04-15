@@ -31,8 +31,8 @@ def get_puzzle_details(puzzle_id: str) -> Dict:
 def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
     """Assign a solver to a puzzle."""
     response = requests.post(
-        f"{BASE_URL}/puzzles/{puzzle_id}/solvers",
-        json={"solver_id": solver_id}
+        f"{BASE_URL}/solvers/{solver_id}/puzz",
+        json={"puzz": puzzle_id}
     )
     if not response.ok:
         print(f"Failed to assign solver {solver_id} to puzzle {puzzle_id}: {response.text}")
@@ -43,6 +43,57 @@ def get_puzzle_solver_history(puzzle_id: str) -> List[str]:
     """Get the solver history for a puzzle."""
     puzzle = get_puzzle_details(puzzle_id)
     return puzzle.get("solvers", "").split(",") if puzzle.get("solvers") else []
+
+def verify_answer(puzzle_id: str, answer: str) -> bool:
+    """Verify a puzzle answer."""
+    response = requests.post(
+        f"{BASE_URL}/puzzles/{puzzle_id}/answer",
+        json={"answer": answer}
+    )
+    if not response.ok:
+        print(f"Failed to verify answer for puzzle {puzzle_id}: {response.text}")
+        return False
+        
+    result = response.json()
+    if result.get("status") != "ok":
+        print(f"Answer verification failed for puzzle {puzzle_id}:")
+        print(f"  Expected status: 'ok'")
+        print(f"  Actual status: '{result.get('status')}'")
+        print(f"  Error message: {result.get('error', 'No error message')}")
+        print(f"  Submitted answer: '{answer}'")
+        return False
+        
+    return True
+
+def test_answer_verification(self, result: TestResult):
+    """Test puzzle answer verification functionality"""
+    self.logger.log_operation("\nTesting answer verification...")
+    
+    # Get a puzzle to test with
+    puzzles = self.get_all_puzzles()
+    if not puzzles:
+        result.fail("No puzzles found to test answer verification")
+        return
+        
+    test_puzzle = puzzles[0]
+    self.logger.log_operation(f"Using puzzle {test_puzzle['name']} (ID: {test_puzzle['id']}) for answer verification test")
+    
+    # Try incorrect answer
+    incorrect_answer = "INCORRECT_ANSWER"
+    self.logger.log_operation(f"Testing incorrect answer: '{incorrect_answer}'")
+    if self.verify_answer(test_puzzle["id"], incorrect_answer):
+        result.fail(f"Incorrect answer '{incorrect_answer}' was accepted for puzzle {test_puzzle['name']}")
+        return
+        
+    # Try correct answer
+    correct_answer = test_puzzle.get("answer", "CORRECT_ANSWER")
+    self.logger.log_operation(f"Testing correct answer: '{correct_answer}'")
+    if not self.verify_answer(test_puzzle["id"], correct_answer):
+        result.fail(f"Correct answer '{correct_answer}' was rejected for puzzle {test_puzzle['name']}")
+        return
+        
+    self.logger.log_operation("Answer verification test passed")
+    result.pass_test()
 
 def main():
     print("Starting solver assignment test...")
