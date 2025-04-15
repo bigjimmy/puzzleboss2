@@ -141,42 +141,39 @@ class TestRunner:
 
     def get_puzzle_details(self, puzzle_id: str) -> Dict:
         """Get detailed information about a specific puzzle."""
-        response = requests.get(f"{self.base_url}/puzzles/{puzzle_id}")
-        if not response.ok:
-            raise Exception(f"Failed to get puzzle {puzzle_id}: {response.text}")
-        return response.json()["puzzle"]
+        try:
+            response = requests.get(f"{self.base_url}/puzzles/{puzzle_id}")
+            if not response.ok:
+                self.logger.log_error(f"Failed to get puzzle {puzzle_id}: {response.text}")
+                return None
+            return response.json()["puzzle"]
+        except Exception as e:
+            self.logger.log_error(f"Error getting puzzle details: {str(e)}")
+            return None
+
+    def get_solver_details(self, solver_id: str) -> Dict:
+        """Get detailed information about a specific solver."""
+        try:
+            response = requests.get(f"{self.base_url}/solvers/{solver_id}")
+            if not response.ok:
+                self.logger.log_error(f"Failed to get solver {solver_id}: {response.text}")
+                return None
+            return response.json()["solver"]
+        except Exception as e:
+            self.logger.log_error(f"Error getting solver details: {str(e)}")
+            return None
 
     def get_round(self, round_id: int) -> Dict:
         """Get detailed information about a specific round."""
         try:
             response = requests.get(f"{self.base_url}/rounds/{round_id}")
             if not response.ok:
-                self.logger.log_error(f"HTTP error getting round {round_id}: {response.status_code}")
-                self.logger.log_error(f"Response text: {response.text}")
-                raise Exception(f"HTTP error getting round: {response.status_code} - {response.text}")
-            
-            try:
-                response_data = response.json()
-            except json.JSONDecodeError as e:
-                self.logger.log_error(f"Failed to parse JSON response for round {round_id}")
-                self.logger.log_error(f"Response text: {response.text}")
-                self.logger.log_error(f"JSON decode error: {str(e)}")
-                raise Exception(f"JSON decode error: {str(e)}")
-            
-            if "status" not in response_data or response_data["status"] != "ok":
-                self.logger.log_error(f"Unexpected response format getting round {round_id}")
-                self.logger.log_error(f"Full response: {response_data}")
-                raise Exception(f"Unexpected response format: {response_data}")
-            
-            if "round" not in response_data:
-                self.logger.log_error(f"Missing round data in response for round {round_id}")
-                self.logger.log_error(f"Full response: {response_data}")
-                raise Exception("Missing round data in response")
-            
-            return response_data["round"]
+                self.logger.log_error(f"Failed to get round {round_id}: {response.text}")
+                return None
+            return response.json()["round"]
         except Exception as e:
-            self.logger.log_error(f"Error getting round {round_id}: {str(e)}")
-            raise
+            self.logger.log_error(f"Error getting round details: {str(e)}")
+            return None
 
     def create_round(self, name: str) -> Dict:
         """Create a new round with detailed error handling"""
