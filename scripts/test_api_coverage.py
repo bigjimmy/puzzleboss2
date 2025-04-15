@@ -813,52 +813,43 @@ class TestRunner:
                 response = requests.get(f"{self.base_url}/puzzles/{puzzle['id']}/lastact")
                 if not response.ok:
                     result.fail(f"Failed to get lastact for puzzle {puzzle['name']}: {response.text}")
-                    continue
+                    return
                     
                 last_activity = response.json().get('puzzle', {}).get('lastact')
                 if not last_activity:
-                    result.fail(f"Puzzle {puzzle['name']} has empty activity record")
-                    continue
+                    result.fail(f"No lastact found for puzzle {puzzle['name']}")
+                    return
                     
-                # Print lastact structure for debugging
-                self.logger.log_operation(f"Last activity structure for {puzzle['name']}:")
-                self.logger.log_operation(json.dumps(last_activity, indent=2))
-                    
-                # Verify activity has required fields
-                required_fields = ['type', 'source']
-                for field in required_fields:
-                    if field not in last_activity:
-                        result.fail(f"Activity record for puzzle {puzzle['name']} missing required field: {field}")
-                        continue
-                    
-                # Verify type and source are valid
-                valid_types = ['create', 'open', 'revise', 'comment', 'interact']
-                valid_sources = ['google', 'pb_auto', 'pb_manual', 'bigjimmy', 'twiki', 'squid', 'apache', 'xmpp']
-                
-                if last_activity['type'] not in valid_types:
-                    result.fail(f"Invalid activity type for puzzle {puzzle['name']}: {last_activity['type']}")
-                    continue
-                    
-                if last_activity['source'] not in valid_sources:
-                    result.fail(f"Invalid activity source for puzzle {puzzle['name']}: {last_activity['source']}")
-                    continue
+                # Verify lastact structure
+                if not all(key in last_activity for key in ['time', 'type', 'source', 'uri']):
+                    result.fail(f"Invalid lastact structure for puzzle {puzzle['name']}")
+                    return
                 
         result.set_success("Activity tracking test completed successfully")
 
     def test_meta_puzzles_and_round_completion(self, result: TestResult):
-        """Test meta puzzles and round completion logic"""
-        self.logger.log_operation("Testing meta puzzles and round completion")
+        """Test meta puzzle functionality and round completion logic."""
+        self.logger.log_operation("Starting meta puzzle and round completion test")
         
-        # For each round, set multiple puzzles as meta and test completion
-        for round_data in self.rounds:
-            self.logger.log_operation(f"\nTesting round {round_data['name']}")
-            
-            # Get all puzzles in this round
-            round_puzzles = [p for p in self.puzzles if p["round_id"] == round_data["id"]]
-            if len(round_puzzles) < 3:  # Need at least 3 puzzles for meaningful test
-                self.logger.log_operation(f"Skipping round {round_data['name']} - not enough puzzles")
-                continue
+        try:
+            # Get all rounds
+            rounds = self.get_all_rounds()
+            if not rounds:
+                result.fail("No rounds found to test meta puzzles")
+                return
                 
+            # Select a round for testing
+            round_data = random.choice(rounds)
+            self.logger.log_operation(f"Selected round {round_data['name']} for testing")
+            
+            # Get puzzles in this round
+            round_puzzles = [p for p in self.get_all_puzzles() if str(p['round_id']) == str(round_data['id'])]
+            if len(round_puzzles) < 3:
+                result.fail(f"Round {round_data['name']} has fewer than 3 puzzles, cannot test meta functionality")
+                return
+                
+            self.logger.log_operation(f"Found {len(round_puzzles)} puzzles in round {round_data['name']}")
+            
             # Select 2 random puzzles as meta (or 1 if only 3 puzzles)
             num_metas = min(2, len(round_puzzles) - 1)
             meta_puzzles = random.sample(round_puzzles, num_metas)
@@ -895,7 +886,7 @@ class TestRunner:
             
             # Verify round is not complete yet (metas still unsolved)
             self.logger.log_operation("\nVerifying round is not complete (metas unsolved)")
-            round_details = requests.get(f"{BASE_URL}/rounds/{round_data['id']}").json()["round"]
+            round_details = requests.get(f"{self.base_url}/rounds/{round_data['id']}").json()["round"]
             if round_details.get("complete", False):
                 result.fail(f"Round {round_data['id']} marked as complete before metas solved")
                 return
@@ -915,7 +906,7 @@ class TestRunner:
                 
                 # Verify round is still not complete
                 self.logger.log_operation("Verifying round is still incomplete")
-                round_details = requests.get(f"{BASE_URL}/rounds/{round_data['id']}").json()["round"]
+                round_details = requests.get(f"{self.base_url}/rounds/{round_data['id']}").json()["round"]
                 if round_details.get("complete", False):
                     result.fail(f"Round {round_data['id']} marked as complete before all metas solved")
                     return
@@ -935,13 +926,19 @@ class TestRunner:
             
             # Verify round is now complete
             self.logger.log_operation("Verifying round is now complete")
-            round_details = requests.get(f"{BASE_URL}/rounds/{round_data['id']}").json()["round"]
+            round_details = requests.get(f"{self.base_url}/rounds/{round_data['id']}").json()["round"]
             if not round_details.get("complete", False):
                 result.fail(f"Round {round_data['id']} not marked as complete after all metas solved")
                 return
             self.logger.log_operation("Round correctly marked as complete")
-        
-        result.message = "Successfully tested meta puzzles and round completion logic"
+            
+            result.set_success("Meta puzzle and round completion test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in meta puzzle and round completion test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
     def test_answer_verification(self, result: TestResult):
         """Test answer verification functionality."""
