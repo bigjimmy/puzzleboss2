@@ -247,35 +247,50 @@ class TestRunner:
             raise
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
-        """Create a new puzzle"""
-        response = requests.post(
-            f"{BASE_URL}/puzzles",
-            json={
+        """Create a new puzzle with detailed error handling"""
+        try:
+            self.logger.log_operation(f"Creating puzzle {name} in round {round_id}")
+            
+            # Prepare the request data according to the API spec
+            puzzle_data = {
                 "name": name,
                 "round_id": round_id,
-                "puzzle_uri": "http://example.com"
+                "puzzle_uri": "http://example.com/puzzle",  # Required field
+                "ismeta": False  # Optional field with default value
             }
-        )
-        if not response.ok:
-            self.logger.log_error(f"Failed to create puzzle {name}: {response.text}")
-            raise Exception(f"Failed to create puzzle: {response.text}")
             
-        response_data = response.json()
-        if "status" not in response_data or response_data["status"] != "ok":
-            self.logger.log_error(f"Unexpected response format creating puzzle {name}: {response_data}")
-            raise Exception(f"Unexpected response format: {response_data}")
+            response = requests.post(
+                f"{self.base_url}/puzzles",
+                json=puzzle_data
+            )
             
-        if "puzzle" not in response_data:
-            self.logger.log_error(f"Missing puzzle data in response for {name}: {response_data}")
-            raise Exception(f"Missing puzzle data in response: {response_data}")
+            if not response.ok:
+                self.logger.log_error(f"HTTP error creating puzzle {name}: {response.status_code}")
+                self.logger.log_error(f"Response text: {response.text}")
+                raise Exception(f"HTTP error creating puzzle: {response.status_code} - {response.text}")
             
-        puzzle_data = response_data["puzzle"]
-        if "id" not in puzzle_data:
-            self.logger.log_error(f"Missing id in puzzle data for {name}: {puzzle_data}")
-            raise Exception(f"Missing id in puzzle data: {puzzle_data}")
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError as e:
+                self.logger.log_error(f"Failed to parse JSON response for puzzle {name}")
+                self.logger.log_error(f"Response text: {response.text}")
+                self.logger.log_error(f"JSON decode error: {str(e)}")
+                raise Exception(f"JSON decode error: {str(e)}")
             
-        self.logger.log_operation(f"Created puzzle {name} with id {puzzle_data['id']}")
-        return puzzle_data
+            if "status" not in response_data or response_data["status"] != "ok":
+                self.logger.log_error(f"Unexpected response format creating puzzle {name}")
+                self.logger.log_error(f"Full response: {response_data}")
+                raise Exception(f"Unexpected response format: {response_data}")
+            
+            if "puzzle" not in response_data:
+                self.logger.log_error(f"Missing puzzle data in response for {name}")
+                self.logger.log_error(f"Full response: {response_data}")
+                raise Exception("Missing puzzle data in response")
+            
+            return response_data["puzzle"]
+        except Exception as e:
+            self.logger.log_error(f"Error creating puzzle {name}: {str(e)}")
+            raise
 
     def update_puzzle(self, puzzle_id: str, field: str, value: str) -> bool:
         self.logger.log_operation(f"Updating puzzle {puzzle_id}: {field} = {value}")
