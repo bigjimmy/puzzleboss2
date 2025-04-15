@@ -412,33 +412,34 @@ class TestRunner:
         return response.json().get("rounds", [])
 
     def test_puzzle_creation(self, result: TestResult):
-        """Test puzzle creation functionality."""
-        self.logger.log_operation("Starting puzzle creation test")
+        """Test puzzle creation functionality"""
+        self.logger.log_operation("Testing puzzle creation...")
         
         # Create a round first
-        round_name = f"TestRound_{int(time.time())}"
+        round_name = f"Test Round {int(time.time())}"
         round_data = self.create_round(round_name)
         if not round_data:
-            result.fail("Failed to create test round")
-            return
+            self.logger.log_error("Failed to create test round")
+            return False
             
         # Create a puzzle in the round
-        puzzle_name = f"TestPuzzle1_{int(time.time())}"
-        puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
+        puzzle_name = f"Test Puzzle {int(time.time())}"
+        puzzle_data = self.create_puzzle(puzzle_name, round_data['id'])
         if not puzzle_data:
-            result.fail(f"Failed to create puzzle {puzzle_name}")
-            return
+            self.logger.log_error("Failed to create test puzzle")
+            return False
             
-        # Verify puzzle was created correctly
+        # Verify the puzzle was created correctly
         if puzzle_data['name'] != puzzle_name:
-            result.fail(f"Puzzle name mismatch. Expected {puzzle_name}, got {puzzle_data['name']}")
-            return
+            self.logger.log_error(f"Puzzle name mismatch: expected {puzzle_name}, got {puzzle_data['name']}")
+            return False
             
-        if str(puzzle_data['round_id']) != str(round_data['id']):
-            result.fail(f"Round ID mismatch. Expected {round_data['id']}, got {puzzle_data['round_id']}")
-            return
+        if str(puzzle_data['puzzle']['round_id']) != str(round_data['id']):
+            self.logger.log_error(f"Round ID mismatch: expected {round_data['id']}, got {puzzle_data['puzzle']['round_id']}")
+            return False
             
-        result.set_success("Puzzle creation test completed successfully")
+        self.logger.log_success("Puzzle creation test passed")
+        return True
 
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality."""
