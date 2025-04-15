@@ -4,7 +4,7 @@ import requests
 import random
 import time
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import sys
 import traceback
@@ -800,6 +800,10 @@ class TestRunner:
                     result.fail(f"Failed to get details for puzzle {puzzle['name']}")
                     continue
                     
+                # Print full puzzle structure for debugging
+                self.logger.log_operation(f"Full puzzle structure for {puzzle['name']}:")
+                self.logger.log_operation(json.dumps(puzzle_details, indent=2))
+                    
                 # Verify activity was recorded
                 if 'lastact' not in puzzle_details:
                     result.fail(f"Puzzle {puzzle['name']} missing activity after solver assignment")
@@ -810,6 +814,10 @@ class TestRunner:
                     result.fail(f"Puzzle {puzzle['name']} has empty activity record")
                     continue
                     
+                # Print lastact structure for debugging
+                self.logger.log_operation(f"Last activity structure for {puzzle['name']}:")
+                self.logger.log_operation(json.dumps(last_activity, indent=2))
+                    
                 # Verify activity has required fields
                 required_fields = ['time', 'type', 'source']
                 for field in required_fields:
@@ -817,18 +825,30 @@ class TestRunner:
                         result.fail(f"Activity record for puzzle {puzzle['name']} missing required field: {field}")
                         continue
                         
-                # Verify activity type is valid
+                # Verify activity type is valid and appropriate for solver assignment
                 valid_types = ['create', 'open', 'revise', 'comment', 'interact']
                 if last_activity['type'] not in valid_types:
                     result.fail(f"Invalid activity type for puzzle {puzzle['name']}: {last_activity['type']}")
                     continue
                     
-                # Verify activity source is valid
+                # Verify activity source is valid and appropriate for solver assignment
                 valid_sources = ['google', 'pb_auto', 'pb_manual', 'bigjimmy', 'twiki', 'squid', 'apache', 'xmpp']
                 if last_activity['source'] not in valid_sources:
                     result.fail(f"Invalid activity source for puzzle {puzzle['name']}: {last_activity['source']}")
                     continue
                     
+                # Verify activity time is recent (within last minute)
+                activity_time = datetime.fromisoformat(last_activity['time'])
+                time_diff = datetime.now(timezone.utc) - activity_time
+                if time_diff.total_seconds() > 60:
+                    result.fail(f"Activity time for puzzle {puzzle['name']} is too old: {last_activity['time']}")
+                    continue
+                    
+                # Verify activity type and source are appropriate for solver assignment
+                if last_activity['type'] != 'interact' or last_activity['source'] != 'pb_auto':
+                    result.fail(f"Unexpected activity type/source for solver assignment. Got type={last_activity['type']}, source={last_activity['source']}")
+                    continue
+                
         result.set_success("Activity tracking test completed successfully")
 
     def test_meta_puzzles_and_round_completion(self, result: TestResult):
