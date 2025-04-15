@@ -467,29 +467,34 @@ class TestRunner:
         self.logger.log_operation("Starting puzzle creation test")
         
         try:
-            # Create a test round
-            round_name = f"Test Round {int(time.time())}"
-            round_data = self.create_round(round_name)
-            if not round_data:
-                result.fail("Failed to create test round")
-                return
-                
-            # Create 4 puzzles in the round
-            puzzles = []
-            for i in range(4):
-                puzzle_name = f"Test Puzzle {int(time.time()) + i}"
-                puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
-                if not puzzle_data:
-                    result.fail(f"Failed to create puzzle {puzzle_name}")
+            # Create 3 test rounds
+            rounds = []
+            for i in range(3):
+                round_name = f"Test Round {int(time.time()) + i}"
+                round_data = self.create_round(round_name)
+                if not round_data:
+                    result.fail(f"Failed to create test round {i+1}")
                     return
-                puzzles.append(puzzle_data)
+                rounds.append(round_data)
                 
-            # Verify all puzzles were created in the correct round
-            for puzzle in puzzles:
-                if str(puzzle['round_id']) != str(round_data['id']):
-                    result.fail(f"Puzzle {puzzle['name']} created in wrong round")
-                    return
+            # Create 4 puzzles in each round
+            for round_data in rounds:
+                self.logger.log_operation(f"Creating puzzles for round {round_data['name']}")
+                puzzles = []
+                for i in range(4):
+                    puzzle_name = f"Test Puzzle {int(time.time()) + i}"
+                    puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
+                    if not puzzle_data:
+                        result.fail(f"Failed to create puzzle {puzzle_name}")
+                        return
+                    puzzles.append(puzzle_data)
                     
+                # Verify all puzzles were created in the correct round
+                for puzzle in puzzles:
+                    if str(puzzle['round_id']) != str(round_data['id']):
+                        result.fail(f"Puzzle {puzzle['name']} created in wrong round")
+                        return
+                        
             result.set_success("Puzzle creation test completed successfully")
             
         except Exception as e:
