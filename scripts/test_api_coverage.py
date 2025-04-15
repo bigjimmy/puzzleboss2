@@ -308,8 +308,7 @@ class TestRunner:
         
         result.message = f"Found {len(solvers)} solvers"
 
-    def test_puzzle_creation(self) -> TestResult:
-        result = TestResult("Puzzle Creation", self.logger)
+    def test_puzzle_creation(self, result: TestResult):
         start_time = time.time()
 
         try:
@@ -319,7 +318,7 @@ class TestRunner:
                 round_data = self.create_round(round_name)
                 if not round_data:
                     result.fail(f"Failed to create round {round_name}")
-                    return result
+                    return
 
                 # Add round comment with optional emoji
                 round_comment = f"Test comment for {round_name}"
@@ -332,7 +331,7 @@ class TestRunner:
                 round_info = self.get_round(round_data["id"])
                 if round_info.get("comment") != round_comment:
                     result.fail(f"Round comment verification failed for {round_name}")
-                    return result
+                    return
 
                 for puzzle_num in range(1, 6):
                     puzzle_name = f"R{round_num}Puzzle{puzzle_num}"
@@ -342,28 +341,27 @@ class TestRunner:
                     puzzle_data = self.create_puzzle(round_data["id"], puzzle_name)
                     if not puzzle_data:
                         result.fail(f"Failed to create puzzle {puzzle_name}")
-                        return result
+                        return
 
                     # Verify puzzle was created with correct attributes
                     puzzle_info = self.get_puzzle(puzzle_data["id"])
                     if not puzzle_info:
                         result.fail(f"Failed to get puzzle {puzzle_name}")
-                        return result
+                        return
                     
                     if puzzle_info["name"] != puzzle_name:
                         result.fail(f"Puzzle name mismatch for {puzzle_name}")
-                        return result
+                        return
                     
                     if puzzle_info["round_id"] != round_data["id"]:
                         result.fail(f"Puzzle round_id mismatch for {puzzle_name}")
-                        return result
+                        return
 
             result.set_success("Successfully created and verified rounds and puzzles")
         except Exception as e:
             result.fail(f"Puzzle creation test failed: {str(e)}")
         
         result.duration = time.time() - start_time
-        return result
 
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality"""
