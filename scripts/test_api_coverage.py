@@ -704,23 +704,23 @@ class TestRunner:
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
             
     def is_round_complete(self, round_id: int) -> bool:
-        """Check if a round is complete by calling the check_completion endpoint."""
+        """Check if a round is complete by checking its status field."""
         try:
-            response = requests.get(f"{self.base_url}/rounds/{round_id}/check_completion")
-            if response.ok:
-                return response.json().get('complete', False)
-            return False
+            round_data = self.get_round(round_id)
+            if not round_data:
+                return False
+            return round_data.get('status') == 'Solved'
         except Exception as e:
             self.logger.log_error(f"Error checking round completion: {str(e)}")
             return False
 
     def get_round_status(self, round_id: int) -> str:
-        """Get the status of a round by calling the check_completion endpoint."""
+        """Get the status of a round by checking its status field."""
         try:
-            response = requests.get(f"{self.base_url}/rounds/{round_id}/check_completion")
-            if response.ok:
-                return 'Solved' if response.json().get('complete', False) else 'Unsolved'
-            return ''
+            round_data = self.get_round(round_id)
+            if not round_data:
+                return ''
+            return round_data.get('status', '')
         except Exception as e:
             self.logger.log_error(f"Error getting round status: {str(e)}")
             return ''
