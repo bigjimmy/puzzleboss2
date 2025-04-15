@@ -30,10 +30,21 @@ def get_puzzle_details(puzzle_id: str) -> Dict:
 
 def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
     """Assign a solver to a puzzle."""
+    print(f"DEBUG - Before API call:")
+    print(f"  Puzzle ID: {puzzle_id}")
+    print(f"  Solver ID: {solver_id}")
+    
     response = requests.post(
         f"{BASE_URL}/solvers/{solver_id}/puzz",
         json={"puzz": puzzle_id}
     )
+    
+    print(f"DEBUG - After API call:")
+    print(f"  Request URL: {BASE_URL}/solvers/{solver_id}/puzz")
+    print(f"  Request Body: {{'puzz': {puzzle_id}}}")
+    print(f"  Response Status: {response.status_code}")
+    print(f"  Response Body: {response.text}")
+    
     if not response.ok:
         print(f"Failed to assign solver {solver_id} to puzzle {puzzle_id}: {response.text}")
         return False
