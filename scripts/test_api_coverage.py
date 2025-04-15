@@ -248,22 +248,34 @@ class TestRunner:
 
     def create_puzzle(self, name: str, round_id: str) -> Dict:
         """Create a new puzzle."""
-        self.logger.log_operation(f"Creating puzzle: {name}")
         try:
+            # Convert round_id to integer
+            round_id_int = int(round_id)
+            
+            # Prepare the request data
+            puzzle_data = {
+                "name": name,
+                "round_id": round_id_int,
+                "puzzle_uri": "http://example.com/puzzle",
+                "ismeta": False
+            }
+            
+            self.logger.log_operation(f"Creating puzzle: {name} in round {round_id_int}")
+            
             response = requests.post(
                 f"{self.base_url}/puzzles",
-                json={
-                    "name": name,
-                    "round_id": round_id,
-                    "puzzle_uri": "http://example.com/puzzle",
-                    "ismeta": False
-                }
+                json=puzzle_data
             )
+            
             if response.ok:
                 return response.json()['puzzle']
             else:
                 self.logger.log_error(f"Failed to create puzzle: {response.text}")
+                self.logger.log_error(f"Request data: {puzzle_data}")
                 return None
+        except ValueError as e:
+            self.logger.log_error(f"Invalid round_id format: {str(e)}")
+            return None
         except Exception as e:
             self.logger.log_error(f"Error creating puzzle: {str(e)}")
             return None
@@ -397,29 +409,29 @@ class TestRunner:
         """Test puzzle creation functionality."""
         self.logger.log_operation("Starting puzzle creation test")
         
-        # Get all rounds
-        rounds = self.get_all_rounds()
-        if not rounds:
-            result.fail("Failed to get rounds")
-            return
-            
-        # Create a new round for testing
+        # Create a round first
         round_name = f"TestRound_{int(time.time())}"
-        self.logger.log_operation(f"Creating test round: {round_name}")
-        new_round = self.create_round(round_name)
-        if not new_round:
+        round_data = self.create_round(round_name)
+        if not round_data:
             result.fail("Failed to create test round")
             return
             
-        # Create three puzzles in the new round
-        for i in range(1, 4):
-            puzzle_name = f"TestPuzzle{i}_{int(time.time())}"
-            self.logger.log_operation(f"Creating puzzle: {puzzle_name}")
-            puzzle = self.create_puzzle(puzzle_name, str(new_round["id"]))
-            if not puzzle:
-                result.fail(f"Failed to create puzzle {puzzle_name}")
-                return
-                
+        # Create a puzzle in the round
+        puzzle_name = f"TestPuzzle1_{int(time.time())}"
+        puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
+        if not puzzle_data:
+            result.fail(f"Failed to create puzzle {puzzle_name}")
+            return
+            
+        # Verify puzzle was created correctly
+        if puzzle_data['name'] != puzzle_name:
+            result.fail(f"Puzzle name mismatch. Expected {puzzle_name}, got {puzzle_data['name']}")
+            return
+            
+        if str(puzzle_data['round_id']) != str(round_data['id']):
+            result.fail(f"Round ID mismatch. Expected {round_data['id']}, got {puzzle_data['round_id']}")
+            return
+            
         result.set_success("Puzzle creation test completed successfully")
 
     def test_puzzle_modification(self, result: TestResult):
