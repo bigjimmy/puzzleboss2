@@ -677,9 +677,10 @@ class TestRunner:
                     continue
                     
                 # Check if the solver's current puzzle matches what we just assigned
-                if str(solver_details.get('puzz')) != str(puzzle['id']):
+                if solver_details.get('puzz') != puzzle['name']:
                     self.logger.log_error(f"DEBUG - Solver details: {solver_details}")
-                    self.logger.log_error(f"DEBUG - Expected puzzle: {puzzle['id']}")
+                    self.logger.log_error(f"DEBUG - Expected puzzle name: {puzzle['name']}")
+                    self.logger.log_error(f"DEBUG - Actual puzzle name: {solver_details.get('puzz')}")
                     result.fail(f"Solver {solver['name']} not assigned to puzzle {puzzle['name']}")
                     continue
                     
