@@ -788,6 +788,9 @@ class TestRunner:
             current_solvers = puzzle1_details.get('cursolvers', '') or ''
             if solver1['name'] not in current_solvers.split(',') or solver2['name'] not in current_solvers.split(','):
                 result.fail(f"Solvers not properly assigned to puzzle {puzzle1['name']}")
+                self.logger.log_error(f"Expected solvers: {solver1['name']}, {solver2['name']}")
+                self.logger.log_error(f"Actual solvers: {current_solvers}")
+                self.logger.log_error(f"Puzzle details: {puzzle1_details}")
                 return
                 
             # Check solvers' current puzzles
