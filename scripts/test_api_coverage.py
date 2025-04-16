@@ -765,12 +765,41 @@ class TestRunner:
                 result.fail("Need at least 2 solvers for reassignment test")
                 return
                 
-            # Select two random puzzles and two random solvers
-            puzzle1, puzzle2 = random.sample(puzzles, 2)
-            solver1, solver2 = random.sample(solvers, 2)
+            # Get solvers that are already assigned to puzzles
+            assigned_solvers = []
+            for solver in solvers:
+                solver_details = self.get_solver_details(solver['id'])
+                if solver_details and solver_details.get('puzz'):
+                    assigned_solvers.append(solver)
+                    
+            if len(assigned_solvers) < 2:
+                result.fail("Need at least 2 solvers already assigned to puzzles for reassignment test")
+                return
+                
+            # Select two random assigned solvers
+            solver1, solver2 = random.sample(assigned_solvers, 2)
+            
+            # Get their current puzzles
+            solver1_details = self.get_solver_details(solver1['id'])
+            solver2_details = self.get_solver_details(solver2['id'])
+            solver1_current_puzzle = solver1_details.get('puzz')
+            solver2_current_puzzle = solver2_details.get('puzz')
+            
+            # Filter out puzzles that are currently assigned to either solver
+            available_puzzles = []
+            for puzzle in puzzles:
+                if puzzle['name'] != solver1_current_puzzle and puzzle['name'] != solver2_current_puzzle:
+                    available_puzzles.append(puzzle)
+                    
+            if len(available_puzzles) < 2:
+                result.fail("Not enough puzzles available that aren't already assigned to the selected solvers")
+                return
+                
+            # Select two random puzzles from the available ones
+            puzzle1, puzzle2 = random.sample(available_puzzles, 2)
             
             self.logger.log_operation(f"Selected puzzles: {puzzle1['name']}, {puzzle2['name']}")
-            self.logger.log_operation(f"Selected solvers: {solver1['name']}, {solver2['name']}")
+            self.logger.log_operation(f"Selected solvers: {solver1['name']} (currently on {solver1_current_puzzle}), {solver2['name']} (currently on {solver2_current_puzzle})")
             
             # Assign both solvers to first puzzle
             for solver in [solver1, solver2]:
@@ -816,7 +845,7 @@ class TestRunner:
                 
             # Check solver is no longer assigned to old puzzle
             current_solvers = puzzle1_details.get('cursolvers', '') or ''
-            self.logger.log_operation(f"Checking solver {solver1['name']} is no longer in old puzzle's cursolvers: {current_solvers}")
+            self.logger.log_operation(f"Checking solver {solver1['name']} is no longer in old puzzle's solvers: {current_solvers}")
             if solver1['name'] in current_solvers.split(','):
                 result.fail(f"Solver {solver1['name']} still assigned to old puzzle {puzzle1['name']}")
                 return
@@ -824,7 +853,7 @@ class TestRunner:
                 
             # Check solver is assigned to new puzzle
             current_solvers = puzzle2_details.get('cursolvers', '') or ''
-            self.logger.log_operation(f"Checking solver {solver1['name']} is in new puzzle's cursolvers: {current_solvers}")
+            self.logger.log_operation(f"Checking solver {solver1['name']} is in new puzzle's solvers: {current_solvers}")
             if solver1['name'] not in current_solvers.split(','):
                 result.fail(f"Solver {solver1['name']} not assigned to new puzzle {puzzle2['name']}")
                 return
@@ -838,7 +867,7 @@ class TestRunner:
             self.logger.log_operation(f"Confirmed solver {solver1['name']}'s puzz field is updated to {puzzle2['name']}")
                 
             # Check solver is in historical solvers list for old puzzle
-            historical_solvers = puzzle1_details.get('solvers', '') or ''
+            historical_solvers = puzzle1_details.get('cursolvers', '') or ''
             self.logger.log_operation(f"Checking solver {solver1['name']} is in old puzzle's historical solvers: {historical_solvers}")
             if solver1['name'] not in historical_solvers.split(','):
                 result.fail(f"Solver {solver1['name']} not in historical solvers list for puzzle {puzzle1['name']}")
@@ -847,7 +876,7 @@ class TestRunner:
                 
             # Verify second solver is still assigned to first puzzle
             current_solvers = puzzle1_details.get('cursolvers', '') or ''
-            self.logger.log_operation(f"Checking solver {solver2['name']} is still in puzzle {puzzle1['name']}'s cursolvers: {current_solvers}")
+            self.logger.log_operation(f"Checking solver {solver2['name']} is still in puzzle {puzzle1['name']}'s solvers: {current_solvers}")
             if solver2['name'] in current_solvers.split(','):
                 result.fail(f"Solver {solver2['name']} no longer assigned to puzzle {puzzle1['name']}")
                 return
@@ -1130,7 +1159,7 @@ class TestRunner:
                         result.fail(f"Failed to get updated puzzle data for {puzzle['name']}")
                         sys.exit(1)
                         
-                    if solver['name'] not in puzzle_data.get('solvers', ''):
+                    if solver['name'] not in puzzle_data.get('cursolvers', ''):
                         result.fail(f"Solver {solver['name']} not found in puzzle's solver history")
                         sys.exit(1)
                         
@@ -1148,7 +1177,7 @@ class TestRunner:
                         result.fail(f"Failed to get updated puzzle data for {puzzle['name']}")
                         sys.exit(1)
                         
-                    if solver['name'] in puzzle_data.get('solvers', ''):
+                    if solver['name'] in puzzle_data.get('cursolvers', ''):
                         result.fail(f"Solver {solver['name']} still found in puzzle's solver history after removal")
                         sys.exit(1)
                         
