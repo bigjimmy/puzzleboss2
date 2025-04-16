@@ -1124,8 +1124,9 @@ class TestRunner:
             puzzle1_details = self.get_puzzle_details(puzzle1['id'])
             puzzle2_details = self.get_puzzle_details(puzzle2['id'])
             solver1_details = self.get_solver_details(solver1['id'])
+            solver2_details = self.get_solver_details(solver2['id'])
             
-            if not puzzle1_details or not puzzle2_details or not solver1_details:
+            if not puzzle1_details or not puzzle2_details or not solver1_details or not solver2_details:
                 result.fail("Failed to get details after reassignment")
                 return
                 
@@ -1147,6 +1148,12 @@ class TestRunner:
             self.logger.log_operation(f"Solver {solver1['name']} current puzzle after reassignment: {solver1_details.get('puzz')}")
             if solver1_details.get('puzz') != puzzle2['name']:
                 result.fail(f"Solver {solver1['name']} not properly reassigned to puzzle {puzzle2['name']}")
+                return
+                
+            # Check solver2 is still assigned to puzzle1
+            self.logger.log_operation(f"Solver {solver2['name']} current puzzle after reassignment: {solver2_details.get('puzz')}")
+            if solver2_details.get('puzz') != puzzle1['name']:
+                result.fail(f"Solver {solver2['name']} no longer assigned to puzzle {puzzle1['name']}")
                 return
                 
             result.set_success("Solver reassignment test completed successfully")
