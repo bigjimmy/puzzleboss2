@@ -756,7 +756,7 @@ class TestRunner:
             
             if not solvers or not puzzles:
                 result.fail("Failed to get solvers or puzzles")
-                sys.exit(1)
+                return
                 
             self.logger.log_operation(f"Found {len(solvers)} solvers and {len(puzzles)} puzzles")
             
@@ -768,11 +768,11 @@ class TestRunner:
                     detailed_puzzles.append(puzzle_details)
                 else:
                     result.fail(f"Failed to get details for puzzle {puzzle['id']}")
-                    sys.exit(1)
+                    continue
                 
             if not detailed_puzzles:
                 result.fail("Failed to get puzzle details")
-                sys.exit(1)
+                return
                 
             # Group puzzles by round
             puzzles_by_round = {}
@@ -795,7 +795,7 @@ class TestRunner:
                     
             if not selected_puzzles:
                 result.fail("No puzzles available for testing")
-                sys.exit(1)
+                return
                 
             self.logger.log_operation(f"Selected {len(selected_puzzles)} puzzles for assignment testing")
                 
@@ -804,7 +804,7 @@ class TestRunner:
                 # Select 2 random solvers
                 if len(solvers) < 2:
                     result.fail("Not enough solvers available for testing")
-                    sys.exit(1)
+                    continue
                     
                 selected_solvers = random.sample(solvers, 2)
                 
@@ -813,17 +813,17 @@ class TestRunner:
                     success = self.assign_solver_to_puzzle(solver['id'], puzzle['id'])
                     if not success:
                         result.fail(f"Failed to assign solver {solver['name']} to puzzle {puzzle['name']}")
-                        sys.exit(1)
+                        continue
                         
                     # Verify assignment
                     solver_details = self.get_solver_details(solver['id'])
                     if not solver_details:
                         result.fail(f"Failed to get solver details for {solver['name']}")
-                        sys.exit(1)
+                        continue
                         
                     if solver_details.get('puzz') != puzzle['name']:
                         result.fail(f"Solver {solver['name']} not properly assigned to puzzle {puzzle['name']}")
-                        sys.exit(1)
+                        continue
                         
                     self.logger.log_operation(f"Successfully assigned solver {solver['name']} to puzzle {puzzle['name']}")
                 
@@ -834,7 +834,6 @@ class TestRunner:
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
-            sys.exit(1)  # Terminate the entire test
 
     def test_activity_tracking(self, result: TestResult):
         """Test activity tracking functionality."""
@@ -932,7 +931,7 @@ class TestRunner:
             
             if not solvers or not puzzles:
                 result.fail("Failed to get solvers or puzzles")
-                sys.exit(1)
+                return
                 
             self.logger.log_operation(f"Found {len(solvers)} solvers and {len(puzzles)} puzzles")
             
@@ -944,11 +943,11 @@ class TestRunner:
                     detailed_puzzles.append(puzzle_details)
                 else:
                     result.fail(f"Failed to get details for puzzle {puzzle['id']}")
-                    sys.exit(1)
+                    continue
                 
             if not detailed_puzzles:
                 result.fail("Failed to get puzzle details")
-                sys.exit(1)
+                return
                 
             # Group puzzles by round
             puzzles_by_round = {}
@@ -961,16 +960,17 @@ class TestRunner:
                     
             self.logger.log_operation(f"Found {len(puzzles_by_round)} rounds with puzzles")
             
-            # For each round, select one random puzzle for testing
+            # For each round, select up to 2 random puzzles
             selected_puzzles = []
             for round_id, round_puzzles in puzzles_by_round.items():
-                if round_puzzles:
-                    selected = random.choice(round_puzzles)
-                    selected_puzzles.append(selected)
+                num_to_select = min(2, len(round_puzzles))
+                if num_to_select > 0:
+                    selected = random.sample(round_puzzles, num_to_select)
+                    selected_puzzles.extend(selected)
                     
             if not selected_puzzles:
                 result.fail("No puzzles available for testing")
-                sys.exit(1)
+                return
                 
             self.logger.log_operation(f"Selected {len(selected_puzzles)} puzzles for history testing")
                 
@@ -979,7 +979,7 @@ class TestRunner:
                 # Select 2 random solvers
                 if len(solvers) < 2:
                     result.fail("Not enough solvers available for testing")
-                    sys.exit(1)
+                    continue
                     
                 selected_solvers = random.sample(solvers, 2)
                 
@@ -988,13 +988,13 @@ class TestRunner:
                     success = self.add_solver_to_history(puzzle['id'], solver['id'])
                     if not success:
                         result.fail(f"Failed to add solver {solver['name']} to history for puzzle {puzzle['name']}")
-                        sys.exit(1)
+                        continue
                         
                     # Verify history addition
                     puzzle_data = self.get_puzzle_details(puzzle['id'])
                     if not puzzle_data:
                         result.fail(f"Failed to get updated puzzle data for {puzzle['name']}")
-                        sys.exit(1)
+                        continue
                         
                     # Check if solver is in historical solvers list
                     historical_solvers = puzzle_data.get('solvers', '')
@@ -1002,7 +1002,7 @@ class TestRunner:
                         historical_solvers = ''
                     if solver['name'] not in historical_solvers:
                         result.fail(f"Solver {solver['name']} not found in puzzle's historical solvers")
-                        sys.exit(1)
+                        continue
                         
                     self.logger.log_operation(f"Successfully added solver {solver['name']} to history for puzzle {puzzle['name']}")
                     
@@ -1010,13 +1010,13 @@ class TestRunner:
                     success = self.remove_solver_from_history(puzzle['id'], solver['id'])
                     if not success:
                         result.fail(f"Failed to remove solver {solver['name']} from history for puzzle {puzzle['name']}")
-                        sys.exit(1)
+                        continue
                         
                     # Verify history removal
                     puzzle_data = self.get_puzzle_details(puzzle['id'])
                     if not puzzle_data:
                         result.fail(f"Failed to get updated puzzle data for {puzzle['name']}")
-                        sys.exit(1)
+                        continue
                         
                     # Check if solver is no longer in historical solvers list
                     historical_solvers = puzzle_data.get('solvers', '')
@@ -1024,7 +1024,7 @@ class TestRunner:
                         historical_solvers = ''
                     if solver['name'] in historical_solvers:
                         result.fail(f"Solver {solver['name']} still found in puzzle's historical solvers after removal")
-                        sys.exit(1)
+                        continue
                         
                     self.logger.log_operation(f"Successfully removed solver {solver['name']} from history for puzzle {puzzle['name']}")
                 
@@ -1035,7 +1035,6 @@ class TestRunner:
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
-            sys.exit(1)  # Terminate the entire test
 
     def test_solver_reassignment(self, result: TestResult):
         """Test reassignment of solvers between puzzles."""
@@ -1217,13 +1216,7 @@ class TestRunner:
         
         for name, test in tests:
             result = self.run_test(name, test)
-            self.results.append(result)
             
-            # If meta puzzles test fails, stop execution
-            if name == "Meta Puzzles and Round Completion" and not result.success:
-                self.logger.log_error("Meta puzzles test failed - stopping execution")
-                break
-                
         self.print_results()
 
 if __name__ == "__main__":
