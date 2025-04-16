@@ -996,8 +996,12 @@ class TestRunner:
                         result.fail(f"Failed to get updated puzzle data for {puzzle['name']}")
                         sys.exit(1)
                         
-                    if solver['name'] not in puzzle_data.get('cursolvers', ''):
-                        result.fail(f"Solver {solver['name']} not found in puzzle's solver history")
+                    # Check if solver is in current solvers list
+                    current_solvers = puzzle_data.get('cursolvers', '')
+                    if current_solvers is None:
+                        current_solvers = ''
+                    if solver['name'] not in current_solvers:
+                        result.fail(f"Solver {solver['name']} not found in puzzle's current solvers")
                         sys.exit(1)
                         
                     self.logger.log_operation(f"Successfully added solver {solver['name']} to history for puzzle {puzzle['name']}")
@@ -1014,8 +1018,12 @@ class TestRunner:
                         result.fail(f"Failed to get updated puzzle data for {puzzle['name']}")
                         sys.exit(1)
                         
-                    if solver['name'] in puzzle_data.get('cursolvers', ''):
-                        result.fail(f"Solver {solver['name']} still found in puzzle's solver history after removal")
+                    # Check if solver is no longer in current solvers list
+                    current_solvers = puzzle_data.get('cursolvers', '')
+                    if isinstance(current_solvers, str):
+                        current_solvers = json.loads(current_solvers)
+                    if any(s.get('solver_id') == solver['id'] for s in current_solvers.get('solvers', [])):
+                        result.fail(f"Solver {solver['name']} still found in puzzle's current solvers after removal")
                         sys.exit(1)
                         
                     self.logger.log_operation(f"Successfully removed solver {solver['name']} from history for puzzle {puzzle['name']}")
