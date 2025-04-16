@@ -1224,6 +1224,45 @@ class TestRunner:
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
             return False
 
+    def test_round_modification(self, result: TestResult):
+        """Test round modification functionality."""
+        self.logger.log_operation("Starting round modification test")
+        
+        try:
+            # Create a test round
+            round_name = f"Test Round {int(time.time())}"
+            round_data = self.create_round(round_name)
+            if not round_data:
+                result.fail("Failed to create test round")
+                return
+                
+            self.logger.log_operation(f"Created test round: {round_data['name']}")
+            
+            # Test comments update
+            new_comments = f"Test comments for round {round_data['name']}"
+            self.logger.log_operation(f"Updating comments to '{new_comments}'")
+            
+            # Update round comments
+            updated_round = self.update_round(round_data['id'], {'comments': new_comments})
+            if not updated_round:
+                result.fail(f"Failed to update comments for round {round_data['name']}")
+                return
+                
+            # Verify comments update
+            if updated_round.get('comments') != new_comments:
+                result.fail(f"Comments not updated for round {round_data['name']}")
+                return
+                
+            self.logger.log_operation(f"Successfully updated comments for round {round_data['name']}")
+            
+            result.set_success("Round modification test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in round modification test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def run_all_tests(self):
         """Run all test cases."""
         # Check if system is empty before running tests
@@ -1250,6 +1289,7 @@ class TestRunner:
             ("Solver Listing", self.test_solver_listing),
             ("Puzzle Creation", self.test_puzzle_creation),
             ("Puzzle Modification", self.test_puzzle_modification),
+            ("Round Modification", self.test_round_modification),
             ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
             ("Answer Verification", self.test_answer_verification),
             ("Solver Assignments", self.test_solver_assignments),
