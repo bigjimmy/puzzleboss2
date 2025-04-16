@@ -353,8 +353,8 @@ class TestRunner:
         """Assign a solver to a puzzle."""
         try:
             response = requests.post(
-                f"{self.base_url}/puzzles/{puzzle_id}/solvers",
-                json={"solver_id": solver_id}
+                f"{self.base_url}/solvers/{solver_id}/puzz",
+                json={"puzz": puzzle_id}
             )
             return response.status_code == 200
         except Exception as e:
