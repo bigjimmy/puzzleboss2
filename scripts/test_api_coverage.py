@@ -536,10 +536,10 @@ class TestRunner:
             
         # Randomly select puzzles for answer verification
         puzzles_for_answers = random.sample(selected_puzzles, len(selected_puzzles) // 2)
-        puzzles_for_answers_set = set(p.id for p in puzzles_for_answers)
+        puzzles_for_answers_set = set(p['id'] for p in puzzles_for_answers)
             
         # For each selected puzzle, test modifications
-        for puzzle in selected_puzzles:
+        for idx, puzzle in enumerate(selected_puzzles):
             self.logger.log_operation(f"Testing modifications for puzzle {puzzle['name']}")
             
             # Test name update with spaces
