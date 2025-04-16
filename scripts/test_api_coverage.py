@@ -258,20 +258,13 @@ class TestRunner:
             
             # Prepare request data
             request_data = {
-                "puzzle": {
-                    "name": name,
-                    "round_id": round_id_int,
-                    "puzzle_uri": "http://example.com/puzzle",
-                    "ismeta": False
-                }
+                "name": name,
+                "round_id": round_id_int,
+                "puzzle_uri": "http://example.com/puzzle"
             }
             
-            self.logger.log_operation(f"Request data: {json.dumps(request_data)}")
-            
-            response = requests.post(
-                f"{BASE_URL}/puzzles",
-                json=request_data
-            )
+            # Make the API request
+            response = requests.post(f"{self.base_url}/puzzles", json=request_data)
             
             if not response.ok:
                 self.logger.log_error(f"HTTP error creating puzzle {name}: {response.status_code}")
@@ -431,10 +424,6 @@ class TestRunner:
         if not solvers:
             result.fail("No solvers found")
             return
-        
-        # Log details of each solver
-        for solver in solvers:
-            self.logger.log_operation(f"Solver found: {solver['name']} (ID: {solver['id']})")
         
         result.message = f"Found {len(solvers)} solvers"
 
