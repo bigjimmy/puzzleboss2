@@ -747,163 +747,6 @@ class TestRunner:
                 
         result.set_success("Answer verification test completed successfully")
 
-    def test_solver_reassignment(self, result: TestResult):
-        """Test reassignment of solvers between puzzles."""
-        self.logger.log_operation("Starting solver reassignment test")
-        
-        try:
-            # Get all puzzles and solvers
-            puzzles = self.get_all_puzzles()
-            solvers = self.get_all_solvers()
-            
-            if not puzzles or len(puzzles) < 2:
-                result.fail("Need at least 2 puzzles for reassignment test")
-                return
-                
-            if not solvers or len(solvers) < 2:
-                result.fail("Need at least 2 solvers for reassignment test")
-                return
-                
-            # Get solvers that are already assigned to puzzles
-            assigned_solvers = []
-            for solver in solvers:
-                solver_details = self.get_solver_details(solver['id'])
-                if solver_details and solver_details.get('puzz'):
-                    assigned_solvers.append(solver)
-                    
-            if len(assigned_solvers) < 2:
-                result.fail("Need at least 2 solvers already assigned to puzzles for reassignment test")
-                return
-                
-            # Select two random assigned solvers
-            solver1, solver2 = random.sample(assigned_solvers, 2)
-            
-            # Get their current puzzles
-            solver1_details = self.get_solver_details(solver1['id'])
-            solver2_details = self.get_solver_details(solver2['id'])
-            solver1_current_puzzle = solver1_details.get('puzz')
-            solver2_current_puzzle = solver2_details.get('puzz')
-            
-            # Filter out puzzles that are currently assigned to either solver
-            available_puzzles = []
-            for puzzle in puzzles:
-                if puzzle['name'] != solver1_current_puzzle and puzzle['name'] != solver2_current_puzzle:
-                    available_puzzles.append(puzzle)
-                    
-            if len(available_puzzles) < 2:
-                result.fail("Not enough puzzles available that aren't already assigned to the selected solvers")
-                return
-                
-            # Select two random puzzles from the available ones
-            puzzle1, puzzle2 = random.sample(available_puzzles, 2)
-            
-            self.logger.log_operation(f"Selected puzzles: {puzzle1['name']}, {puzzle2['name']}")
-            self.logger.log_operation(f"Selected solvers: {solver1['name']} (currently on {solver1_current_puzzle}), {solver2['name']} (currently on {solver2_current_puzzle})")
-            
-            # Assign both solvers to first puzzle
-            for solver in [solver1, solver2]:
-                self.logger.log_operation(f"Attempting to assign solver {solver['name']} to puzzle {puzzle1['name']}")
-                if not self.update_solver_puzzle(solver['id'], puzzle1['id']):
-                    result.fail(f"Failed to assign solver {solver['name']} to puzzle {puzzle1['name']}")
-                    return
-                self.logger.log_operation(f"Successfully assigned solver {solver['name']} to puzzle {puzzle1['name']}")
-                    
-            # Verify initial assignments
-            puzzle1_details = self.get_puzzle_details(puzzle1['id'])
-            if not puzzle1_details:
-                result.fail(f"Failed to get details for puzzle {puzzle1['name']}")
-                return
-                
-            # Check puzzle's current solvers
-            current_solvers = puzzle1_details.get('cursolvers', '') or ''
-            self.logger.log_operation(f"Current solvers for puzzle {puzzle1['name']}: {current_solvers}")
-            if solver1['name'] not in current_solvers.split(',') or solver2['name'] not in current_solvers.split(','):
-                result.fail(f"Solvers not properly assigned to puzzle {puzzle1['name']}")
-                self.logger.log_error(f"Expected solvers: {solver1['name']}, {solver2['name']}")
-                self.logger.log_error(f"Actual solvers: {current_solvers}")
-                return
-                
-            # Check solvers' current puzzles
-            for solver in [solver1, solver2]:
-                solver_details = self.get_solver_details(solver['id'])
-                self.logger.log_operation(f"Solver {solver['name']} current puzzle: {solver_details.get('puzz')}")
-                if solver_details.get('puzz') != puzzle1['name']:
-                    result.fail(f"Solver {solver['name']} not properly assigned to puzzle {puzzle1['name']}")
-                    return
-                    
-            # Reassign first solver to second puzzle
-            self.logger.log_operation(f"Attempting to reassign solver {solver1['name']} to puzzle {puzzle2['name']}")
-            if not self.update_solver_puzzle(solver1['id'], puzzle2['id']):
-                result.fail(f"Failed to reassign solver {solver1['name']} to puzzle {puzzle2['name']}")
-                return
-            self.logger.log_operation(f"Successfully reassigned solver {solver1['name']} to puzzle {puzzle2['name']}")
-                
-            # Verify reassignment
-            puzzle1_details = self.get_puzzle_details(puzzle1['id'])
-            puzzle2_details = self.get_puzzle_details(puzzle2['id'])
-            solver1_details = self.get_solver_details(solver1['id'])
-            
-            if not puzzle1_details or not puzzle2_details or not solver1_details:
-                result.fail("Failed to get details after reassignment")
-                return
-                
-            # Check solver is no longer assigned to old puzzle
-            current_solvers = puzzle1_details.get('cursolvers', '') or ''
-            self.logger.log_operation(f"Current solvers for puzzle {puzzle1['name']} after reassignment: {current_solvers}")
-            if solver1['name'] in current_solvers.split(','):
-                result.fail(f"Solver {solver1['name']} still assigned to old puzzle {puzzle1['name']}")
-                return
-                
-            # Check solver is assigned to new puzzle
-            current_solvers = puzzle2_details.get('cursolvers', '') or ''
-            self.logger.log_operation(f"Current solvers for puzzle {puzzle2['name']} after reassignment: {current_solvers}")
-            if solver1['name'] not in current_solvers.split(','):
-                result.fail(f"Solver {solver1['name']} not assigned to new puzzle {puzzle2['name']}")
-                return
-                
-            # Check solver's current puzzle is updated
-            self.logger.log_operation(f"Solver {solver1['name']} current puzzle after reassignment: {solver1_details.get('puzz')}")
-            if solver1_details.get('puzz') != puzzle2['name']:
-                result.fail(f"Solver {solver1['name']} not properly reassigned to puzzle {puzzle2['name']}")
-                return
-                
-            result.set_success("Solver reassignment test completed successfully")
-            
-        except Exception as e:
-            result.fail(f"Error in solver reassignment test: {str(e)}")
-            self.logger.log_error(f"Exception type: {type(e).__name__}")
-            self.logger.log_error(f"Exception message: {str(e)}")
-            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
-
-    def update_solver_puzzle(self, solver_id: str, puzzle_id: str) -> bool:
-        """Update a solver's current puzzle assignment."""
-        try:
-            self.logger.log_operation(f"Making POST request to /solvers/{solver_id}/puzz with puzzle_id {puzzle_id}")
-            response = requests.post(
-                f"{self.base_url}/solvers/{solver_id}/puzz",
-                json={"puzz": puzzle_id}
-            )
-            
-            self.logger.log_operation(f"Response status code: {response.status_code}")
-            self.logger.log_operation(f"Response body: {response.text}")
-            
-            if response.status_code != 200:
-                self.logger.log_error(f"Failed to update solver puzzle. Status code: {response.status_code}")
-                return False
-                
-            response_data = response.json()
-            if response_data.get('status') != 'ok':
-                self.logger.log_error(f"Failed to update solver puzzle. Response: {response_data}")
-                return False
-                
-            return True
-            
-        except Exception as e:
-            self.logger.log_error(f"Error updating solver puzzle: {str(e)}")
-            self.logger.log_error(f"Exception type: {type(e).__name__}")
-            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
-            return False
-
     def test_solver_assignments(self, result: TestResult):
         """Test solver assignment functionality."""
         try:
@@ -1194,19 +1037,21 @@ class TestRunner:
             ("Puzzle Modification", self.test_puzzle_modification),
             ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
             ("Answer Verification", self.test_answer_verification),
-            ("Solver Reassignment", self.test_solver_reassignment),
             ("Solver Assignments", self.test_solver_assignments),
-            ("Solver History", self.test_solver_history),
+            ("Solver Reassignment", self.test_solver_reassignment),
             ("Activity Tracking", self.test_activity_tracking),
+            ("Solver History", self.test_solver_history)
         ]
         
         for name, test in tests:
             result = self.run_test(name, test)
+            self.results.append(result)
+            
             # If meta puzzles test fails, stop execution
             if name == "Meta Puzzles and Round Completion" and not result.success:
-                self.logger.log_error("Meta puzzles test failed - stopping test execution")
+                self.logger.log_error("Meta puzzles test failed - stopping execution")
                 break
-            
+                
         self.print_results()
 
 if __name__ == "__main__":
