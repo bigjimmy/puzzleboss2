@@ -785,8 +785,8 @@ class TestRunner:
                 return
                 
             # Check puzzle's current solvers
-            current_solvers = puzzle1_details.get('cursolvers', '').split(',')
-            if solver1['name'] not in current_solvers or solver2['name'] not in current_solvers:
+            current_solvers = puzzle1_details.get('cursolvers', '') or ''
+            if solver1['name'] not in current_solvers.split(',') or solver2['name'] not in current_solvers.split(','):
                 result.fail(f"Solvers not properly assigned to puzzle {puzzle1['name']}")
                 return
                 
@@ -812,17 +812,17 @@ class TestRunner:
                 return
                 
             # Check solver is no longer assigned to old puzzle
-            current_solvers = puzzle1_details.get('cursolvers', '').split(',')
+            current_solvers = puzzle1_details.get('cursolvers', '') or ''
             self.logger.log_operation(f"Checking solver {solver1['name']} is no longer in old puzzle's cursolvers: {current_solvers}")
-            if solver1['name'] in current_solvers:
+            if solver1['name'] in current_solvers.split(','):
                 result.fail(f"Solver {solver1['name']} still assigned to old puzzle {puzzle1['name']}")
                 return
             self.logger.log_operation(f"Confirmed solver {solver1['name']} is no longer assigned to puzzle {puzzle1['name']}")
                 
             # Check solver is assigned to new puzzle
-            current_solvers = puzzle2_details.get('cursolvers', '').split(',')
+            current_solvers = puzzle2_details.get('cursolvers', '') or ''
             self.logger.log_operation(f"Checking solver {solver1['name']} is in new puzzle's cursolvers: {current_solvers}")
-            if solver1['name'] not in current_solvers:
+            if solver1['name'] not in current_solvers.split(','):
                 result.fail(f"Solver {solver1['name']} not assigned to new puzzle {puzzle2['name']}")
                 return
             self.logger.log_operation(f"Confirmed solver {solver1['name']} is now assigned to puzzle {puzzle2['name']}")
@@ -835,17 +835,17 @@ class TestRunner:
             self.logger.log_operation(f"Confirmed solver {solver1['name']}'s puzz field is updated to {puzzle2['name']}")
                 
             # Check solver is in historical solvers list for old puzzle
-            historical_solvers = puzzle1_details.get('solvers', '').split(',')
+            historical_solvers = puzzle1_details.get('solvers', '') or ''
             self.logger.log_operation(f"Checking solver {solver1['name']} is in old puzzle's historical solvers: {historical_solvers}")
-            if solver1['name'] not in historical_solvers:
+            if solver1['name'] not in historical_solvers.split(','):
                 result.fail(f"Solver {solver1['name']} not in historical solvers list for puzzle {puzzle1['name']}")
                 return
             self.logger.log_operation(f"Confirmed solver {solver1['name']} is in historical solvers list for puzzle {puzzle1['name']}")
                 
             # Verify second solver is still assigned to first puzzle
-            current_solvers = puzzle1_details.get('cursolvers', '').split(',')
+            current_solvers = puzzle1_details.get('cursolvers', '') or ''
             self.logger.log_operation(f"Checking solver {solver2['name']} is still in puzzle {puzzle1['name']}'s cursolvers: {current_solvers}")
-            if solver2['name'] not in current_solvers:
+            if solver2['name'] in current_solvers.split(','):
                 result.fail(f"Solver {solver2['name']} no longer assigned to puzzle {puzzle1['name']}")
                 return
             self.logger.log_operation(f"Confirmed solver {solver2['name']} is still assigned to puzzle {puzzle1['name']}")
@@ -865,7 +865,7 @@ class TestRunner:
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
-            
+
     def update_solver_puzzle(self, solver_id: str, puzzle_id: str) -> bool:
         """Update a solver's current puzzle assignment."""
         try:
