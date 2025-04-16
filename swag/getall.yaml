@@ -24,6 +24,10 @@ responses:
               comments:
                 type: string
                 description: Round comments
+              status:
+                type: string
+                enum: ['Solved']
+                description: Status of the round (Solved when all meta puzzles are solved)
               puzzles:
                 type: array
                 items:

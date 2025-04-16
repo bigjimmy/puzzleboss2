@@ -28,6 +28,10 @@ responses:
               round_uri:
                   type: string
                   description: URI of page where this round is
+              status:
+                  type: string
+                  enum: ['Solved']
+                  description: Status of the round (Solved when all meta puzzles are solved)
               puzzles:
                   type: array
                   items:

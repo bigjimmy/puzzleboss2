@@ -200,7 +200,7 @@ CREATE TABLE `solver` (
 /*!50001 SET character_set_results     = utf8 */;
 /*!50001 SET collation_connection      = utf8_unicode_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, `round`.`comments` AS `comments`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */; 
+/*!50001 VIEW `round_view` AS select `round`.`id` AS `id`,`round`.`name` AS `name`,`round`.`round_uri` AS `round_uri`, `round`.`drive_uri` AS `drive_uri`, `round`.`drive_id` AS `drive_id`, `round`.`comments` AS `comments`, `round`.`status` AS `status`, GROUP_CONCAT(`puzzle`.`id` SEPARATOR ',') AS puzzles FROM `round` LEFT JOIN `puzzle` ON (`puzzle`.`round_id` = `round`.`id`) GROUP BY `round`.`id` */; 
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
 /*!50001 SET collation_connection      = @saved_col_connection */;
