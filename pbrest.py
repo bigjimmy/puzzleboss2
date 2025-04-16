@@ -8,7 +8,7 @@ import inspect
 import datetime
 import bleach
 import smtplib
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_restful import Api
 from flask_mysqldb import MySQL
 from pblib import *
@@ -236,10 +236,30 @@ def get_all_rounds():
 @swag_from("swag/getroundid.yaml", endpoint="round_id", methods=["GET"])
 def get_one_round(id):
     debug_log(4, "start. id: %s" % id)
-    rounds = get_all_all()["rounds"]
-    round = next((round for round in rounds if str(round["id"]) == str(id)), None)
-    if not round:
-        raise Exception("Round %s not found in database" % id)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.id, r.name, r.round_uri, r.drive_uri, r.drive_id, r.status, r.comments,
+                   GROUP_CONCAT(p.id) as puzzles
+            FROM round r
+            LEFT JOIN puzzle p ON p.round_id = r.id
+            WHERE r.id = %s
+            GROUP BY r.id
+        """, (id,))
+        round = cursor.fetchone()
+        if not round:
+            raise Exception("Round %s not found in database" % id)
+            
+        # Convert puzzles string to list of puzzle objects
+        puzzle_ids = round['puzzles'].split(',') if round['puzzles'] else []
+        puzzles = []
+        for pid in puzzle_ids:
+            if pid:  # Skip empty strings
+                puzzles.append(get_one_puzzle(pid)['puzzle'])
+        round['puzzles'] = puzzles
+    except:
+        raise Exception("Exception in fetching round %s from database" % id)
 
     debug_log(4, "fetched round %s" % id)
     return {
@@ -255,8 +275,12 @@ def get_round_part(id, part):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute(f"SELECT {part} from round_view where id = %s", (id,))
-        answer = cursor.fetchone()[part]
+        # Use round table directly instead of round_view to get status
+        cursor.execute(f"SELECT {part} from round where id = %s", (id,))
+        answer = cursor.fetchone()
+        if not answer:
+            raise Exception("Round %s not found in database" % id)
+        answer = answer[part]
     except TypeError:
         raise Exception("Round %s not found in database" % id)
     except:
@@ -298,6 +322,8 @@ def get_one_solver(id):
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from solver_view where id = %s", (id,))
         solver = cursor.fetchone()
+        if solver is None:
+            raise Exception("Solver %s not found in database" % id)
     except IndexError:
         raise Exception("Solver %s not found in database" % id)
     except:
@@ -449,26 +475,26 @@ def put_config():
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
 @swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
 def create_puzzle():
-    debug_log(4, "start")
     try:
-        data = request.get_json()
-        puzname = sanitize_puzzle_name(data["name"])
-        puzuri = bleach.clean(data["puzzle_uri"])
-        roundid = int(data["round_id"])
-        ismeta = data.get("ismeta", False)
-        debug_log(5, "request data is - %s" % str(data))
+        puzzle_data = request.get_json()
+        debug_log(5, f"Incoming puzzle creation payload: {json.dumps(puzzle_data, indent=2)}")
+        if not puzzle_data or "puzzle" not in puzzle_data:
+            return jsonify({"error": "Invalid JSON POST structure"}), 400
+            
+        puzzle = puzzle_data["puzzle"]
+        name = puzzle.get("name")
+        round_id = puzzle.get("round_id")
+        puzzle_uri = puzzle.get("puzzle_uri")
+        ismeta = puzzle.get("ismeta", False)
+        debug_log(5, "request data is - %s" % str(puzzle))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception(
-            "One or more expected fields (name, puzzle_uri, round_id) missing."
-        )
 
     # Check for duplicate
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (puzname,))
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
         existing_puzzle = cursor.fetchone()
     except:
         raise Exception(
@@ -476,17 +502,17 @@ def create_puzzle():
         )
 
     if existing_puzzle:
-        raise Exception("Duplicate puzzle name %s detected" % puzname)
+        raise Exception("Duplicate puzzle name %s detected" % name)
 
     # Get round drive link and name
-    round_drive_uri = get_round_part(roundid, "drive_uri")["round"]["drive_uri"]
-    round_name = get_round_part(roundid, "name")["round"]["name"]
+    round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
+    round_name = get_round_part(round_id, "name")["round"]["name"]
     round_drive_id = round_drive_uri.split("/")[-1]
 
     # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
-    drive_uri = "%s/doc.php?pname=%s" % (configstruct["BIN_URI"], puzname)
+    drive_uri = "%s/doc.php?pname=%s" % (configstruct["BIN_URI"], name)
     chat_channel = chat_create_channel_for_puzzle(
-        puzname, round_name, puzuri, drive_uri
+        name, round_name, puzzle_uri, drive_uri
     )
     debug_log(4, "return from creating chat channel: %s" % str(chat_channel))
 
@@ -496,15 +522,15 @@ def create_puzzle():
     except:
         raise Exception("Error in creating chat channel for puzzle")
 
-    debug_log(4, "chat channel for puzzle %s is made" % puzname)
+    debug_log(4, "chat channel for puzzle %s is made" % name)
 
     # Create google sheet
     drive_id = create_puzzle_sheet(
         round_drive_id,
         {
-            "name": puzname,
+            "name": name,
             "roundname": round_name,
-            "puzzle_uri": puzuri,
+            "puzzle_uri": puzzle_uri,
             "chat_uri": chat_link,
         },
     )
@@ -525,12 +551,12 @@ def create_puzzle():
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                puzname,
-                puzuri,
-                roundid,
+                name,
+                puzzle_uri,
+                round_id,
                 chat_id,
                 chat_link,
-                puzname, # Store the full name with emojis intact
+                name, # Store the full name with emojis intact
                 drive_id,
                 drive_uri,
                 ismeta,
@@ -540,35 +566,35 @@ def create_puzzle():
     except MySQLdb._exceptions.IntegrityError:
         raise Exception(
             "MySQL integrity failure. Does another puzzle with the same name %s exist?"
-            % puzname
+            % name
         )
     except:
-        raise Exception("Exception in insertion of puzzle %s into database" % puzname)
+        raise Exception("Exception in insertion of puzzle %s into database" % name)
 
     # We need to figure out what the ID is that the puzzle got assigned
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM puzzle WHERE name = %s", (puzname,))
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
         puzzle = cursor.fetchone()
         myid = str(puzzle["id"])
     except:
         raise Exception("Exception checking database for puzzle after insert")
 
     # Announce new puzzle in chat
-    chat_announce_new(puzname)
+    chat_announce_new(name)
 
     debug_log(
         3,
         "puzzle %s added to system fully (chat room, spreadsheet, database, etc.)!"
-        % puzname,
+        % name,
     )
 
     return {
         "status": "ok",
         "puzzle": {
             "id": myid,
-            "name": puzname,
+            "name": name,
             "chat_channel_id": chat_id,
             "chat_link": chat_link,
             "drive_uri": drive_uri,
