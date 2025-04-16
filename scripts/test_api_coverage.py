@@ -353,15 +353,10 @@ class TestRunner:
         """Assign a solver to a puzzle."""
         try:
             response = requests.post(
-                f"{self.base_url}/puzzles/{puzzle_id}/history/add",
+                f"{self.base_url}/puzzles/{puzzle_id}/solvers",
                 json={"solver_id": solver_id}
             )
-            if not response.ok:
-                return False
-            response_data = response.json()
-            if response_data.get('status') != 'ok':
-                return False
-            return True
+            return response.status_code == 200
         except Exception as e:
             self.logger.log_error(f"Error assigning solver to puzzle: {str(e)}")
             return False
@@ -803,7 +798,7 @@ class TestRunner:
             
             # Assign both solvers to first puzzle
             for solver in [solver1, solver2]:
-                if not self.assign_solver_to_puzzle(solver['id'], puzzle1['id']):
+                if not self.update_solver_puzzle(solver['id'], puzzle1['id']):
                     result.fail(f"Failed to assign solver {solver['name']} to puzzle {puzzle1['name']}")
                     return
                     
