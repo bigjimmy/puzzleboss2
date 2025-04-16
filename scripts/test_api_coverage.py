@@ -878,13 +878,30 @@ class TestRunner:
     def update_solver_puzzle(self, solver_id: str, puzzle_id: str) -> bool:
         """Update a solver's current puzzle assignment."""
         try:
+            self.logger.log_operation(f"Making POST request to /solvers/{solver_id}/puzz with puzzle_id {puzzle_id}")
             response = requests.post(
                 f"{self.base_url}/solvers/{solver_id}/puzz",
                 json={"puzz": puzzle_id}
             )
-            return response.status_code == 200
+            
+            self.logger.log_operation(f"Response status code: {response.status_code}")
+            self.logger.log_operation(f"Response body: {response.text}")
+            
+            if response.status_code != 200:
+                self.logger.log_error(f"Failed to update solver puzzle. Status code: {response.status_code}")
+                return False
+                
+            response_data = response.json()
+            if response_data.get('status') != 'ok':
+                self.logger.log_error(f"Failed to update solver puzzle. Response: {response_data}")
+                return False
+                
+            return True
+            
         except Exception as e:
             self.logger.log_error(f"Error updating solver puzzle: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
             return False
 
     def test_solver_assignments(self, result: TestResult):
