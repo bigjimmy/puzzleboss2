@@ -258,9 +258,11 @@ class TestRunner:
             
             # Prepare request data
             request_data = {
-                "name": name,
-                "round_id": round_id_int,
-                "puzzle_uri": "http://example.com/puzzle"
+                "puzzle": {
+                    "name": name,
+                    "round_id": round_id_int,
+                    "puzzle_uri": "http://example.com/puzzle"
+                }
             }
             
             # Make the API request
