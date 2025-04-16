@@ -585,6 +585,23 @@ class TestRunner:
                 result.fail(f"Comments not updated for puzzle {puzzle['name']}")
                 continue
                 
+            # Test location update
+            new_location = f"Test Location {random.randint(1000, 9999)}"
+            self.logger.log_operation(f"Updating location to '{new_location}'")
+            if not self.update_puzzle(puzzle["id"], "xyzloc", new_location):
+                result.fail(f"Failed to update location for puzzle {puzzle['name']}")
+                continue
+                
+            # Verify location update
+            updated_puzzle = self.get_puzzle_details(puzzle["id"])
+            if not updated_puzzle:
+                result.fail(f"Failed to verify location update for puzzle {puzzle['name']}")
+                continue
+                
+            if updated_puzzle["xyzloc"] != new_location:
+                result.fail(f"Location not updated for puzzle {puzzle['name']}")
+                continue
+                
         result.set_success("Puzzle modification test completed successfully")
 
     def test_meta_puzzles_and_round_completion(self, result: TestResult):
