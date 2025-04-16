@@ -1263,6 +1263,67 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def test_api_endpoints(self, result: TestResult):
+        """Test basic read-only API endpoints."""
+        self.logger.log_operation("Starting API endpoints test")
+        
+        try:
+            # Test /all endpoint
+            self.logger.log_operation("Testing /all endpoint")
+            response = requests.get(f"{self.base_url}/all")
+            if not response.ok:
+                result.fail(f"Failed to get /all endpoint: {response.text}")
+                return
+            all_data = response.json()
+            if not isinstance(all_data, dict) or 'rounds' not in all_data:
+                result.fail("Invalid response format from /all endpoint")
+                return
+            self.logger.log_operation("Successfully tested /all endpoint")
+            
+            # Test /puzzles endpoint
+            self.logger.log_operation("Testing /puzzles endpoint")
+            response = requests.get(f"{self.base_url}/puzzles")
+            if not response.ok:
+                result.fail(f"Failed to get /puzzles endpoint: {response.text}")
+                return
+            puzzles_data = response.json()
+            if not isinstance(puzzles_data, dict) or 'puzzles' not in puzzles_data:
+                result.fail("Invalid response format from /puzzles endpoint")
+                return
+            self.logger.log_operation("Successfully tested /puzzles endpoint")
+            
+            # Test /solvers endpoint
+            self.logger.log_operation("Testing /solvers endpoint")
+            response = requests.get(f"{self.base_url}/solvers")
+            if not response.ok:
+                result.fail(f"Failed to get /solvers endpoint: {response.text}")
+                return
+            solvers_data = response.json()
+            if not isinstance(solvers_data, dict) or 'solvers' not in solvers_data:
+                result.fail("Invalid response format from /solvers endpoint")
+                return
+            self.logger.log_operation("Successfully tested /solvers endpoint")
+            
+            # Test /rounds endpoint
+            self.logger.log_operation("Testing /rounds endpoint")
+            response = requests.get(f"{self.base_url}/rounds")
+            if not response.ok:
+                result.fail(f"Failed to get /rounds endpoint: {response.text}")
+                return
+            rounds_data = response.json()
+            if not isinstance(rounds_data, dict) or 'rounds' not in rounds_data:
+                result.fail("Invalid response format from /rounds endpoint")
+                return
+            self.logger.log_operation("Successfully tested /rounds endpoint")
+            
+            result.set_success("API endpoints test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in API endpoints test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def run_all_tests(self):
         """Run all test cases."""
         # Check if system is empty before running tests
@@ -1295,7 +1356,8 @@ class TestRunner:
             ("Solver Assignments", self.test_solver_assignments),
             ("Solver Reassignment", self.test_solver_reassignment),
             ("Activity Tracking", self.test_activity_tracking),
-            ("Solver History", self.test_solver_history)
+            ("Solver History", self.test_solver_history),
+            ("API Endpoints", self.test_api_endpoints)
         ]
         
         for name, test in tests:
