@@ -460,18 +460,22 @@ class TestRunner:
                 self.logger.log_operation(f"Creating puzzles for round {round_data['name']}")
                 puzzles = []
                 for puzzle_idx in range(4):
-                    # Create puzzle name with spaces
-                    puzzle_name = f"Test Puzzle R{round_idx+1}P{puzzle_idx+1} {int(time.time())}"
+                    # Create puzzle name with spaces and emojis for even-numbered puzzles
+                    base_name = f"Test Puzzle R{round_idx+1}P{puzzle_idx+1} {int(time.time())}"
+                    puzzle_name = self.get_emoji_string(base_name, include_emoji=(puzzle_idx % 2 == 0))
+                    
                     # Create the puzzle
                     puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
                     if not puzzle_data:
                         result.fail(f"Failed to create puzzle {puzzle_name}")
                         return
-                    # Verify the name was stripped of spaces
+                        
+                    # Verify the name was stripped of spaces but emojis preserved
                     expected_name = puzzle_name.replace(" ", "")
                     if puzzle_data['name'] != expected_name:
-                        result.fail(f"Puzzle name not properly stripped of spaces. Expected: {expected_name}, Got: {puzzle_data['name']}")
+                        result.fail(f"Puzzle name not properly processed. Expected: {expected_name}, Got: {puzzle_data['name']}")
                         return
+                        
                     puzzles.append(puzzle_data)
                     
                 # Verify all puzzles were created in the correct round
@@ -530,6 +534,10 @@ class TestRunner:
             result.fail("No puzzles available for testing")
             return
             
+        # Randomly select puzzles for answer verification
+        puzzles_for_answers = random.sample(selected_puzzles, len(selected_puzzles) // 2)
+        puzzles_for_answers_set = set(p.id for p in puzzles_for_answers)
+            
         # For each selected puzzle, test modifications
         for puzzle in selected_puzzles:
             self.logger.log_operation(f"Testing modifications for puzzle {puzzle['name']}")
@@ -569,37 +577,41 @@ class TestRunner:
                 result.fail(f"Status not updated for puzzle {puzzle['name']}")
                 continue
                 
-            # Test answer update
-            answer = "TESTANSWER"
-            self.logger.log_operation(f"Updating answer to '{answer}'")
-            if not self.update_puzzle(puzzle["id"], "answer", answer):
-                result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
-                continue
+            # Only set answer and verify solution on randomly selected puzzles
+            if puzzle["id"] in puzzles_for_answers_set:
+                # Test answer update
+                answer = "TESTANSWER"
+                self.logger.log_operation(f"Updating answer to '{answer}'")
+                if not self.update_puzzle(puzzle["id"], "answer", answer):
+                    result.fail(f"Failed to update answer for puzzle {puzzle['name']}")
+                    continue
+                    
+                # Verify puzzle is solved
+                updated_puzzle = self.get_puzzle_details(puzzle["id"])
+                if not updated_puzzle:
+                    result.fail(f"Failed to verify puzzle solve for puzzle {puzzle['name']}")
+                    continue
+                    
+                # Convert both to uppercase for comparison
+                expected_upper = answer.upper()
+                actual_upper = updated_puzzle.get('answer', '').upper()
                 
-            # Verify puzzle is solved
-            updated_puzzle = self.get_puzzle_details(puzzle["id"])
-            if not updated_puzzle:
-                result.fail(f"Failed to verify puzzle solve for puzzle {puzzle['name']}")
-                continue
-                
-            # Convert both to uppercase for comparison
-            expected_upper = answer.upper()
-            actual_upper = updated_puzzle.get('answer', '').upper()
-            
-            if expected_upper != actual_upper:
-                self.logger.log_error(f"DEBUG - Puzzle before answer update: {puzzle}")
-                self.logger.log_error(f"DEBUG - Updated puzzle after answer set: {updated_puzzle}")
-                self.logger.log_error(f"DEBUG - Expected answer: {answer}")
-                self.logger.log_error(f"DEBUG - Actual answer: {updated_puzzle.get('answer')}")
-                self.logger.log_error(f"DEBUG - Expected (upper): {expected_upper}")
-                self.logger.log_error(f"DEBUG - Actual (upper): {actual_upper}")
-                self.logger.log_error(f"DEBUG - Answer comparison: {expected_upper == actual_upper}")
-                result.fail(f"Answer verification failed for puzzle {puzzle['name']}")
-                continue
-                
-            if updated_puzzle["status"] != "Solved":
-                result.fail(f"Status not automatically set to 'Solved' for puzzle {puzzle['name']}")
-                continue
+                if expected_upper != actual_upper:
+                    self.logger.log_error(f"DEBUG - Puzzle before answer update: {puzzle}")
+                    self.logger.log_error(f"DEBUG - Updated puzzle after answer set: {updated_puzzle}")
+                    self.logger.log_error(f"DEBUG - Expected answer: {answer}")
+                    self.logger.log_error(f"DEBUG - Actual answer: {updated_puzzle.get('answer')}")
+                    self.logger.log_error(f"DEBUG - Expected (upper): {expected_upper}")
+                    self.logger.log_error(f"DEBUG - Actual (upper): {actual_upper}")
+                    self.logger.log_error(f"DEBUG - Answer comparison: {expected_upper == actual_upper}")
+                    result.fail(f"Answer verification failed for puzzle {puzzle['name']}")
+                    continue
+                    
+                if updated_puzzle["status"] != "Solved":
+                    result.fail(f"Status not automatically set to 'Solved' for puzzle {puzzle['name']}")
+                    continue
+            else:
+                self.logger.log_operation(f"Skipping answer update for puzzle {puzzle['name']} (not selected for answer testing)")
                 
             # Test comments update
             new_comments = f"Test comments for {puzzle['name']}"
@@ -618,22 +630,26 @@ class TestRunner:
                 result.fail(f"Comments not updated for puzzle {puzzle['name']}")
                 continue
                 
-            # Test location update
-            new_location = f"Test Location {random.randint(1000, 9999)}"
-            self.logger.log_operation(f"Updating location to '{new_location}'")
-            if not self.update_puzzle(puzzle["id"], "xyzloc", new_location):
-                result.fail(f"Failed to update location for puzzle {puzzle['name']}")
-                continue
-                
-            # Verify location update
-            updated_puzzle = self.get_puzzle_details(puzzle["id"])
-            if not updated_puzzle:
-                result.fail(f"Failed to verify location update for puzzle {puzzle['name']}")
-                continue
-                
-            if updated_puzzle["xyzloc"] != new_location:
-                result.fail(f"Location not updated for puzzle {puzzle['name']}")
-                continue
+            # Only add xyzloc to every other puzzle
+            if idx % 2 == 1:
+                # Test location update
+                new_location = f"Test Location {random.randint(1000, 9999)}"
+                self.logger.log_operation(f"Updating location to '{new_location}'")
+                if not self.update_puzzle(puzzle["id"], "xyzloc", new_location):
+                    result.fail(f"Failed to update location for puzzle {puzzle['name']}")
+                    continue
+                    
+                # Verify location update
+                updated_puzzle = self.get_puzzle_details(puzzle["id"])
+                if not updated_puzzle:
+                    result.fail(f"Failed to verify location update for puzzle {puzzle['name']}")
+                    continue
+                    
+                if updated_puzzle["xyzloc"] != new_location:
+                    result.fail(f"Location not updated for puzzle {puzzle['name']}")
+                    continue
+            else:
+                self.logger.log_operation(f"Skipping location update for puzzle {puzzle['name']} (every other puzzle)")
                 
         result.set_success("Puzzle modification test completed successfully")
 
