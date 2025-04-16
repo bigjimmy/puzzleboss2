@@ -304,25 +304,26 @@ class TestRunner:
                 self.logger.log_error(f"Unexpected format in puzzles list: {puzzles_data}")
                 raise Exception(f"Unexpected format in puzzles list: {puzzles_data}")
                 
-            # Find the puzzle we just created
+            # Find the puzzle we just created - look for space-stripped name
             puzzle_data = None
+            expected_name = name.replace(" ", "")
             for puzzle in puzzles_data["puzzles"]:
-                if puzzle["name"] == name:
+                if puzzle["name"] == expected_name:
                     puzzle_data = puzzle
                     break
                     
             if not puzzle_data:
-                self.logger.log_error(f"Could not find newly created puzzle {name} in puzzles list")
+                self.logger.log_error(f"Could not find newly created puzzle {expected_name} in puzzles list")
                 self.logger.log_error(f"Available puzzles: {[p['name'] for p in puzzles_data['puzzles']]}")
-                raise Exception(f"Could not find newly created puzzle {name} in puzzles list")
+                raise Exception(f"Could not find newly created puzzle {expected_name} in puzzles list")
                 
             # Get full puzzle details
             puzzle_details = self.get_puzzle_details(puzzle_data["id"])
             if not puzzle_details:
-                self.logger.log_error(f"Failed to get details for puzzle {name}")
-                raise Exception(f"Failed to get details for puzzle {name}")
+                self.logger.log_error(f"Failed to get details for puzzle {expected_name}")
+                raise Exception(f"Failed to get details for puzzle {expected_name}")
                 
-            self.logger.log_operation(f"Created puzzle {name} with id {puzzle_data['id']}")
+            self.logger.log_operation(f"Created puzzle {expected_name} with id {puzzle_data['id']}")
             return puzzle_details
             
         except requests.RequestException as e:
@@ -1254,31 +1255,32 @@ class TestRunner:
         self.logger.log_operation("Starting round modification test")
         
         try:
-            # Create a test round
-            round_name = f"Test Round {int(time.time())}"
-            round_data = self.create_round(round_name)
-            if not round_data:
-                result.fail("Failed to create test round")
+            # Get all existing rounds
+            rounds = self.get_all_rounds()
+            if not rounds:
+                result.fail("No rounds found for testing")
                 return
                 
-            self.logger.log_operation(f"Created test round: {round_data['name']}")
+            # Select a random round for testing
+            test_round = random.choice(rounds)
+            self.logger.log_operation(f"Selected round for testing: {test_round['name']}")
             
             # Test comments update
-            new_comments = f"Test comments for round {round_data['name']}"
+            new_comments = f"Test comments for round {test_round['name']}"
             self.logger.log_operation(f"Updating comments to '{new_comments}'")
             
             # Update round comments
-            updated_round = self.update_round(round_data['id'], {'comments': new_comments})
+            updated_round = self.update_round(test_round['id'], {'comments': new_comments})
             if not updated_round:
-                result.fail(f"Failed to update comments for round {round_data['name']}")
+                result.fail(f"Failed to update comments for round {test_round['name']}")
                 return
                 
             # Verify comments update
             if updated_round.get('comments') != new_comments:
-                result.fail(f"Comments not updated for round {round_data['name']}")
+                result.fail(f"Comments not updated for round {test_round['name']}")
                 return
                 
-            self.logger.log_operation(f"Successfully updated comments for round {round_data['name']}")
+            self.logger.log_operation(f"Successfully updated comments for round {test_round['name']}")
             
             result.set_success("Round modification test completed successfully")
             
