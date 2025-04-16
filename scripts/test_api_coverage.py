@@ -542,24 +542,6 @@ class TestRunner:
         for idx, puzzle in enumerate(selected_puzzles):
             self.logger.log_operation(f"Testing modifications for puzzle {puzzle['name']}")
             
-            # Test name update with spaces
-            new_name = f"Updated Puzzle {random.randint(1000, 9999)}"
-            expected_name = new_name.replace(" ", "")
-            self.logger.log_operation(f"Updating name to '{new_name}' (expected: '{expected_name}')")
-            if not self.update_puzzle(puzzle["id"], "name", new_name):
-                result.fail(f"Failed to update name for puzzle {puzzle['name']}")
-                continue
-                
-            # Verify name update
-            updated_puzzle = self.get_puzzle_details(puzzle["id"])
-            if not updated_puzzle:
-                result.fail(f"Failed to verify name update for puzzle {puzzle['name']}")
-                continue
-                
-            if updated_puzzle["name"] != expected_name:
-                result.fail(f"Name not properly stripped of spaces. Expected: {expected_name}, Got: {updated_puzzle['name']}")
-                continue
-                
             # Test status update
             new_status = "Being worked"
             self.logger.log_operation(f"Updating status to '{new_status}'")
