@@ -482,7 +482,7 @@ def create_puzzle():
             return jsonify({"error": "Invalid JSON POST structure"}), 400
             
         puzzle = puzzle_data["puzzle"]
-        name = puzzle.get("name")
+        name = puzzle.get("name").replace(" ", "")  # Strip spaces from name
         round_id = puzzle.get("round_id")
         puzzle_uri = puzzle.get("puzzle_uri")
         ismeta = puzzle.get("ismeta", False)
@@ -758,6 +758,9 @@ def update_puzzle_part(id, part):
         data = request.get_json()
         debug_log(5, "request data is - %s" % str(data))
         value = data[part]
+        # Strip spaces if this is a name update
+        if part == "name":
+            value = value.replace(" ", "")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:

@@ -459,10 +459,17 @@ class TestRunner:
                 self.logger.log_operation(f"Creating puzzles for round {round_data['name']}")
                 puzzles = []
                 for puzzle_idx in range(4):
+                    # Create puzzle name with spaces
                     puzzle_name = f"Test Puzzle R{round_idx+1}P{puzzle_idx+1} {int(time.time())}"
+                    # Create the puzzle
                     puzzle_data = self.create_puzzle(puzzle_name, str(round_data['id']))
                     if not puzzle_data:
                         result.fail(f"Failed to create puzzle {puzzle_name}")
+                        return
+                    # Verify the name was stripped of spaces
+                    expected_name = puzzle_name.replace(" ", "")
+                    if puzzle_data['name'] != expected_name:
+                        result.fail(f"Puzzle name not properly stripped of spaces. Expected: {expected_name}, Got: {puzzle_data['name']}")
                         return
                     puzzles.append(puzzle_data)
                     
@@ -526,6 +533,24 @@ class TestRunner:
         for puzzle in selected_puzzles:
             self.logger.log_operation(f"Testing modifications for puzzle {puzzle['name']}")
             
+            # Test name update with spaces
+            new_name = f"Updated Puzzle {random.randint(1000, 9999)}"
+            expected_name = new_name.replace(" ", "")
+            self.logger.log_operation(f"Updating name to '{new_name}' (expected: '{expected_name}')")
+            if not self.update_puzzle(puzzle["id"], "name", new_name):
+                result.fail(f"Failed to update name for puzzle {puzzle['name']}")
+                continue
+                
+            # Verify name update
+            updated_puzzle = self.get_puzzle_details(puzzle["id"])
+            if not updated_puzzle:
+                result.fail(f"Failed to verify name update for puzzle {puzzle['name']}")
+                continue
+                
+            if updated_puzzle["name"] != expected_name:
+                result.fail(f"Name not properly stripped of spaces. Expected: {expected_name}, Got: {updated_puzzle['name']}")
+                continue
+                
             # Test status update
             new_status = "Being worked"
             self.logger.log_operation(f"Updating status to '{new_status}'")
