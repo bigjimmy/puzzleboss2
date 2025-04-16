@@ -20,7 +20,14 @@ class TestLogger:
     def log(self, message: str, level: str = "INFO"):
         timestamp = datetime.now().strftime("%H:%M:%S")
         indent = "  " * self.indent_level
-        print(f"[{timestamp}] [{level}] {indent}{message}")
+        
+        if level == "TEST":
+            # Add extra spacing and visual separation for TEST messages
+            print("\n" + "=" * 80)
+            print(f"[{timestamp}] [{level}] {indent}{message}")
+            print("=" * 80 + "\n")
+        else:
+            print(f"[{timestamp}] [{level}] {indent}{message}")
 
     def start_test(self, name: str):
         self.log(f"Starting test: {name}", "TEST")
@@ -1219,6 +1226,26 @@ class TestRunner:
 
     def run_all_tests(self):
         """Run all test cases."""
+        # Check if system is empty before running tests
+        self.logger.log_operation("Checking if system is empty before running tests")
+        
+        # Get all rounds and puzzles
+        rounds = self.get_all_rounds()
+        puzzles = self.get_all_puzzles()
+        
+        if rounds or puzzles:
+            self.logger.log_error("System is not empty!")
+            self.logger.log_error(f"Found {len(rounds)} rounds and {len(puzzles)} puzzles")
+            self.logger.log_error("Please run reset_hunt.py to reset the system before running tests")
+            print("\n" + "=" * 80)
+            print("ERROR: System is not empty!")
+            print(f"Found {len(rounds)} rounds and {len(puzzles)} puzzles")
+            print("Please run reset_hunt.py to reset the system before running tests")
+            print("=" * 80 + "\n")
+            sys.exit(1)
+            
+        self.logger.log_operation("System is empty, proceeding with tests")
+        
         tests = [
             ("Solver Listing", self.test_solver_listing),
             ("Puzzle Creation", self.test_puzzle_creation),
