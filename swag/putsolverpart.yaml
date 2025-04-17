@@ -24,8 +24,8 @@ parameters:
                   type: string
                   description: Solver full name
               puzz:
-                  type: integer
-                  description: ID of puzzle solver is currently working on
+                  type: string
+                  description: ID of the puzzle to assign to the solver
               puzzles:
                   type: string
                   description: Comma separated list of all puzzles (IDs) solver has worked on
@@ -35,6 +35,11 @@ parameters:
               chat_name:
                   type: string
                   description: Chat service name for solver
+              source:
+                  type: string
+                  description: Optional source of the activity (google, puzzleboss, bigjimmybot, or discord)
+                  enum: [google, puzzleboss, bigjimmybot, discord]
+                  default: puzzleboss
                   
                   
 

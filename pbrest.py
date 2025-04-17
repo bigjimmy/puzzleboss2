@@ -399,13 +399,15 @@ def update_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
+            # Get the source from the request data if provided, otherwise use default
+            source = data.get('source', 'puzzleboss')
             cursor.execute(
                 """
                 INSERT INTO activity
                 (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'apache', 'interact')
+                VALUES (%s, %s, %s, 'interact')
                 """,
-                (value, id),
+                (value, id, source),
             )
             conn.commit()
         except TypeError:
@@ -578,6 +580,17 @@ def create_puzzle():
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
         puzzle = cursor.fetchone()
         myid = str(puzzle["id"])
+        
+        # Add activity entry for puzzle creation
+        cursor.execute(
+            """
+            INSERT INTO activity
+            (puzzle_id, solver_id, source, type)
+            VALUES (%s, %s, 'puzzleboss', 'create')
+            """,
+            (myid, 100),
+        )
+        conn.commit()
     except:
         raise Exception("Exception checking database for puzzle after insert")
 
@@ -797,6 +810,22 @@ def update_puzzle_part(id, part):
                 update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
                 
+                # Add activity entry for puzzle being solved
+                try:
+                    conn = mysql.connection
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        """
+                        INSERT INTO activity
+                        (puzzle_id, solver_id, source, type)
+                        VALUES (%s, %s, 'puzzleboss', 'solve')
+                        """,
+                        (id, 100),
+                    )
+                    conn.commit()
+                except:
+                    debug_log(0, "Exception in logging puzzle solve in activity table for puzzle %s" % id)
+                
                 # Check if this is a meta puzzle and if all metas in the round are solved
                 if mypuzzle["puzzle"]["ismeta"]:
                     check_round_completion(mypuzzle["puzzle"]["round_id"])
@@ -854,6 +883,22 @@ def update_puzzle_part(id, part):
             "**ATTENTION** new comment for puzzle %s: %s"
             % (mypuzzle["puzzle"]["name"], value),
         )
+        
+        # Add activity entry for comment
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'puzzleboss', 'comment')
+                """,
+                (id, 100),
+            )
+            conn.commit()
+        except:
+            debug_log(0, "Exception in logging comment in activity table for puzzle %s" % id)
 
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)

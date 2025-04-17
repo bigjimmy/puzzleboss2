@@ -165,7 +165,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                     % solver_from_email(
                                         revision["lastModifyingUser"]["emailAddress"]
                                     ),
-                                    "source": "google",
+                                    "source": "bigjimmybot",
                                     "type": "revise",
                                 }
                             }
