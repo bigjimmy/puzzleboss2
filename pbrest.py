@@ -810,22 +810,6 @@ def update_puzzle_part(id, part):
                 update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
                 
-                # Add activity entry for puzzle being solved
-                try:
-                    conn = mysql.connection
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                        INSERT INTO activity
-                        (puzzle_id, solver_id, source, type)
-                        VALUES (%s, %s, 'puzzleboss', 'solve')
-                        """,
-                        (id, 100),
-                    )
-                    conn.commit()
-                except:
-                    debug_log(0, "Exception in logging puzzle solve in activity table for puzzle %s" % id)
-                
                 # Check if this is a meta puzzle and if all metas in the round are solved
                 if mypuzzle["puzzle"]["ismeta"]:
                     check_round_completion(mypuzzle["puzzle"]["round_id"])
