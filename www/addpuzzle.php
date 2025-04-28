@@ -133,10 +133,12 @@ HTML;
   }
   $apiurl = "/puzzles";
   $data = array(
-    'name' => $name,
-    'round_id' => $round_id,
-    'puzzle_uri' => $puzzle_uri,
-    // 'defer_to' => $defer_to,
+    'puzzle' => array(
+      'name' => $name,
+      'round_id' => $round_id,
+      'puzzle_uri' => $puzzle_uri,
+      // 'defer_to' => $defer_to,
+    )
   );
 
   echo "Submitting API request to add puzzle. May take a few seconds.<br>";

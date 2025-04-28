@@ -103,9 +103,11 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
             response = requests.post(
                 f"{base_url}/puzzles",
                 json={
-                    "name": f"R{r}Puzz{p}",
-                    "round_id": str(rounds[round_name]),
-                    "puzzle_uri": "http://www.google.com"
+                    "puzzle": {
+                        "name": f"R{r}Puzz{p}",
+                        "round_id": str(rounds[round_name]),
+                        "puzzle_uri": "http://www.google.com"
+                    }
                 }
             )
             if not response.ok:
