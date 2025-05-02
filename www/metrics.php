@@ -12,10 +12,12 @@ try {
         foreach ($puzzle_response->rounds as $round) {
             foreach ($round->puzzles as $puzzle) {
                 $status = $puzzle->status ?? 'New';
+                error_log("Found puzzle {$puzzle->name} with status: '$status' (length: " . strlen($status) . ")");
                 $puzzle_status[$status] = ($puzzle_status[$status] ?? 0) + 1;
             }
         }
     }
+    error_log("Final puzzle status counts: " . print_r($puzzle_status, true));
     
     // Get round counts
     $rounds = readapi('/rounds')->rounds;
@@ -56,7 +58,7 @@ try {
     $metrics[] = "# HELP puzzleboss_puzzles_by_status_total Current number of puzzles in each status";
     $metrics[] = "# TYPE puzzleboss_puzzles_by_status_total gauge";
     
-    $statuses = array('New', 'Being worked', 'Needs eyes', 'WTF', 'Critical', 'Unnecessary');
+    $statuses = array('New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', '[hidden]');
     foreach ($statuses as $status) {
         $status_key = strtolower(str_replace(' ', '_', $status));
         $metrics[] = 'puzzleboss_puzzles_by_status_total{status="' . $status_key . '"} ' . ($puzzle_status[$status] ?? 0);
@@ -72,6 +74,8 @@ try {
     // Print metrics
     header('Content-Type: text/plain');
     echo implode("\n", $metrics) . "\n";
+
+    error_log("Expected statuses: " . print_r($statuses, true));
 
 } catch (Exception $e) {
     error_log("Error generating metrics: " . $e->getMessage());
