@@ -8,9 +8,12 @@ try {
     // Get puzzle status counts
     $puzzle_status = array();
     $puzzle_response = readapi('/all');
+    error_log("Puzzle response: " . print_r($puzzle_response, true));
     if ($puzzle_response->status === 'ok') {
         foreach ($puzzle_response->rounds as $round) {
+            error_log("Round: " . print_r($round, true));
             foreach ($round->puzzles as $puzzle) {
+                error_log("Puzzle: " . print_r($puzzle, true));
                 $status = $puzzle->status ?? 'New';
                 error_log("Found puzzle {$puzzle->name} with status: '$status' (length: " . strlen($status) . ")");
                 $puzzle_status[$status] = ($puzzle_status[$status] ?? 0) + 1;
