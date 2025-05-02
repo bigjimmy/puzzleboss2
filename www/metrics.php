@@ -1,40 +1,32 @@
 <?php
-require_once('../pblib.php');
-
-// Connect to database
-$conn = new mysqli(
-    $config['MYSQL']['HOST'],
-    $config['MYSQL']['USERNAME'],
-    $config['MYSQL']['PASSWORD'],
-    $config['MYSQL']['DATABASE']
-);
-
-if ($conn->connect_error) {
-    error_log("Connection failed: " . $conn->connect_error);
-    exit(1);
-}
+require_once('puzzlebosslib.php');
 
 try {
     // Get activity counts
     $activity_counts = array();
-    $result = $conn->query("SELECT type, COUNT(*) as count FROM activity GROUP BY type");
-    while ($row = $result->fetch_assoc()) {
-        $activity_counts[$row['type']] = $row['count'];
+    $activities = readapi('/activity')->activity;
+    foreach ($activities as $activity) {
+        $type = $activity->type;
+        $activity_counts[$type] = ($activity_counts[$type] ?? 0) + 1;
     }
     
     // Get puzzle status counts
     $puzzle_counts = array();
-    $result = $conn->query("SELECT status, COUNT(*) as count FROM puzzle GROUP BY status");
-    while ($row = $result->fetch_assoc()) {
-        $puzzle_counts[$row['status']] = $row['count'];
+    $puzzles = readapi('/puzzles')->puzzles;
+    foreach ($puzzles as $puzzle) {
+        $status = $puzzle->status;
+        $puzzle_counts[$status] = ($puzzle_counts[$status] ?? 0) + 1;
     }
     
     // Get round counts
-    $result = $conn->query("SELECT COUNT(*) as total FROM round");
-    $rounds_total = $result->fetch_assoc()['total'];
-    
-    $result = $conn->query("SELECT COUNT(*) as solved FROM round WHERE status = 'Solved'");
-    $rounds_solved = $result->fetch_assoc()['solved'];
+    $rounds = readapi('/rounds')->rounds;
+    $rounds_total = count($rounds);
+    $rounds_solved = 0;
+    foreach ($rounds as $round) {
+        if ($round->status === 'Solved') {
+            $rounds_solved++;
+        }
+    }
     $rounds_open = $rounds_total - $rounds_solved;
     
     // Build metrics output
@@ -79,6 +71,4 @@ try {
 } catch (Exception $e) {
     error_log("Error generating metrics: " . $e->getMessage());
     exit(1);
-} finally {
-    $conn->close();
 } 
