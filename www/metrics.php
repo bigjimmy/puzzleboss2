@@ -8,26 +8,38 @@ try {
     // Get puzzle status counts
     $puzzle_status = array();
     $puzzle_response = readapi('/all');
-    error_log("Puzzle response: " . print_r($puzzle_response, true));
-    if ($puzzle_response->status === 'ok') {
-        foreach ($puzzle_response->rounds as $round) {
-            error_log("Round: " . print_r($round, true));
-            foreach ($round->puzzles as $puzzle) {
-                error_log("Puzzle: " . print_r($puzzle, true));
-                $status = $puzzle->status ?? 'New';
-                error_log("Found puzzle {$puzzle->name} with status: '$status' (length: " . strlen($status) . ")");
-                $puzzle_status[$status] = ($puzzle_status[$status] ?? 0) + 1;
+    error_log("Raw puzzle response: " . print_r($puzzle_response, true));
+    
+    if (!isset($puzzle_response->rounds)) {
+        error_log("No rounds found in response");
+        $puzzle_response = (object)['rounds' => []];
+    }
+    
+    foreach ($puzzle_response->rounds as $round) {
+        error_log("Processing round: " . print_r($round, true));
+        if (!isset($round->puzzles)) {
+            error_log("No puzzles found in round");
+            continue;
+        }
+        foreach ($round->puzzles as $puzzle) {
+            error_log("Processing puzzle: " . print_r($puzzle, true));
+            if (!isset($puzzle->status)) {
+                error_log("No status found for puzzle");
+                continue;
             }
+            $status = $puzzle->status;
+            error_log("Found puzzle {$puzzle->name} with status: '$status'");
+            $puzzle_status[$status] = ($puzzle_status[$status] ?? 0) + 1;
         }
     }
     error_log("Final puzzle status counts: " . print_r($puzzle_status, true));
     
     // Get round counts
-    $rounds = readapi('/rounds')->rounds;
+    $rounds = $puzzle_response->rounds;
     $rounds_total = count($rounds);
     $rounds_solved = 0;
     foreach ($rounds as $round) {
-        if ($round->status === 'Solved') {
+        if (isset($round->status) && $round->status === 'Solved') {
             $rounds_solved++;
         }
     }
