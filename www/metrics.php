@@ -66,7 +66,8 @@ try {
     $metrics[] = 'puzzleboss_rounds_by_status_total{status="solved"} ' . $rounds_solved;
     
     // Print metrics
-    echo implode("\n", $metrics);
+    header('Content-Type: text/plain');
+    echo implode("\n", $metrics) . "\n";
 
 } catch (Exception $e) {
     error_log("Error generating metrics: " . $e->getMessage());
