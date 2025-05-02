@@ -192,7 +192,6 @@ function print_rounds_table($rounds, $mypuzzle) {
   foreach ($rounds as $round) {
     echo '<td style="vertical-align:top;">';
     $puzzlearray = $round->puzzles;
-    $metapuzzle = $round->meta_id;
     echo '<table>';
     foreach ($puzzlearray as $puzzle) {
       if ($puzzle->status == '[hidden]') {

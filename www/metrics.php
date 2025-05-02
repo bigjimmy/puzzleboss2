@@ -107,8 +107,6 @@ try {
     header('Content-Type: text/plain');
     echo implode("\n", $metrics) . "\n";
 
-    error_log("Expected statuses: " . print_r($statuses, true));
-
 } catch (Exception $e) {
     error_log("Error generating metrics: " . $e->getMessage());
     exit(1);
