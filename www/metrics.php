@@ -6,11 +6,15 @@ try {
     $activity_counts = readapi('/activity')->activity;
     
     // Get puzzle status counts
-    $puzzle_counts = array();
-    $puzzles = readapi('/puzzles')->puzzles;
-    foreach ($puzzles as $puzzle) {
-        $status = $puzzle->status;
-        $puzzle_counts[$status] = ($puzzle_counts[$status] ?? 0) + 1;
+    $puzzle_status = array();
+    $puzzle_response = readapi('/all');
+    if ($puzzle_response['status'] === 'ok') {
+        foreach ($puzzle_response['rounds'] as $round) {
+            foreach ($round['puzzles'] as $puzzle) {
+                $status = $puzzle['status'] ?? 'New';
+                $puzzle_status[$status] = ($puzzle_status[$status] ?? 0) + 1;
+            }
+        }
     }
     
     // Get round counts
@@ -55,7 +59,7 @@ try {
     $statuses = array('New', 'Being worked', 'Needs eyes', 'WTF', 'Critical', 'Unnecessary');
     foreach ($statuses as $status) {
         $status_key = strtolower(str_replace(' ', '_', $status));
-        $metrics[] = 'puzzleboss_puzzles_by_status_total{status="' . $status_key . '"} ' . ($puzzle_counts[$status] ?? 0);
+        $metrics[] = 'puzzleboss_puzzles_by_status_total{status="' . $status_key . '"} ' . ($puzzle_status[$status] ?? 0);
     }
     $metrics[] = "";
     

@@ -1,7 +1,7 @@
-summary: Get all puzzles
-description: Get a list of all puzzles in the system with their basic information (id and name only)
 tags:
   - Puzzles
+summary: Get all puzzles
+description: Get a list of all puzzles in the system with their basic information (id and name only)
 responses:
   200:
     description: Basic listing of all puzzles
