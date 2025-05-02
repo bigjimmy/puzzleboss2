@@ -1483,10 +1483,12 @@ def refresh_config():
         return {"status": "error", "message": str(e)}, 500
 
 @app.route("/activity", methods=["GET"])
+@swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])
 def get_all_activities():
     """Get activity counts by type."""
     try:
-        cursor = get_db().cursor(MySQLdb.cursors.DictCursor)
+        conn = mysql.connection
+        cursor = conn.cursor()
         cursor.execute(
             """
             SELECT type, COUNT(*) as count 
