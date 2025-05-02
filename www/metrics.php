@@ -8,10 +8,10 @@ try {
     // Get puzzle status counts
     $puzzle_status = array();
     $puzzle_response = readapi('/all');
-    if ($puzzle_response['status'] === 'ok') {
-        foreach ($puzzle_response['rounds'] as $round) {
-            foreach ($round['puzzles'] as $puzzle) {
-                $status = $puzzle['status'] ?? 'New';
+    if ($puzzle_response->status === 'ok') {
+        foreach ($puzzle_response->rounds as $round) {
+            foreach ($round->puzzles as $puzzle) {
+                $status = $puzzle->status ?? 'New';
                 $puzzle_status[$status] = ($puzzle_status[$status] ?? 0) + 1;
             }
         }
