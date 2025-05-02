@@ -1,7 +1,7 @@
 tags:
   - Activity
-summary: Get activity counts and puzzle solve timing information
-description: Returns counts of different activity types and timing information for solved puzzles
+summary: Get activity counts and puzzle timing information
+description: Returns counts of different activity types and timing information for both solved and open puzzles
 produces:
   - application/json
 responses:
@@ -37,6 +37,15 @@ responses:
             total_solve_time_seconds:
               type: integer
               description: Total time in seconds that all solved puzzles were open
+        open_puzzles_timer:
+          type: object
+          properties:
+            total_open:
+              type: integer
+              description: Total number of currently open puzzles
+            total_open_time_seconds:
+              type: integer
+              description: Total time in seconds that all open puzzles have been open
   500:
     description: Server error
     schema:

@@ -1485,7 +1485,7 @@ def refresh_config():
 @app.route("/activity", methods=["GET"])
 @swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])
 def get_all_activities():
-    """Get activity counts by type and puzzle solve timing information."""
+    """Get activity counts by type and puzzle timing information."""
     try:
         conn = mysql.connection
         cursor = conn.cursor()
@@ -1513,6 +1513,19 @@ def get_all_activities():
         )
         solve_timing = cursor.fetchone()
         
+        # Get open puzzles timing information
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(DISTINCT p.id) as total_open,
+                SUM(TIMESTAMPDIFF(SECOND, a.time, NOW())) as total_open_time
+            FROM puzzle p
+            JOIN activity a ON p.id = a.puzzle_id AND a.type = 'create'
+            WHERE p.status != 'Solved' AND p.status != '[hidden]'
+            """
+        )
+        open_timing = cursor.fetchone()
+        
         cursor.close()
         
         # Convert to dictionary format for easier access
@@ -1524,6 +1537,10 @@ def get_all_activities():
             "puzzle_solves_timer": {
                 "total_solves": solve_timing['total_solves'] or 0,
                 "total_solve_time_seconds": solve_timing['total_solve_time'] or 0
+            },
+            "open_puzzles_timer": {
+                "total_open": open_timing['total_open'] or 0,
+                "total_open_time_seconds": open_timing['total_open_time'] or 0
             }
         })
     except Exception as e:

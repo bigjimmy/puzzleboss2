@@ -73,6 +73,17 @@ try {
     $metrics[] = "puzzleboss_puzzle_solve_time_seconds_total " . ($solve_timing->total_solve_time_seconds ?? 0);
     $metrics[] = "";
     
+    // Open puzzle timing metrics
+    $metrics[] = "# HELP puzzleboss_open_puzzles_total Total number of open puzzles";
+    $metrics[] = "# TYPE puzzleboss_open_puzzles_total counter";
+    $metrics[] = "puzzleboss_open_puzzles_total " . ($solve_timing->open_puzzles_timer->total_open ?? 0);
+    $metrics[] = "";
+    
+    $metrics[] = "# HELP puzzleboss_open_puzzles_time_seconds_total Total time in seconds that all open puzzles have been open";
+    $metrics[] = "# TYPE puzzleboss_open_puzzles_time_seconds_total counter";
+    $metrics[] = "puzzleboss_open_puzzles_time_seconds_total " . ($solve_timing->open_puzzles_timer->total_open_time_seconds ?? 0);
+    $metrics[] = "";
+    
     // Puzzle status metrics
     $metrics[] = "# HELP puzzleboss_puzzles_by_status_total Current number of puzzles in each status";
     $metrics[] = "# TYPE puzzleboss_puzzles_by_status_total gauge";
