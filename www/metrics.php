@@ -2,9 +2,11 @@
 require_once('puzzlebosslib.php');
 
 try {
-    // Get activity counts
-    $activity_counts = readapi('/activity')->activity;
-    $solve_timing = readapi('/activity')->puzzle_solves_timer;
+    // Get activity counts and timing data
+    $activity_response = readapi('/activity');
+    $activity_counts = $activity_response->activity;
+    $solve_timing = $activity_response->puzzle_solves_timer;
+    $open_timing = $activity_response->open_puzzles_timer;
     
     // Get puzzle status counts
     $puzzle_status = array();
@@ -76,12 +78,12 @@ try {
     // Open puzzle timing metrics
     $metrics[] = "# HELP puzzleboss_open_puzzles_total Total number of open puzzles";
     $metrics[] = "# TYPE puzzleboss_open_puzzles_total counter";
-    $metrics[] = "puzzleboss_open_puzzles_total " . ($solve_timing->open_puzzles_timer->total_open ?? 0);
+    $metrics[] = "puzzleboss_open_puzzles_total " . ($open_timing->total_open ?? 0);
     $metrics[] = "";
     
     $metrics[] = "# HELP puzzleboss_open_puzzles_time_seconds_total Total time in seconds that all open puzzles have been open";
     $metrics[] = "# TYPE puzzleboss_open_puzzles_time_seconds_total counter";
-    $metrics[] = "puzzleboss_open_puzzles_time_seconds_total " . ($solve_timing->open_puzzles_timer->total_open_time_seconds ?? 0);
+    $metrics[] = "puzzleboss_open_puzzles_time_seconds_total " . ($open_timing->total_open_time_seconds ?? 0);
     $metrics[] = "";
     
     // Puzzle status metrics
