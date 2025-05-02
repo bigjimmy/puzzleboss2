@@ -1485,10 +1485,12 @@ def refresh_config():
 @app.route("/activity", methods=["GET"])
 @swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])
 def get_all_activities():
-    """Get activity counts by type."""
+    """Get activity counts by type and puzzle solve timing information."""
     try:
         conn = mysql.connection
         cursor = conn.cursor()
+        
+        # Get activity counts
         cursor.execute(
             """
             SELECT type, COUNT(*) as count 
@@ -1497,6 +1499,20 @@ def get_all_activities():
             """
         )
         activities = cursor.fetchall()
+        
+        # Get puzzle solve timing information
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(DISTINCT a1.puzzle_id) as total_solves,
+                SUM(TIMESTAMPDIFF(SECOND, a2.time, a1.time)) as total_solve_time
+            FROM activity a1
+            JOIN activity a2 ON a1.puzzle_id = a2.puzzle_id AND a2.type = 'create'
+            WHERE a1.type = 'solve'
+            """
+        )
+        solve_timing = cursor.fetchone()
+        
         cursor.close()
         
         # Convert to dictionary format for easier access
@@ -1504,7 +1520,11 @@ def get_all_activities():
         
         return jsonify({
             "status": "ok", 
-            "activity": activity_counts
+            "activity": activity_counts,
+            "puzzle_solves_timer": {
+                "total_solves": solve_timing['total_solves'] or 0,
+                "total_solve_time_seconds": solve_timing['total_solve_time'] or 0
+            }
         })
     except Exception as e:
         debug_log(0, "Exception in getting activity counts: %s" % e)

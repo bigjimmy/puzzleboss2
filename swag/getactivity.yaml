@@ -1,37 +1,42 @@
 tags:
   - Activity
-summary: Get activity counts by type
-description: Returns a count of activities grouped by type (create, solve, comment, interact)
+summary: Get activity counts and puzzle solve timing information
+description: Returns counts of different activity types and timing information for solved puzzles
 produces:
   - application/json
 responses:
   200:
-    description: Activity counts retrieved successfully
+    description: Successful response
     schema:
       type: object
       properties:
         status:
           type: string
-          example: "ok"
+          example: ok
         activity:
           type: object
           properties:
             create:
               type: integer
               description: Number of puzzle creation activities
-              example: 10
             solve:
               type: integer
               description: Number of puzzle solve activities
-              example: 5
             comment:
               type: integer
               description: Number of comment activities
-              example: 15
             interact:
               type: integer
               description: Number of interaction activities
-              example: 8
+        puzzle_solves_timer:
+          type: object
+          properties:
+            total_solves:
+              type: integer
+              description: Total number of unique puzzles solved
+            total_solve_time_seconds:
+              type: integer
+              description: Total time in seconds that all solved puzzles were open
   500:
     description: Server error
     schema:
@@ -39,7 +44,7 @@ responses:
       properties:
         status:
           type: string
-          example: "error"
+          example: error
         error:
           type: string
-          example: "Exception in getting activity counts" 
+          description: Error message 
