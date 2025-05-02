@@ -1482,6 +1482,32 @@ def refresh_config():
         debug_log(0, f"Error refreshing configuration: {str(e)}")
         return {"status": "error", "message": str(e)}, 500
 
+@app.route("/activity", methods=["GET"])
+def get_all_activities():
+    """Get activity counts by type."""
+    try:
+        cursor = get_db().cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute(
+            """
+            SELECT type, COUNT(*) as count 
+            FROM activity 
+            GROUP BY type
+            """
+        )
+        activities = cursor.fetchall()
+        cursor.close()
+        
+        # Convert to dictionary format for easier access
+        activity_counts = {row['type']: row['count'] for row in activities}
+        
+        return jsonify({
+            "status": "ok", 
+            "activity": activity_counts
+        })
+    except Exception as e:
+        debug_log(0, "Exception in getting activity counts: %s" % e)
+        return jsonify({"status": "error", "error": str(e)}), 500
+
 if __name__ == "__main__":
     if initdrive() != 0:
         debug_log(0, "Startup google drive initialization failed.")

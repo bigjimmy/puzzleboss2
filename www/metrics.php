@@ -3,12 +3,7 @@ require_once('puzzlebosslib.php');
 
 try {
     // Get activity counts
-    $activity_counts = array();
-    $activities = readapi('/activity')->activity;
-    foreach ($activities as $activity) {
-        $type = $activity->type;
-        $activity_counts[$type] = ($activity_counts[$type] ?? 0) + 1;
-    }
+    $activity_counts = readapi('/activity')->activity;
     
     // Get puzzle status counts
     $puzzle_counts = array();
@@ -35,19 +30,23 @@ try {
     // Activity metrics
     $metrics[] = "# HELP puzzleboss_puzzles_created_total Total number of puzzles created";
     $metrics[] = "# TYPE puzzleboss_puzzles_created_total counter";
-    $metrics[] = "puzzleboss_puzzles_created_total " . ($activity_counts['create'] ?? 0) . "\n";
+    $metrics[] = "puzzleboss_puzzles_created_total " . ($activity_counts['create'] ?? 0);
+    $metrics[] = "";
     
     $metrics[] = "# HELP puzzleboss_puzzles_solved_total Total number of puzzles solved";
     $metrics[] = "# TYPE puzzleboss_puzzles_solved_total counter";
-    $metrics[] = "puzzleboss_puzzles_solved_total " . ($activity_counts['solve'] ?? 0) . "\n";
+    $metrics[] = "puzzleboss_puzzles_solved_total " . ($activity_counts['solve'] ?? 0);
+    $metrics[] = "";
     
     $metrics[] = "# HELP puzzleboss_comments_made_total Total number of comments made";
     $metrics[] = "# TYPE puzzleboss_comments_made_total counter";
-    $metrics[] = "puzzleboss_comments_made_total " . ($activity_counts['comment'] ?? 0) . "\n";
+    $metrics[] = "puzzleboss_comments_made_total " . ($activity_counts['comment'] ?? 0);
+    $metrics[] = "";
     
     $metrics[] = "# HELP puzzleboss_assignments_made_total Total number of puzzle assignments made";
     $metrics[] = "# TYPE puzzleboss_assignments_made_total counter";
-    $metrics[] = "puzzleboss_assignments_made_total " . ($activity_counts['interact'] ?? 0) . "\n";
+    $metrics[] = "puzzleboss_assignments_made_total " . ($activity_counts['interact'] ?? 0);
+    $metrics[] = "";
     
     // Puzzle status metrics
     $metrics[] = "# HELP puzzleboss_puzzles_by_status_total Current number of puzzles in each status";
@@ -58,9 +57,10 @@ try {
         $status_key = strtolower(str_replace(' ', '_', $status));
         $metrics[] = 'puzzleboss_puzzles_by_status_total{status="' . $status_key . '"} ' . ($puzzle_counts[$status] ?? 0);
     }
+    $metrics[] = "";
     
     // Round status metrics
-    $metrics[] = "\n# HELP puzzleboss_rounds_by_status_total Current number of rounds in each status";
+    $metrics[] = "# HELP puzzleboss_rounds_by_status_total Current number of rounds in each status";
     $metrics[] = "# TYPE puzzleboss_rounds_by_status_total gauge";
     $metrics[] = 'puzzleboss_rounds_by_status_total{status="open"} ' . $rounds_open;
     $metrics[] = 'puzzleboss_rounds_by_status_total{status="solved"} ' . $rounds_solved;
