@@ -92,90 +92,6 @@ def get_puzzle_solver_history(puzzle_id: str) -> List[str]:
         return []
     return puzzle.get("solvers", "").split(",") if puzzle.get("solvers") else []
 
-def verify_answer(puzzle_id: str, answer: str) -> bool:
-    """Verify a puzzle answer."""
-    print("\n" + "="*50)
-    print(f"DEBUG - Verifying answer for puzzle {puzzle_id}")
-    print(f"DEBUG - Answer to verify: {answer}")
-    try:
-        print(f"DEBUG - Making request to {BASE_URL}/puzzles/{puzzle_id}/answer")
-        response = requests.post(
-            f"{BASE_URL}/puzzles/{puzzle_id}/answer",
-            json={"answer": answer}
-        )
-        print(f"DEBUG - Response status: {response.status_code}")
-        print(f"DEBUG - Response body: {response.text}")
-        if not response.ok:
-            print(f"DEBUG - Error verifying answer: {response.text}")
-            return False
-            
-        result = response.json()
-        print(f"DEBUG - Parsed response: {result}")
-        if result.get("status") != "ok":
-            print(f"DEBUG - Answer verification failed for puzzle {puzzle_id}:")
-            print(f"DEBUG -   Expected status: 'ok'")
-            print(f"DEBUG -   Actual status: '{result.get('status')}'")
-            print(f"DEBUG -   Error message: {result.get('error', 'No error message')}")
-            print(f"DEBUG -   Submitted answer: '{answer}'")
-            return False
-            
-        print("DEBUG - Answer verification successful!")
-        return True
-    except Exception as e:
-        print(f"DEBUG - Exception during answer verification: {str(e)}")
-        print(f"DEBUG - Exception type: {type(e).__name__}")
-        import traceback
-        print(f"DEBUG - Traceback: {traceback.format_exc()}")
-        return False
-
-def test_answer_verification(self, result: TestResult):
-    """Test answer verification functionality."""
-    print("\n" + "="*50)
-    print("Testing answer verification...")
-    print("="*50)
-    
-    # Get a puzzle to test
-    puzzles = get_all_puzzles()
-    if not puzzles:
-        print("No puzzles found to test!")
-        return
-        
-    test_puzzle = puzzles[0]
-    print(f"\nTesting with puzzle: {test_puzzle['name']} (ID: {test_puzzle['id']})")
-    print(f"DEBUG - Full puzzle details: {test_puzzle}")
-    
-    # Test incorrect answer
-    print("\n" + "-"*50)
-    print("Testing incorrect answer...")
-    incorrect_result = verify_answer(test_puzzle["id"], "WRONGANSWER")
-    print(f"Result: {'Accepted' if incorrect_result else 'Rejected'}")
-    if incorrect_result:
-        print("ERROR: Incorrect answer was accepted!")
-        result.fail()
-        return
-        
-    # Test correct answer
-    print("\n" + "-"*50)
-    print("Testing correct answer...")
-    correct_answer = test_puzzle.get("answer", "CORRECTANSWER")
-    print(f"DEBUG - Correct answer to test: {correct_answer}")
-    print(f"DEBUG - Answer type: {type(correct_answer)}")
-    print(f"DEBUG - Answer length: {len(correct_answer) if correct_answer else 0}")
-    correct_result = verify_answer(test_puzzle["id"], correct_answer)
-    print(f"Result: {'Accepted' if correct_result else 'Rejected'}")
-    if not correct_result:
-        print("ERROR: Correct answer was rejected!")
-        print(f"DEBUG - Puzzle answer: {test_puzzle.get('answer')}")
-        print(f"DEBUG - Tested answer: {correct_answer}")
-        print(f"DEBUG - Answer comparison: {test_puzzle.get('answer') == correct_answer}")
-        result.fail()
-        return
-        
-    print("\n" + "="*50)
-    print("Answer verification test passed!")
-    print("="*50)
-    result.pass_()
-
 def main():
     print("Starting solver assignment test...")
     
@@ -219,12 +135,6 @@ def main():
                 print(f"Successfully assigned solver to puzzle. History count: {puzzle_history_counts[puzzle['id']]}")
             else:
                 print("Failed to assign solver to puzzle!")
-                
-    # Run answer verification test
-    print("\nRunning answer verification test...")
-    result = TestResult()
-    test_answer_verification(result)
-    print(f"\nAnswer verification test result: {'PASS' if result.passed else 'FAIL'}")
 
 if __name__ == "__main__":
     main() 

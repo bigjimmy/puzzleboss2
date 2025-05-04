@@ -399,13 +399,15 @@ def update_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
+            # Get the source from the request data if provided, otherwise use default
+            source = data.get('source', 'puzzleboss')
             cursor.execute(
                 """
                 INSERT INTO activity
                 (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'apache', 'interact')
+                VALUES (%s, %s, %s, 'interact')
                 """,
-                (value, id),
+                (value, id, source),
             )
             conn.commit()
         except TypeError:
@@ -578,6 +580,17 @@ def create_puzzle():
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
         puzzle = cursor.fetchone()
         myid = str(puzzle["id"])
+        
+        # Add activity entry for puzzle creation
+        cursor.execute(
+            """
+            INSERT INTO activity
+            (puzzle_id, solver_id, source, type)
+            VALUES (%s, %s, 'puzzleboss', 'create')
+            """,
+            (myid, 100),
+        )
+        conn.commit()
     except:
         raise Exception("Exception checking database for puzzle after insert")
 
@@ -843,6 +856,22 @@ def update_puzzle_part(id, part):
             clear_puzzle_solvers(id)
             chat_announce_solved(mypuzzle["puzzle"]["name"])
             
+            # Add activity entry for puzzle being solved
+            try:
+                conn = mysql.connection
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO activity
+                    (puzzle_id, solver_id, source, type)
+                    VALUES (%s, %s, 'puzzleboss', 'solve')
+                    """,
+                    (id, 100),
+                )
+                conn.commit()
+            except:
+                debug_log(0, "Exception in logging puzzle solve in activity table for puzzle %s" % id)
+            
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
                 check_round_completion(mypuzzle["puzzle"]["round_id"])
@@ -854,6 +883,22 @@ def update_puzzle_part(id, part):
             "**ATTENTION** new comment for puzzle %s: %s"
             % (mypuzzle["puzzle"]["name"], value),
         )
+        
+        # Add activity entry for comment
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'puzzleboss', 'comment')
+                """,
+                (id, 100),
+            )
+            conn.commit()
+        except:
+            debug_log(0, "Exception in logging comment in activity table for puzzle %s" % id)
 
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)
@@ -1436,6 +1481,71 @@ def refresh_config():
     except Exception as e:
         debug_log(0, f"Error refreshing configuration: {str(e)}")
         return {"status": "error", "message": str(e)}, 500
+
+@app.route("/activity", methods=["GET"])
+@swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])
+def get_all_activities():
+    """Get activity counts by type and puzzle timing information."""
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        
+        # Get activity counts
+        cursor.execute(
+            """
+            SELECT type, COUNT(*) as count 
+            FROM activity 
+            GROUP BY type
+            """
+        )
+        activities = cursor.fetchall()
+        
+        # Get puzzle solve timing information
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(DISTINCT a1.puzzle_id) as total_solves,
+                SUM(TIMESTAMPDIFF(SECOND, a2.time, a1.time)) as total_solve_time
+            FROM activity a1
+            JOIN activity a2 ON a1.puzzle_id = a2.puzzle_id AND a2.type = 'create'
+            WHERE a1.type = 'solve'
+            """
+        )
+        solve_timing = cursor.fetchone()
+        
+        # Get open puzzles timing information
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(DISTINCT p.id) as total_open,
+                SUM(TIMESTAMPDIFF(SECOND, a.time, NOW())) as total_open_time
+            FROM puzzle p
+            JOIN activity a ON p.id = a.puzzle_id AND a.type = 'create'
+            WHERE p.status != 'Solved' AND p.status != '[hidden]'
+            """
+        )
+        open_timing = cursor.fetchone()
+        
+        cursor.close()
+        
+        # Convert to dictionary format for easier access
+        activity_counts = {row['type']: row['count'] for row in activities}
+        
+        return jsonify({
+            "status": "ok", 
+            "activity": activity_counts,
+            "puzzle_solves_timer": {
+                "total_solves": solve_timing['total_solves'] or 0,
+                "total_solve_time_seconds": solve_timing['total_solve_time'] or 0
+            },
+            "open_puzzles_timer": {
+                "total_open": open_timing['total_open'] or 0,
+                "total_open_time_seconds": open_timing['total_open_time'] or 0
+            }
+        })
+    except Exception as e:
+        debug_log(0, "Exception in getting activity counts: %s" % e)
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 if __name__ == "__main__":
     if initdrive() != 0:
