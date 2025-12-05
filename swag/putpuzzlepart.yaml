@@ -54,6 +54,9 @@ parameters:
               xyzloc:
                   type: string
                   description: Location where puzzle is being worked on
+              sheetcount:
+                  type: integer
+                  description: Number of sheets/tabs in the puzzle's Google spreadsheet
         
 responses:
     200:

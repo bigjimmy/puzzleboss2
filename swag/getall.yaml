@@ -74,6 +74,9 @@ responses:
                             properties:
                               solver_id:
                                 type: integer
+                    sheetcount:
+                      type: integer
+                      description: Number of sheets/tabs in the puzzle's Google spreadsheet
   500:
     description: Error retrieving data
     schema:
