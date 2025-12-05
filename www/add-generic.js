@@ -337,6 +337,7 @@ export default {
         <p><textarea v-if="type === 'note'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
 
         <!-- status -->
+        <p v-if="type === 'status' && puzzle.sheetcount">Sheets in spreadsheet: {{puzzle.sheetcount}}</p>
         <p v-if="type === 'status'">Is Meta: <input type="checkbox" v-model="isMetaLoc"></input></p>
         <p v-if="type === 'status'"> Status:
             <select ref="modal-input" class="dropdown" v-model="stateStrA" :disabled="puzzle.status === 'Solved'">

@@ -193,7 +193,9 @@ echo '<tr><td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td
 echo '<tr><td><b>Comments</b></td><td>' . htmlentities($puzzleobj->puzzle->comments ?? '') . '</td></tr>';
 echo '<tr><td><b>Meta For Round</b></td><td>';
 echo $puzzleobj->puzzle->ismeta ? "Yes" : "No";
-echo '</td></tr></table>';
+echo '</td></tr>';
+echo '<tr><td><b>Sheet Count</b></td><td>' . ($puzzleobj->puzzle->sheetcount ?? 'N/A') . '</td></tr>';
+echo '</table>';
 
 //Solver Assignment
 if ($userobj->solver->puzz != $puzname) {
