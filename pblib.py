@@ -54,7 +54,8 @@ def refresh_config():
         cursor.execute("SELECT * FROM config")
         configdump = cursor.fetchall()
         db_connection.close()
-        configstruct = dict(configdump)
+        configstruct.clear()
+        configstruct.update(dict(configdump))
         debug_log(3, "Database configuration reloaded")
     except Exception as e:
         debug_log(0, f"FATAL EXCEPTION reading database configuration: {e}")

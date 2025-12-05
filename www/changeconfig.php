@@ -64,6 +64,21 @@
     color: black;
     margin-bottom: 10px;
   }
+  .warning-box {
+    background-color: #ffcccc;
+    border: 2px solid #cc0000;
+    border-radius: 6px;
+    color: #990000;
+    padding: 15px;
+    margin: 20px 0;
+  }
+  .warning-box h3 {
+    margin-top: 0;
+    color: #cc0000;
+  }
+  .warning-box ul {
+    margin-bottom: 0;
+  }
   </style>
 </head>
 <body>
@@ -78,9 +93,16 @@ require('puzzlebosslib.php');
       $responseobj = postapi("/config/refresh", array());
       assert_api_success($responseobj);
       echo '<div class="success">Configuration refreshed successfully!</div>';
-      echo '<br><br>';
+      echo '<div class="warning-box">';
+      echo '<h3>⚠️ Production Limitations</h3>';
+      echo '<ul>';
+      echo '<li><strong>Multi-server deployments:</strong> This config sync only refreshes the API server that handled this request. In production with multiple web servers, scale the AWS autoscaling group down to 1 before running this sync, or manually restart all puzzleboss web servers.</li>';
+      echo '<li><strong>Backend services:</strong> This sync does NOT propagate to the series-of-tubes backend server where the Discord bot and BigJimmyBot run. Manually restart those services to pick up new config values.</li>';
+      echo '</ul>';
+      echo '</div>';
+      echo '<br>';
       echo '<a href="javascript:window.history.back();">Go back</a>';
-      echo '</div><br><hr>';
+      echo '<br><hr>';
       exit;
     } catch (Exception $e) {
       exit_with_api_error($e);
@@ -118,9 +140,17 @@ HTML;
   echo '<input type="hidden" name="refresh" value="yes">';
   echo '<input type="submit" class="refresh-button" value="Refresh Configuration">';
   echo '</form>';
-  echo '<br><br>';
+  echo '</div>';
+  echo '<div class="warning-box">';
+  echo '<h3>⚠️ Production Limitations</h3>';
+  echo '<ul>';
+  echo '<li><strong>Multi-server deployments:</strong> This config sync only refreshes the API server that handled this request. In production with multiple web servers, scale the AWS autoscaling group down to 1 before running this sync, or manually restart all puzzleboss web servers.</li>';
+  echo '<li><strong>Backend services:</strong> This sync does NOT propagate to the series-of-tubes backend server where the Discord bot and BigJimmyBot run. Manually restart those services to pick up new config values.</li>';
+  echo '</ul>';
+  echo '</div>';
+  echo '<br>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
-  echo '</div><br><hr>';
+  echo '<br><hr>';
 
 ?>
 
