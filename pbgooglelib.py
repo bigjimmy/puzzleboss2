@@ -136,7 +136,7 @@ def get_puzzle_sheet_info(myfileid):
     Returns dict with 'revisions' (list) and 'sheetcount' (int or None).
     THREAD SAFE.
     """
-    debug_log(4, "start with fileid: %s" % myfileid)
+    debug_log(5, "start with fileid: %s" % myfileid)
     
     result = {
         "revisions": [],
@@ -183,7 +183,7 @@ def get_puzzle_sheet_info(myfileid):
             .execute(http=threadsafe_http)
         )
         result["sheetcount"] = len(spreadsheet.get("sheets", []))
-        debug_log(4, "Sheet count for %s: %s" % (myfileid, result["sheetcount"]))
+        debug_log(5, "Sheet count for %s: %s" % (myfileid, result["sheetcount"]))
     except Exception as e:
         debug_log(1, "Error getting sheet count for %s: %s" % (myfileid, e))
     
