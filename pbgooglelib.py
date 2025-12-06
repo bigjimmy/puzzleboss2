@@ -157,11 +157,16 @@ def get_puzzle_sheet_info(myfileid):
             .list(fileId=myfileid, fields="*")
             .execute(http=threadsafe_http)
         )
-        if type(retval) != str:
-            for revision in retval.get("revisions", []):
+        if type(retval) == str:
+            debug_log(1, "Revisions API returned string (error) for %s: %s" % (myfileid, retval))
+        else:
+            all_revisions = retval.get("revisions", [])
+            debug_log(4, "Revisions API returned %d total revisions for %s" % (len(all_revisions), myfileid))
+            for revision in all_revisions:
                 debug_log(5, "Revision found: %s" % revision)
                 if not (revision["lastModifyingUser"]["me"]):
                     result["revisions"].append(revision)
+            debug_log(4, "After filtering, %d revisions for %s" % (len(result["revisions"]), myfileid))
     except Exception as e:
         debug_log(1, "Error fetching revisions for %s: %s" % (myfileid, e))
     
