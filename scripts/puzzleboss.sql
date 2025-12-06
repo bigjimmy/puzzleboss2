@@ -132,6 +132,7 @@ CREATE TABLE `puzzle` (
   `ismeta` tinyint(1) NOT NULL DEFAULT 0,
   `current_solvers` JSON DEFAULT NULL,
   `solver_history` JSON DEFAULT NULL,
+  `sheetcount` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
   KEY `fk_puzzles_rounds1_idx` (`round_id`)
@@ -330,7 +331,8 @@ SELECT
         ) AS jt
         JOIN solver s ON s.id = jt.solver_id
     ) AS cursolvers,
-    p.xyzloc
+    p.xyzloc,
+    p.sheetcount
 FROM puzzle p
 LEFT JOIN round r ON p.round_id = r.id;
 

@@ -52,6 +52,19 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             # Feeble attempt to inject a new revision to split up grouping periodically
             # force_sheet_edit(mypuzzle['drive_id'])
 
+            # Get revisions AND sheet count in a single combined call
+            sheet_info = get_puzzle_sheet_info(mypuzzle["drive_id"])
+            
+            # Update sheet count
+            if sheet_info["sheetcount"] is not None:
+                try:
+                    requests.post(
+                        "%s/puzzles/%s/sheetcount" % (config["API"]["APIURI"], mypuzzle["id"]),
+                        json={"sheetcount": sheet_info["sheetcount"]},
+                    )
+                except Exception as e:
+                    debug_log(1, "[Thread: %s] Error updating sheetcount: %s" % (threadname, e))
+
             # Lots of annoying time string conversions here between mysql and google
             lastpuzzleacttime = datetime.datetime.fromordinal(1)
             myreq = "%s/puzzles/%s/lastact" % (
@@ -84,7 +97,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                 )
 
             # Go through all revisions for the puzzle and see if any are relevant ("new")
-            for revision in get_revisions(mypuzzle["drive_id"]):
+            for revision in sheet_info["revisions"]:
                 revisiontime = datetime.datetime.strptime(
                     revision["modifiedTime"], "%Y-%m-%dT%H:%M:%S.%fZ"
                 )

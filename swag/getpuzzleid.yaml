@@ -71,6 +71,10 @@ definitions:
           type: string
           description: Location where puzzle is being worked on
           example: "Table 3"
+      sheetcount:
+          type: integer
+          description: Number of sheets/tabs in the puzzle's Google spreadsheet
+          example: 3
 
 parameters:
     - in: path

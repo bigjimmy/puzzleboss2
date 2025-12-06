@@ -130,31 +130,55 @@ def initdrive():
     return 0
 
 
-def get_revisions(myfileid):
-    # will return full list of revisions for a google fileid not made by current user. THREAD SAFE
-
+def get_puzzle_sheet_info(myfileid):
+    """
+    Get both revisions and sheet count for a puzzle spreadsheet in one call.
+    Returns dict with 'revisions' (list) and 'sheetcount' (int or None).
+    THREAD SAFE.
+    """
     debug_log(4, "start with fileid: %s" % myfileid)
-    revisions = []
+    
+    result = {
+        "revisions": [],
+        "sheetcount": None
+    }
+    
+    if configstruct["SKIP_GOOGLE_API"] == "true":
+        debug_log(3, "google API skipped by config.")
+        return result
+    
+    # Create single threadsafe HTTP object for both API calls
     threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    
+    # Get revisions from Drive API
     try:
         retval = (
             service.revisions()
             .list(fileId=myfileid, fields="*")
             .execute(http=threadsafe_http)
         )
+        if type(retval) != str:
+            for revision in retval.get("revisions", []):
+                debug_log(5, "Revision found: %s" % revision)
+                if not (revision["lastModifyingUser"]["me"]):
+                    result["revisions"].append(revision)
     except Exception as e:
-        debug_log(1, "Unknown Error fetching revisions for %s: %s" % (myfileid, e))
-        return revisions
-
-    if type(retval) == str:
-        debug_log(1, "Problem fetching revisions for %s: %s" % (myfileid, retval))
-        return revisions
-    for revision in retval["revisions"]:
-        # exclude revisions done by this bot
-        debug_log(5, "Revision found: %s" % revision)
-        if not (revision["lastModifyingUser"]["me"]):
-            revisions.append(revision)
-    return revisions
+        debug_log(1, "Error fetching revisions for %s: %s" % (myfileid, e))
+    
+    # Get sheet count from Sheets API (reuse same HTTP auth)
+    try:
+        sheetsservice = build("sheets", "v4", credentials=creds)
+        spreadsheet = (
+            sheetsservice.spreadsheets()
+            .get(spreadsheetId=myfileid, fields="sheets.properties.title")
+            .execute(http=threadsafe_http)
+        )
+        result["sheetcount"] = len(spreadsheet.get("sheets", []))
+        debug_log(4, "Sheet count for %s: %s" % (myfileid, result["sheetcount"]))
+    except Exception as e:
+        debug_log(1, "Error getting sheet count for %s: %s" % (myfileid, e))
+    
+    return result
 
 
 def create_round_folder(foldername):

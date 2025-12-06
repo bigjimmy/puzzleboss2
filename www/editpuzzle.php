@@ -178,8 +178,23 @@ $userid = getauthenticateduser();
 
 $userobj = readapi('/solvers/' . $userid);
 $puzzleobj = readapi('/puzzles/' . $puzzid);
+$lastactobj = readapi('/puzzles/' . $puzzid . '/lastact');
 $puzname = $puzzleobj->puzzle->name;
 $username = $userobj->solver->name;
+
+// Calculate time since last activity
+$timeSinceLastAct = 'N/A';
+if (isset($lastactobj->puzzle->lastact->time)) {
+  $lastActTime = strtotime($lastactobj->puzzle->lastact->time);
+  $now = time();
+  $diff = $now - $lastActTime;
+  if ($diff >= 0) {
+    $hours = floor($diff / 3600);
+    $minutes = floor(($diff % 3600) / 60);
+    $seconds = $diff % 60;
+    $timeSinceLastAct = sprintf('%dh %dm %ds ago', $hours, $minutes, $seconds);
+  }
+}
 
 echo 'You Are: ' . $username;
 echo '<br><br><table border=2>';
@@ -193,7 +208,10 @@ echo '<tr><td><b>All Solvers</b></td><td>' . $puzzleobj->puzzle->solvers . '</td
 echo '<tr><td><b>Comments</b></td><td>' . htmlentities($puzzleobj->puzzle->comments ?? '') . '</td></tr>';
 echo '<tr><td><b>Meta For Round</b></td><td>';
 echo $puzzleobj->puzzle->ismeta ? "Yes" : "No";
-echo '</td></tr></table>';
+echo '</td></tr>';
+echo '<tr><td><b>Sheet Count</b></td><td>' . ($puzzleobj->puzzle->sheetcount ?? 'N/A') . '</td></tr>';
+echo '<tr><td><b>Last Activity</b></td><td>' . $timeSinceLastAct . '</td></tr>';
+echo '</table>';
 
 //Solver Assignment
 if ($userobj->solver->puzz != $puzname) {

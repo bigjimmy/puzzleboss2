@@ -126,6 +126,11 @@ export default {
         //
         const answer = ref("");
         const isMetaLoc = ref(false);
+        
+        //
+        // Time since last activity (for status modal)
+        //
+        const timeSinceLastAct = ref("");
 
         // Force answers to be all uppercase.
         watch(answer, () => {
@@ -180,6 +185,29 @@ export default {
                     stateStrA.value = props.puzzle.status;           
                     isMetaLoc.value = props.ismeta;
                     answer.value = props.puzzle.answer !== null ? props.puzzle.answer : "";
+                    
+                    // Fetch last activity time
+                    try {
+                        const lastActUrl = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=lastact`;
+                        let lastActData = await(await fetch(lastActUrl)).json();
+                        if (lastActData.puzzle && lastActData.puzzle.lastact && lastActData.puzzle.lastact.time) {
+                            const lastActTime = new Date(lastActData.puzzle.lastact.time);
+                            const now = new Date();
+                            const diffMs = now - lastActTime;
+                            if (diffMs >= 0) {
+                                const diffSec = Math.floor(diffMs / 1000);
+                                const hours = Math.floor(diffSec / 3600);
+                                const minutes = Math.floor((diffSec % 3600) / 60);
+                                const seconds = diffSec % 60;
+                                timeSinceLastAct.value = `${hours}h ${minutes}m ${seconds}s ago`;
+                            }
+                        } else {
+                            timeSinceLastAct.value = "";
+                        }
+                    } catch (e) {
+                        console.log("Failed to fetch lastact:", e);
+                        timeSinceLastAct.value = "";
+                    }
                 }
 
                 //
@@ -316,7 +344,7 @@ export default {
         return {
             showModal, toggleModal, warning,
             stateStrA,
-            answer, isMetaLoc,
+            answer, isMetaLoc, timeSinceLastAct,
             showStatus, currentlyWorking, claimCurrentPuzzle
         };
     },
@@ -337,6 +365,8 @@ export default {
         <p><textarea v-if="type === 'note'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
 
         <!-- status -->
+        <p v-if="type === 'status' && puzzle.sheetcount">Sheets in spreadsheet: {{puzzle.sheetcount}}</p>
+        <p v-if="type === 'status' && timeSinceLastAct">Last activity: {{timeSinceLastAct}}</p>
         <p v-if="type === 'status'">Is Meta: <input type="checkbox" v-model="isMetaLoc"></input></p>
         <p v-if="type === 'status'"> Status:
             <select ref="modal-input" class="dropdown" v-model="stateStrA" :disabled="puzzle.status === 'Solved'">

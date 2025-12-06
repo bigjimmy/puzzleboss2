@@ -1288,6 +1288,106 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def test_sheetcount(self, result: TestResult):
+        """Test sheetcount field population, modification, and reading."""
+        self.logger.log_operation("Starting sheetcount test")
+        
+        try:
+            # Get all puzzles
+            puzzles = self.get_all_puzzles()
+            if not puzzles:
+                result.fail("No puzzles found for sheetcount testing")
+                return
+                
+            # Select a few random puzzles for testing
+            selected_puzzles = random.sample(puzzles, min(3, len(puzzles)))
+            
+            for puzzle in selected_puzzles:
+                self.logger.log_operation(f"Testing sheetcount for puzzle {puzzle['name']}")
+                
+                # Get initial puzzle details
+                puzzle_details = self.get_puzzle_details(puzzle['id'])
+                if not puzzle_details:
+                    result.fail(f"Failed to get details for puzzle {puzzle['name']}")
+                    return
+                    
+                initial_sheetcount = puzzle_details.get('sheetcount')
+                self.logger.log_operation(f"Initial sheetcount: {initial_sheetcount}")
+                
+                # Set sheetcount to a specific value
+                test_sheetcount = random.randint(2, 10)
+                self.logger.log_operation(f"Setting sheetcount to {test_sheetcount}")
+                
+                if not self.update_puzzle(puzzle['id'], 'sheetcount', test_sheetcount):
+                    result.fail(f"Failed to set sheetcount for puzzle {puzzle['name']}")
+                    return
+                    
+                # Verify sheetcount was set
+                puzzle_details = self.get_puzzle_details(puzzle['id'])
+                if not puzzle_details:
+                    result.fail(f"Failed to get puzzle details after setting sheetcount")
+                    return
+                    
+                if puzzle_details.get('sheetcount') != test_sheetcount:
+                    result.fail(f"Sheetcount not set correctly for puzzle {puzzle['name']}. Expected: {test_sheetcount}, Got: {puzzle_details.get('sheetcount')}")
+                    return
+                    
+                self.logger.log_operation(f"Successfully set sheetcount to {test_sheetcount}")
+                
+                # Update sheetcount to a different value
+                new_sheetcount = test_sheetcount + random.randint(1, 5)
+                self.logger.log_operation(f"Updating sheetcount to {new_sheetcount}")
+                
+                if not self.update_puzzle(puzzle['id'], 'sheetcount', new_sheetcount):
+                    result.fail(f"Failed to update sheetcount for puzzle {puzzle['name']}")
+                    return
+                    
+                # Verify sheetcount was updated
+                puzzle_details = self.get_puzzle_details(puzzle['id'])
+                if not puzzle_details:
+                    result.fail(f"Failed to get puzzle details after updating sheetcount")
+                    return
+                    
+                if puzzle_details.get('sheetcount') != new_sheetcount:
+                    result.fail(f"Sheetcount not updated correctly for puzzle {puzzle['name']}. Expected: {new_sheetcount}, Got: {puzzle_details.get('sheetcount')}")
+                    return
+                    
+                self.logger.log_operation(f"Successfully updated sheetcount to {new_sheetcount}")
+                
+                # Verify sheetcount is included in /all endpoint
+                response = requests.get(f"{self.base_url}/all")
+                if not response.ok:
+                    result.fail(f"Failed to get /all endpoint")
+                    return
+                    
+                all_data = response.json()
+                found_puzzle = None
+                for round_data in all_data.get('rounds', []):
+                    for p in round_data.get('puzzles', []):
+                        if p.get('id') == puzzle['id']:
+                            found_puzzle = p
+                            break
+                    if found_puzzle:
+                        break
+                        
+                if not found_puzzle:
+                    result.fail(f"Puzzle {puzzle['name']} not found in /all endpoint")
+                    return
+                    
+                if found_puzzle.get('sheetcount') != new_sheetcount:
+                    result.fail(f"Sheetcount not correct in /all endpoint for puzzle {puzzle['name']}. Expected: {new_sheetcount}, Got: {found_puzzle.get('sheetcount')}")
+                    return
+                    
+                self.logger.log_operation(f"Sheetcount correctly included in /all endpoint")
+                
+            result.set_success("Sheetcount test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in sheetcount test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def test_api_endpoints(self, result: TestResult):
         """Test basic read-only API endpoints."""
         self.logger.log_operation("Starting API endpoints test")
@@ -1382,6 +1482,7 @@ class TestRunner:
             ("Solver Reassignment", self.test_solver_reassignment),
             ("Activity Tracking", self.test_activity_tracking),
             ("Solver History", self.test_solver_history),
+            ("Sheetcount", self.test_sheetcount),
             ("API Endpoints", self.test_api_endpoints)
         ]
         

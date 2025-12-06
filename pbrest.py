@@ -904,6 +904,10 @@ def update_puzzle_part(id, part):
         update_puzzle_part_in_db(id, part, value)
         # This obviously needs some sanity checking
 
+    elif part == "sheetcount":
+        # Simple integer update for sheet count (set by bigjimmybot)
+        update_puzzle_part_in_db(id, part, value)
+
     else:
         raise Exception("Invalid part name %s" % part)
 
