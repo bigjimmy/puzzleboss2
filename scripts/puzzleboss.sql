@@ -67,6 +67,21 @@ CREATE TABLE `clientindex` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `botstats`
+--
+
+DROP TABLE IF EXISTS `botstats`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `botstats` (
+  `key` varchar(100) NOT NULL,
+  `val` varchar(500) DEFAULT NULL,
+  `updated` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `config`
 --
 

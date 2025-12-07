@@ -102,6 +102,31 @@ try {
     $metrics[] = "# TYPE puzzleboss_rounds_by_status_total gauge";
     $metrics[] = 'puzzleboss_rounds_by_status_total{status="open"} ' . $rounds_open;
     $metrics[] = 'puzzleboss_rounds_by_status_total{status="solved"} ' . $rounds_solved;
+    $metrics[] = "";
+    
+    // BigJimmyBot stats
+    try {
+        $botstats_response = readapi('/botstats');
+        if (isset($botstats_response->botstats)) {
+            $botstats = $botstats_response->botstats;
+            
+            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_time_seconds Time in seconds for last full puzzle scan loop";
+            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_time_seconds gauge";
+            $metrics[] = "puzzleboss_bigjimmy_loop_time_seconds " . ($botstats->loop_time_seconds->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_puzzle_count Number of puzzles processed in last loop";
+            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_puzzle_count gauge";
+            $metrics[] = "puzzleboss_bigjimmy_loop_puzzle_count " . ($botstats->loop_puzzle_count->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_bigjimmy_avg_seconds_per_puzzle Average seconds per puzzle in last loop";
+            $metrics[] = "# TYPE puzzleboss_bigjimmy_avg_seconds_per_puzzle gauge";
+            $metrics[] = "puzzleboss_bigjimmy_avg_seconds_per_puzzle " . ($botstats->loop_avg_seconds_per_puzzle->val ?? 0);
+        }
+    } catch (Exception $e) {
+        // Botstats not available yet, skip
+    }
     
     // Print metrics
     header('Content-Type: text/plain');

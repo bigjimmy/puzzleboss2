@@ -43,6 +43,7 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             # puzzle-pull wait time per thread to avoid API limits
             time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
 
+            puzzle_start_time = time.time()
             debug_log(
                 4,
                 "[Thread: %s] Fetched from queue puzzle: %s"
@@ -246,6 +247,14 @@ def check_puzzle_from_queue(threadname, q, fromtime):
                                             assignmentresponse.text,
                                         ),
                                     )
+            
+            # Log per-puzzle timing
+            puzzle_elapsed = time.time() - puzzle_start_time
+            debug_log(
+                4,
+                "[Thread: %s] Finished processing puzzle %s in %.2f seconds"
+                % (threadname, mypuzzle["name"], puzzle_elapsed),
+            )
         else:
             queueLock.release()
     return 0
@@ -294,6 +303,7 @@ if __name__ == "__main__":
                     debug_log(4, "skipping solved puzzle %s" % puzzle["name"])
         debug_log(4, "full puzzle structure loaded")
         fromtime = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        loop_start_time = time.time()
         debug_log(
             4,
             "Beginning iteration of bigjimmy bot across all puzzles (checking revs from time %s)"
@@ -324,9 +334,34 @@ if __name__ == "__main__":
         for t in threads:
             t.join()
 
+        loop_elapsed = time.time() - loop_start_time
         debug_log(
             4,
             "Completed iteration of bigjimmy bot across all puzzles from time %s"
             % fromtime,
         )
+        debug_log(
+            3,
+            "Full iteration completed: %d puzzles processed in %.2f seconds (%.2f sec/puzzle avg)"
+            % (len(puzzles), loop_elapsed, loop_elapsed / len(puzzles) if puzzles else 0),
+        )
+        
+        # Post timing stats to API for Prometheus metrics
+        try:
+            requests.post(
+                "%s/botstats/loop_time_seconds" % config["API"]["APIURI"],
+                json={"val": "%.2f" % loop_elapsed},
+            )
+            requests.post(
+                "%s/botstats/loop_puzzle_count" % config["API"]["APIURI"],
+                json={"val": str(len(puzzles))},
+            )
+            if puzzles:
+                requests.post(
+                    "%s/botstats/loop_avg_seconds_per_puzzle" % config["API"]["APIURI"],
+                    json={"val": "%.2f" % (loop_elapsed / len(puzzles))},
+                )
+        except Exception as e:
+            debug_log(1, "Error posting botstats: %s" % e)
+        
         exitFlag = 0

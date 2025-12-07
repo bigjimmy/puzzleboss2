@@ -474,6 +474,52 @@ def put_config():
     debug_log(2, "Config value %s changed successfully" % mykey)
     return {"status": "ok"}
 
+
+@app.route("/botstats", endpoint="getbotstats", methods=["GET"])
+def get_botstats():
+    """Get all bot statistics"""
+    debug_log(4, "start")
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT `key`, `val`, `updated` FROM botstats")
+        rows = cursor.fetchall()
+        botstats = {}
+        for row in rows:
+            botstats[row["key"]] = {
+                "val": row["val"],
+                "updated": row["updated"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["updated"] else None
+            }
+    except Exception as e:
+        raise Exception("Exception fetching botstats from database: %s" % e)
+
+    debug_log(5, "fetched all botstats from database")
+    return {"status": "ok", "botstats": botstats}
+
+
+@app.route("/botstats/<key>", endpoint="putbotstat", methods=["POST"])
+def put_botstat(key):
+    """Update a single bot statistic"""
+    debug_log(4, "start with key: %s" % key)
+    try:
+        data = request.get_json()
+        myval = data["val"]
+        debug_log(4, "Botstat update: key=%s val=%s" % (key, myval))
+    except Exception as e:
+        raise Exception("Exception interpreting input data for botstat update: %s" % e)
+    
+    conn = mysql.connection
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO botstats (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
+        (key, myval, myval)
+    )
+    conn.commit()
+
+    debug_log(4, "Botstat %s updated successfully to %s" % (key, myval))
+    return {"status": "ok"}
+
+
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
 @swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
 def create_puzzle():
