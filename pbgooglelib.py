@@ -135,12 +135,8 @@ def get_puzzle_sheet_info(myfileid):
     Get both revisions and sheet count for a puzzle spreadsheet in one call.
     Returns dict with 'revisions' (list) and 'sheetcount' (int or None).
     THREAD SAFE.
-    Includes retry logic for rate limit (429) errors.
     """
     debug_log(5, "start with fileid: %s" % myfileid)
-    
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
     
     result = {
         "revisions": [],
@@ -154,70 +150,42 @@ def get_puzzle_sheet_info(myfileid):
     # Create single threadsafe HTTP object for both API calls
     threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
     
-    # Get revisions from Drive API (with retry on rate limit)
-    revisions_success = False
-    for attempt in range(max_retries):
-        try:
-            retval = (
-                service.revisions()
-                .list(fileId=myfileid, fields="*")
-                .execute(http=threadsafe_http)
-            )
-            if type(retval) == str:
-                debug_log(1, "Revisions API returned string (error) for %s: %s" % (myfileid, retval))
-            else:
-                all_revisions = retval.get("revisions", [])
-                debug_log(5, "Revisions API returned %d total revisions for %s" % (len(all_revisions), myfileid))
-                for revision in all_revisions:
-                    last_user = revision.get("lastModifyingUser", {})
-                    user_email = last_user.get("emailAddress", "unknown")
-                    is_me = last_user.get("me", False)
-                    debug_log(5, "Revision by %s (me=%s) at %s" % (user_email, is_me, revision.get("modifiedTime", "unknown")))
-                    debug_log(5, "Full revision: %s" % revision)
-                    if not is_me:
-                        result["revisions"].append(revision)
-                debug_log(5, "After filtering, %d revisions for %s" % (len(result["revisions"]), myfileid))
-            revisions_success = True
-            break  # Success, exit retry loop
-        except Exception as e:
-            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
-                _increment_quota_failure()
-                debug_log(3, "Rate limit hit fetching revisions for %s, waiting %d seconds (attempt %d/%d)" 
-                          % (myfileid, retry_delay, attempt + 1, max_retries))
-                time.sleep(retry_delay)
-            else:
-                debug_log(1, "Error fetching revisions for %s: %s" % (myfileid, e))
-                break  # Non-rate-limit error, don't retry
+    # Get revisions from Drive API
+    try:
+        retval = (
+            service.revisions()
+            .list(fileId=myfileid, fields="*")
+            .execute(http=threadsafe_http)
+        )
+        if type(retval) == str:
+            debug_log(1, "Revisions API returned string (error) for %s: %s" % (myfileid, retval))
+        else:
+            all_revisions = retval.get("revisions", [])
+            debug_log(5, "Revisions API returned %d total revisions for %s" % (len(all_revisions), myfileid))
+            for revision in all_revisions:
+                last_user = revision.get("lastModifyingUser", {})
+                user_email = last_user.get("emailAddress", "unknown")
+                is_me = last_user.get("me", False)
+                debug_log(5, "Revision by %s (me=%s) at %s" % (user_email, is_me, revision.get("modifiedTime", "unknown")))
+                debug_log(5, "Full revision: %s" % revision)
+                if not is_me:
+                    result["revisions"].append(revision)
+            debug_log(5, "After filtering, %d revisions for %s" % (len(result["revisions"]), myfileid))
+    except Exception as e:
+        debug_log(1, "Error fetching revisions for %s: %s" % (myfileid, e))
     
-    if not revisions_success and max_retries > 0:
-        debug_log(1, "EXHAUSTED all %d retries fetching revisions for %s - giving up" % (max_retries, myfileid))
-    
-    # Get sheet count from Sheets API (with retry on rate limit)
-    sheetcount_success = False
-    for attempt in range(max_retries):
-        try:
-            sheetsservice = build("sheets", "v4", credentials=creds)
-            spreadsheet = (
-                sheetsservice.spreadsheets()
-                .get(spreadsheetId=myfileid, fields="sheets.properties.title")
-                .execute(http=threadsafe_http)
-            )
-            result["sheetcount"] = len(spreadsheet.get("sheets", []))
-            debug_log(5, "Sheet count for %s: %s" % (myfileid, result["sheetcount"]))
-            sheetcount_success = True
-            break  # Success, exit retry loop
-        except Exception as e:
-            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
-                _increment_quota_failure()
-                debug_log(3, "Rate limit hit getting sheet count for %s, waiting %d seconds (attempt %d/%d)" 
-                          % (myfileid, retry_delay, attempt + 1, max_retries))
-                time.sleep(retry_delay)
-            else:
-                debug_log(1, "Error getting sheet count for %s: %s" % (myfileid, e))
-                break  # Non-rate-limit error, don't retry
-    
-    if not sheetcount_success and max_retries > 0:
-        debug_log(1, "EXHAUSTED all %d retries getting sheet count for %s - giving up" % (max_retries, myfileid))
+    # Get sheet count from Sheets API (reuse same HTTP auth)
+    try:
+        sheetsservice = build("sheets", "v4", credentials=creds)
+        spreadsheet = (
+            sheetsservice.spreadsheets()
+            .get(spreadsheetId=myfileid, fields="sheets.properties.title")
+            .execute(http=threadsafe_http)
+        )
+        result["sheetcount"] = len(spreadsheet.get("sheets", []))
+        debug_log(5, "Sheet count for %s: %s" % (myfileid, result["sheetcount"]))
+    except Exception as e:
+        debug_log(1, "Error getting sheet count for %s: %s" % (myfileid, e))
     
     return result
 
