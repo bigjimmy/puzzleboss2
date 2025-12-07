@@ -300,20 +300,40 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         "mimeType": "application/vnd.google-apps.spreadsheet",
     }
 
-    if configstruct["SHEETS_TEMPLATE_ID"] == "none":
-        file = service.files().create(body=file_metadata, fields="id").execute()
-        debug_log(4, "file ID returned from creation: %s" % file.get("id"))
-    else:
-        file = (
-            service.files()
-            .copy(
-                body=file_metadata,
-                fileId=configstruct["SHEETS_TEMPLATE_ID"],
-                fields="id",
-            )
-            .execute()
-        )
-        debug_log(4, "file ID returned from copy: %s" % file.get("id"))
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+
+    # Create/copy file with retry logic
+    file = None
+    for attempt in range(max_retries):
+        try:
+            if configstruct["SHEETS_TEMPLATE_ID"] == "none":
+                file = service.files().create(body=file_metadata, fields="id").execute()
+                debug_log(4, "file ID returned from creation: %s" % file.get("id"))
+            else:
+                file = (
+                    service.files()
+                    .copy(
+                        body=file_metadata,
+                        fileId=configstruct["SHEETS_TEMPLATE_ID"],
+                        fields="id",
+                    )
+                    .execute()
+                )
+                debug_log(4, "file ID returned from copy: %s" % file.get("id"))
+            break  # Success
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                debug_log(3, "Rate limit hit creating file, waiting %d seconds (attempt %d/%d)" 
+                          % (retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(0, "Error creating puzzle sheet file: %s" % e)
+                sys.exit(255)
+    
+    if file is None:
+        debug_log(0, "EXHAUSTED all %d retries creating puzzle sheet - giving up" % max_retries)
+        sys.exit(255)
 
     # Now let's set initial contents
 
@@ -503,21 +523,59 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     debug_log(
         4, "Sheets api batchupdate request id: %s body %s" % (file.get("id"), body)
     )
-    response = (
-        sheetsservice.spreadsheets()
-        .batchUpdate(spreadsheetId=file.get("id"), body=body)
-        .execute()
-    )
+    
+    # Batch update with retry logic
+    response = None
+    for attempt in range(max_retries):
+        try:
+            response = (
+                sheetsservice.spreadsheets()
+                .batchUpdate(spreadsheetId=file.get("id"), body=body)
+                .execute()
+            )
+            debug_log(5, "Response from sheetservice.spreadsheets.batchUpdate: %s" % response)
+            break  # Success
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                debug_log(3, "Rate limit hit on batchUpdate, waiting %d seconds (attempt %d/%d)" 
+                          % (retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(0, "Error in batchUpdate for puzzle sheet: %s" % e)
+                sys.exit(255)
+    
+    if response is None:
+        debug_log(0, "EXHAUSTED all %d retries on batchUpdate - giving up" % max_retries)
+        sys.exit(255)
+
     permission = {
         "role": "writer",
         "type": "domain",
         "domain": configstruct["DOMAINNAME"],
     }
-    debug_log(5, "Response from sheetservice.spreadsheets.batchUpdate: %s" % response)
-    permresp = (
-        service.permissions().create(fileId=file.get("id"), body=permission).execute()
-    )
-    debug_log(5, "Response from service.permissions.create: %s" % permresp)
+    
+    # Set permissions with retry logic
+    permresp = None
+    for attempt in range(max_retries):
+        try:
+            permresp = (
+                service.permissions().create(fileId=file.get("id"), body=permission).execute()
+            )
+            debug_log(5, "Response from service.permissions.create: %s" % permresp)
+            break  # Success
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                debug_log(3, "Rate limit hit setting permissions, waiting %d seconds (attempt %d/%d)" 
+                          % (retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(0, "Error setting permissions for puzzle sheet: %s" % e)
+                sys.exit(255)
+    
+    if permresp is None:
+        debug_log(0, "EXHAUSTED all %d retries setting permissions - giving up" % max_retries)
+        sys.exit(255)
+
     return file.get("id")
 
 
