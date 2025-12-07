@@ -377,6 +377,12 @@ if __name__ == "__main__":
                     "%s/botstats/loop_avg_seconds_per_puzzle" % config["API"]["APIURI"],
                     json={"val": "%.2f" % (processing_elapsed / len(puzzles))},
                 )
+            # Post quota failure count (cumulative counter, not reset)
+            quota_failures = get_quota_failure_count()
+            requests.post(
+                "%s/botstats/quota_failures" % config["API"]["APIURI"],
+                json={"val": str(quota_failures)},
+            )
         except Exception as e:
             debug_log(1, "Error posting botstats: %s" % e)
         

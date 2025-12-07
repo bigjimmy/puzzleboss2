@@ -133,6 +133,11 @@ try {
             $metrics[] = "# HELP puzzleboss_bigjimmy_avg_seconds_per_puzzle Average processing seconds per puzzle in last loop";
             $metrics[] = "# TYPE puzzleboss_bigjimmy_avg_seconds_per_puzzle gauge";
             $metrics[] = "puzzleboss_bigjimmy_avg_seconds_per_puzzle " . ($botstats->loop_avg_seconds_per_puzzle->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_bigjimmy_quota_failures_total Total Google API quota failures (429 errors) since bot start";
+            $metrics[] = "# TYPE puzzleboss_bigjimmy_quota_failures_total counter";
+            $metrics[] = "puzzleboss_bigjimmy_quota_failures_total " . ($botstats->quota_failures->val ?? 0);
         }
     } catch (Exception $e) {
         // Botstats not available yet, skip
