@@ -1,4 +1,5 @@
 import yaml
+import sys
 import inspect
 import datetime
 import bleach
@@ -45,7 +46,7 @@ def refresh_config():
         debug_log(3, "YAML configuration reloaded")
     except Exception as e:
         debug_log(0, f"FATAL EXCEPTION reading YAML configuration: {e}")
-        return
+        sys.exit(255)
 
     # Reload database config
     try:
@@ -59,6 +60,7 @@ def refresh_config():
         debug_log(3, "Database configuration reloaded")
     except Exception as e:
         debug_log(0, f"FATAL EXCEPTION reading database configuration: {e}")
+        sys.exit(255)
 
 # Initial configuration load
 refresh_config()

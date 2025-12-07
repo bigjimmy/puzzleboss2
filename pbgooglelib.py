@@ -1,4 +1,5 @@
 import os.path
+import sys
 import time
 import threading
 import googleapiclient
@@ -67,7 +68,7 @@ def initadmin():
         else:
             errmsg = "Admin Credentials missing.  Run googleadmininit.py on console."
             debug_log(0, errmsg)
-            return {"error": errmsg}
+            sys.exit(255)
 
         with open("admintoken.json", "w") as token:
             token.write(admincreds.to_json())
@@ -98,7 +99,7 @@ def initdrive():
         else:
             errmsg = "Credentials missing.  Run gdriveinit.py on console."
             debug_log(0, errmsg)
-            return {"error": errmsg}
+            sys.exit(255)
 
         with open("token.json", "w") as token:
             token.write(creds.to_json())
@@ -138,7 +139,7 @@ def initdrive():
     elif len(matchingfolders) > 1:
         errmsg = "Multiple folders found matching name %s! Fix this." % foldername
         debug_log(0, errmsg)
-        return {"error": errmsg}
+        sys.exit(255)
     else:
         debug_log(
             4,

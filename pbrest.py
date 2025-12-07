@@ -916,7 +916,7 @@ def update_puzzle_part(id, part):
                 )
                 conn.commit()
             except:
-                debug_log(0, "Exception in logging puzzle solve in activity table for puzzle %s" % id)
+                debug_log(1, "Exception in logging puzzle solve in activity table for puzzle %s" % id)
             
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
@@ -944,7 +944,7 @@ def update_puzzle_part(id, part):
             )
             conn.commit()
         except:
-            debug_log(0, "Exception in logging comment in activity table for puzzle %s" % id)
+            debug_log(1, "Exception in logging comment in activity table for puzzle %s" % id)
 
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)
@@ -1331,7 +1331,7 @@ def check_round_completion(round_id):
             conn.commit()
             debug_log(3, "Round %s marked as solved - all meta puzzles completed" % round_id)
     except:
-        debug_log(0, "Error checking round completion status for round %s" % round_id)
+        debug_log(1, "Error checking round completion status for round %s" % round_id)
 
 def assign_solver_to_puzzle(puzzle_id, solver_id):
     debug_log(4, "Started with puzzle id %s" % puzzle_id) 
@@ -1529,7 +1529,7 @@ def refresh_config():
         refresh_config()
         return {"status": "ok", "message": "Configuration refreshed successfully"}
     except Exception as e:
-        debug_log(0, f"Error refreshing configuration: {str(e)}")
+        debug_log(1, f"Error refreshing configuration: {str(e)}")
         return {"status": "error", "message": str(e)}, 500
 
 @app.route("/activity", methods=["GET"])
@@ -1607,7 +1607,7 @@ def get_all_activities():
             "seconds_since_last_solve": last_solve['seconds_since_last_solve'] if last_solve else None
         })
     except Exception as e:
-        debug_log(0, "Exception in getting activity counts: %s" % e)
+        debug_log(1, "Exception in getting activity counts: %s" % e)
         return jsonify({"status": "error", "error": str(e)}), 500
 
 if __name__ == "__main__":
