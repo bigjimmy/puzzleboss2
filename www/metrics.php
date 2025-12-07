@@ -110,9 +110,19 @@ try {
         if (isset($botstats_response->botstats)) {
             $botstats = $botstats_response->botstats;
             
-            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_time_seconds Time in seconds for last full puzzle scan loop";
+            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_time_seconds Total time in seconds for last full puzzle scan loop (setup + processing)";
             $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_time_seconds gauge";
             $metrics[] = "puzzleboss_bigjimmy_loop_time_seconds " . ($botstats->loop_time_seconds->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_setup_seconds Time in seconds for loop setup (API fetch, thread creation)";
+            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_setup_seconds gauge";
+            $metrics[] = "puzzleboss_bigjimmy_loop_setup_seconds " . ($botstats->loop_setup_seconds->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_processing_seconds Time in seconds for actual puzzle processing";
+            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_processing_seconds gauge";
+            $metrics[] = "puzzleboss_bigjimmy_loop_processing_seconds " . ($botstats->loop_processing_seconds->val ?? 0);
             $metrics[] = "";
             
             $metrics[] = "# HELP puzzleboss_bigjimmy_loop_puzzle_count Number of puzzles processed in last loop";
@@ -120,7 +130,7 @@ try {
             $metrics[] = "puzzleboss_bigjimmy_loop_puzzle_count " . ($botstats->loop_puzzle_count->val ?? 0);
             $metrics[] = "";
             
-            $metrics[] = "# HELP puzzleboss_bigjimmy_avg_seconds_per_puzzle Average seconds per puzzle in last loop";
+            $metrics[] = "# HELP puzzleboss_bigjimmy_avg_seconds_per_puzzle Average processing seconds per puzzle in last loop";
             $metrics[] = "# TYPE puzzleboss_bigjimmy_avg_seconds_per_puzzle gauge";
             $metrics[] = "puzzleboss_bigjimmy_avg_seconds_per_puzzle " . ($botstats->loop_avg_seconds_per_puzzle->val ?? 0);
         }

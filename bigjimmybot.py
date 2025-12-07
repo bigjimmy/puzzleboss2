@@ -280,6 +280,9 @@ if __name__ == "__main__":
     debug_log(3, "google drive init succeeded. Hunt folder id: %s" % pblib.huntfolderid)
 
     while True:
+        # Start timing setup phase
+        setup_start_time = time.time()
+        
         try:
             r = json.loads(requests.get("%s/all" % config["API"]["APIURI"]).text)
         except Exception as e:
@@ -303,12 +306,6 @@ if __name__ == "__main__":
                     debug_log(4, "skipping solved puzzle %s" % puzzle["name"])
         debug_log(4, "full puzzle structure loaded")
         fromtime = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
-        loop_start_time = time.time()
-        debug_log(
-            4,
-            "Beginning iteration of bigjimmy bot across all puzzles (checking revs from time %s)"
-            % fromtime,
-        )
 
         # initialize threads
         for i in range(1, (int(configstruct["BIGJIMMY_THREADCOUNT"]) + 1)):
@@ -323,6 +320,15 @@ if __name__ == "__main__":
             workQueue.put(puzzle)
         queueLock.release()
 
+        # Setup complete, start timing processing phase
+        setup_elapsed = time.time() - setup_start_time
+        processing_start_time = time.time()
+        debug_log(
+            4,
+            "Beginning iteration of bigjimmy bot across all puzzles (checking revs from time %s, setup took %.2f sec)"
+            % (fromtime, setup_elapsed),
+        )
+
         # wait for queue to be completed
         while not workQueue.empty():
             pass
@@ -334,7 +340,8 @@ if __name__ == "__main__":
         for t in threads:
             t.join()
 
-        loop_elapsed = time.time() - loop_start_time
+        processing_elapsed = time.time() - processing_start_time
+        loop_elapsed = setup_elapsed + processing_elapsed
         debug_log(
             4,
             "Completed iteration of bigjimmy bot across all puzzles from time %s"
@@ -342,8 +349,9 @@ if __name__ == "__main__":
         )
         debug_log(
             3,
-            "Full iteration completed: %d puzzles processed in %.2f seconds (%.2f sec/puzzle avg)"
-            % (len(puzzles), loop_elapsed, loop_elapsed / len(puzzles) if puzzles else 0),
+            "Full iteration completed: %d puzzles in %.2f sec (setup: %.2f sec, processing: %.2f sec, %.2f sec/puzzle avg)"
+            % (len(puzzles), loop_elapsed, setup_elapsed, processing_elapsed, 
+               processing_elapsed / len(puzzles) if puzzles else 0),
         )
         
         # Post timing stats to API for Prometheus metrics
@@ -353,13 +361,21 @@ if __name__ == "__main__":
                 json={"val": "%.2f" % loop_elapsed},
             )
             requests.post(
+                "%s/botstats/loop_setup_seconds" % config["API"]["APIURI"],
+                json={"val": "%.2f" % setup_elapsed},
+            )
+            requests.post(
+                "%s/botstats/loop_processing_seconds" % config["API"]["APIURI"],
+                json={"val": "%.2f" % processing_elapsed},
+            )
+            requests.post(
                 "%s/botstats/loop_puzzle_count" % config["API"]["APIURI"],
                 json={"val": str(len(puzzles))},
             )
             if puzzles:
                 requests.post(
                     "%s/botstats/loop_avg_seconds_per_puzzle" % config["API"]["APIURI"],
-                    json={"val": "%.2f" % (loop_elapsed / len(puzzles))},
+                    json={"val": "%.2f" % (processing_elapsed / len(puzzles))},
                 )
         except Exception as e:
             debug_log(1, "Error posting botstats: %s" % e)
