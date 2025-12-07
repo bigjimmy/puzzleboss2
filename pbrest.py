@@ -1576,6 +1576,18 @@ def get_all_activities():
         )
         open_timing = cursor.fetchone()
         
+        # Get time since last solve
+        cursor.execute(
+            """
+            SELECT TIMESTAMPDIFF(SECOND, time, NOW()) as seconds_since_last_solve
+            FROM activity
+            WHERE type = 'solve'
+            ORDER BY time DESC
+            LIMIT 1
+            """
+        )
+        last_solve = cursor.fetchone()
+        
         cursor.close()
         
         # Convert to dictionary format for easier access
@@ -1591,7 +1603,8 @@ def get_all_activities():
             "open_puzzles_timer": {
                 "total_open": open_timing['total_open'] or 0,
                 "total_open_time_seconds": open_timing['total_open_time'] or 0
-            }
+            },
+            "seconds_since_last_solve": last_solve['seconds_since_last_solve'] if last_solve else None
         })
     except Exception as e:
         debug_log(0, "Exception in getting activity counts: %s" % e)

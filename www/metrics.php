@@ -86,6 +86,11 @@ try {
     $metrics[] = "puzzleboss_open_puzzles_time_seconds_total " . ($open_timing->total_open_time_seconds ?? 0);
     $metrics[] = "";
     
+    $metrics[] = "# HELP puzzleboss_seconds_since_last_solve Seconds since the last puzzle was solved";
+    $metrics[] = "# TYPE puzzleboss_seconds_since_last_solve gauge";
+    $metrics[] = "puzzleboss_seconds_since_last_solve " . ($activity_response->seconds_since_last_solve ?? 0);
+    $metrics[] = "";
+    
     // Puzzle status metrics
     $metrics[] = "# HELP puzzleboss_puzzles_by_status_total Current number of puzzles in each status";
     $metrics[] = "# TYPE puzzleboss_puzzles_by_status_total gauge";
