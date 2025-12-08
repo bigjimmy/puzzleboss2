@@ -16,6 +16,7 @@ from pblib import *
 from builtins import Exception
 
 service = None
+sheetsservice = None
 creds = None
 admincreds = None
 
@@ -82,6 +83,7 @@ def initdrive():
         return 0
 
     global service
+    global sheetsservice
     global creds
     global SCOPES
 
@@ -105,6 +107,8 @@ def initdrive():
             token.write(creds.to_json())
 
     service = build("drive", "v3", credentials=creds)
+    sheetsservice = build("sheets", "v4", credentials=creds)
+    debug_log(3, "Drive and Sheets services initialized")
 
     foldername = configstruct["HUNT_FOLDER_NAME"]
 
@@ -257,9 +261,28 @@ def create_round_folder(foldername):
         "parents": [pblib.huntfolderid],
     }
 
-    file = service.files().create(body=file_metadata, fields="id").execute()
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
 
-    debug_log(4, "folder id returned: %s" % file.get("id"))
+    file = None
+    for attempt in range(max_retries):
+        try:
+            file = service.files().create(body=file_metadata, fields="id").execute()
+            debug_log(4, "folder id returned: %s" % file.get("id"))
+            break  # Success
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                debug_log(3, "Rate limit hit creating round folder, waiting %d seconds (attempt %d/%d)" 
+                          % (retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(0, "Error creating round folder: %s" % e)
+                sys.exit(255)
+    
+    if file is None:
+        debug_log(0, "EXHAUSTED all %d retries creating round folder - giving up" % max_retries)
+        sys.exit(255)
+
     return file.get("id")
 
 def delete_puzzle_sheet(sheetid):
@@ -336,9 +359,6 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         sys.exit(255)
 
     # Now let's set initial contents
-
-    # Setup sheets service for this
-    sheetsservice = build("sheets", "v4", credentials=creds)
     requests = []
 
     sheet_properties = {
@@ -622,8 +642,6 @@ def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
         creds, http=httplib2.Http()
     )
 
-    # Setup sheets service for this
-    sheetsservice = build("sheets", "v4", credentials=creds)
     datarange = "A7"
     datainputoption = "USER_ENTERED"
     data = {"values": [["last bigjimmybot probe: %s" % mytimestamp]]}
