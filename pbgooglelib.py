@@ -67,9 +67,8 @@ def initadmin():
             debug_log(3, "Refreshing credentials.")
             admincreds.refresh(Request())
         else:
-            errmsg = "Admin Credentials missing.  Run googleadmininit.py on console."
-            debug_log(0, errmsg)
-            sys.exit(255)
+            debug_log(0, "Admin Credentials missing. Run googleadmininit.py on console.")
+            raise Exception("Google API admin credentials on server invalid or missing. Fatal error, contact puzztech immediately.")
 
         with open("admintoken.json", "w") as token:
             token.write(admincreds.to_json())
