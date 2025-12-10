@@ -320,7 +320,7 @@ if (isset($_GET['code'])) {
     }
   </style>
   <script>
-    const apiRoot = '$apiroot';
+    const proxyUrl = '../www/apicall.php';
     const code = '$code';
     
     const steps = [
@@ -355,7 +355,7 @@ if (isset($_GET['code'])) {
       setStepStatus(step.id, 'active');
       
       try {
-        const response = await fetch(apiRoot + '/finishaccount/' + code + '?step=' + stepNum);
+        const response = await fetch(proxyUrl + '?apicall=finishaccount&apiparam1=' + code + '&apiparam2=' + stepNum);
         const data = await response.json();
         
         if (data.error) {
