@@ -398,8 +398,7 @@ if (isset($_GET['code'])) {
         const success = await runStep(i);
         if (!success) return;
       }
-      // All done!
-      document.getElementById('progress-container').style.display = 'none';
+      // All done - show success below the progress steps
       document.getElementById('success-container').style.display = 'block';
     }
     
