@@ -1159,7 +1159,7 @@ def finish_account(code):
     # Check if solver already exists in DB (don't rely on LDAP check since step 3 just created the LDAP entry)
     if step == "4":
         debug_log(4, "User %s: Step 4 - Checking if solver already exists in Puzzleboss database" % username)
-        solver_check = requests.get("%s/solvers/%s" % (configstruct["API"]["APIURI"], username))
+        solver_check = requests.get("%s/solvers/%s" % (config["API"]["APIURI"], username))
         solver_exists = solver_check.ok and solver_check.json().get("status") == "ok"
         
         if solver_exists:
@@ -1169,7 +1169,7 @@ def finish_account(code):
             debug_log(4, "User %s: Step 4 - Adding to Puzzleboss solver database (for puzzle assignments)" % username)
             postbody = {"fullname": "%s %s" % (firstname, lastname), "name": username}
             solveraddresponse = requests.post(
-                "%s/solvers" % configstruct["API"]["APIURI"], json=postbody
+                "%s/solvers" % config["API"]["APIURI"], json=postbody
             )
             if not solveraddresponse.ok:
                 raise Exception("Failed to add to solver database")
