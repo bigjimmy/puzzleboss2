@@ -1096,20 +1096,24 @@ def finish_account(code):
     
     # Determine if this is a new user or password reset
     operation = "update" if verify_email_for_user(email, username) == 1 else "new"
+    debug_log(4, "User %s: operation type is '%s' (new=create account, update=password reset)" % (username, operation))
     
     # If no step specified, run all steps (backward compatible)
     if step is None:
+        debug_log(4, "User %s: Running all steps at once (no step parameter)" % username)
         retcode = add_or_update_user(username, firstname, lastname, email, password)
         if retcode == "OK":
             conn = mysql.connection
             cursor = conn.cursor()
             cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
             conn.commit()
+            debug_log(4, "User %s: All steps complete, temporary newuser entry deleted" % username)
             return {"status": "ok"}
         raise Exception(retcode)
     
     # Step 1: Just validate and return operation type
     if step == "1":
+        debug_log(4, "User %s: Step 1 - Validation complete. Operation: %s" % (username, operation))
         return {
             "status": "ok",
             "step": 1,
@@ -1120,45 +1124,67 @@ def finish_account(code):
     # Step 2: Google account
     if step == "2":
         if operation == "new":
+            debug_log(4, "User %s: Step 2 - Creating new Google Workspace account" % username)
             result = add_user_to_google(username, firstname, lastname, password)
             if result != "OK":
                 raise Exception("Failed to create Google account: %s" % result)
+            debug_log(4, "User %s: Step 2 - Google Workspace account created successfully" % username)
             return {"status": "ok", "step": 2, "message": "Google account created"}
         else:
+            debug_log(4, "User %s: Step 2 - Updating Google Workspace password" % username)
             result = change_google_user_password(username, password)
             if result != "OK":
                 raise Exception("Failed to update Google password: %s" % result)
+            debug_log(4, "User %s: Step 2 - Google Workspace password updated successfully" % username)
             return {"status": "ok", "step": 2, "message": "Google password updated"}
     
     # Step 3: LDAP
     if step == "3":
+        if operation == "new":
+            debug_log(4, "User %s: Step 3 - Creating new LDAP directory entry" % username)
+        else:
+            debug_log(4, "User %s: Step 3 - Updating password in LDAP directory" % username)
         retcode = create_or_update_ldap_user(username, firstname, lastname, email, password, operation)
         if retcode != "OK":
             raise Exception("Failed to update LDAP: %s" % retcode)
         if operation == "new":
+            debug_log(4, "User %s: Step 3 - LDAP directory entry created successfully" % username)
             return {"status": "ok", "step": 3, "message": "LDAP account created"}
         else:
+            debug_log(4, "User %s: Step 3 - LDAP password updated successfully" % username)
             return {"status": "ok", "step": 3, "message": "LDAP password updated"}
     
     # Step 4: Solver DB (new accounts only)
+    # The solver DB tracks puzzle assignments and solver activity during the hunt
+    # Check if solver already exists in DB (don't rely on LDAP check since step 3 just created the LDAP entry)
     if step == "4":
-        if operation == "new":
+        debug_log(4, "User %s: Step 4 - Checking if solver already exists in Puzzleboss database" % username)
+        solver_check = requests.get("%s/solvers/%s" % (configstruct["API"]["APIURI"], username))
+        solver_exists = solver_check.ok and solver_check.json().get("status") == "ok"
+        
+        if solver_exists:
+            debug_log(4, "User %s: Step 4 - Solver already exists in database, skipping" % username)
+            return {"status": "ok", "step": 4, "message": "Skipped (solver already exists)", "skipped": True}
+        else:
+            debug_log(4, "User %s: Step 4 - Adding to Puzzleboss solver database (for puzzle assignments)" % username)
             postbody = {"fullname": "%s %s" % (firstname, lastname), "name": username}
             solveraddresponse = requests.post(
                 "%s/solvers" % configstruct["API"]["APIURI"], json=postbody
             )
             if not solveraddresponse.ok:
                 raise Exception("Failed to add to solver database")
+            debug_log(4, "User %s: Step 4 - Added to solver database successfully" % username)
             return {"status": "ok", "step": 4, "message": "Added to solver database"}
-        else:
-            return {"status": "ok", "step": 4, "message": "Skipped (password reset)", "skipped": True}
     
     # Step 5: Cleanup
+    # Delete the temporary newuser entry (contains verification code and password)
     if step == "5":
+        debug_log(4, "User %s: Step 5 - Deleting temporary newuser entry from database" % username)
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
+        debug_log(4, "User %s: Step 5 - Cleanup complete, account registration finished" % username)
         return {"status": "ok", "step": 5, "message": "Cleanup complete"}
     
     raise Exception("Invalid step: %s" % step)
