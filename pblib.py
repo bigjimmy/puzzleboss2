@@ -88,35 +88,43 @@ def sanitize_puzzle_name(mystring):
 def email_user_verification(email, code, fullname, username):
     debug_log(4, "start for email: %s" % email)
 
-    messagecontent = """Hello %s!
-                        Someone using this email address has attempted to register or reset an account at
-                        %s
-                        username: %s
-                        name: %s
-                        
-                        If this was you, please follow the link below or type the provided URL 
-                        into a browser to complete account creation or reset process.
-                        
-                        %s/index.php?code=%s
-                                                
-                        Thank you.
-                        - Puzzleboss 2000
-                        
-                        (replies to this email will most likely not reach anybody)
-                        """ % (
-        email,
-        configstruct["TEAMNAME"],
+    verification_url = "%s/index.php?code=%s" % (configstruct["ACCT_URI"], code)
+    team_name = configstruct["TEAMNAME"]
+
+    messagecontent = """Hi %s,
+
+Welcome to %s! To complete your account setup, please visit the link below:
+
+%s
+
+Account details:
+- Username: %s
+- Display name: %s
+
+This link will finish creating your account so you can access our puzzle-solving tools.
+
+If you did not request this account, you can safely ignore this email.
+
+Thanks,
+The %s Puzzletech Team
+
+---
+This is an automated message from %s registration system.
+""" % (
+        fullname,
+        team_name,
+        verification_url,
         username,
         fullname,
-        configstruct["ACCT_URI"],
-        code,
+        team_name,
+        team_name,
     )
 
     debug_log(4, "Email to be sent: %s" % messagecontent)
 
     try:
         msg = EmailMessage()
-        msg["Subject"] = "Finish %s account sign-up." % configstruct["TEAMNAME"]
+        msg["Subject"] = "%s - Complete your account registration" % team_name
         msg["From"] = "%s" % configstruct["REGEMAIL"]
         msg["To"] = email
         msg.set_content(messagecontent)
