@@ -66,14 +66,6 @@ else {
     case "round":
       echo json_encode(readapi('/rounds/' . $apiparam1));
       break;
-    case "finishaccount":
-      // apiparam1 = code, apiparam2 = step (optional)
-      $url = '/finishaccount/' . $apiparam1;
-      if (!empty($apiparam2)) {
-        $url .= '?step=' . $apiparam2;
-      }
-      echo json_encode(readapi($url));
-      break;
     default:
       http_response_code(500);
       die('Error: improper apicall specified.');
