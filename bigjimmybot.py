@@ -56,8 +56,10 @@ def check_puzzle_from_queue(threadname, q, fromtime):
             # Get revisions AND sheet count in a single combined call
             sheet_info = get_puzzle_sheet_info(mypuzzle["drive_id"])
             
-            # Update sheet count
-            if sheet_info["sheetcount"] is not None:
+            # Update sheet count only if changed
+            if sheet_info["sheetcount"] is not None and sheet_info["sheetcount"] != mypuzzle.get("sheetcount"):
+                debug_log(4, "[Thread: %s] Updating sheetcount for %s: %s -> %s" % (
+                    threadname, mypuzzle["name"], mypuzzle.get("sheetcount"), sheet_info["sheetcount"]))
                 try:
                     requests.post(
                         "%s/puzzles/%s/sheetcount" % (config["API"]["APIURI"], mypuzzle["id"]),
