@@ -1047,8 +1047,22 @@ def new_account():
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
 @swag_from("swag/getfinishaccount.yaml", endpoint="get_finish_account", methods=["GET"])
 def finish_account(code):
-    debug_log(4, "start. code %s" % code)
+    """
+    Account creation endpoint with optional step parameter for progress tracking.
+    
+    Steps:
+      1 - Validate code and return operation type (new/update)
+      2 - Create/update Google account
+      3 - Create/update LDAP entry
+      4 - Add to solver DB (new accounts only, skipped for updates)
+      5 - Cleanup (delete temporary newuser entry)
+    
+    If no step parameter, runs all steps at once (backward compatible).
+    """
+    step = request.args.get('step', None)
+    debug_log(4, "start. code %s, step %s" % (code, step))
 
+    # Always validate code and get user info first
     try:
         conn = mysql.connection
         cursor = conn.cursor()
@@ -1079,18 +1093,75 @@ def finish_account(code):
     )
 
     firstname, lastname = fullname.split(maxsplit=1)
-
-    retcode = add_or_update_user(username, firstname, lastname, email, password)
-
-    if retcode == "OK":
-        # Delete code and preliminary entry now
+    
+    # Determine if this is a new user or password reset
+    operation = "update" if verify_email_for_user(email, username) == 1 else "new"
+    
+    # If no step specified, run all steps (backward compatible)
+    if step is None:
+        retcode = add_or_update_user(username, firstname, lastname, email, password)
+        if retcode == "OK":
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
+            conn.commit()
+            return {"status": "ok"}
+        raise Exception(retcode)
+    
+    # Step 1: Just validate and return operation type
+    if step == "1":
+        return {
+            "status": "ok",
+            "step": 1,
+            "operation": operation,
+            "username": username
+        }
+    
+    # Step 2: Google account
+    if step == "2":
+        if operation == "new":
+            result = add_user_to_google(username, firstname, lastname, password)
+            if result != "OK":
+                raise Exception("Failed to create Google account: %s" % result)
+            return {"status": "ok", "step": 2, "message": "Google account created"}
+        else:
+            result = change_google_user_password(username, password)
+            if result != "OK":
+                raise Exception("Failed to update Google password: %s" % result)
+            return {"status": "ok", "step": 2, "message": "Google password updated"}
+    
+    # Step 3: LDAP
+    if step == "3":
+        retcode = create_or_update_ldap_user(username, firstname, lastname, email, password, operation)
+        if retcode != "OK":
+            raise Exception("Failed to update LDAP: %s" % retcode)
+        if operation == "new":
+            return {"status": "ok", "step": 3, "message": "LDAP account created"}
+        else:
+            return {"status": "ok", "step": 3, "message": "LDAP password updated"}
+    
+    # Step 4: Solver DB (new accounts only)
+    if step == "4":
+        if operation == "new":
+            postbody = {"fullname": "%s %s" % (firstname, lastname), "name": username}
+            solveraddresponse = requests.post(
+                "%s/solvers" % configstruct["API"]["APIURI"], json=postbody
+            )
+            if not solveraddresponse.ok:
+                raise Exception("Failed to add to solver database")
+            return {"status": "ok", "step": 4, "message": "Added to solver database"}
+        else:
+            return {"status": "ok", "step": 4, "message": "Skipped (password reset)", "skipped": True}
+    
+    # Step 5: Cleanup
+    if step == "5":
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
-        return {"status": "ok"}
-
-    raise Exception(retcode)
+        return {"status": "ok", "step": 5, "message": "Cleanup complete"}
+    
+    raise Exception("Invalid step: %s" % step)
 
 
 @app.route("/deleteuser/<username>", endpoint="get_delete_account", methods=["GET"])

@@ -162,3 +162,60 @@ def add_or_update_user(username, firstname, lastname, email, password):
 
     ldapconn.unbind_s()
     return "OK"
+
+
+def create_or_update_ldap_user(username, firstname, lastname, email, password, operation):
+    """
+    Create or update LDAP user entry (without Google operations).
+    Used by step-based account creation flow.
+    
+    Args:
+        operation: "new" for new account, "update" for password reset
+    """
+    debug_log(
+        4,
+        "start, called with (username, firstname, lastname, email, operation): %s %s %s %s %s"
+        % (username, firstname, lastname, email, operation),
+    )
+
+    ldapconn = ldap.initialize("ldap://%s" % configstruct["LDAP_HOST"])
+    ldapconn.simple_bind_s(configstruct["LDAP_ADMINDN"], configstruct["LDAP_ADMINPW"])
+
+    debug_log(4, "admin bound to ldap with dn: %s" % configstruct["LDAP_ADMINDN"])
+
+    userdn = "uid=%s,%s" % (username, configstruct["LDAP_DOMAIN"])
+    fullname = "%s %s" % (firstname, lastname)
+    mailaddr = "%s@%s" % (username, configstruct["DOMAINNAME"])
+
+    try:
+        if operation == "new":
+            newuserattrs = {}
+            newuserattrs["objectclass"] = ["inetOrgPerson".encode("utf-8")]
+            newuserattrs["uid"] = username.encode("utf-8")
+            newuserattrs["sn"] = lastname.encode("utf-8")
+            newuserattrs["givenName"] = firstname.encode("utf-8")
+            newuserattrs["cn"] = fullname.encode("utf-8")
+            newuserattrs["displayName"] = fullname.encode("utf-8")
+            newuserattrs["userPassword"] = password.encode("utf-8")
+            newuserattrs["email"] = email.encode("utf-8")
+            newuserattrs["mail"] = mailaddr.encode("utf-8")
+            newuserattrs["o"] = configstruct["LDAP_LDAP0"].encode("utf-8")
+
+            ldif = ldap.modlist.addModlist(newuserattrs)
+            ldapconn.add_s(userdn, ldif)
+            debug_log(3, "Added %s to ldap" % username)
+
+        elif operation == "update":
+            debug_log(3, "Updating password in LDAP for user %s" % username)
+            ldapconn.modify_s(
+                userdn, [(ldap.MOD_REPLACE, "userPassword", password.encode("utf-8"))]
+            )
+
+    except Exception as e:
+        ldapconn.unbind_s()
+        errmsg = "LDAP operation failed: %s" % str(e)
+        debug_log(1, errmsg)
+        return errmsg
+
+    ldapconn.unbind_s()
+    return "OK"

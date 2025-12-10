@@ -223,49 +223,189 @@ HTML;
 }
 
 if (isset($_GET['code'])) {
-  print "<h2>Verifying.... code " . $_GET['code'] . "</h2>";
-
   $code = $_GET['code'];
-
-  try {
-    $responseobj = readapi('/finishaccount/' . $code);
-  } catch (Exception $e) {
-    exit_with_api_error($e);
-    throw $e;
-  }
-  assert_api_success($responseobj);
   print <<<HTML
-  <h2>Account creation successful!</h2>
-  <p>
-    Your account on Puzzleboss has been created/updated.
-    All our hunt tools should now accessible.
-  </p>
-  <p>Please confirm that's the case by:</p>
-  <ol>
-    <li>Logging into our <a href="/" target="_blank">Team Wiki</a> with the username/password you just made</li>
-    <li>
-      Loading
-      <a href="$example_google_sheet_url" target="_blank">this test Google Spreadsheet</a>.
-      <ul>
-        <li>
-          Use <tt>YOUR_USERNAME@$google_domain</tt> and your $google_domain password to log into Google.
-        </li>
-        <li>
-          (Consider creating
-          <a href="https://support.google.com/chrome/answer/2364824" target="_blank">a new Chrome profile</a>
-          for Mystery Hunt; it also helps quarantine your wild Hunt search history.)
-        </li>
-      </ul>
-    </li>
-    <li>
-      Returning to our Discord and ping @RoleVerifier with your username
-      so we can connect your Puzzleboss and Discord accounts.
-    </li>
-  </ol>
-  <p>
-  If you hit any other issues, ping @Puzztech in the Discord.<br>
-  Thanks, and get excited to Hunt!
-  </p>
+  <h2>Creating your account...</h2>
+  <div id="progress-container">
+    <div class="step" id="step1">
+      <span class="status">⏳</span>
+      <span class="label">Validating verification code...</span>
+    </div>
+    <div class="step" id="step2">
+      <span class="status">⏳</span>
+      <span class="label">Creating Google account...</span>
+    </div>
+    <div class="step" id="step3">
+      <span class="status">⏳</span>
+      <span class="label">Creating LDAP account...</span>
+    </div>
+    <div class="step" id="step4">
+      <span class="status">⏳</span>
+      <span class="label">Adding to solver database...</span>
+    </div>
+    <div class="step" id="step5">
+      <span class="status">⏳</span>
+      <span class="label">Finishing up...</span>
+    </div>
+  </div>
+  <div id="error-container" class="error" style="display: none;">
+    <strong>ERROR:</strong>
+    <span id="error-message"></span>
+    <br><br>
+    Contact @Puzztech on Discord for help.
+  </div>
+  <div id="success-container" style="display: none;">
+    <h2>✅ Account creation successful!</h2>
+    <p>
+      Your account on Puzzleboss has been created/updated.
+      All our hunt tools should now accessible.
+    </p>
+    <p>Please confirm that's the case by:</p>
+    <ol>
+      <li>Logging into our <a href="/" target="_blank">Team Wiki</a> with the username/password you just made</li>
+      <li>
+        Loading
+        <a href="$example_google_sheet_url" target="_blank">this test Google Spreadsheet</a>.
+        <ul>
+          <li>
+            Use <tt>YOUR_USERNAME@$google_domain</tt> and your $google_domain password to log into Google.
+          </li>
+          <li>
+            (Consider creating
+            <a href="https://support.google.com/chrome/answer/2364824" target="_blank">a new Chrome profile</a>
+            for Mystery Hunt; it also helps quarantine your wild Hunt search history.)
+          </li>
+        </ul>
+      </li>
+      <li>
+        Returning to our Discord and ping @RoleVerifier with your username
+        so we can connect your Puzzleboss and Discord accounts.
+      </li>
+    </ol>
+    <p>
+    If you hit any other issues, ping @Puzztech in the Discord.<br>
+    Thanks, and get excited to Hunt!
+    </p>
+  </div>
+  <style>
+    #progress-container {
+      margin: 20px 0;
+      font-family: monospace;
+    }
+    .step {
+      padding: 8px 0;
+      opacity: 0.5;
+    }
+    .step.active {
+      opacity: 1;
+      font-weight: bold;
+    }
+    .step.complete {
+      opacity: 1;
+      color: green;
+    }
+    .step.skipped {
+      opacity: 0.7;
+      color: #666;
+      font-style: italic;
+    }
+    .step.error {
+      opacity: 1;
+      color: red;
+    }
+    .step .status {
+      display: inline-block;
+      width: 30px;
+      text-align: center;
+    }
+  </style>
+  <script>
+    const apiRoot = '$apiroot';
+    const code = '$code';
+    
+    const steps = [
+      { id: 'step1', num: 1, newLabel: 'Verification code validated', updateLabel: 'Verification code validated' },
+      { id: 'step2', num: 2, newLabel: 'Google account created', updateLabel: 'Google password updated' },
+      { id: 'step3', num: 3, newLabel: 'LDAP account created', updateLabel: 'LDAP password updated' },
+      { id: 'step4', num: 4, newLabel: 'Added to solver database', updateLabel: 'Solver database (skipped - existing account)' },
+      { id: 'step5', num: 5, newLabel: 'Cleanup complete', updateLabel: 'Cleanup complete' }
+    ];
+    
+    let operation = 'new';
+    
+    function setStepStatus(stepId, status, label) {
+      const el = document.getElementById(stepId);
+      el.className = 'step ' + status;
+      if (status === 'active') {
+        el.querySelector('.status').textContent = '🔄';
+      } else if (status === 'complete') {
+        el.querySelector('.status').textContent = '✅';
+      } else if (status === 'skipped') {
+        el.querySelector('.status').textContent = '⏭️';
+      } else if (status === 'error') {
+        el.querySelector('.status').textContent = '❌';
+      }
+      if (label) {
+        el.querySelector('.label').textContent = label;
+      }
+    }
+    
+    async function runStep(stepNum) {
+      const step = steps[stepNum - 1];
+      setStepStatus(step.id, 'active');
+      
+      try {
+        const response = await fetch(apiRoot + '/finishaccount/' + code + '?step=' + stepNum);
+        const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        if (data.status !== 'ok') {
+          throw new Error(data.message || 'Unknown error');
+        }
+        
+        // Step 1 tells us if this is new or update
+        if (stepNum === 1 && data.operation) {
+          operation = data.operation;
+          // Update labels for password reset flow
+          if (operation === 'update') {
+            document.querySelector('#step2 .label').textContent = 'Updating Google password...';
+            document.querySelector('#step3 .label').textContent = 'Updating LDAP password...';
+            document.querySelector('#step4 .label').textContent = 'Solver database (skipped for reset)...';
+          }
+        }
+        
+        // Mark complete with appropriate label
+        const label = operation === 'new' ? step.newLabel : step.updateLabel;
+        if (data.skipped) {
+          setStepStatus(step.id, 'skipped', label);
+        } else {
+          setStepStatus(step.id, 'complete', label);
+        }
+        
+        return true;
+      } catch (err) {
+        setStepStatus(step.id, 'error');
+        document.getElementById('error-message').textContent = err.message;
+        document.getElementById('error-container').style.display = 'block';
+        return false;
+      }
+    }
+    
+    async function runAllSteps() {
+      for (let i = 1; i <= 5; i++) {
+        const success = await runStep(i);
+        if (!success) return;
+      }
+      // All done!
+      document.getElementById('progress-container').style.display = 'none';
+      document.getElementById('success-container').style.display = 'block';
+    }
+    
+    // Start the process
+    runAllSteps();
+  </script>
   </main></body></html>
 HTML;
   exit(0);

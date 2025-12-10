@@ -1,3 +1,57 @@
+summary: Complete account registration
+description: |
+  Finishes account creation after email verification.
+  
+  Supports optional step parameter for progress tracking:
+  - step=1: Validate code, return operation type (new/update)
+  - step=2: Create/update Google account
+  - step=3: Create/update LDAP entry
+  - step=4: Add to solver database (new accounts only, skipped for password reset)
+  - step=5: Cleanup (delete temporary newuser entry)
+  
+  If no step parameter is provided, runs all steps at once (backward compatible).
+parameters:
+  - name: code
+    in: path
+    type: string
+    required: true
+    description: Verification code from email
+  - name: step
+    in: query
+    type: integer
+    required: false
+    description: Step number (1-5) for incremental progress. Omit to run all steps.
+    enum: [1, 2, 3, 4, 5]
 responses:
-    200:
-        description: Account fully registered
+  200:
+    description: Step completed successfully (or all steps if no step param)
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        step:
+          type: integer
+          description: Step number completed (only present if step param provided)
+        operation:
+          type: string
+          description: "new" or "update" (only present in step 1 response)
+          enum: [new, update]
+        username:
+          type: string
+          description: Username being registered (only present in step 1 response)
+        message:
+          type: string
+          description: Human-readable status message
+        skipped:
+          type: boolean
+          description: True if step was skipped (e.g., step 4 for password reset)
+  500:
+    description: Error during account creation
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
