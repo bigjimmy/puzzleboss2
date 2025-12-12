@@ -1010,22 +1010,16 @@ def new_account():
                 userfound = True
                 debug_log(3, "Password reset attempt detected for user %s" % username)
             else:
-                raise Exception(
-                    "Username %s already exists. Pick another, or add reset flag."
-                    % username
-                )
+                debug_log(2, "Account creation rejected: username %s already exists" % username)
+                return {"status": "error", "error": "Username %s already exists. Pick another, or add reset flag." % username}, 400
 
     if reset == "reset":
         if not userfound:
-            raise Exception("Username %s not found in system to reset." % username)
+            debug_log(2, "Password reset rejected: username %s not found" % username)
+            return {"status": "error", "error": "Username %s not found in system to reset." % username}, 400
         if verify_email_for_user(email, username) != 1:
-            raise Exception(
-                "Username %s does not match email %s in the system."
-                % (
-                    username,
-                    email,
-                )
-            )
+            debug_log(2, "Password reset rejected: username %s does not match email %s" % (username, email))
+            return {"status": "error", "error": "Username %s does not match email %s in the system." % (username, email)}, 400
 
     # Generate the code
     code = token_hex(4)
