@@ -1094,9 +1094,18 @@ def finish_account(code):
 
     firstname, lastname = fullname.split(maxsplit=1)
     
-    # Determine if this is a new user or password reset
-    operation = "update" if verify_email_for_user(email, username) == 1 else "new"
-    debug_log(4, "User %s: operation type is '%s' (new=create account, update=password reset)" % (username, operation))
+    # For steps 2-5, accept operation from client (determined in step 1)
+    # This prevents re-checking Google after step 2 already created the account
+    operation_param = request.args.get('operation', None)
+    
+    if operation_param in ('new', 'update'):
+        # Use client-provided operation (from step 1)
+        operation = operation_param
+        debug_log(4, "User %s: using client-provided operation '%s'" % (username, operation))
+    else:
+        # Step 1 or backward-compatible mode: determine operation from Google
+        operation = "update" if verify_email_for_user(email, username) == 1 else "new"
+        debug_log(4, "User %s: operation type is '%s' (new=create account, update=password reset)" % (username, operation))
     
     # If no step specified, run all steps (backward compatible)
     if step is None:

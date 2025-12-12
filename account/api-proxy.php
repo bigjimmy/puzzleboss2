@@ -14,10 +14,18 @@ if (!isset($_GET['code']) || empty($_GET['code'])) {
 
 $code = $_GET['code'];
 $step = isset($_GET['step']) ? $_GET['step'] : '';
+$operation = isset($_GET['operation']) ? $_GET['operation'] : '';
 
 $url = $apiroot . '/finishaccount/' . urlencode($code);
+$params = [];
 if (!empty($step)) {
-    $url .= '?step=' . urlencode($step);
+    $params[] = 'step=' . urlencode($step);
+}
+if (!empty($operation)) {
+    $params[] = 'operation=' . urlencode($operation);
+}
+if (!empty($params)) {
+    $url .= '?' . implode('&', $params);
 }
 
 $curl = curl_init($url);

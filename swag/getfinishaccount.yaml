@@ -22,6 +22,14 @@ parameters:
     required: false
     description: Step number (1-5) for incremental progress. Omit to run all steps.
     enum: [1, 2, 3, 4, 5]
+  - name: operation
+    in: query
+    type: string
+    required: false
+    description: |
+      Operation type (new or update), obtained from step 1 response.
+      Should be passed to steps 2-5 to avoid re-checking Google account state.
+    enum: [new, update]
 responses:
   200:
     description: Step completed successfully (or all steps if no step param)

@@ -355,7 +355,12 @@ if (isset($_GET['code'])) {
       setStepStatus(step.id, 'active');
       
       try {
-        const response = await fetch(proxyUrl + '?code=' + code + '&step=' + stepNum);
+        let url = proxyUrl + '?code=' + code + '&step=' + stepNum;
+        // Pass operation to steps 2-5 so backend doesn't have to re-check Google
+        if (stepNum > 1 && operation) {
+          url += '&operation=' + operation;
+        }
+        const response = await fetch(url);
         const data = await response.json();
         
         if (data.error) {
