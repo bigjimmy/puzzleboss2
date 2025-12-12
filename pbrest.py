@@ -455,7 +455,7 @@ def update_solver_part(id, part):
 @app.route("/config", endpoint="getconfig", methods=["GET"])
 # @swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
 def get_config():
-    debug_log(4, "start")
+    debug_log(5, "start")
     try:
         conn = mysql.connection
         cursor = conn.cursor()
@@ -495,7 +495,7 @@ def put_config():
 @app.route("/botstats", endpoint="getbotstats", methods=["GET"])
 def get_botstats():
     """Get all bot statistics"""
-    debug_log(4, "start")
+    debug_log(5, "start")
     try:
         conn = mysql.connection
         cursor = conn.cursor()
