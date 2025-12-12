@@ -337,6 +337,23 @@ def get_one_solver(id):
     }
 
 
+def _solver_exists(id):
+    """
+    Internal check if solver exists. Returns True/False.
+    Does not raise exceptions or log errors for missing solvers.
+    """
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        cursor.execute("SELECT id FROM solver WHERE id = %s", (id,))
+        solver = cursor.fetchone()
+        return solver is not None
+    except Exception as e:
+        debug_log(1, "Error checking solver existence for %s: %s" % (id, e))
+        return False
+
+
 @app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
 @swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
 def update_solver_part(id, part):
@@ -1168,8 +1185,7 @@ def finish_account(code):
     # Check if solver already exists in DB (don't rely on LDAP check since step 3 just created the LDAP entry)
     if step == "4":
         debug_log(4, "User %s: Step 4 - Checking if solver already exists in Puzzleboss database" % username)
-        solver_check = requests.get("%s/solvers/%s" % (config["API"]["APIURI"], username))
-        solver_exists = solver_check.ok and solver_check.json().get("status") == "ok"
+        solver_exists = _solver_exists(username)
         
         if solver_exists:
             debug_log(4, "User %s: Step 4 - Solver already exists in database, skipping" % username)
@@ -1397,7 +1413,7 @@ def set_new_activity_for_puzzle(id, actstruct):
         debug_log(
             0,
             "Exception in logging change to puzzle %s in activity table for solver %s in database"
-            % (value, id),
+            % (puzzle_id, solver_id),
         )
         return 255
 
