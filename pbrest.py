@@ -539,6 +539,89 @@ def put_botstat(key):
     return {"status": "ok"}
 
 
+# Tag endpoints
+
+@app.route("/tags", endpoint="gettags", methods=["GET"])
+@swag_from("swag/gettags.yaml", endpoint="gettags", methods=["GET"])
+def get_tags():
+    """Get all tags"""
+    debug_log(4, "start")
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, created_at FROM tag ORDER BY name")
+        rows = cursor.fetchall()
+        tags = []
+        for row in rows:
+            tags.append({
+                "id": row["id"],
+                "name": row["name"],
+                "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None
+            })
+    except Exception as e:
+        raise Exception("Exception fetching tags from database: %s" % e)
+
+    debug_log(4, "fetched %d tags from database" % len(tags))
+    return {"status": "ok", "tags": tags}
+
+
+@app.route("/tags/<tag>", endpoint="gettag", methods=["GET"])
+@swag_from("swag/gettag.yaml", endpoint="gettag", methods=["GET"])
+def get_tag(tag):
+    """Get a single tag by name"""
+    debug_log(4, "start with tag: %s" % tag)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, created_at FROM tag WHERE name = %s", (tag,))
+        row = cursor.fetchone()
+        if row is None:
+            debug_log(4, "Tag %s not found" % tag)
+            return {"status": "not_found", "error": "Tag %s not found" % tag}, 404
+        tag_data = {
+            "id": row["id"],
+            "name": row["name"],
+            "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None
+        }
+    except Exception as e:
+        raise Exception("Exception fetching tag %s from database: %s" % (tag, e))
+
+    debug_log(4, "fetched tag %s from database" % tag)
+    return {"status": "ok", "tag": tag_data}
+
+
+@app.route("/tags", endpoint="posttag", methods=["POST"])
+@swag_from("swag/posttag.yaml", endpoint="posttag", methods=["POST"])
+def create_tag():
+    """Create a new tag"""
+    debug_log(4, "start")
+    try:
+        data = request.get_json()
+        tag_name = data["name"]
+        debug_log(4, "Creating tag: %s" % tag_name)
+    except (TypeError, KeyError) as e:
+        raise Exception("Missing or invalid 'name' field in request body")
+
+    # Validate tag name (alphanumeric, hyphens, underscores only)
+    if not tag_name or not all(c.isalnum() or c in '-_' for c in tag_name):
+        return {"status": "error", "error": "Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores"}, 400
+
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO tag (name) VALUES (%s)", (tag_name,))
+        conn.commit()
+        new_id = cursor.lastrowid
+    except Exception as e:
+        if "Duplicate entry" in str(e):
+            debug_log(3, "Tag %s already exists" % tag_name)
+            return {"status": "error", "error": "Tag %s already exists" % tag_name}, 409
+        raise Exception("Exception creating tag %s: %s" % (tag_name, e))
+
+    debug_log(3, "Created new tag: %s (id: %d)" % (tag_name, new_id))
+    return {"status": "ok", "tag": {"id": new_id, "name": tag_name}}
+
+
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
 @swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
 def create_puzzle():

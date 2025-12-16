@@ -1,0 +1,60 @@
+summary: Create a new tag
+description: Creates a new tag with the given name
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: The tag name (alphanumeric, hyphens, underscores only)
+          example: logic
+responses:
+  200:
+    description: Tag created successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        tag:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: New tag ID
+              example: 1
+            name:
+              type: string
+              description: Tag name
+              example: logic
+  400:
+    description: Invalid tag name
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          example: Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores
+  409:
+    description: Tag already exists
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          example: Tag logic already exists
+  500:
+    description: Error creating tag
+

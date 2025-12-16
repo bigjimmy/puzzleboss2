@@ -1,0 +1,46 @@
+summary: Get a single tag
+description: Returns a tag by name
+parameters:
+  - name: tag
+    in: path
+    type: string
+    required: true
+    description: The tag name to retrieve
+responses:
+  200:
+    description: Tag retrieved successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        tag:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: Tag ID
+              example: 1
+            name:
+              type: string
+              description: Tag name
+              example: logic
+            created_at:
+              type: string
+              format: date-time
+              description: When the tag was created
+  404:
+    description: Tag not found
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: not_found
+        error:
+          type: string
+          example: Tag xyz not found
+  500:
+    description: Error fetching tag
+
