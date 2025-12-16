@@ -44,7 +44,7 @@ responses:
           description: Step number completed (only present if step param provided)
         operation:
           type: string
-          description: "new" or "update" (only present in step 1 response)
+          description: Operation type - new or update (only present in step 1 response)
           enum: [new, update]
         username:
           type: string
