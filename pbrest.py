@@ -1650,7 +1650,7 @@ def refresh_config():
         debug_log(1, f"Error refreshing configuration: {str(e)}")
         return {"status": "error", "message": str(e)}, 500
 
-@app.route("/activity", methods=["GET"])
+@app.route("/activity", endpoint="activity", methods=["GET"])
 @swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])
 def get_all_activities():
     """Get activity counts by type and puzzle timing information."""
