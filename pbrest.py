@@ -1067,13 +1067,24 @@ def update_puzzle_part(id, part):
         current_tags = json.loads(row['tags']) if row['tags'] else []
         
         if "add" in value:
-            # Add by tag name
+            # Add by tag name (auto-create if doesn't exist)
             tag_name = value["add"]
+            
+            # Validate tag name
+            if not tag_name or not all(c.isalnum() or c in '-_' for c in tag_name):
+                raise Exception("Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores")
+            
             cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
             tag_row = cursor.fetchone()
             if not tag_row:
-                raise Exception("Tag '%s' not found" % tag_name)
-            tag_id = tag_row["id"]
+                # Auto-create the tag
+                cursor.execute("INSERT INTO tag (name) VALUES (%s)", (tag_name,))
+                conn.commit()
+                tag_id = cursor.lastrowid
+                debug_log(3, "Auto-created tag %s (id: %d)" % (tag_name, tag_id))
+            else:
+                tag_id = tag_row["id"]
+            
             if tag_id not in current_tags:
                 current_tags.append(tag_id)
                 cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))

@@ -110,7 +110,7 @@ parameters:
             properties:
               add:
                 type: string
-                description: Tag name to add to the puzzle
+                description: Tag name to add to the puzzle (auto-creates tag if it doesn't exist)
                 example: logic
               add_id:
                 type: integer
