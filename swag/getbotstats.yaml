@@ -1,0 +1,27 @@
+summary: Get all bot statistics
+description: Returns all bot statistics from the botstats table
+responses:
+  200:
+    description: Bot statistics retrieved successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        botstats:
+          type: object
+          description: Dictionary of bot statistics keyed by stat name
+          additionalProperties:
+            type: object
+            properties:
+              val:
+                type: string
+                description: The statistic value
+              updated:
+                type: string
+                format: date-time
+                description: When the stat was last updated
+  500:
+    description: Error fetching bot statistics
+

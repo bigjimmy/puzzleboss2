@@ -1,0 +1,31 @@
+summary: Update a bot statistic
+description: Updates or inserts a single bot statistic value
+parameters:
+  - name: key
+    in: path
+    type: string
+    required: true
+    description: The statistic key to update
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - val
+      properties:
+        val:
+          type: string
+          description: The new value for the statistic
+responses:
+  200:
+    description: Statistic updated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+  500:
+    description: Error updating statistic
+

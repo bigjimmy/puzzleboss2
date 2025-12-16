@@ -493,6 +493,7 @@ def put_config():
 
 
 @app.route("/botstats", endpoint="getbotstats", methods=["GET"])
+@swag_from("swag/getbotstats.yaml", endpoint="getbotstats", methods=["GET"])
 def get_botstats():
     """Get all bot statistics"""
     debug_log(5, "start")
@@ -515,6 +516,7 @@ def get_botstats():
 
 
 @app.route("/botstats/<key>", endpoint="putbotstat", methods=["POST"])
+@swag_from("swag/putbotstat.yaml", endpoint="putbotstat", methods=["POST"])
 def put_botstat(key):
     """Update a single bot statistic"""
     debug_log(4, "start with key: %s" % key)
