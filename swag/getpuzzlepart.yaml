@@ -1,3 +1,8 @@
+summary: Get a puzzle part
+description: |
+  Retrieve a specific part/field of a puzzle.
+  
+  For tags, returns comma-separated tag names (e.g., "logic,wordplay,meta").
 parameters:
     - in: path
       name: id
@@ -27,6 +32,8 @@ parameters:
         - cursolvers
         - xyzloc
         - lastact
+        - sheetcount
+        - tags
 responses:
     200:
       description: The requested puzzle part

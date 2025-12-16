@@ -1056,6 +1056,66 @@ def update_puzzle_part(id, part):
         # Simple integer update for sheet count (set by bigjimmybot)
         update_puzzle_part_in_db(id, part, value)
 
+    elif part == "tags":
+        # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}}
+        conn = mysql.connection
+        cursor = conn.cursor()
+        
+        # Get current tags
+        cursor.execute("SELECT tags FROM puzzle WHERE id = %s", (id,))
+        row = cursor.fetchone()
+        current_tags = json.loads(row['tags']) if row['tags'] else []
+        
+        if "add" in value:
+            # Add by tag name
+            tag_name = value["add"]
+            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                raise Exception("Tag '%s' not found" % tag_name)
+            tag_id = tag_row["id"]
+            if tag_id not in current_tags:
+                current_tags.append(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
+            else:
+                debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
+        
+        elif "add_id" in value:
+            # Add by tag ID
+            tag_id = value["add_id"]
+            cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                raise Exception("Tag id %s not found" % tag_id)
+            if tag_id not in current_tags:
+                current_tags.append(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
+            else:
+                debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
+        
+        elif "remove" in value:
+            # Remove by tag name
+            tag_name = value["remove"]
+            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                raise Exception("Tag '%s' not found" % tag_name)
+            tag_id = tag_row["id"]
+            if tag_id in current_tags:
+                current_tags.remove(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Removed tag %s from puzzle %s" % (tag_name, id))
+            else:
+                debug_log(4, "Tag %s not on puzzle %s" % (tag_name, id))
+        
+        else:
+            raise Exception("Invalid tags operation. Use {add: 'name'}, {add_id: id}, or {remove: 'name'}")
+
     else:
         raise Exception("Invalid part name %s" % part)
 
@@ -1719,6 +1779,7 @@ def remove_solver_from_history(id):
     debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
 
     return {"status": "ok"}
+
 
 @app.route("/config/refresh", endpoint="refresh_config", methods=["POST"])
 @swag_from("swag/refreshconfig.yaml", endpoint="refresh_config", methods=["POST"])
