@@ -653,7 +653,7 @@ def create_tag():
     debug_log(4, "start")
     try:
         data = request.get_json()
-        tag_name = data["name"]
+        tag_name = data["name"].lower()  # Force lowercase
         debug_log(4, "Creating tag: %s" % tag_name)
     except (TypeError, KeyError) as e:
         raise Exception("Missing or invalid 'name' field in request body")
@@ -1113,7 +1113,7 @@ def update_puzzle_part(id, part):
         update_puzzle_part_in_db(id, part, value)
 
     elif part == "tags":
-        # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}}
+        # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}} or {"tags": {"remove_id": 123}}
         conn = mysql.connection
         cursor = conn.cursor()
         
@@ -1122,9 +1122,11 @@ def update_puzzle_part(id, part):
         row = cursor.fetchone()
         current_tags = json.loads(row['tags']) if row['tags'] else []
         
+        tag_changed = False  # Track if we actually made a change
+        
         if "add" in value:
             # Add by tag name (auto-create if doesn't exist)
-            tag_name = value["add"]
+            tag_name = value["add"].lower()  # Force lowercase
             
             # Validate tag name
             if not tag_name or not all(c.isalnum() or c in '-_' for c in tag_name):
@@ -1146,6 +1148,7 @@ def update_puzzle_part(id, part):
                 cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
                 conn.commit()
                 debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
+                tag_changed = True
             else:
                 debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
         
@@ -1165,12 +1168,13 @@ def update_puzzle_part(id, part):
                 cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
                 conn.commit()
                 debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
+                tag_changed = True
             else:
                 debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
         
         elif "remove" in value:
             # Remove by tag name
-            tag_name = value["remove"]
+            tag_name = value["remove"].lower()  # Force lowercase for lookup
             cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
             tag_row = cursor.fetchone()
             if not tag_row:
@@ -1181,11 +1185,48 @@ def update_puzzle_part(id, part):
                 cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
                 conn.commit()
                 debug_log(3, "Removed tag %s from puzzle %s" % (tag_name, id))
+                tag_changed = True
             else:
                 debug_log(4, "Tag %s not on puzzle %s" % (tag_name, id))
         
+        elif "remove_id" in value:
+            # Remove by tag ID - validate it's an integer first
+            try:
+                tag_id = int(value["remove_id"])
+            except (ValueError, TypeError):
+                raise Exception("remove_id must be an integer")
+            
+            cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                raise Exception("Tag id %s not found" % tag_id)
+            if tag_id in current_tags:
+                current_tags.remove(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Removed tag id %s from puzzle %s" % (tag_id, id))
+                tag_changed = True
+            else:
+                debug_log(4, "Tag id %s not on puzzle %s" % (tag_id, id))
+        
         else:
-            raise Exception("Invalid tags operation. Use {add: 'name'}, {add_id: id}, or {remove: 'name'}")
+            raise Exception("Invalid tags operation. Use {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}")
+        
+        # Log tag change to activity table using system solver_id (100)
+        if tag_changed:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO activity
+                    (puzzle_id, solver_id, source, type)
+                    VALUES (%s, %s, 'puzzleboss', 'revise')
+                    """,
+                    (id, 100),
+                )
+                conn.commit()
+                debug_log(4, "Logged tag change activity for puzzle %s" % id)
+            except Exception as e:
+                debug_log(1, "Failed to log tag activity: %s" % str(e))
 
     else:
         raise Exception("Invalid part name %s" % part)

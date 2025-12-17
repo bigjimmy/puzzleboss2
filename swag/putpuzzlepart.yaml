@@ -98,19 +98,18 @@ parameters:
           tags:
             type: object
             description: |
-              Tag manipulation object. Use exactly ONE of the following properties:
-              - add: Tag name to add to puzzle
-              - add_id: Tag ID to add to puzzle  
-              - remove: Tag name to remove from puzzle
+              Tag manipulation object. Use exactly ONE of add/add_id/remove/remove_id.
+              All tag names are normalized to lowercase.
               
               Examples:
                 {"tags": {"add": "logic"}}
                 {"tags": {"add_id": 5}}
                 {"tags": {"remove": "wordplay"}}
+                {"tags": {"remove_id": 3}}
             properties:
               add:
                 type: string
-                description: Tag name to add to the puzzle (auto-creates tag if it doesn't exist)
+                description: Tag name to add to the puzzle (auto-creates tag if it doesn't exist, normalized to lowercase)
                 example: logic
               add_id:
                 type: integer
@@ -118,8 +117,12 @@ parameters:
                 example: 5
               remove:
                 type: string
-                description: Tag name to remove from the puzzle
+                description: Tag name to remove from the puzzle (normalized to lowercase for lookup)
                 example: wordplay
+              remove_id:
+                type: integer
+                description: Tag ID to remove from the puzzle
+                example: 3
 
 responses:
   200:
