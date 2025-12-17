@@ -32,7 +32,6 @@ export default {
         // Computes the icon to be displayed.
         //
         icon() {
-            if (this.type === 'note') return this.puzzle.comments == null ? '➕' : 'ℹ️';
             if (this.type === 'work state') {
                 if (this.puzzle.cursolvers !== null && this.puzzle.cursolvers.length !== 0) return '👥';
                 if (this.puzzle.xyzloc !== null && this.puzzle.xyzloc.length !== 0) return '📍'
@@ -43,8 +42,9 @@ export default {
                 const idx = Consts.statuses.indexOf(this.puzzle.status);
                 return (idx === -1) ? '🤡' : Consts.emoji[idx];
             }
-            if (this.type === 'comments') {
-                return this.puzzle.comments == null ? '➕' : '📝'
+            if ((this.type === 'note') || (this.type === 'comments')) {
+                return ((this.puzzle.comments === null) || (this.puzzle.comments.length === 0)) ? 
+                        '➕' : '📝'
             }
             return '🤡!';
         },
@@ -53,7 +53,8 @@ export default {
         //
         description() {
             if ((this.type === 'note') || (this.type === 'comments')) {
-                return this.puzzle.comments == null ? 'add note' : this.puzzle.comments;
+                return ((this.puzzle.comments == null) || (this.puzzle.comments.length == 0)) ? 
+                    'add note' : this.puzzle.comments;
             }
 
             if (this.type === 'status') {
