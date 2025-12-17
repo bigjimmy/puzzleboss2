@@ -125,7 +125,7 @@ if (isset($_POST['delete_tag']) && !empty($_POST['tag_to_delete'])) {
   $tag_to_delete = $_POST['tag_to_delete'];
   try {
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $config->api_base . '/tags/' . urlencode($tag_to_delete));
+    curl_setopt($ch, CURLOPT_URL, $GLOBALS['apiroot'] . '/tags/' . urlencode($tag_to_delete));
     curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     $response = curl_exec($ch);
