@@ -21,11 +21,11 @@ $unsolvedpuzz = 0;
 $status_counts = [];
 $status_puzzles = [];
 
-// Statuses to show in the count table (excludes Solved, [hidden], Unnecessary)
-$statuses_for_count_table = ['New', 'Being worked', 'WTF', 'Needs eyes', 'Critical'];
+// Statuses EXCLUDED from the count table
+$excluded_from_count_table = ['[hidden]', 'Solved'];
 
-// Statuses to include in the "work on" list
-$statuses_for_workon = ['Critical', 'Needs eyes', 'WTF', 'New', 'Being worked'];
+// Statuses EXCLUDED from the "work on" list
+$excluded_from_workon = ['[hidden]', 'Unnecessary', 'Solved'];
 
 $nolocarray = [];
 $rounds;
@@ -124,10 +124,12 @@ echo '</table><br><br>';
 
 echo '<table border=3>';
 echo '<tr><th>Status</th><th>Open Puzzle Count</th></tr>';
-// Display counts for tracked statuses dynamically
-foreach ($statuses_for_count_table as $st) {
-  $cnt = isset($status_counts[$st]) ? $status_counts[$st] : 0;
-  echo '<tr><td>' . htmlentities($st) . '</td><td>' . $cnt . '</td></tr>';
+// Display counts for all statuses except excluded ones
+foreach ($allstatuses as $st) {
+  if (!in_array($st, $excluded_from_count_table)) {
+    $cnt = isset($status_counts[$st]) ? $status_counts[$st] : 0;
+    echo '<tr><td>' . htmlentities($st) . '</td><td>' . $cnt . '</td></tr>';
+  }
 }
 echo '</table><br><br>';
 
@@ -216,10 +218,10 @@ echo '</table><br><br>';
 
 echo 'Total Hunt Overview:<br>';
 
-// Build workonarray from statuses that should be worked on (in priority order)
+// Build workonarray from all statuses except excluded ones
 $workonarray = [];
-foreach ($statuses_for_workon as $st) {
-  if (isset($status_puzzles[$st])) {
+foreach ($allstatuses as $st) {
+  if (!in_array($st, $excluded_from_workon) && isset($status_puzzles[$st])) {
     $workonarray = array_merge($workonarray, $status_puzzles[$st]);
   }
 }
