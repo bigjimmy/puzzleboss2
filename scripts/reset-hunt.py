@@ -137,7 +137,7 @@ def main():
     print("==WARNING!!!===WARNING!!!===WARNING!!!===WARNING==")
     print("")
     print("Hunt reset: This will ERASE ALL PROGRESS AND PUZZLE DATA")
-    print("Solver ID/discord database and configuration will be preserved")
+    print("Solver database, tags, and configuration will be preserved")
     print()
     print("DO NOT DO THIS DURING HUNT!")
     print()
@@ -176,7 +176,7 @@ def main():
         sys.exit(1)
     
     # Tables to preserve
-    preserve_tables = ['solver', 'privs', 'config']
+    preserve_tables = ['solver', 'privs', 'config', 'tag']
     
     # Backup tables we want to preserve
     for table in preserve_tables:
