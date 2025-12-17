@@ -120,6 +120,22 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
 <hr>
 <h3>Tag Management</h3>
 <?php
+// Handle tag creation
+if (isset($_POST['create_tag']) && !empty($_POST['new_tag_name'])) {
+  $new_tag_name = trim($_POST['new_tag_name']);
+  try {
+    $responseobj = postapi('/tags', array('name' => $new_tag_name));
+    if ($responseobj && $responseobj->status == 'ok') {
+      echo '<div class="success" style="background-color: lightgreen; padding: 10px; margin: 10px 0;">✅ Tag "' . htmlentities($responseobj->tag->name) . '" created (ID: ' . $responseobj->tag->id . ').</div>';
+    } else {
+      $error_msg = $responseobj && isset($responseobj->error) ? $responseobj->error : 'Unknown error';
+      echo '<div class="error">❌ Failed to create tag: ' . htmlentities($error_msg) . '</div>';
+    }
+  } catch (Exception $e) {
+    echo '<div class="error">❌ Error: ' . htmlentities($e->getMessage()) . '</div>';
+  }
+}
+
 // Handle tag deletion
 if (isset($_POST['delete_tag']) && !empty($_POST['tag_to_delete'])) {
   $tag_to_delete = $_POST['tag_to_delete'];
@@ -156,7 +172,22 @@ try {
 
 <p><a href="search.php">Search Puzzles by Tag</a></p>
 
+<table border="2" cellpadding="3">
+  <tr>
+    <td>Create a new tag:</td>
+    <td>
+      <form action="pbtools.php" method="post" style="display:inline;">
+        <input type="text" name="new_tag_name" placeholder="tag-name" pattern="[a-zA-Z0-9_-]+" title="Alphanumeric, hyphens, and underscores only" required>
+        <input type="submit" name="create_tag" value="Create Tag">
+      </form>
+    </td>
+  </tr>
+</table>
+<small><em>Tag names can only contain letters, numbers, hyphens, and underscores. Will be converted to lowercase.</em></small>
+<br><br>
+
 <?php if (count($alltags) > 0): ?>
+<strong>Existing Tags:</strong>
 <table border="2" cellpadding="3">
   <tr>
     <th>Tag Name</th>
