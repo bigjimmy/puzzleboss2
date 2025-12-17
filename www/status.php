@@ -79,6 +79,10 @@ foreach ($rounds as $round) {
   $round_metas_solved = 0;
 
   // Count puzzles
+  // Statuses excluded from the status overview tables: [hidden], Unnecessary, Solved
+  // (Solved is counted separately, [hidden] and Unnecessary are intentionally omitted)
+  $excluded_from_status_table = ['[hidden]', 'Unnecessary', 'Solved'];
+  
   foreach ($puzzlearray as $puzzle) {
     if ($puzzle->status == '[hidden]') {
       continue;
@@ -111,6 +115,7 @@ foreach ($rounds as $round) {
           $round_metas_solved += 1;
         }
         break;
+      // Note: Unnecessary and other statuses intentionally not tracked in overview
     }
     if ($puzzle->ismeta) {
       $round_metas += 1;
@@ -195,9 +200,13 @@ foreach ($nolocarray as $puzzle) {
         break;
       case "Solved":
         echo "*";
-		break;
+        break;
       case "Unnecessary":
         echo "Unnecessary";
+        break;
+      default:
+        // Unknown status - show as-is
+        echo htmlentities($puzzle->status);
         break;
     }
     echo '</a></td>';
