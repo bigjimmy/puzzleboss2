@@ -101,6 +101,34 @@ function updateroundpart($id, $part, $value) {
   echo '<div class="success">OK.  Round Part '.$part.' Updated.</div>';
 }
 
+function addtagtopuzzle($puzzid, $tagname) {
+  try {
+    $responseobj = postapi(
+      "/puzzles/" . $puzzid . "/tags",
+      array('tags' => array('add' => $tagname)),
+    );
+  } catch (Exception $e) {
+    exit_with_api_error($e);
+    throw $e;
+  }
+  assert_api_success($responseobj);
+  echo '<div class="success">OK.  Tag "'.$tagname.'" added to puzzle.</div>';
+}
+
+function removetagfrompuzzle($puzzid, $tagname) {
+  try {
+    $responseobj = postapi(
+      "/puzzles/" . $puzzid . "/tags",
+      array('tags' => array('remove' => $tagname)),
+    );
+  } catch (Exception $e) {
+    exit_with_api_error($e);
+    throw $e;
+  }
+  assert_api_success($responseobj);
+  echo '<div class="success">OK.  Tag "'.$tagname.'" removed from puzzle.</div>';
+}
+
 if (isset($_POST['submit'])) {
   if (!isset($_POST['uid'])) {
     exit_with_error_message('No Authenticated User ID Found in Request');
@@ -141,6 +169,18 @@ if (isset($_POST['submit'])) {
     }
   }
 
+  if (isset($_POST['addtag'])) {
+    $whatdo = "addtag";
+  }
+
+  if (isset($_POST['removetag'])) {
+    $whatdo = "removetag";
+  }
+
+  if (isset($_POST['newtag'])) {
+    $whatdo = "newtag";
+  }
+
   $id = $_POST['uid'];
   $puzz = $_POST['pid'];
 
@@ -160,6 +200,17 @@ if (isset($_POST['submit'])) {
       break;
     case "partupdate":
       updatepuzzlepart($puzz, $_POST['part'], $_POST['value']);
+      break;
+    case "addtag":
+      addtagtopuzzle($puzz, $_POST['tagname']);
+      break;
+    case "removetag":
+      removetagfrompuzzle($puzz, $_POST['tagname']);
+      break;
+    case "newtag":
+      if (!empty(trim($_POST['newtagname']))) {
+        addtagtopuzzle($puzz, trim($_POST['newtagname']));
+      }
       break;
   }
   echo '<br><hr>';
@@ -211,6 +262,7 @@ echo $puzzleobj->puzzle->ismeta ? "Yes" : "No";
 echo '</td></tr>';
 echo '<tr><td><b>Sheet Count</b></td><td>' . ($puzzleobj->puzzle->sheetcount ?? 'N/A') . '</td></tr>';
 echo '<tr><td><b>Last Activity</b></td><td>' . $timeSinceLastAct . '</td></tr>';
+echo '<tr><td><b>Tags</b></td><td>' . htmlentities($puzzleobj->puzzle->tags ?? 'none') . '</td></tr>';
 echo '</table>';
 
 //Solver Assignment
@@ -309,7 +361,68 @@ echo '</form></td></tr>';
 
 echo '</table>';
 
+// --- Tag Management Section ---
+echo '<br><h3>Tag Management</h3>';
 
+// Fetch all available tags
+$alltagsobj = readapi('/tags');
+$alltags = isset($alltagsobj->tags) ? $alltagsobj->tags : array();
+
+// Get current puzzle tags as array
+$currentTagsStr = $puzzleobj->puzzle->tags ?? '';
+$currentTags = $currentTagsStr ? array_map('trim', explode(',', $currentTagsStr)) : array();
+
+echo '<table border="1" cellpadding="8"><tr><th>Tag</th><th>Status</th><th>Action</th></tr>';
+
+if (count($alltags) > 0) {
+  foreach ($alltags as $tag) {
+    $tagname = $tag->name;
+    $isAssigned = in_array($tagname, $currentTags);
+    
+    echo '<tr>';
+    echo '<td>' . htmlentities($tagname) . '</td>';
+    echo '<td>' . ($isAssigned ? '✅ Assigned' : '—') . '</td>';
+    echo '<td>';
+    
+    if ($isAssigned) {
+      // Show remove button
+      echo '<form action="editpuzzle.php?pid=' . $puzzid . '" method="post" style="display:inline;">';
+      echo '<input type="hidden" name="removetag" value="yes">';
+      echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+      echo '<input type="hidden" name="uid" value="' . $userid . '">';
+      echo '<input type="hidden" name="tagname" value="' . htmlentities($tagname) . '">';
+      echo '<input type="submit" name="submit" value="Remove">';
+      echo '</form>';
+    } else {
+      // Show add button
+      echo '<form action="editpuzzle.php?pid=' . $puzzid . '" method="post" style="display:inline;">';
+      echo '<input type="hidden" name="addtag" value="yes">';
+      echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+      echo '<input type="hidden" name="uid" value="' . $userid . '">';
+      echo '<input type="hidden" name="tagname" value="' . htmlentities($tagname) . '">';
+      echo '<input type="submit" name="submit" value="Add">';
+      echo '</form>';
+    }
+    
+    echo '</td>';
+    echo '</tr>';
+  }
+} else {
+  echo '<tr><td colspan="3"><em>No tags defined in system yet.</em></td></tr>';
+}
+
+echo '</table>';
+
+// Add new tag form
+echo '<br><b>Create &amp; Add New Tag:</b><br>';
+echo '<form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
+echo '<input type="hidden" name="newtag" value="yes">';
+echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+echo '<input type="hidden" name="uid" value="' . $userid . '">';
+echo '<input type="text" name="newtagname" placeholder="new-tag-name" pattern="[a-zA-Z0-9_-]+" title="Alphanumeric, hyphens, and underscores only">';
+echo ' <input type="submit" name="submit" value="Create &amp; Add Tag">';
+echo '</form>';
+echo '<small><em>Tag names can only contain letters, numbers, hyphens, and underscores.</em></small>';
 
 ?>
 </main>
