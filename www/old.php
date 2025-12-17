@@ -214,42 +214,7 @@ function print_rounds_table($rounds, $mypuzzle) {
       }
       echo '<tr ' . $styleinsert . '>';
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
-      switch ($puzzle->status) {
-        case "New":
-          echo $use_text ? '.' : '🆕';
-          break;
-        case "Being worked":
-          echo $use_text ? 'O' : '🙇';
-          break;
-        case "Needs eyes":
-          echo $use_text ? 'E' : '👀';
-          break;
-        case "WTF":
-          echo $use_text ? '?' : '☢️';
-          break;
-        case "Critical":
-          echo $use_text ? '!' : '⚠️';
-          break;
-        case "Solved":
-          echo $use_text ? '*' : '✅';
-          break;
-        case "Unnecessary":
-          echo $use_text ? 'X' : '😶‍🌫️';
-          break;
-        case "Under control":
-          echo $use_text ? 'U' : '👍';
-          break;
-        case "Waiting for HQ":
-          echo $use_text ? 'W' : '⏳';
-          break;
-        case "Grind":
-          echo $use_text ? 'G' : '⚙️';
-          break;
-        default:
-          // Unknown status - show first letter or question mark
-          echo $use_text ? substr($puzzle->status, 0, 1) : '❓';
-          break;
-      }
+      echo get_status_display($puzzle->status, $use_text);
       echo '</a></td>';
       echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
       if ($puzzle->ismeta) {
