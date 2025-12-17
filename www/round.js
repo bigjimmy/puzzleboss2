@@ -163,7 +163,13 @@ export default {
             <p v-if="showbody" class="puzzle-icon">▼</p>
             <p v-if="!showbody" class="puzzle-icon">▶</p>
             <h3 @mouseover="scroll($event, 0)" @mouseout="stopscroll">{{round.name}}</h3>
+            <div class="round-header-column">
             <p>({{solved}} solved / {{open}} open)</p>
+            <div class="round-header-icons">
+                <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank">📂</a></p>
+                <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')" @click.stop></AddGeneric>
+            </div>
+            </div>
             <button v-if="showbody" @click.stop="toggleSpoil">{{ spoilAll ? 'Hide' : 'Show' }} Spoilers</button>
         </div>
         <div :class = "{'round-body': true, hiding: !showbody}">

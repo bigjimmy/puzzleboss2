@@ -6,15 +6,15 @@ import Consts from './consts.js';
 // that functionality is shared, so I refactored it into one file. You can
 // argue about whether that was a good idea.
 //
-// There are three kinds of update icons: "note", which updates comments,
-// "work state", which updates location and your "currently solving" state, and
-// "status", which updates puzzle status (including answers and whether it is a
-// meta for the round).
+// There are four kinds of update icons: "note", which updates comments,
+// "work state", which updates location and your "currently solving" state,
+// "comments", which updates a round's notes, and "status", which updates
+// puzzle status (including answers and whether it is a meta for the round).
 //
 export default {
     props: {
     
-        // the puzzle from the puzzboss API
+        // the puzzle or round from the puzzboss API
         puzzle: Object,
         // the type of update icon
         type: String,
@@ -43,13 +43,19 @@ export default {
                 const idx = Consts.statuses.indexOf(this.puzzle.status);
                 return (idx === -1) ? '🤡' : Consts.emoji[idx];
             }
+            if (this.type === 'comments') {
+                return this.puzzle.comments == null ? '➕' : '📝'
+            }
             return '🤡!';
         },
         //
         // Computes the description, or hover text, for the icon.
         //
         description() {
-            if (this.type === 'note') return this.puzzle.comments == null ? 'add note' : this.puzzle.comments;
+            if ((this.type === 'note') || (this.type === 'comments')) {
+                return this.puzzle.comments == null ? 'add note' : this.puzzle.comments;
+            }
+
             if (this.type === 'status') {
                 var desc = (this.ismeta ? '(Meta) ' : '') + this.puzzle.status;
                 if (this.puzzle.xyzloc !== null && this.puzzle.xyzloc.length !== 0) {
@@ -113,10 +119,10 @@ export default {
         const puzzle = useTemplateRef('puzzle-tag');
 
         //
-        // stateStrA is shared by all types. It represents comments for "note",
-        // location (xyzloc) for "work state", and status for "status". It
-        // shadows the true value of the puzzle state until the user commits
-        // the change with the save button. 
+        // stateStrA is shared by all types. It represents comments for
+        // "note/comments", location (xyzloc) for "work state", and status for
+        // "status". It shadows the true value of the puzzle state until the
+        // user commits the change with the save button. 
         //
         const stateStrA = ref("");
         
@@ -171,7 +177,7 @@ export default {
                 //
                 // Type-specific initalization of state variables.
                 //
-                if (props.type === 'note') {
+                if ((props.type === 'note') || (props.type === 'comments')) {
                     stateStrA.value = props.puzzle.comments;
                 } else if (props.type === 'work state') {
                     stateStrA.value = props.puzzle.xyzloc;
@@ -233,7 +239,10 @@ export default {
                 // read stateStrA and assign it to the appropriate property
                 // before fetching the appropriate endpoint.
                 //
-                if (props.type === 'note') what = 'comments';
+                if ((props.type === 'note') || (props.type === 'comments')) {
+                    what = 'comments';
+                }
+
                 if (props.type === 'work state') what = 'xyzloc';
                 if (props.type === 'status') what = 'status';
 
@@ -262,7 +271,10 @@ export default {
                 //
                 // Hit the backend with the appropriate API parameters.
                 //
-                const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}`;
+                const url = (props.type === 'comments') ?
+                                `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.id}&apiparam2=${what}` :
+                                `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}` ;
+
                 if (emitFetch) {
                     try {
                         await fetch(url, {
@@ -348,7 +360,7 @@ export default {
     },
 
     template: `
-    <p class="puzzle-icon" ref="puzzle-tag" :title="description" @click.prevent="toggleModal(false)">{{icon}}</p>
+    <p class="puzzle-icon" ref="puzzle-tag" :title="description" @click.stop="toggleModal(false)">{{icon}}</p>
     <dialog v-if='showModal' open>
         <h4>Editing {{type}} for {{puzzle.name}}:</h4>
         <p v-if="warning.length !== 0">{{warning}}</p>
@@ -359,8 +371,8 @@ export default {
         <p v-if="(!currentlyWorking) && showStatus">You are not marked as currently working on this puzzle. Would you like to be? <button @click="claimCurrentPuzzle">Yes</button></p>
         <p v-if="type === 'work state'">Location: <input ref="modal-input" v-model="stateStrA"></input></p>
 
-        <!-- note -->
-        <p><textarea v-if="type === 'note'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
+        <!-- note/comments -->
+        <p><textarea v-if="type === 'note' || type === 'comments'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
 
         <!-- status -->
         <p v-if="type === 'status' && puzzle.sheetcount">Sheets in spreadsheet: {{puzzle.sheetcount}}</p>
@@ -377,8 +389,8 @@ export default {
             </select>
         </p>
         <p v-if="type === 'status' && stateStrA === 'Solved'">Answer: <input v-model = "answer"></input></p>
-        <button @click="toggleModal(false)">Close</button>
-        <button @click="toggleModal(true)">Save</button>
+        <button @click.stop="toggleModal(false)">Close</button>
+        <button @click.stop="toggleModal(true)">Save</button>
     </dialog>
     `
   }

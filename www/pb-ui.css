@@ -95,7 +95,7 @@
 
 .round-header {
     display: flex;
-    gap: 10px;
+    gap: 4px;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -111,7 +111,7 @@
 }
 
 .round-header > h3 {
-    width: 110px;
+    width: 120px;
     overflow: hidden;
 }
 
@@ -143,12 +143,27 @@
     transition: background-color 0.2s ease;
 }
 
-.round-body a {
+.round a {
     text-decoration: none;
 }
 
 textarea {
     resize: none;
+}
+
+.round-header-column {
+    display: flex;
+    flex-direction: column;
+    font-size: small;
+}
+
+.round-header-column p {
+    margin: 0px;
+}
+
+.round-header-icons {
+    display: flex;
+    flex-direction: row;
 }
 
 /*
