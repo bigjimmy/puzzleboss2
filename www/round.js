@@ -1,5 +1,6 @@
 import { ref, watch, watchEffect } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
 import AddGeneric from './add-generic.js'
+import Consts from './consts.js'
 
 export default {
     props: {
@@ -24,12 +25,10 @@ export default {
             const fp = this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status]);
             if(!this.sortpuzzles) return fp;
 
-            const meta_id = this.round.meta_id;
-
             function pri(puzzle) {
-                if (meta_id === puzzle.id) return -1;
+                if (puzzle.ismeta) return -1;
 
-                return ['Critical', 'Needs eyes', 'WTF', 'Being worked', 'New', 'Unnecessary', 'Solved'].indexOf(puzzle.status);
+                return Consts.statuses.indexOf(puzzle.status);
             }
 
             return [...fp].sort((a, b) => {
@@ -44,16 +43,9 @@ export default {
         hiddenCount() {
             return this.round.puzzles.filter(puzzle => !this.puzzlefilter[puzzle.status]).length;
         },
-       
-        //
-        // This function calculates whether the meta has been solved.
-        //
+
         isSolved() {
-
-            return this.round.puzzles.filter(puzzle => puzzle.status === 'Solved')
-                                     .filter(puzzle => puzzle.id === this.round.meta_id)
-                                     .length > 0; 
-
+            return Consts.isRoundSolved(this.round);
         }
     },
     components: {
@@ -183,11 +175,11 @@ export default {
             <div
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
-                :class="'puzzle' + (round.meta_id === puzzle.id ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] === true ? ' highlighted' : '')">
+                :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] === true ? ' highlighted' : '')">
                 <div class="puzzle-icons">
-                    <AddGeneric type="status" :puzzle='puzzle' :ismeta='round.meta_id === puzzle.id' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
+                    <AddGeneric type="status" :puzzle='puzzle' :ismeta='puzzle.ismeta' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
                     <AddGeneric type="work state" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="highlight(puzzle.id)"></AddGeneric>
-                    <p :class="{'meta': round.meta_id === puzzle.id, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
+                    <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                     <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
                     <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
                     <AddGeneric type="note" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>

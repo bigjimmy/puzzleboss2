@@ -1,4 +1,5 @@
 import { ref, useTemplateRef, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
+import Consts from './consts.js';
 
 //
 // This component represents one of three update icons on each puzzle. Much of
@@ -39,9 +40,8 @@ export default {
             }
             if (this.type === 'status') {
                 if (this.ismeta) return 'Ⓜ️';
-                const map = {'New': '🆕', 'Being worked': '🙇', 'Unnecessary': '🙃', 'WTF': '☢️', 'Critical': '⚠️', 'Solved': '✅', 'Needs eyes': '👀'}
-                const ret = map[this.puzzle.status];
-                return (ret === undefined) ? '🤡' : ret;
+                const idx = Consts.statuses.indexOf(this.puzzle.status);
+                return (idx === -1) ? '🤡' : Consts.emoji[idx];
             }
             return '🤡!';
         },
@@ -183,7 +183,7 @@ export default {
                     showStatus.value = true;
                 } else if (props.type === 'status') {
                     stateStrA.value = props.puzzle.status;           
-                    isMetaLoc.value = props.ismeta;
+                    isMetaLoc.value = props.ismeta != 0 ? true : false;
                     answer.value = props.puzzle.answer !== null ? props.puzzle.answer : "";
                     
                     // Fetch last activity time
@@ -279,16 +279,14 @@ export default {
 
                 //
                 // We do special handling of the meta location update, since
-                // it can be updated at the same time as status, and it hits
-                // the round API as a property of the round, rather than the
-                // puzzle.
+                // it can be updated at the same time as status.
                 //
-                if (props.type === 'status' && (isMetaLoc.value != props.ismeta)) {
-                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.round_id}&apiparam2=meta_id`
+                if (props.type === 'status' && (isMetaLoc.value !== (props.ismeta != 0 ? true : false ))) {
+                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=ismeta`
                     try {
                         await fetch(url, {
                             method: 'POST',
-                            body: JSON.stringify({ "meta_id": isMetaLoc.value ? props.puzzle.id : null }),
+                            body: JSON.stringify({ "ismeta": isMetaLoc.value }),
                         });
                         if (!emitFetch) context.emit('please-fetch');
 

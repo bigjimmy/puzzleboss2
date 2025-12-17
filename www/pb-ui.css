@@ -6,15 +6,29 @@
 
 #controls {
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
     flex-wrap: wrap;
     gap: 10px;
+    font-size: small;
+}
+
+#controls > div {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+}
+
+#controls > div > p {
+    margin: 2px;
+    font-size: small;
 }
 
 .filter {
     box-shadow: 0 2px 4px 0 rgba(0,0,0,0.2);
     width: fit-content;
+    height: fit-content;
     padding: 5px;
     cursor: pointer;
 }
