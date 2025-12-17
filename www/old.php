@@ -236,6 +236,10 @@ function print_rounds_table($rounds, $mypuzzle) {
         case "Unnecessary":
           echo $use_text ? 'X' : '😶‍🌫️';
           break;
+        default:
+          // Unknown status - show first letter or question mark
+          echo $use_text ? substr($puzzle->status, 0, 1) : '❓';
+          break;
       }
       echo '</a></td>';
       echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';

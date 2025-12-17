@@ -1,0 +1,23 @@
+Get all available puzzle statuses
+---
+tags:
+  - Statuses
+description: |
+  Returns all valid puzzle status values as defined in the database schema.
+  This is the source of truth for status values - UIs should fetch this
+  dynamically rather than hardcoding status lists.
+responses:
+  200:
+    description: List of all available statuses
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        statuses:
+          type: array
+          items:
+            type: string
+          example: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', '[hidden]']
+

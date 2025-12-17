@@ -597,6 +597,39 @@ def put_botstat(key):
 
 # Tag endpoints
 
+@app.route("/statuses", endpoint="getstatuses", methods=["GET"])
+@swag_from("swag/getstatuses.yaml", endpoint="getstatuses", methods=["GET"])
+def get_statuses():
+    """Get all available puzzle statuses from database schema"""
+    debug_log(5, "start")
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        # Get enum values from the puzzle table schema
+        cursor.execute("""
+            SELECT COLUMN_TYPE 
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = DATABASE() 
+            AND TABLE_NAME = 'puzzle' 
+            AND COLUMN_NAME = 'status'
+        """)
+        row = cursor.fetchone()
+        if not row:
+            raise Exception("Could not find status column in puzzle table")
+        
+        # Parse enum('val1','val2',...) format
+        enum_str = row['COLUMN_TYPE']
+        # Remove "enum(" prefix and ")" suffix, then split by ","
+        values_str = enum_str[5:-1]  # Remove "enum(" and ")"
+        statuses = [v.strip("'") for v in values_str.split("','")]
+        
+    except Exception as e:
+        raise Exception("Exception fetching statuses from database: %s" % e)
+
+    debug_log(5, "fetched %d statuses from database" % len(statuses))
+    return {"status": "ok", "statuses": statuses}
+
+
 @app.route("/tags", endpoint="gettags", methods=["GET"])
 @swag_from("swag/gettags.yaml", endpoint="gettags", methods=["GET"])
 def get_tags():

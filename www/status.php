@@ -34,6 +34,16 @@ $rounds;
 $huntstruct = readapi("/all");
 $rounds = $huntstruct->rounds;
 
+// Fetch available statuses dynamically, excluding ones that shouldn't be manually selectable
+$excluded_statuses_for_dropdown = ['Solved', '[hidden]'];
+$allstatuses = array();
+try {
+  $statusobj = readapi('/statuses');
+  $allstatuses = isset($statusobj->statuses) ? $statusobj->statuses : array();
+} catch (Exception $e) {
+  // Fallback - continue without dynamic statuses
+}
+
 // Create a cache of puzzle meta statuses
 $puzzle_meta_cache = [];
 foreach ($rounds as $round) {
@@ -240,56 +250,12 @@ foreach ($workonarray as $puzzle) {
     echo '<input type="hidden" name="uid" value="' . $uid . '">';
     echo '<input type="hidden" name="part" value="status">';
     echo '<select id="value" name="value"/>';
-
-    switch ($puzzle->status) {
-      case "New":
-    echo '<option value="New" selected>New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Being worked":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked" selected>Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Needs eyes":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes" selected>Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "WTF":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF" selected>WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Critical":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical" selected>Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Unnecessary":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary" selected>Unnecessary</option>';
-        break;
+    // Dynamic status dropdown - excludes Solved and [hidden]
+    foreach ($allstatuses as $statusval) {
+      if (!in_array($statusval, $excluded_statuses_for_dropdown)) {
+        $selected = ($puzzle->status == $statusval) ? ' selected' : '';
+        echo '<option value="' . htmlentities($statusval) . '"' . $selected . '>' . htmlentities($statusval) . '</option>';
+      }
     }
     echo '<input type="submit" name="submit" value="submit"></td>';
     echo '</form>';
