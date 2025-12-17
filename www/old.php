@@ -438,7 +438,7 @@ if (count($comparison) > 0) {
 ?>
 <?= $wifi_warning ?>
 You are: <?= $username ?><br>
-<a href="status.php">Hunt Status Overview / Puzzle Suggester</a><br>
+<a href="status.php">Hunt Status Overview / Puzzle Suggester</a> | <a href="search.php">Search Puzzles by Tag</a><br>
 <?php
 $unsolved_rounds = array();
 $solved_rounds = array();
