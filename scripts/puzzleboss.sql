@@ -154,7 +154,7 @@ CREATE TABLE `puzzle` (
   `chat_channel_id` varchar(500) DEFAULT NULL,
   `chat_channel_link` varchar(255) DEFAULT NULL,
   `comments` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','[hidden]') NOT NULL,
+  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','Under control','Waiting for HQ','Grind','[hidden]') NOT NULL,
   `answer` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `round_id` int(11) NOT NULL,
   `drive_id` varchar(100) DEFAULT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE `round` (
   `round_uri` text,
   `drive_uri` varchar(255) DEFAULT NULL,
   `drive_id` varchar(100) DEFAULT NULL,
-  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','[hidden]') NOT NULL DEFAULT 'New',
+  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','Under control','Waiting for HQ','Grind','[hidden]') NOT NULL DEFAULT 'New',
   `comments` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`)

@@ -214,29 +214,7 @@ function print_rounds_table($rounds, $mypuzzle) {
       }
       echo '<tr ' . $styleinsert . '>';
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
-      switch ($puzzle->status) {
-        case "New":
-          echo $use_text ? '.' : '🆕';
-          break;
-        case "Being worked":
-          echo $use_text ? 'O' : '🙇';
-          break;
-        case "Needs eyes":
-          echo $use_text ? 'E' : '👀';
-          break;
-        case "WTF":
-          echo $use_text ? '?' : '☢️';
-          break;
-        case "Critical":
-          echo $use_text ? '!' : '⚠️';
-          break;
-        case "Solved":
-          echo $use_text ? '*' : '✅';
-          break;
-        case "Unnecessary":
-          echo $use_text ? 'X' : '😶‍🌫️';
-          break;
-      }
+      echo get_status_display($puzzle->status, $use_text);
       echo '</a></td>';
       echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
       if ($puzzle->ismeta) {
@@ -460,7 +438,7 @@ if (count($comparison) > 0) {
 ?>
 <?= $wifi_warning ?>
 You are: <?= $username ?><br>
-<a href="status.php">Hunt Status Overview / Puzzle Suggester</a><br>
+<a href="status.php">Hunt Status Overview / Puzzle Suggester</a> | <a href="search.php">Search Puzzles by Tag</a><br>
 <?php
 $unsolved_rounds = array();
 $solved_rounds = array();
@@ -486,7 +464,7 @@ if (count($solved_rounds) > 0) {
 }
 ?>
 <br>
-<a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>
+<a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round, manage tags)</a>
 <br><h3>Legend:</h3>
 <table>
   <tr bgcolor="Gainsboro"><td><?= $use_text ? '.' : '🆕' ?></td><td>Meta Puzzle</td></tr>

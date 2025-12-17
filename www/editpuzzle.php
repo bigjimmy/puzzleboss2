@@ -325,7 +325,18 @@ echo '<input type="text" required minlength="1" name="value" value="' . $puzzleo
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
-// Change Status
+// Change Status - fetch available statuses dynamically
+// Statuses excluded from manual selection (must be set via other means)
+$excluded_statuses = ['Solved'];
+
+$allstatuses = array();
+try {
+  $statusobj = readapi('/statuses');
+  $allstatuses = isset($statusobj->statuses) ? $statusobj->statuses : array();
+} catch (Exception $e) {
+  // Fallback to empty - form will show no options
+}
+
 echo '<tr>';
 echo '<td>Status</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
 echo '<input type="hidden" name="partupdate" value="yes">';
@@ -334,13 +345,11 @@ echo '<input type="hidden" name="uid" value="' . $userid . '">';
 echo '<input type="hidden" name="part" value="status">';
 echo '<select id="value" name="value"/>';
 echo '<option disabled selected value>-- select --</option>';
-echo '<option value="New">New</option>';
-echo '<option value="Being worked">Being worked</option>';
-echo '<option value="Needs eyes">Needs eyes</option>';
-echo '<option value="Critical">Critical</option>';
-echo '<option value="WTF">WTF</option>';
-echo '<option value="Unnecessary">Unnecessary</option>';
-echo '<option value="[hidden]">[hidden]</option>';
+foreach ($allstatuses as $statusval) {
+  if (!in_array($statusval, $excluded_statuses)) {
+    echo '<option value="' . htmlentities($statusval) . '">' . htmlentities($statusval) . '</option>';
+  }
+}
 echo '</option>';
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
