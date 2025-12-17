@@ -1,0 +1,47 @@
+Search puzzles by tag
+---
+tags:
+  - Search
+parameters:
+  - name: tag
+    in: query
+    type: string
+    required: false
+    description: Tag name to search for
+  - name: tag_id
+    in: query
+    type: integer
+    required: false
+    description: Tag ID to search for
+responses:
+  200:
+    description: List of puzzles matching the search criteria
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        puzzles:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 42
+              name:
+                type: string
+                example: crossword-puzzle
+  400:
+    description: Bad request - missing or invalid parameters
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Error message (e.g., "Must provide 'tag' or 'tag_id' parameter" or "tag_id must be an integer")
+

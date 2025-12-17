@@ -1,63 +1,151 @@
-description: Post Puzzle Part
+summary: Update a puzzle part
+description: |
+  Update a specific part/field of a puzzle.
+  
+  Most parts accept a simple value in the request body:
+    POST /puzzles/123/status with {"status": "Being worked"}
+  
+  The "tags" part is special - it accepts an operation object to add or remove a single tag:
+    POST /puzzles/123/tags with {"tags": {"add": "logic"}}      - add tag by name
+    POST /puzzles/123/tags with {"tags": {"add_id": 5}}         - add tag by ID
+    POST /puzzles/123/tags with {"tags": {"remove": "logic"}}   - remove tag by name
+  
+  To read a puzzle's tags, use GET /puzzles/<id>/tags which returns comma-separated tag names.
 consumes:
     - application/json
 parameters:
-    - name: part
-      in: path
-      type: string
-      description: Part of puzzle to change (e.g. drive_uri, status)
     - name: id
       in: path
       type: integer
-      description: ID of puzzle to change
+      required: true
+      description: ID of puzzle to update
+    - name: part
+      in: path
+      type: string
+      required: true
+      description: |
+        Part of puzzle to change. Valid values:
+        - name: Puzzle name
+        - status: Puzzle status (New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary)
+        - answer: Puzzle answer (automatically marks as Solved)
+        - round_id: ID of round puzzle belongs to
+        - comments: Free-form comments
+        - drive_uri: Google Sheet URL
+        - chat_channel_name: Chat channel name
+        - chat_channel_id: Chat channel ID
+        - chat_channel_link: Chat channel link
+        - drive_id: Google Drive file ID
+        - puzzle_uri: Original puzzle URL
+        - xyzloc: Physical location where puzzle is being worked
+        - sheetcount: Number of sheets in Google spreadsheet
+        - ismeta: Whether puzzle is a meta (true/false)
+        - tags: Tag manipulation (uses object with add/add_id/remove)
     - name: body
       in: body
       required: true
       schema:
-        id: puzzle_update
         type: object
+        description: |
+          Object with the part name as key and value to set.
+          For most parts, this is a simple value.
+          For tags, this is an operation object.
+        example:
+          status: "Being worked"
         properties:
-              name:
-                  type: string
-                  description: Puzzle name
-              status:
-                  type: string
-                  enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
-                  description: Status category of puzzle
-              answer:
-                  type: string
-                  description: Answer of puzzle (if solved)
-              round_id:
-                  type: integer
-                  description: ID of round that puzzle is in
-              comments:
-                  type: string
-                  description: free-form comments field
-              drive_uri:
-                  type: string
-                  description: URI of google sheet for puzzle
-              chat_channel_name:
-                  type: string
-                  description: Name of puzzle's chat channel
-              chat_channel_id:
-                  type: string
-                  description: ID number of puzzle's chat channel
-              chat_channel_link:
-                  type: string
-                  description: HTML A tag for linking to puzzle's chat channel
-              drive_id:
-                  type: string
-                  description: Google drive id string for puzzle's google sheet
-              puzzle_uri:
-                  type: string
-                  description: URI pointing to the original puzzle page
-              xyzloc:
-                  type: string
-                  description: Location where puzzle is being worked on
-              sheetcount:
-                  type: integer
-                  description: Number of sheets/tabs in the puzzle's Google spreadsheet
-        
+          name:
+            type: string
+            description: Puzzle name (spaces will be removed)
+          status:
+            type: string
+            enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
+            description: Status category of puzzle
+          answer:
+            type: string
+            description: Puzzle answer - setting this automatically marks puzzle as Solved
+          round_id:
+            type: integer
+            description: ID of round that puzzle belongs to
+          comments:
+            type: string
+            description: Free-form comments field
+          drive_uri:
+            type: string
+            description: URI of Google Sheet for puzzle
+          chat_channel_name:
+            type: string
+            description: Name of puzzle's chat channel
+          chat_channel_id:
+            type: string
+            description: ID of puzzle's chat channel
+          chat_channel_link:
+            type: string
+            description: Link to puzzle's chat channel
+          drive_id:
+            type: string
+            description: Google Drive file ID for puzzle's sheet
+          puzzle_uri:
+            type: string
+            description: URI pointing to the original puzzle page
+          xyzloc:
+            type: string
+            description: Physical location where puzzle is being worked on
+          sheetcount:
+            type: integer
+            description: Number of sheets/tabs in the puzzle's Google spreadsheet
+          ismeta:
+            type: boolean
+            description: Whether this puzzle is a meta puzzle
+          tags:
+            type: object
+            description: |
+              Tag manipulation object. Use exactly ONE of add/add_id/remove/remove_id.
+              All tag names are normalized to lowercase.
+              
+              Examples:
+                {"tags": {"add": "logic"}}
+                {"tags": {"add_id": 5}}
+                {"tags": {"remove": "wordplay"}}
+                {"tags": {"remove_id": 3}}
+            properties:
+              add:
+                type: string
+                description: Tag name to add to the puzzle (auto-creates tag if it doesn't exist, normalized to lowercase)
+                example: logic
+              add_id:
+                type: integer
+                description: Tag ID to add to the puzzle
+                example: 5
+              remove:
+                type: string
+                description: Tag name to remove from the puzzle (normalized to lowercase for lookup)
+                example: wordplay
+              remove_id:
+                type: integer
+                description: Tag ID to remove from the puzzle
+                example: 3
+
 responses:
-    200:
-        description: Update of puzzle OK
+  200:
+    description: Puzzle part updated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        puzzle:
+          type: object
+          properties:
+            id:
+              type: integer
+            part_name:
+              type: string
+              description: The part that was updated with its new value
+  500:
+    description: Error updating puzzle part
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message

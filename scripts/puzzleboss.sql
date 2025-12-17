@@ -82,6 +82,22 @@ CREATE TABLE `botstats` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `tag`
+--
+
+DROP TABLE IF EXISTS `tag`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `tag` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name_UNIQUE` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `config`
 --
 
@@ -148,9 +164,11 @@ CREATE TABLE `puzzle` (
   `current_solvers` JSON DEFAULT NULL,
   `solver_history` JSON DEFAULT NULL,
   `sheetcount` int(11) DEFAULT NULL,
+  `tags` JSON DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
-  KEY `fk_puzzles_rounds1_idx` (`round_id`)
+  KEY `fk_puzzles_rounds1_idx` (`round_id`),
+  KEY `idx_puzzle_tags` ((CAST(tags->'$[*]' AS UNSIGNED ARRAY)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -347,7 +365,17 @@ SELECT
         JOIN solver s ON s.id = jt.solver_id
     ) AS cursolvers,
     p.xyzloc,
-    p.sheetcount
+    p.sheetcount,
+    (
+        SELECT GROUP_CONCAT(DISTINCT t.name ORDER BY t.name)
+        FROM JSON_TABLE(
+            p.tags,
+            '$[*]' COLUMNS (
+                tag_id INT PATH '$'
+            )
+        ) AS jt
+        JOIN tag t ON t.id = jt.tag_id
+    ) AS tags
 FROM puzzle p
 LEFT JOIN round r ON p.round_id = r.id;
 

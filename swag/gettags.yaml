@@ -1,0 +1,31 @@
+summary: Get all tags
+description: Returns all tags ordered by name
+responses:
+  200:
+    description: Tags retrieved successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Tag ID
+                example: 1
+              name:
+                type: string
+                description: Tag name
+                example: logic
+              created_at:
+                type: string
+                format: date-time
+                description: When the tag was created
+  500:
+    description: Error fetching tags
+

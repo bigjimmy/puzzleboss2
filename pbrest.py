@@ -119,6 +119,62 @@ def get_all_puzzles():
         "puzzles": puzzlist,
     }
 
+
+@app.route("/search", endpoint="search", methods=["GET"])
+@swag_from("swag/getsearch.yaml", endpoint="search", methods=["GET"])
+def search_puzzles():
+    """Search puzzles by tag name or tag ID"""
+    debug_log(4, "start")
+    
+    tag_name = request.args.get('tag')
+    tag_id = request.args.get('tag_id')
+    
+    if not tag_name and not tag_id:
+        return {"status": "error", "error": "Must provide 'tag' or 'tag_id' parameter"}, 400
+    
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        
+        # If tag name provided, look up the tag_id first
+        if tag_name:
+            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                debug_log(4, "tag '%s' not found" % tag_name)
+                return {"status": "ok", "puzzles": []}
+            tag_id = tag_row["id"]
+        else:
+            # Validate tag_id is an integer
+            try:
+                tag_id = int(tag_id)
+            except (ValueError, TypeError):
+                return {"status": "error", "error": "tag_id must be an integer"}, 400
+            
+            # Verify the tag exists
+            cursor.execute("SELECT id FROM tag WHERE id = %s", (tag_id,))
+            if not cursor.fetchone():
+                debug_log(4, "tag_id %s not found" % tag_id)
+                return {"status": "ok", "puzzles": []}
+        
+        # Use MEMBER OF() to leverage the multi-valued JSON index
+        cursor.execute(
+            "SELECT id, name FROM puzzle WHERE %s MEMBER OF(tags)",
+            (tag_id,)
+        )
+        puzzlist = cursor.fetchall()
+        
+        debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
+        return {
+            "status": "ok",
+            "puzzles": puzzlist,
+        }
+        
+    except Exception as e:
+        debug_log(1, "Error searching puzzles: %s" % str(e))
+        raise Exception("Exception searching puzzles: %s" % str(e))
+
+
 @app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
 @swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
 def check_priv(priv,uid):
@@ -537,6 +593,139 @@ def put_botstat(key):
 
     debug_log(4, "Botstat %s updated successfully to %s" % (key, myval))
     return {"status": "ok"}
+
+
+# Tag endpoints
+
+@app.route("/tags", endpoint="gettags", methods=["GET"])
+@swag_from("swag/gettags.yaml", endpoint="gettags", methods=["GET"])
+def get_tags():
+    """Get all tags"""
+    debug_log(4, "start")
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, created_at FROM tag ORDER BY name")
+        rows = cursor.fetchall()
+        tags = []
+        for row in rows:
+            tags.append({
+                "id": row["id"],
+                "name": row["name"],
+                "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None
+            })
+    except Exception as e:
+        raise Exception("Exception fetching tags from database: %s" % e)
+
+    debug_log(4, "fetched %d tags from database" % len(tags))
+    return {"status": "ok", "tags": tags}
+
+
+@app.route("/tags/<tag>", endpoint="gettag", methods=["GET"])
+@swag_from("swag/gettag.yaml", endpoint="gettag", methods=["GET"])
+def get_tag(tag):
+    """Get a single tag by name"""
+    debug_log(4, "start with tag: %s" % tag)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, created_at FROM tag WHERE name = %s", (tag,))
+        row = cursor.fetchone()
+        if row is None:
+            debug_log(4, "Tag %s not found" % tag)
+            return {"status": "not_found", "error": "Tag %s not found" % tag}, 404
+        tag_data = {
+            "id": row["id"],
+            "name": row["name"],
+            "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None
+        }
+    except Exception as e:
+        raise Exception("Exception fetching tag %s from database: %s" % (tag, e))
+
+    debug_log(4, "fetched tag %s from database" % tag)
+    return {"status": "ok", "tag": tag_data}
+
+
+@app.route("/tags", endpoint="posttag", methods=["POST"])
+@swag_from("swag/posttag.yaml", endpoint="posttag", methods=["POST"])
+def create_tag():
+    """Create a new tag"""
+    debug_log(4, "start")
+    try:
+        data = request.get_json()
+        tag_name = data["name"].lower()  # Force lowercase
+        debug_log(4, "Creating tag: %s" % tag_name)
+    except (TypeError, KeyError) as e:
+        raise Exception("Missing or invalid 'name' field in request body")
+
+    # Validate tag name (alphanumeric, hyphens, underscores only)
+    if not tag_name or not all(c.isalnum() or c in '-_' for c in tag_name):
+        return {"status": "error", "error": "Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores"}, 400
+
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO tag (name) VALUES (%s)", (tag_name,))
+        conn.commit()
+        new_id = cursor.lastrowid
+    except Exception as e:
+        if "Duplicate entry" in str(e):
+            debug_log(3, "Tag %s already exists" % tag_name)
+            return {"status": "error", "error": "Tag %s already exists" % tag_name}, 409
+        raise Exception("Exception creating tag %s: %s" % (tag_name, e))
+
+    debug_log(3, "Created new tag: %s (id: %d)" % (tag_name, new_id))
+    return {"status": "ok", "tag": {"id": new_id, "name": tag_name}}
+
+
+@app.route("/tags/<tag>", endpoint="deletetag", methods=["DELETE"])
+@swag_from("swag/deletetag.yaml", endpoint="deletetag", methods=["DELETE"])
+def delete_tag(tag):
+    """Delete a tag and remove it from all puzzles"""
+    debug_log(4, "start with tag: %s" % tag)
+    tag_name = tag.lower()  # Normalize to lowercase
+    
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        
+        # First, find the tag id
+        cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+        tag_row = cursor.fetchone()
+        if not tag_row:
+            debug_log(3, "Tag '%s' not found for deletion" % tag_name)
+            return {"status": "error", "error": "Tag '%s' not found" % tag_name}, 404
+        
+        tag_id = tag_row["id"]
+        
+        # Find all puzzles that have this tag and remove it from them
+        cursor.execute("SELECT id, tags FROM puzzle WHERE tags IS NOT NULL")
+        puzzles = cursor.fetchall()
+        
+        puzzles_updated = 0
+        for puzzle in puzzles:
+            if puzzle['tags']:
+                current_tags = json.loads(puzzle['tags'])
+                if tag_id in current_tags:
+                    current_tags.remove(tag_id)
+                    new_tags = json.dumps(current_tags) if current_tags else None
+                    cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (new_tags, puzzle['id']))
+                    puzzles_updated += 1
+        
+        # Now delete the tag from the tags table
+        cursor.execute("DELETE FROM tag WHERE id = %s", (tag_id,))
+        conn.commit()
+        
+        debug_log(3, "Deleted tag '%s' (id: %d), removed from %d puzzle(s)" % (tag_name, tag_id, puzzles_updated))
+        return {
+            "status": "ok",
+            "message": "Tag '%s' deleted" % tag_name,
+            "puzzles_updated": puzzles_updated
+        }
+        
+    except Exception as e:
+        debug_log(1, "Error deleting tag '%s': %s" % (tag_name, str(e)))
+        raise Exception("Error deleting tag '%s': %s" % (tag_name, str(e)))
 
 
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
@@ -972,6 +1161,122 @@ def update_puzzle_part(id, part):
     elif part == "sheetcount":
         # Simple integer update for sheet count (set by bigjimmybot)
         update_puzzle_part_in_db(id, part, value)
+
+    elif part == "tags":
+        # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}} or {"tags": {"remove_id": 123}}
+        conn = mysql.connection
+        cursor = conn.cursor()
+        
+        # Get current tags
+        cursor.execute("SELECT tags FROM puzzle WHERE id = %s", (id,))
+        row = cursor.fetchone()
+        current_tags = json.loads(row['tags']) if row['tags'] else []
+        
+        tag_changed = False  # Track if we actually made a change
+        
+        if "add" in value:
+            # Add by tag name (auto-create if doesn't exist)
+            tag_name = value["add"].lower()  # Force lowercase
+            
+            # Validate tag name
+            if not tag_name or not all(c.isalnum() or c in '-_' for c in tag_name):
+                raise Exception("Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores")
+            
+            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                # Auto-create the tag
+                cursor.execute("INSERT INTO tag (name) VALUES (%s)", (tag_name,))
+                conn.commit()
+                tag_id = cursor.lastrowid
+                debug_log(3, "Auto-created tag %s (id: %d)" % (tag_name, tag_id))
+            else:
+                tag_id = tag_row["id"]
+            
+            if tag_id not in current_tags:
+                current_tags.append(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
+                tag_changed = True
+            else:
+                debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
+        
+        elif "add_id" in value:
+            # Add by tag ID - validate it's an integer first
+            try:
+                tag_id = int(value["add_id"])
+            except (ValueError, TypeError):
+                raise Exception("add_id must be an integer")
+            
+            cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                raise Exception("Tag id %s not found" % tag_id)
+            if tag_id not in current_tags:
+                current_tags.append(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
+                tag_changed = True
+            else:
+                debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
+        
+        elif "remove" in value:
+            # Remove by tag name
+            tag_name = value["remove"].lower()  # Force lowercase for lookup
+            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                raise Exception("Tag '%s' not found" % tag_name)
+            tag_id = tag_row["id"]
+            if tag_id in current_tags:
+                current_tags.remove(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Removed tag %s from puzzle %s" % (tag_name, id))
+                tag_changed = True
+            else:
+                debug_log(4, "Tag %s not on puzzle %s" % (tag_name, id))
+        
+        elif "remove_id" in value:
+            # Remove by tag ID - validate it's an integer first
+            try:
+                tag_id = int(value["remove_id"])
+            except (ValueError, TypeError):
+                raise Exception("remove_id must be an integer")
+            
+            cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                raise Exception("Tag id %s not found" % tag_id)
+            if tag_id in current_tags:
+                current_tags.remove(tag_id)
+                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                conn.commit()
+                debug_log(3, "Removed tag id %s from puzzle %s" % (tag_id, id))
+                tag_changed = True
+            else:
+                debug_log(4, "Tag id %s not on puzzle %s" % (tag_id, id))
+        
+        else:
+            raise Exception("Invalid tags operation. Use {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}")
+        
+        # Log tag change to activity table using system solver_id (100)
+        if tag_changed:
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO activity
+                    (puzzle_id, solver_id, source, type)
+                    VALUES (%s, %s, 'puzzleboss', 'revise')
+                    """,
+                    (id, 100),
+                )
+                conn.commit()
+                debug_log(4, "Logged tag change activity for puzzle %s" % id)
+            except Exception as e:
+                debug_log(1, "Failed to log tag activity: %s" % str(e))
 
     else:
         raise Exception("Invalid part name %s" % part)
@@ -1636,6 +1941,7 @@ def remove_solver_from_history(id):
     debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
 
     return {"status": "ok"}
+
 
 @app.route("/config/refresh", endpoint="refresh_config", methods=["POST"])
 @swag_from("swag/refreshconfig.yaml", endpoint="refresh_config", methods=["POST"])

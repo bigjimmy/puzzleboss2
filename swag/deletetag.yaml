@@ -1,0 +1,38 @@
+Delete a tag and remove from all puzzles
+---
+tags:
+  - Tags
+parameters:
+  - name: tag
+    in: path
+    type: string
+    required: true
+    description: The tag name to delete (case-insensitive)
+responses:
+  200:
+    description: Tag deleted successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
+          example: Tag 'logic' deleted
+        puzzles_updated:
+          type: integer
+          description: Number of puzzles that had the tag removed
+          example: 5
+  404:
+    description: Tag not found
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          example: Tag 'logic' not found
+
