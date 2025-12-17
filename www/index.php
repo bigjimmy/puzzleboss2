@@ -149,7 +149,7 @@
                 const puzzleFilter = ref(
                     Object.fromEntries(Consts.statuses.map((status) => [status, true]))
                 );
-                const showControls = ref(true);
+                const showControls = ref(false);
 
                 const sortPuzzles = ref(false);
                 const roundStats = ref({})
