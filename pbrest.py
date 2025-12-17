@@ -119,6 +119,52 @@ def get_all_puzzles():
         "puzzles": puzzlist,
     }
 
+
+@app.route("/search", endpoint="search", methods=["GET"])
+@swag_from("swag/getsearch.yaml", endpoint="search", methods=["GET"])
+def search_puzzles():
+    """Search puzzles by tag name or tag ID"""
+    debug_log(4, "start")
+    
+    tag_name = request.args.get('tag')
+    tag_id = request.args.get('tag_id')
+    
+    if not tag_name and not tag_id:
+        return {"status": "error", "error": "Must provide 'tag' or 'tag_id' parameter"}, 400
+    
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        
+        # If tag name provided, look up the tag_id first
+        if tag_name:
+            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+            tag_row = cursor.fetchone()
+            if not tag_row:
+                debug_log(4, "tag '%s' not found" % tag_name)
+                return {"status": "ok", "puzzles": []}
+            tag_id = tag_row["id"]
+        else:
+            tag_id = int(tag_id)
+        
+        # Use MEMBER OF() to leverage the multi-valued JSON index
+        cursor.execute(
+            "SELECT id, name FROM puzzle WHERE %s MEMBER OF(tags)",
+            (tag_id,)
+        )
+        puzzlist = cursor.fetchall()
+        
+        debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
+        return {
+            "status": "ok",
+            "puzzles": puzzlist,
+        }
+        
+    except Exception as e:
+        debug_log(1, "Error searching puzzles: %s" % str(e))
+        raise Exception("Exception searching puzzles: %s" % str(e))
+
+
 @app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
 @swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
 def check_priv(priv,uid):
