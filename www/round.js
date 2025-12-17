@@ -166,7 +166,7 @@ export default {
             <div class="round-header-column">
             <p>({{solved}} solved / {{open}} open)</p>
             <div class="round-header-icons">
-                <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank">📂</a></p>
+                <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
                 <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')" @click.stop></AddGeneric>
             </div>
             </div>
