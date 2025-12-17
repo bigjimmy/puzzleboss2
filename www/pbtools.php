@@ -117,6 +117,69 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
   </tr>
 </table>
 
+<hr>
+<h3>Tag Management</h3>
+<?php
+// Handle tag deletion
+if (isset($_POST['delete_tag']) && !empty($_POST['tag_to_delete'])) {
+  $tag_to_delete = $_POST['tag_to_delete'];
+  try {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $config->api_base . '/tags/' . urlencode($tag_to_delete));
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    $result = json_decode($response);
+    if ($http_code == 200 && $result && $result->status == 'ok') {
+      echo '<div class="success" style="background-color: lightgreen; padding: 10px; margin: 10px 0;">✅ Tag "' . htmlentities($tag_to_delete) . '" deleted. Removed from ' . $result->puzzles_updated . ' puzzle(s).</div>';
+    } else {
+      $error_msg = $result && $result->error ? $result->error : 'Unknown error';
+      echo '<div class="error">❌ Failed to delete tag: ' . htmlentities($error_msg) . '</div>';
+    }
+  } catch (Exception $e) {
+    echo '<div class="error">❌ Error: ' . htmlentities($e->getMessage()) . '</div>';
+  }
+}
+
+// Fetch all tags
+$alltags = array();
+try {
+  $tagsobj = readapi('/tags');
+  $alltags = isset($tagsobj->tags) ? $tagsobj->tags : array();
+} catch (Exception $e) {
+  echo '<div class="error">Failed to fetch tags: ' . htmlentities($e->getMessage()) . '</div>';
+}
+?>
+
+<p><a href="search.php">Search Puzzles by Tag</a></p>
+
+<?php if (count($alltags) > 0): ?>
+<table border="2" cellpadding="3">
+  <tr>
+    <th>Tag Name</th>
+    <th>ID</th>
+    <th>Action</th>
+  </tr>
+  <?php foreach ($alltags as $tag): ?>
+  <tr>
+    <td><?= htmlentities($tag->name) ?></td>
+    <td><?= $tag->id ?></td>
+    <td>
+      <form action="pbtools.php" method="post" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete tag \'<?= htmlentities($tag->name) ?>\'? This will remove it from all puzzles.');">
+        <input type="hidden" name="tag_to_delete" value="<?= htmlentities($tag->name) ?>">
+        <input type="submit" name="delete_tag" value="Delete" style="color: red;">
+      </form>
+    </td>
+  </tr>
+  <?php endforeach; ?>
+</table>
+<?php else: ?>
+<p><em>No tags defined in the system yet.</em></p>
+<?php endif; ?>
+
 </main>
 <footer><br><hr><br><a href="/pb/">Puzzleboss Home</a>
 <br><a href="/pb/admin.php">Puzztech-only Puzzleboss Admininstration Page</a>

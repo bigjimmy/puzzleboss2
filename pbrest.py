@@ -678,6 +678,56 @@ def create_tag():
     return {"status": "ok", "tag": {"id": new_id, "name": tag_name}}
 
 
+@app.route("/tags/<tag>", endpoint="deletetag", methods=["DELETE"])
+@swag_from("swag/deletetag.yaml", endpoint="deletetag", methods=["DELETE"])
+def delete_tag(tag):
+    """Delete a tag and remove it from all puzzles"""
+    debug_log(4, "start with tag: %s" % tag)
+    tag_name = tag.lower()  # Normalize to lowercase
+    
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        
+        # First, find the tag id
+        cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
+        tag_row = cursor.fetchone()
+        if not tag_row:
+            debug_log(3, "Tag '%s' not found for deletion" % tag_name)
+            return {"status": "error", "error": "Tag '%s' not found" % tag_name}, 404
+        
+        tag_id = tag_row["id"]
+        
+        # Find all puzzles that have this tag and remove it from them
+        cursor.execute("SELECT id, tags FROM puzzle WHERE tags IS NOT NULL")
+        puzzles = cursor.fetchall()
+        
+        puzzles_updated = 0
+        for puzzle in puzzles:
+            if puzzle['tags']:
+                current_tags = json.loads(puzzle['tags'])
+                if tag_id in current_tags:
+                    current_tags.remove(tag_id)
+                    new_tags = json.dumps(current_tags) if current_tags else None
+                    cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (new_tags, puzzle['id']))
+                    puzzles_updated += 1
+        
+        # Now delete the tag from the tags table
+        cursor.execute("DELETE FROM tag WHERE id = %s", (tag_id,))
+        conn.commit()
+        
+        debug_log(3, "Deleted tag '%s' (id: %d), removed from %d puzzle(s)" % (tag_name, tag_id, puzzles_updated))
+        return {
+            "status": "ok",
+            "message": "Tag '%s' deleted" % tag_name,
+            "puzzles_updated": puzzles_updated
+        }
+        
+    except Exception as e:
+        debug_log(1, "Error deleting tag '%s': %s" % (tag_name, str(e)))
+        raise Exception("Error deleting tag '%s': %s" % (tag_name, str(e)))
+
+
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
 @swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
 def create_puzzle():
