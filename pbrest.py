@@ -145,7 +145,17 @@ def search_puzzles():
                 return {"status": "ok", "puzzles": []}
             tag_id = tag_row["id"]
         else:
-            tag_id = int(tag_id)
+            # Validate tag_id is an integer
+            try:
+                tag_id = int(tag_id)
+            except (ValueError, TypeError):
+                return {"status": "error", "error": "tag_id must be an integer"}, 400
+            
+            # Verify the tag exists
+            cursor.execute("SELECT id FROM tag WHERE id = %s", (tag_id,))
+            if not cursor.fetchone():
+                debug_log(4, "tag_id %s not found" % tag_id)
+                return {"status": "ok", "puzzles": []}
         
         # Use MEMBER OF() to leverage the multi-valued JSON index
         cursor.execute(
@@ -1140,8 +1150,12 @@ def update_puzzle_part(id, part):
                 debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
         
         elif "add_id" in value:
-            # Add by tag ID
-            tag_id = value["add_id"]
+            # Add by tag ID - validate it's an integer first
+            try:
+                tag_id = int(value["add_id"])
+            except (ValueError, TypeError):
+                raise Exception("add_id must be an integer")
+            
             cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
             tag_row = cursor.fetchone()
             if not tag_row:

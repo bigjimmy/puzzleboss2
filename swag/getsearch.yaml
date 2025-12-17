@@ -34,7 +34,7 @@ responses:
                 type: string
                 example: crossword-puzzle
   400:
-    description: Missing required parameters
+    description: Bad request - missing or invalid parameters
     schema:
       type: object
       properties:
@@ -43,5 +43,5 @@ responses:
           example: error
         error:
           type: string
-          example: Must provide 'tag' or 'tag_id' parameter
+          description: Error message (e.g., "Must provide 'tag' or 'tag_id' parameter" or "tag_id must be an integer")
 
