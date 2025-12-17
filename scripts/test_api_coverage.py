@@ -1388,6 +1388,282 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def generate_unique_test_tag_name(self) -> str:
+        """Generate a unique test tag name that doesn't collide with existing tags."""
+        # Get existing tags
+        response = requests.get(f"{self.base_url}/tags")
+        existing_tags = set()
+        if response.ok:
+            existing_tags = {t['name'] for t in response.json().get('tags', [])}
+        
+        # Generate unique tag name with TEST prefix
+        while True:
+            timestamp = str(int(time.time() * 1000))  # milliseconds for more uniqueness
+            random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+            tag_name = f"test-{timestamp}-{random_suffix}"
+            if tag_name not in existing_tags:
+                return tag_name
+
+    def test_tagging(self, result: TestResult):
+        """Test tagging functionality."""
+        self.logger.log_operation("Starting tagging test")
+        
+        try:
+            # Generate unique tag names for this test run (all prefixed with "test-")
+            tag1_name = self.generate_unique_test_tag_name()
+            tag2_name = self.generate_unique_test_tag_name()
+            tag3_name = self.generate_unique_test_tag_name()
+            invalid_tag_name = "test invalid tag with spaces"  # Spaces make it invalid
+            
+            self.logger.log_operation(f"Generated unique test tags: {tag1_name}, {tag2_name}, {tag3_name}")
+            
+            # ============================================
+            # Test 1: Create a new tag unassociated with a puzzle
+            # ============================================
+            self.logger.log_operation(f"Test 1: Creating tag '{tag1_name}' via POST /tags")
+            response = requests.post(
+                f"{self.base_url}/tags",
+                json={"name": tag1_name}
+            )
+            if not response.ok:
+                result.fail(f"Failed to create tag: {response.text}")
+                return
+            tag1_data = response.json()
+            if tag1_data.get('status') != 'ok':
+                result.fail(f"Unexpected response creating tag: {tag1_data}")
+                return
+            tag1_id = tag1_data['tag']['id']
+            self.logger.log_operation(f"Created tag '{tag1_name}' with id {tag1_id}")
+            
+            # ============================================
+            # Test 2: Pull that tag from the tags endpoint
+            # ============================================
+            self.logger.log_operation(f"Test 2: Fetching tag '{tag1_name}' via GET /tags/{tag1_name}")
+            response = requests.get(f"{self.base_url}/tags/{tag1_name}")
+            if not response.ok:
+                result.fail(f"Failed to get tag: {response.text}")
+                return
+            fetched_tag = response.json()
+            if fetched_tag.get('status') != 'ok':
+                result.fail(f"Unexpected response fetching tag: {fetched_tag}")
+                return
+            if fetched_tag['tag']['name'] != tag1_name:
+                result.fail(f"Tag name mismatch. Expected: {tag1_name}, Got: {fetched_tag['tag']['name']}")
+                return
+            if fetched_tag['tag']['id'] != tag1_id:
+                result.fail(f"Tag id mismatch. Expected: {tag1_id}, Got: {fetched_tag['tag']['id']}")
+                return
+            self.logger.log_operation(f"Successfully fetched tag '{tag1_name}'")
+            
+            # Verify tag appears in GET /tags list
+            self.logger.log_operation("Verifying tag appears in GET /tags list")
+            response = requests.get(f"{self.base_url}/tags")
+            if not response.ok:
+                result.fail(f"Failed to get tags list: {response.text}")
+                return
+            tags_list = response.json().get('tags', [])
+            tag_names = [t['name'] for t in tags_list]
+            if tag1_name not in tag_names:
+                result.fail(f"Tag '{tag1_name}' not found in tags list")
+                return
+            self.logger.log_operation(f"Tag '{tag1_name}' found in tags list")
+            
+            # ============================================
+            # Test 3: Create a tag with inappropriate characters (should fail)
+            # ============================================
+            self.logger.log_operation(f"Test 3: Attempting to create invalid tag '{invalid_tag_name}' (should fail)")
+            response = requests.post(
+                f"{self.base_url}/tags",
+                json={"name": invalid_tag_name}
+            )
+            if response.ok and response.json().get('status') == 'ok':
+                result.fail(f"Tag with spaces should have been rejected but was accepted")
+                return
+            self.logger.log_operation(f"Invalid tag correctly rejected")
+            
+            # ============================================
+            # Test 4: Create a new tag by associating it with a puzzle (auto-create)
+            # ============================================
+            # First, we need a puzzle to work with
+            puzzles = self.get_all_puzzles()
+            if not puzzles:
+                # Create a round and puzzle for testing
+                self.logger.log_operation("No puzzles found, creating test round and puzzle")
+                test_round = self.create_round(f"TagTestRound{timestamp}")
+                test_puzzle = self.create_puzzle(f"TagTestPuzzle{timestamp}", str(test_round['id']))
+                puzzle_id = test_puzzle['id']
+            else:
+                puzzle_id = puzzles[0]['id']
+            
+            self.logger.log_operation(f"Test 4: Creating tag '{tag2_name}' by adding to puzzle {puzzle_id}")
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}/tags",
+                json={"tags": {"add": tag2_name}}
+            )
+            if not response.ok:
+                result.fail(f"Failed to add tag to puzzle: {response.text}")
+                return
+            self.logger.log_operation(f"Tag '{tag2_name}' auto-created and added to puzzle")
+            
+            # Verify tag was created in system
+            response = requests.get(f"{self.base_url}/tags/{tag2_name}")
+            if not response.ok:
+                result.fail(f"Auto-created tag '{tag2_name}' not found in system")
+                return
+            tag2_id = response.json()['tag']['id']
+            self.logger.log_operation(f"Verified tag '{tag2_name}' exists with id {tag2_id}")
+            
+            # ============================================
+            # Test 5: Associate an existing tag to a puzzle by id
+            # ============================================
+            self.logger.log_operation(f"Test 5: Adding existing tag id {tag1_id} to puzzle {puzzle_id}")
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}/tags",
+                json={"tags": {"add_id": tag1_id}}
+            )
+            if not response.ok:
+                result.fail(f"Failed to add tag by id: {response.text}")
+                return
+            self.logger.log_operation(f"Tag id {tag1_id} added to puzzle")
+            
+            # ============================================
+            # Test 6: Associate a tag by id that doesn't exist (should fail)
+            # ============================================
+            nonexistent_id = 999999
+            self.logger.log_operation(f"Test 6: Attempting to add non-existent tag id {nonexistent_id} (should fail)")
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}/tags",
+                json={"tags": {"add_id": nonexistent_id}}
+            )
+            if response.ok and response.json().get('status') == 'ok':
+                result.fail(f"Adding non-existent tag id should have failed")
+                return
+            self.logger.log_operation(f"Non-existent tag id correctly rejected")
+            
+            # ============================================
+            # Test 7: Make sure a puzzle having multiple tags works
+            # ============================================
+            self.logger.log_operation(f"Test 7: Verifying puzzle {puzzle_id} has multiple tags")
+            puzzle_details = self.get_puzzle_details(puzzle_id)
+            if not puzzle_details:
+                result.fail(f"Failed to get puzzle details")
+                return
+            puzzle_tags = puzzle_details.get('tags', '')
+            if not puzzle_tags:
+                result.fail(f"Puzzle has no tags")
+                return
+            tag_list = [t.strip() for t in puzzle_tags.split(',')]
+            if len(tag_list) < 2:
+                result.fail(f"Puzzle should have at least 2 tags, got: {tag_list}")
+                return
+            if tag1_name not in tag_list:
+                result.fail(f"Tag '{tag1_name}' not found in puzzle tags: {tag_list}")
+                return
+            if tag2_name not in tag_list:
+                result.fail(f"Tag '{tag2_name}' not found in puzzle tags: {tag_list}")
+                return
+            self.logger.log_operation(f"Puzzle has multiple tags: {tag_list}")
+            
+            # ============================================
+            # Test 8: Pull all tags from a given puzzle
+            # ============================================
+            self.logger.log_operation(f"Test 8: Getting tags via GET /puzzles/{puzzle_id}/tags")
+            response = requests.get(f"{self.base_url}/puzzles/{puzzle_id}/tags")
+            if not response.ok:
+                result.fail(f"Failed to get puzzle tags: {response.text}")
+                return
+            puzzle_tags_response = response.json()
+            if puzzle_tags_response.get('status') != 'ok':
+                result.fail(f"Unexpected response getting puzzle tags: {puzzle_tags_response}")
+                return
+            tags_value = puzzle_tags_response.get('puzzle', {}).get('tags', '')
+            self.logger.log_operation(f"Got puzzle tags via endpoint: {tags_value}")
+            
+            # ============================================
+            # Test 9: Search by tag_id
+            # ============================================
+            self.logger.log_operation(f"Test 9: Searching puzzles by tag_id {tag1_id}")
+            response = requests.get(f"{self.base_url}/search?tag_id={tag1_id}")
+            if not response.ok:
+                result.fail(f"Failed to search by tag_id: {response.text}")
+                return
+            search_results = response.json()
+            if search_results.get('status') != 'ok':
+                result.fail(f"Unexpected response searching by tag_id: {search_results}")
+                return
+            found_puzzles = search_results.get('puzzles', [])
+            found_ids = [p['id'] for p in found_puzzles]
+            if puzzle_id not in found_ids:
+                result.fail(f"Puzzle {puzzle_id} not found in search results for tag_id {tag1_id}")
+                return
+            self.logger.log_operation(f"Search by tag_id returned {len(found_puzzles)} puzzle(s)")
+            
+            # ============================================
+            # Test 10: Search by tag name
+            # ============================================
+            self.logger.log_operation(f"Test 10: Searching puzzles by tag name '{tag2_name}'")
+            response = requests.get(f"{self.base_url}/search?tag={tag2_name}")
+            if not response.ok:
+                result.fail(f"Failed to search by tag name: {response.text}")
+                return
+            search_results = response.json()
+            if search_results.get('status') != 'ok':
+                result.fail(f"Unexpected response searching by tag name: {search_results}")
+                return
+            found_puzzles = search_results.get('puzzles', [])
+            found_ids = [p['id'] for p in found_puzzles]
+            if puzzle_id not in found_ids:
+                result.fail(f"Puzzle {puzzle_id} not found in search results for tag '{tag2_name}'")
+                return
+            self.logger.log_operation(f"Search by tag name returned {len(found_puzzles)} puzzle(s)")
+            
+            # ============================================
+            # Bonus: Test remove_id functionality
+            # ============================================
+            self.logger.log_operation(f"Bonus: Testing remove_id - removing tag id {tag1_id} from puzzle")
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}/tags",
+                json={"tags": {"remove_id": tag1_id}}
+            )
+            if not response.ok:
+                result.fail(f"Failed to remove tag by id: {response.text}")
+                return
+            
+            # Verify removal
+            puzzle_details = self.get_puzzle_details(puzzle_id)
+            puzzle_tags = puzzle_details.get('tags', '')
+            tag_list = [t.strip() for t in puzzle_tags.split(',')] if puzzle_tags else []
+            if tag1_name in tag_list:
+                result.fail(f"Tag '{tag1_name}' should have been removed from puzzle")
+                return
+            self.logger.log_operation(f"Tag removed successfully, remaining tags: {tag_list}")
+            
+            # ============================================
+            # Bonus: Test lowercase normalization
+            # ============================================
+            uppercase_tag = self.generate_unique_test_tag_name().upper()  # e.g., "TEST-1234567890-ABC123"
+            self.logger.log_operation(f"Bonus: Testing lowercase normalization with '{uppercase_tag}'")
+            response = requests.post(
+                f"{self.base_url}/tags",
+                json={"name": uppercase_tag}
+            )
+            if not response.ok:
+                result.fail(f"Failed to create uppercase tag: {response.text}")
+                return
+            created_tag = response.json()['tag']
+            if created_tag['name'] != uppercase_tag.lower():
+                result.fail(f"Tag should be lowercase. Expected: {uppercase_tag.lower()}, Got: {created_tag['name']}")
+                return
+            self.logger.log_operation(f"Uppercase tag correctly normalized to '{created_tag['name']}'")
+            
+            result.set_success("Tagging test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in tagging test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def test_api_endpoints(self, result: TestResult):
         """Test basic read-only API endpoints."""
         self.logger.log_operation("Starting API endpoints test")
@@ -1483,6 +1759,7 @@ class TestRunner:
             ("Activity Tracking", self.test_activity_tracking),
             ("Solver History", self.test_solver_history),
             ("Sheetcount", self.test_sheetcount),
+            ("Tagging", self.test_tagging),
             ("API Endpoints", self.test_api_endpoints)
         ]
         

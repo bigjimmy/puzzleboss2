@@ -202,14 +202,14 @@ if (isset($_POST['submit'])) {
       updatepuzzlepart($puzz, $_POST['part'], $_POST['value']);
       break;
     case "addtag":
-      addtagtopuzzle($puzz, $_POST['tagname'], $id);
+      addtagtopuzzle($puzz, $_POST['tagname']);
       break;
     case "removetag":
-      removetagfrompuzzle($puzz, $_POST['tagname'], $id);
+      removetagfrompuzzle($puzz, $_POST['tagname']);
       break;
     case "newtag":
       if (!empty(trim($_POST['newtagname']))) {
-        addtagtopuzzle($puzz, trim($_POST['newtagname']), $id);
+        addtagtopuzzle($puzz, trim($_POST['newtagname']));
       }
       break;
   }
