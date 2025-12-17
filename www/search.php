@@ -173,6 +173,9 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
               case "Critical": echo '⚠️'; break;
               case "Solved": echo '✅'; break;
               case "Unnecessary": echo '😶‍🌫️'; break;
+              case "Under control": echo '👍'; break;
+              case "Waiting for HQ": echo '⏳'; break;
+              case "Grind": echo '⚙️'; break;
               default: echo $puzzle->status;
             }
             ?>

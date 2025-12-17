@@ -236,6 +236,15 @@ function print_rounds_table($rounds, $mypuzzle) {
         case "Unnecessary":
           echo $use_text ? 'X' : '😶‍🌫️';
           break;
+        case "Under control":
+          echo $use_text ? 'U' : '👍';
+          break;
+        case "Waiting for HQ":
+          echo $use_text ? 'W' : '⏳';
+          break;
+        case "Grind":
+          echo $use_text ? 'G' : '⚙️';
+          break;
         default:
           // Unknown status - show first letter or question mark
           echo $use_text ? substr($puzzle->status, 0, 1) : '❓';

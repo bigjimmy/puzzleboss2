@@ -36,13 +36,9 @@ $rounds = $huntstruct->rounds;
 
 // Fetch available statuses dynamically, excluding ones that shouldn't be manually selectable
 $excluded_statuses_for_dropdown = ['Solved', '[hidden]'];
-$allstatuses = array();
-try {
-  $statusobj = readapi('/statuses');
-  $allstatuses = isset($statusobj->statuses) ? $statusobj->statuses : array();
-} catch (Exception $e) {
-  // Fallback - continue without dynamic statuses
-}
+// Fetch available statuses dynamically from database
+$statusobj = readapi('/statuses');
+$allstatuses = $statusobj->statuses;
 
 // Create a cache of puzzle meta statuses
 $puzzle_meta_cache = [];
@@ -154,10 +150,10 @@ foreach ($nolocarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
   $styleinsert = "";
-  if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+  if ($puzzle->ismeta && $puzzle->status != "Critical") {
     $styleinsert .= " bgcolor='Gainsboro' ";
   }
-  if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+  if ($puzzle->status == "New" && !$puzzle->ismeta) {
     $styleinsert .= " bgcolor='aquamarine' ";
   }
   if ($puzzle->status == "Critical") {
@@ -169,33 +165,7 @@ foreach ($nolocarray as $puzzle) {
     //}
     echo '<tr ' . $styleinsert . '>';
     echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '" target="_blank">';
-    switch ($puzzle->status) {
-      case "New":
-        echo "New";
-        break;
-      case "Being worked":
-        echo "Work";
-        break;
-      case "Needs eyes":
-        echo "Eyes";
-        break;
-      case "WTF":
-        echo "WTF";
-        break;
-      case "Critical":
-        echo "Crit";
-        break;
-      case "Solved":
-        echo "*";
-        break;
-      case "Unnecessary":
-        echo "Unnecessary";
-        break;
-      default:
-        // Unknown status - show as-is
-        echo htmlentities($puzzle->status);
-        break;
-    }
+    echo htmlentities($puzzle->status);
     echo '</a></td>';
     echo '<td>' . ispuzzlemeta($puzzle->id) . '</td>';
     echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
@@ -231,10 +201,10 @@ foreach ($workonarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
   $styleinsert = "";
-  if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+  if ($puzzle->ismeta && $puzzle->status != "Critical") {
     $styleinsert .= " bgcolor='Gainsboro' ";
   }
-  if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+  if ($puzzle->status == "New" && !$puzzle->ismeta) {
     $styleinsert .= " bgcolor='aquamarine' ";
   }
   if ($puzzle->status == "Critical") {
