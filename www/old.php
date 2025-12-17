@@ -464,7 +464,7 @@ if (count($solved_rounds) > 0) {
 }
 ?>
 <br>
-<a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>
+<a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round, manage tags)</a>
 <br><h3>Legend:</h3>
 <table>
   <tr bgcolor="Gainsboro"><td><?= $use_text ? '.' : '🆕' ?></td><td>Meta Puzzle</td></tr>
