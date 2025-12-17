@@ -16,18 +16,18 @@ $unsolvedrounds = 0;
 $totpuzz = 0;
 $solvedpuzz = 0;
 $unsolvedpuzz = 0;
-$newcnt = 0;
-$workcnt = 0;
-$wtfcnt = 0;
-$eyescnt = 0;
-$critcnt = 0;
-$critarray = [];
-$eyesarray = [];
-$newarray = [];
-$workonarray = [];
+
+// Dynamic status tracking - counts and puzzle arrays keyed by status name
+$status_counts = [];
+$status_puzzles = [];
+
+// Statuses to show in the count table (excludes Solved, [hidden], Unnecessary)
+$statuses_for_count_table = ['New', 'Being worked', 'WTF', 'Needs eyes', 'Critical'];
+
+// Statuses to include in the "work on" list
+$statuses_for_workon = ['Critical', 'Needs eyes', 'WTF', 'New', 'Being worked'];
+
 $nolocarray = [];
-$workarray = [];
-$wtfarray = [];
 $rounds;
 
 
@@ -79,43 +79,28 @@ foreach ($rounds as $round) {
   $round_metas_solved = 0;
 
   // Count puzzles
-  // Statuses excluded from the status overview tables: [hidden], Unnecessary, Solved
-  // (Solved is counted separately, [hidden] and Unnecessary are intentionally omitted)
-  $excluded_from_status_table = ['[hidden]', 'Unnecessary', 'Solved'];
-  
   foreach ($puzzlearray as $puzzle) {
     if ($puzzle->status == '[hidden]') {
       continue;
     }
     $totpuzz += 1;
-    switch ($puzzle->status) {
-      case "New":
-        $newcnt += 1;
-        array_push($newarray, $puzzle);
-        break;
-      case "Being worked":
-        $workcnt += 1;
-	array_push($workarray, $puzzle);
-        break;
-      case "WTF":
-        $wtfcnt += 1;
-	array_push($wtfarray, $puzzle);
-        break;
-      case "Needs eyes":
-        $eyescnt += 1;
-        array_push($eyesarray, $puzzle);
-        break;
-      case "Critical":
-        $critcnt += 1;
-        array_push($critarray, $puzzle);
-        break;
-      case "Solved":
-	$solvedpuzz += 1;
-        if ($puzzle->ismeta) {
-          $round_metas_solved += 1;
-        }
-        break;
-      // Note: Unnecessary and other statuses intentionally not tracked in overview
+    
+    $pstatus = $puzzle->status;
+    
+    // Track counts and puzzles by status dynamically
+    if (!isset($status_counts[$pstatus])) {
+      $status_counts[$pstatus] = 0;
+      $status_puzzles[$pstatus] = [];
+    }
+    $status_counts[$pstatus] += 1;
+    $status_puzzles[$pstatus][] = $puzzle;
+    
+    // Special handling for Solved (track separately for round completion)
+    if ($pstatus == 'Solved') {
+      $solvedpuzz += 1;
+      if ($puzzle->ismeta) {
+        $round_metas_solved += 1;
+      }
     }
     if ($puzzle->ismeta) {
       $round_metas += 1;
@@ -139,11 +124,11 @@ echo '</table><br><br>';
 
 echo '<table border=3>';
 echo '<tr><th>Status</th><th>Open Puzzle Count</th></tr>';
-echo '<tr><td>New</td><td>' . $newcnt . '</td></tr>';
-echo '<tr><td>Being worked</td><td>' . $workcnt . '</td></tr>';
-echo '<tr><td>WTF</td><td>' . $wtfcnt . '</td></tr>';
-echo '<tr><td>Needs Eyes</td><td>' . $eyescnt . '</td></tr>';
-echo '<tr><td>Critical</td><td>' . $critcnt . '</td></tr>';
+// Display counts for tracked statuses dynamically
+foreach ($statuses_for_count_table as $st) {
+  $cnt = isset($status_counts[$st]) ? $status_counts[$st] : 0;
+  echo '<tr><td>' . htmlentities($st) . '</td><td>' . $cnt . '</td></tr>';
+}
 echo '</table><br><br>';
 
 echo 'Unsolved Puzzles Missing Location<br>';
@@ -231,7 +216,13 @@ echo '</table><br><br>';
 
 echo 'Total Hunt Overview:<br>';
 
-$workonarray = array_merge($critarray, $eyesarray, $wtfarray, $newarray, $workarray);
+// Build workonarray from statuses that should be worked on (in priority order)
+$workonarray = [];
+foreach ($statuses_for_workon as $st) {
+  if (isset($status_puzzles[$st])) {
+    $workonarray = array_merge($workonarray, $status_puzzles[$st]);
+  }
+}
 echo '<table border = 3>';
 echo '<tr><th>Status</th><th>Round</th><th>Meta</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers(current)</th><th>Solvers(all time)</th><th>Location</th><th>Comment</th></tr>';
 foreach ($workonarray as $puzzle) {
