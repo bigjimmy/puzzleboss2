@@ -1100,15 +1100,13 @@ def update_puzzle_part(id, part):
                 # Check if this is a meta puzzle and if all metas in the round are solved
                 if mypuzzle["puzzle"]["ismeta"]:
                     check_round_completion(mypuzzle["puzzle"]["round_id"])
-        elif (
-            value == "Needs eyes"
-            or value == "Critical"
-            or value == "Unnecessary"
-            or value == "WTF"
-            or value == "Being worked"
-        ):
+        elif value in ("Needs eyes", "Critical", "WTF"):
+            # These statuses trigger an attention announcement
             update_puzzle_part_in_db(id, part, value)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
+        else:
+            # All other valid statuses (Being worked, Unnecessary, Under control, Waiting for HQ, Grind, etc.)
+            update_puzzle_part_in_db(id, part, value)
 
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
