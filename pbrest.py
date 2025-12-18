@@ -60,6 +60,11 @@ if PROMETHEUS_AVAILABLE:
     # Add app info label
     metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
 
+# Periodic config refresh on each request (checks if 60s have passed)
+@app.before_request
+def periodic_config_refresh():
+    maybe_refresh_config()
+
 # Memcache client (initialized later after config is available)
 mc = None
 MEMCACHE_CACHE_KEY = 'puzzleboss:all'
@@ -2228,19 +2233,6 @@ def remove_solver_from_history(id):
 
     return {"status": "ok"}
 
-
-@app.route("/config/refresh", endpoint="refresh_config", methods=["POST"])
-@swag_from("swag/refreshconfig.yaml", endpoint="refresh_config", methods=["POST"])
-def refresh_config():
-    """Reload configuration from both YAML file and database"""
-    debug_log(4, "Configuration refresh requested")
-    try:
-        from pblib import refresh_config
-        refresh_config()
-        return {"status": "ok", "message": "Configuration refreshed successfully"}
-    except Exception as e:
-        debug_log(1, f"Error refreshing configuration: {str(e)}")
-        return {"status": "error", "message": str(e)}, 500
 
 @app.route("/activity", endpoint="activity", methods=["GET"])
 @swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])

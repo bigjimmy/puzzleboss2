@@ -17,6 +17,26 @@ huntfolderid = "undefined"
 # Pre-initialize configstruct with default LOGLEVEL
 configstruct = {"LOGLEVEL": "4"}
 
+# Track last config refresh time for periodic refresh
+_last_config_refresh = None
+CONFIG_REFRESH_INTERVAL = 30  # seconds
+
+def maybe_refresh_config():
+    """Refresh config if enough time has passed since last refresh.
+    Call this periodically (e.g., on each request) to ensure config stays current.
+    """
+    global _last_config_refresh
+    import time
+    
+    now = time.time()
+    if _last_config_refresh is None or (now - _last_config_refresh) >= CONFIG_REFRESH_INTERVAL:
+        try:
+            refresh_config()
+            _last_config_refresh = now
+        except Exception as e:
+            # Don't crash on refresh failure, just log it
+            print(f"[WARNING] Config refresh failed: {e}", flush=True)
+
 def debug_log(sev, message):
     # Levels:
     # 0 = emergency
@@ -37,7 +57,8 @@ def debug_log(sev, message):
 
 def refresh_config():
     """Reload configuration from both YAML file and database"""
-    global configstruct, config
+    global configstruct, config, _last_config_refresh
+    import time
     
     # Reload YAML config
     try:
@@ -57,6 +78,7 @@ def refresh_config():
         db_connection.close()
         configstruct.clear()
         configstruct.update(dict(configdump))
+        _last_config_refresh = time.time()  # Update timestamp
         debug_log(3, "Database configuration reloaded")
     except Exception as e:
         debug_log(0, f"FATAL EXCEPTION reading database configuration: {e}")

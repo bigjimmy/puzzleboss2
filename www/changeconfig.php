@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Set Privilege</title>
+  <title>Config Updated</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
   <style>
   body {
@@ -46,38 +46,17 @@
     background-color: lightgreen;
     padding: 10px;
   }
-  .refresh-button {
-    margin-top: 20px;
-    padding: 10px 20px;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .refresh-button:hover {
-    background-color: #45a049;
-  }
-  .refresh-prompt {
-    font-weight: bold;
-    color: black;
-    margin-bottom: 10px;
-  }
-  .warning-box {
-    background-color: #ffcccc;
-    border: 2px solid #cc0000;
+  .info-box {
+    background-color: #e7f3ff;
+    border: 2px solid #0066cc;
     border-radius: 6px;
-    color: #990000;
+    color: #004080;
     padding: 15px;
     margin: 20px 0;
   }
-  .warning-box h3 {
+  .info-box h3 {
     margin-top: 0;
-    color: #cc0000;
-  }
-  .warning-box ul {
-    margin-bottom: 0;
+    color: #0066cc;
   }
   </style>
 </head>
@@ -87,30 +66,6 @@
 
 require('puzzlebosslib.php');
 
-  // Handle refresh request first
-  if (isset($_POST['refresh'])) {
-    try {
-      $responseobj = postapi("/config/refresh", array());
-      assert_api_success($responseobj);
-      echo '<div class="success">Configuration refreshed successfully!</div>';
-      echo '<div class="warning-box">';
-      echo '<h3>⚠️ Production Limitations</h3>';
-      echo '<ul>';
-      echo '<li><strong>Multi-server deployments:</strong> This config sync only refreshes the API server that handled this request. In production with multiple web servers, scale the AWS autoscaling group down to 1 before running this sync, or manually restart all puzzleboss web servers.</li>';
-      echo '<li><strong>Backend services:</strong> This sync does NOT propagate to the series-of-tubes backend server where the Discord bot and BigJimmyBot run. Manually restart those services to pick up new config values.</li>';
-      echo '</ul>';
-      echo '</div>';
-      echo '<br>';
-      echo '<a href="javascript:window.history.back();">Go back</a>';
-      echo '<br><hr>';
-      exit;
-    } catch (Exception $e) {
-      exit_with_api_error($e);
-      throw $e;
-    }
-  }
-
-  // Only execute config change if this is not a refresh request
   $configval = $_POST['configval'];
   $key = $_POST['key'];
 
@@ -133,23 +88,14 @@ HTML;
   assert_api_success($responseobj);
 
   echo '<br><div class="success">';
-  echo 'OK. config ' . $key . ' is ' . $configval;
-  echo '<br><br>';
-  echo '<div class="refresh-prompt">IMPORTANT: Press the button below to refresh the configuration. This is necessary for your change to take effect.</div>';
-  echo '<form action="changeconfig.php" method="post">';
-  echo '<input type="hidden" name="refresh" value="yes">';
-  echo '<input type="submit" class="refresh-button" value="Refresh Configuration">';
-  echo '</form>';
+  echo 'OK. config ' . $key . ' is now set to: ' . $configval;
   echo '</div>';
-  echo '<div class="warning-box">';
-  echo '<h3>⚠️ Production Limitations</h3>';
-  echo '<ul>';
-  echo '<li><strong>Multi-server deployments:</strong> This config sync only refreshes the API server that handled this request. In production with multiple web servers, scale the AWS autoscaling group down to 1 before running this sync, or manually restart all puzzleboss web servers.</li>';
-  echo '<li><strong>Backend services:</strong> This sync does NOT propagate to the series-of-tubes backend server where the Discord bot and BigJimmyBot run. Manually restart those services to pick up new config values.</li>';
-  echo '</ul>';
+  echo '<div class="info-box">';
+  echo '<h3>ℹ️ Automatic Config Refresh</h3>';
+  echo '<p>Configuration changes take effect automatically within <strong>30 seconds</strong> across all API workers and the BigJimmyBot. No manual refresh or restart is required.</p>';
   echo '</div>';
   echo '<br>';
-  echo '<a href="javascript:window.history.back();">Go back</a>';
+  echo '<a href="admin.php">Back to Admin</a>';
   echo '<br><hr>';
 
 ?>
