@@ -115,7 +115,7 @@ def get_hunt_info():
     try:
         cursor.execute("SELECT * FROM config")
         config_rows = cursor.fetchall()
-        result["config"] = {row["k"]: row["v"] for row in config_rows}
+        result["config"] = {row["key"]: row["val"] for row in config_rows}
     except Exception as e:
         debug_log(2, "Could not fetch config: %s" % e)
         result["config"] = {}
@@ -1631,8 +1631,8 @@ def delete_account(username):
 
     return {"status": "ok"}
 
-@app.route("/deletepuzzle/<puzzlename>", endpoint="get_delete_puzzle", methods=["GET"])
-@swag_from("swag/getdeletepuzzle.yaml", endpoint="get_delete_puzzle", methods=["GET"])
+@app.route("/deletepuzzle/<puzzlename>", endpoint="delete_puzzle", methods=["DELETE"])
+@swag_from("swag/deletepuzzle.yaml", endpoint="delete_puzzle", methods=["DELETE"])
 def delete_puzzle(puzzlename):
     debug_log(4, "start. delete puzzle named %s" % puzzlename)
     puzzid = get_puzzle_id_by_name(puzzlename)

@@ -1725,6 +1725,92 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def test_puzzle_deletion(self, result: TestResult):
+        """Test puzzle deletion functionality."""
+        self.logger.log_operation("Starting puzzle deletion test")
+        
+        try:
+            # First, we need a round to create a puzzle in
+            timestamp = str(int(time.time()))
+            round_name = f"DeleteTestRound {timestamp}"
+            
+            self.logger.log_operation(f"Creating test round: {round_name}")
+            test_round = self.create_round(round_name)
+            if not test_round:
+                result.fail("Failed to create test round for deletion test")
+                return
+            
+            # Create a puzzle to delete
+            puzzle_name = f"DeleteTestPuzzle {timestamp}"
+            self.logger.log_operation(f"Creating test puzzle: {puzzle_name}")
+            test_puzzle = self.create_puzzle(puzzle_name, str(test_round['id']))
+            if not test_puzzle:
+                result.fail("Failed to create test puzzle for deletion test")
+                return
+            
+            puzzle_id = test_puzzle['id']
+            # The puzzle name gets spaces stripped
+            expected_name = puzzle_name.replace(" ", "")
+            self.logger.log_operation(f"Created puzzle '{expected_name}' with id {puzzle_id}")
+            
+            # Verify puzzle exists before deletion
+            puzzle_details = self.get_puzzle_details(puzzle_id)
+            if not puzzle_details:
+                result.fail(f"Failed to verify puzzle exists before deletion")
+                return
+            self.logger.log_operation(f"Verified puzzle exists: {puzzle_details['name']}")
+            
+            # Delete the puzzle using DELETE method
+            self.logger.log_operation(f"Deleting puzzle via DELETE /deletepuzzle/{expected_name}")
+            response = requests.delete(f"{self.base_url}/deletepuzzle/{expected_name}")
+            
+            if not response.ok:
+                result.fail(f"Failed to delete puzzle: {response.status_code} - {response.text}")
+                return
+            
+            delete_response = response.json()
+            if delete_response.get('status') != 'ok':
+                result.fail(f"Unexpected response from delete: {delete_response}")
+                return
+            
+            self.logger.log_operation(f"Delete response: {delete_response}")
+            
+            # Verify puzzle no longer exists
+            self.logger.log_operation("Verifying puzzle no longer exists")
+            
+            # Try to get the puzzle - should fail
+            verify_response = requests.get(f"{self.base_url}/puzzles/{puzzle_id}")
+            if verify_response.ok:
+                # If we got a response, check if the puzzle data is actually there
+                verify_data = verify_response.json()
+                if verify_data.get('puzzle'):
+                    result.fail(f"Puzzle still exists after deletion!")
+                    return
+            
+            # Also check in the puzzles list
+            all_puzzles = self.get_all_puzzles()
+            puzzle_names = [p['name'] for p in all_puzzles]
+            if expected_name in puzzle_names:
+                result.fail(f"Deleted puzzle still appears in puzzles list")
+                return
+            
+            self.logger.log_operation(f"Verified puzzle '{expected_name}' no longer exists")
+            
+            # Test deleting a non-existent puzzle (should handle gracefully)
+            self.logger.log_operation("Testing deletion of non-existent puzzle")
+            fake_name = f"NonExistentPuzzle{timestamp}"
+            response = requests.delete(f"{self.base_url}/deletepuzzle/{fake_name}")
+            # This might return an error, which is expected - just log it
+            self.logger.log_operation(f"Delete non-existent puzzle response: {response.status_code}")
+            
+            result.set_success("Puzzle deletion test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in puzzle deletion test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def run_all_tests(self):
         """Run all test cases."""
         # Check if system is empty before running tests
@@ -1760,6 +1846,7 @@ class TestRunner:
             ("Solver History", self.test_solver_history),
             ("Sheetcount", self.test_sheetcount),
             ("Tagging", self.test_tagging),
+            ("Puzzle Deletion", self.test_puzzle_deletion),
             ("API Endpoints", self.test_api_endpoints)
         ]
         

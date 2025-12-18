@@ -49,6 +49,21 @@ function postapi($apicall, $data) {
   return json_decode($resp);
 }
 
+function deleteapi($apicall) {
+  $url = $GLOBALS['apiroot'] . $apicall;
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_URL, $url);
+  curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $headers = array(
+    "Accept: application/json",
+  );
+  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+  $resp = curl_exec($curl);
+  curl_close($curl);
+  return json_decode($resp);
+}
+
 function exit_with_error_message($error) {
   print <<<HTML
     <div class="error">

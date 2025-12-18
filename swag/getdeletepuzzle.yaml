@@ -1,5 +1,0 @@
-tags:
-  - Puzzles
-responses:
-    200:
-        description: Puzzle deleted
