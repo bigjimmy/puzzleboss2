@@ -72,6 +72,11 @@ if (isset($_GET['data'])) {
 
 $use_text = isset($_GET['text_only']);
 
+// Minimum time before hints are available (default: 60 minutes)
+// Puzzles created before this timestamp are eligible for hints
+$hint_wait_minutes = isset($config->HINT_WAIT_MINUTES) ? (int)$config->HINT_WAIT_MINUTES : 60;
+$min_hint_time = time() - ($hint_wait_minutes * 60);
+
 $username = $solver->name;
 $mypuzzle = $solver->puzz;
 
