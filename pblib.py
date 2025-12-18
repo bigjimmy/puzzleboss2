@@ -56,30 +56,67 @@ def debug_log(sev, message):
     return
 
 def refresh_config():
-    """Reload configuration from both YAML file and database"""
+    """Reload configuration from both YAML file and database.
+    Only updates and logs if there are actual changes.
+    """
     global configstruct, config, _last_config_refresh
     import time
     
-    # Reload YAML config
+    # Reload YAML config (rarely changes at runtime, so no comparison)
     try:
         with open("puzzleboss.yaml") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
-        debug_log(3, "YAML configuration reloaded")
     except Exception as e:
         debug_log(0, f"FATAL EXCEPTION reading YAML configuration: {e}")
         sys.exit(255)
 
-    # Reload database config
+    # Reload database config with change detection
     try:
         db_connection = MySQLdb.connect(config["MYSQL"]["HOST"], config["MYSQL"]["USERNAME"], config["MYSQL"]["PASSWORD"], config["MYSQL"]["DATABASE"])
         cursor = db_connection.cursor()
         cursor.execute("SELECT * FROM config")
         configdump = cursor.fetchall()
         db_connection.close()
-        configstruct.clear()
-        configstruct.update(dict(configdump))
+        
+        new_config = dict(configdump)
         _last_config_refresh = time.time()  # Update timestamp
-        debug_log(3, "Database configuration reloaded")
+        
+        # Check if this is initial load (only default LOGLEVEL present)
+        is_initial_load = len(configstruct) <= 1 and "LOGLEVEL" in configstruct
+        
+        if is_initial_load:
+            # Initial load - just set config, no comparison
+            configstruct.clear()
+            configstruct.update(new_config)
+            debug_log(3, "Initial configuration loaded")
+        else:
+            # Compare and detect changes
+            changes_found = False
+            
+            # Check for modified or new keys
+            for key, value in new_config.items():
+                old_value = configstruct.get(key)
+                if old_value != value:
+                    if old_value is None:
+                        debug_log(3, f"Config added: {key} = {value}")
+                    else:
+                        debug_log(3, f"Config changed: {key}: {old_value} -> {value}")
+                    changes_found = True
+            
+            # Check for removed keys
+            for key in configstruct:
+                if key not in new_config:
+                    debug_log(3, f"Config removed: {key}")
+                    changes_found = True
+            
+            # Only update if there were changes
+            if changes_found:
+                configstruct.clear()
+                configstruct.update(new_config)
+                debug_log(3, "Configuration updated with changes")
+            else:
+                debug_log(5, "Configuration checked, no changes detected")
+        
     except Exception as e:
         debug_log(0, f"FATAL EXCEPTION reading database configuration: {e}")
         sys.exit(255)
