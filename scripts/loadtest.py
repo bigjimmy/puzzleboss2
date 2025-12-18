@@ -11,6 +11,8 @@ Usage:
 """
 
 import argparse
+import os
+import subprocess
 import threading
 import time
 import random
@@ -465,6 +467,9 @@ class APITagSearchingModule(TestModule):
 class LoadTestRunner:
     """Main load test orchestrator"""
     
+    NUM_ROUNDS = 10
+    PUZZLES_PER_ROUND = 15
+    
     def __init__(self, config: LoadTestConfig):
         self.config = config
         self.hunt_state = HuntState(config.api_base)
@@ -495,6 +500,40 @@ class LoadTestRunner:
         except Exception as e:
             print(f"ERROR: Could not check hunt state: {e}")
             return False
+    
+    def load_test_hunt(self) -> bool:
+        """Load test data using testload.py"""
+        print()
+        print("Loading test hunt data via testload.py...")
+        print("-" * 40)
+        
+        # Find testload.py relative to this script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        testload_path = os.path.join(script_dir, 'testload.py')
+        
+        if not os.path.exists(testload_path):
+            print(f"ERROR: testload.py not found at {testload_path}")
+            return False
+        
+        # Run testload.py non-interactively
+        cmd = [
+            sys.executable, testload_path,
+            '--no-interactive',
+            '--rounds', str(self.NUM_ROUNDS),
+            '--puzzles', str(self.PUZZLES_PER_ROUND),
+            '--api-base', self.config.api_base,
+            '--solvers'  # Create test solvers
+        ]
+        
+        result = subprocess.run(cmd)
+        
+        if result.returncode != 0:
+            print("ERROR: testload.py failed")
+            return False
+        
+        print("-" * 40)
+        print("Test hunt loaded successfully!")
+        return True
     
     def setup_modules(self):
         """Initialize all test modules"""
@@ -533,10 +572,18 @@ class LoadTestRunner:
         if not self.check_empty_hunt():
             sys.exit(1)
         
-        print("Hunt is empty. Starting load test setup...")
+        print("Hunt is empty.")
+        
+        # Load test data
+        if not self.load_test_hunt():
+            print("ERROR: Failed to load test hunt data")
+            sys.exit(1)
+        
+        print()
+        print("Starting load test...")
         print()
         
-        # Refresh hunt state (will be empty initially)
+        # Refresh hunt state with newly created data
         try:
             self.hunt_state.refresh()
         except Exception as e:
