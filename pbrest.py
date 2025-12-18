@@ -52,7 +52,11 @@ swagger = flasgger.Swagger(app)
 
 # Initialize Prometheus metrics (exposes /metrics endpoint)
 if PROMETHEUS_AVAILABLE:
-    metrics = PrometheusMetrics(app)
+    metrics = PrometheusMetrics(app, group_by_endpoint=True)
+    # group_by_endpoint=True uses route templates like /puzzles/<id> 
+    # instead of actual paths like /puzzles/1, /puzzles/2, etc.
+    # This reduces metric cardinality significantly.
+    
     # Add app info label
     metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
 
