@@ -8,6 +8,7 @@ import inspect
 import datetime
 import json
 import re
+import os
 from flask import Flask, request, jsonify
 from flask_restful import Api
 from flask_mysqldb import MySQL
@@ -19,13 +20,40 @@ from flasgger.utils import swag_from
 from pbldaplib import *
 from werkzeug.exceptions import HTTPException
 
-# Prometheus metrics
+# Prometheus multiprocess setup - must be done BEFORE importing prometheus
+# This allows metrics to be aggregated across Gunicorn workers
+PROMETHEUS_MULTIPROC_DIR = os.environ.get('prometheus_multiproc_dir')
+if not PROMETHEUS_MULTIPROC_DIR:
+    # Use /dev/shm (RAM-backed) if available, otherwise /tmp
+    if os.path.exists('/dev/shm'):
+        PROMETHEUS_MULTIPROC_DIR = '/dev/shm/puzzleboss_prometheus'
+    else:
+        PROMETHEUS_MULTIPROC_DIR = '/tmp/puzzleboss_prometheus'
+    os.environ['prometheus_multiproc_dir'] = PROMETHEUS_MULTIPROC_DIR
+
+# Create the directory if it doesn't exist
+if not os.path.exists(PROMETHEUS_MULTIPROC_DIR):
+    try:
+        os.makedirs(PROMETHEUS_MULTIPROC_DIR, exist_ok=True)
+        debug_log(3, f"Created prometheus multiproc dir: {PROMETHEUS_MULTIPROC_DIR}")
+    except Exception as e:
+        debug_log(2, f"Failed to create prometheus multiproc dir: {e}")
+
+# Prometheus metrics - use multiprocess-safe version for Gunicorn
+PROMETHEUS_AVAILABLE = False
+PROMETHEUS_MULTIPROC = False
 try:
-    from prometheus_flask_exporter import PrometheusMetrics
+    from prometheus_flask_exporter.multiprocess import GunicornPrometheusMetrics
     PROMETHEUS_AVAILABLE = True
+    PROMETHEUS_MULTIPROC = True
+    debug_log(3, f"Prometheus multiprocess metrics enabled (dir: {PROMETHEUS_MULTIPROC_DIR})")
 except ImportError:
-    PROMETHEUS_AVAILABLE = False
-    debug_log(3, "prometheus_flask_exporter not installed - /metrics endpoint unavailable")
+    try:
+        from prometheus_flask_exporter import PrometheusMetrics
+        PROMETHEUS_AVAILABLE = True
+        debug_log(3, "prometheus_flask_exporter available (single-process mode)")
+    except ImportError:
+        debug_log(3, "prometheus_flask_exporter not installed - /metrics endpoint unavailable")
 
 # Optional memcache support
 try:
@@ -48,7 +76,12 @@ swagger = flasgger.Swagger(app)
 
 # Initialize Prometheus metrics (exposes /metrics endpoint)
 if PROMETHEUS_AVAILABLE:
-    metrics = PrometheusMetrics(app, group_by_endpoint=True)
+    if PROMETHEUS_MULTIPROC:
+        # Multiprocess-safe metrics for Gunicorn
+        metrics = GunicornPrometheusMetrics(app, group_by_endpoint=True)
+    else:
+        # Single-process metrics (development)
+        metrics = PrometheusMetrics(app, group_by_endpoint=True)
     # group_by_endpoint=True uses route templates like /puzzles/<id> 
     # instead of actual paths like /puzzles/1, /puzzles/2, etc.
     # This reduces metric cardinality significantly.
