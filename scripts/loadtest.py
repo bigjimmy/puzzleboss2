@@ -521,8 +521,7 @@ class LoadTestRunner:
             '--no-interactive',
             '--rounds', str(self.NUM_ROUNDS),
             '--puzzles', str(self.PUZZLES_PER_ROUND),
-            '--api-base', self.config.api_base,
-            '--solvers'  # Create test solvers
+            '--api-base', self.config.api_base
         ]
         
         result = subprocess.run(cmd)
@@ -669,6 +668,13 @@ class LoadTestRunner:
 def create_default_config() -> str:
     """Return default config YAML content"""
     return """# Puzzleboss Load Test Configuration
+#
+# Copy this file to loadtest_config.yaml and customize as needed.
+#
+# Each module can be individually enabled/disabled and configured with:
+#   - enabled: true/false
+#   - threads: number of concurrent threads
+#   - delay: seconds to wait between requests per thread
 
 api_base: "http://localhost:5000"
 php_base: "https://localhost/pb"
@@ -681,47 +687,47 @@ modules:
     delay: 0.5
 
   php_status:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.5
 
   php_editpuzzle:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.5
 
   api_solver_assignment:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
 
   api_status_changing:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
 
   api_location_updating:
-    enabled: true
+    enabled: false
     threads: 1
     delay: 0.5
 
   api_sheet_simulation:
-    enabled: true
+    enabled: false
     threads: 4
     delay: 0.1
 
   api_commenting:
-    enabled: true
+    enabled: false
     threads: 1
     delay: 0.5
 
   api_tagging:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
 
   api_tag_searching:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
 """

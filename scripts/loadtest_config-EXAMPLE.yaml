@@ -1,5 +1,8 @@
 # Puzzleboss Load Test Configuration
 #
+# Copy this file to loadtest_config.yaml and customize as needed.
+# loadtest_config.yaml is excluded from git.
+#
 # Each module can be individually enabled/disabled and configured with:
 #   - enabled: true/false
 #   - threads: number of concurrent threads
@@ -17,53 +20,53 @@ modules:
     delay: 0.5
 
   php_status:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.5
 
   php_editpuzzle:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.5
 
   # API Tests
   api_solver_assignment:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
     # Note: Max 4 current solvers, max 12 all-time solvers per puzzle
     # Puzzles are reset when limits are reached
 
   api_status_changing:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
     # Excludes: Solved, New, [hidden]
 
   api_location_updating:
-    enabled: true
+    enabled: false
     threads: 1
     delay: 0.5
 
   api_sheet_simulation:
-    enabled: true
+    enabled: false
     threads: 4
     delay: 0.1
     # Simulates bigjimmybot activity recording
 
   api_commenting:
-    enabled: true
+    enabled: false
     threads: 1
     delay: 0.5
 
   api_tagging:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
     # Note: Max 5 tags per puzzle, removes when limit reached
 
   api_tag_searching:
-    enabled: true
+    enabled: false
     threads: 2
     delay: 0.2
 
