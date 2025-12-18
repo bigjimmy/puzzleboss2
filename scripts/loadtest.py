@@ -561,22 +561,25 @@ class LoadTestRunner:
                 )
                 self.modules.append(module)
     
-    def run(self):
+    def run(self, skip_setup: bool = False):
         """Run the load test"""
         print("=" * 60)
         print("Puzzleboss Load Test")
         print("=" * 60)
         
-        # Check for empty hunt
-        if not self.check_empty_hunt():
-            sys.exit(1)
-        
-        print("Hunt is empty.")
-        
-        # Load test data
-        if not self.load_test_hunt():
-            print("ERROR: Failed to load test hunt data")
-            sys.exit(1)
+        if skip_setup:
+            print("Skipping setup (using existing hunt data)...")
+        else:
+            # Check for empty hunt
+            if not self.check_empty_hunt():
+                sys.exit(1)
+            
+            print("Hunt is empty.")
+            
+            # Load test data
+            if not self.load_test_hunt():
+                print("ERROR: Failed to load test hunt data")
+                sys.exit(1)
         
         print()
         print("Starting load test...")
@@ -739,6 +742,8 @@ def main():
     parser.add_argument('--duration', '-d', type=int, help='Test duration in seconds')
     parser.add_argument('--api-base', help='API base URL')
     parser.add_argument('--php-base', help='PHP base URL')
+    parser.add_argument('--skip-setup', '-s', action='store_true',
+                        help='Skip empty hunt check and test data loading (use existing hunt)')
     parser.add_argument('--generate-config', action='store_true', 
                         help='Generate a default config file')
     
@@ -775,7 +780,7 @@ def main():
     
     # Run the load test
     runner = LoadTestRunner(config)
-    runner.run()
+    runner.run(skip_setup=args.skip_setup)
 
 
 if __name__ == '__main__':
