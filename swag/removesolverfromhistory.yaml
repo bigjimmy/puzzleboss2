@@ -1,6 +1,6 @@
 ---
 tags:
-  - puzzle
+  - Puzzles
 summary: Remove a solver from a puzzle's historical solver list
 description: Removes a solver from the historical solver list for a puzzle. This is separate from the current solvers list.
 parameters:

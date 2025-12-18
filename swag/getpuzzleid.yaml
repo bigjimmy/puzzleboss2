@@ -1,3 +1,5 @@
+tags:
+  - Puzzles
 definitions:
   Puzzle:
     type: object
@@ -85,7 +87,7 @@ parameters:
 
 responses:
     200:
-      description: A single puzzle item
+      description: A single puzzle item with last activity
       schema:
         type: object
         properties:
@@ -95,3 +97,21 @@ responses:
             example: ok
           puzzle:
             $ref: '#/definitions/Puzzle'
+          lastact:
+            type: object
+            nullable: true
+            description: Most recent activity on this puzzle (null if none)
+            properties:
+              id:
+                type: integer
+              puzzle_id:
+                type: integer
+              solver_id:
+                type: integer
+              source:
+                type: string
+              type:
+                type: string
+              time:
+                type: string
+                format: date-time

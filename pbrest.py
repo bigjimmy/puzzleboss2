@@ -101,6 +101,49 @@ def get_all_all():
     return {"rounds": rounds}
 
 
+@app.route("/huntinfo", endpoint="huntinfo", methods=["GET"])
+@swag_from("swag/gethuntinfo.yaml", endpoint="huntinfo", methods=["GET"])
+def get_hunt_info():
+    """Get static hunt info: config, statuses, and tags - for reducing HTTP round-trips"""
+    debug_log(5, "start")
+    result = {"status": "ok"}
+    
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Config
+    try:
+        cursor.execute("SELECT * FROM config")
+        config_rows = cursor.fetchall()
+        result["config"] = {row["k"]: row["v"] for row in config_rows}
+    except Exception as e:
+        debug_log(2, "Could not fetch config: %s" % e)
+        result["config"] = {}
+    
+    # Statuses
+    try:
+        cursor.execute("SHOW COLUMNS FROM puzzle WHERE Field = 'status'")
+        row = cursor.fetchone()
+        if row and row.get('Type', '').startswith("enum("):
+            type_str = row['Type']
+            result["statuses"] = [v.strip("'") for v in type_str[5:-1].split("','")]
+        else:
+            result["statuses"] = []
+    except Exception as e:
+        debug_log(2, "Could not fetch statuses: %s" % e)
+        result["statuses"] = []
+    
+    # Tags
+    try:
+        cursor.execute("SELECT id, name FROM tag ORDER BY name")
+        result["tags"] = cursor.fetchall()
+    except Exception as e:
+        debug_log(2, "Could not fetch tags: %s" % e)
+        result["tags"] = []
+    
+    return result
+
+
 @app.route("/puzzles", endpoint="puzzles", methods=["GET"])
 @swag_from("swag/getpuzzles.yaml", endpoint="puzzles", methods=["GET"])
 def get_all_puzzles():
@@ -233,9 +276,12 @@ def get_one_puzzle(id):
         raise Exception("Exception in fetching puzzle %s from database" % id)
 
     debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
+    
+    # Include lastact to reduce HTTP round-trips for clients
     return {
         "status": "ok",
         "puzzle": puzzle,
+        "lastact": get_last_activity_for_puzzle(id),
     }
 
 
@@ -387,6 +433,29 @@ def get_one_solver(id):
 
     solver["lastact"] = get_last_activity_for_solver(id)
     debug_log(4, "fetched solver %s" % id)
+    return {
+        "status": "ok",
+        "solver": solver,
+    }
+
+
+@app.route("/solvers/byname/<name>", endpoint="solver_byname", methods=["GET"])
+@swag_from("swag/getsolverbyname.yaml", endpoint="solver_byname", methods=["GET"])
+def get_solver_by_name(name):
+    """Get solver by username - more efficient than fetching all solvers"""
+    debug_log(4, "start. name: %s" % name)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        cursor.execute("SELECT * from solver_view where name = %s", (name,))
+        solver = cursor.fetchone()
+        if solver is None:
+            return {"status": "error", "error": "Solver '%s' not found" % name}, 404
+    except Exception as e:
+        raise Exception("Exception in fetching solver '%s' from database: %s" % (name, e))
+
+    debug_log(4, "fetched solver by name: %s" % name)
     return {
         "status": "ok",
         "solver": solver,

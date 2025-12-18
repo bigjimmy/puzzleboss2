@@ -1,0 +1,36 @@
+Get static hunt information including config, statuses, and tags.
+This endpoint consolidates multiple lookups into a single call for efficiency.
+---
+tags:
+  - Hunt Info
+responses:
+  200:
+    description: Hunt information retrieved successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        config:
+          type: object
+          description: Key-value configuration from the config table
+          additionalProperties:
+            type: string
+        statuses:
+          type: array
+          description: All valid puzzle status values from the enum
+          items:
+            type: string
+          example: ["New", "Being worked", "Needs eyes", "Solved"]
+        tags:
+          type: array
+          description: All tags defined in the system
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+

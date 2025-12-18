@@ -56,7 +56,6 @@
 <body>
 <main>
 <?php 
-
 require('puzzlebosslib.php');
 
 function startuseronpuzzle($id, $puzz) {
@@ -225,18 +224,19 @@ echo '<h1>Per-Puzzle Change Interface</h1>';
 
 // Check for authenticated user
 $puzzid = $_GET['pid'];
-$userid = getauthenticateduser();
+$userobj = getauthenticatedsolver();  // Returns full solver object
+$userid = $userobj->id;
+$username = $userobj->name;
 
-$userobj = readapi('/solvers/' . $userid);
+// Get puzzle data (includes lastact)
+// Note: $huntinfo (with config, statuses, tags) is loaded by puzzlebosslib.php
 $puzzleobj = readapi('/puzzles/' . $puzzid);
-$lastactobj = readapi('/puzzles/' . $puzzid . '/lastact');
 $puzname = $puzzleobj->puzzle->name;
-$username = $userobj->solver->name;
 
-// Calculate time since last activity
+// Calculate time since last activity (now included in puzzle response)
 $timeSinceLastAct = 'N/A';
-if (isset($lastactobj->puzzle->lastact->time)) {
-  $lastActTime = strtotime($lastactobj->puzzle->lastact->time);
+if (isset($puzzleobj->lastact->time)) {
+  $lastActTime = strtotime($puzzleobj->lastact->time);
   $now = time();
   $diff = $now - $lastActTime;
   if ($diff >= 0) {
@@ -266,7 +266,7 @@ echo '<tr><td><b>Tags</b></td><td>' . htmlentities($puzzleobj->puzzle->tags ?? '
 echo '</table>';
 
 //Solver Assignment
-if ($userobj->solver->puzz != $puzname) {
+if ($userobj->puzz != $puzname) {
   echo '<br>You are not marked as working on this puzzle.  Would you like to be?';
   echo '<form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
   echo '<input type="hidden" name="startwork" value="yes">';
@@ -325,17 +325,11 @@ echo '<input type="text" required minlength="1" name="value" value="' . $puzzleo
 echo '<td><input type="submit" name="submit" value="submit"></td>';
 echo '</form></td></tr>';
 
-// Change Status - fetch available statuses dynamically
+// Change Status - use statuses from huntinfo (loaded by puzzlebosslib.php)
 // Statuses excluded from manual selection (must be set via other means)
 $excluded_statuses = ['Solved'];
-
-$allstatuses = array();
-try {
-  $statusobj = readapi('/statuses');
-  $allstatuses = isset($statusobj->statuses) ? $statusobj->statuses : array();
-} catch (Exception $e) {
-  // Fallback to empty - form will show no options
-}
+global $huntinfo;
+$allstatuses = isset($huntinfo->statuses) ? $huntinfo->statuses : array();
 
 echo '<tr>';
 echo '<td>Status</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
@@ -373,9 +367,8 @@ echo '</table>';
 // --- Tag Management Section ---
 echo '<br><h3>Tag Management</h3>';
 
-// Fetch all available tags
-$alltagsobj = readapi('/tags');
-$alltags = isset($alltagsobj->tags) ? $alltagsobj->tags : array();
+// Use tags from huntinfo
+$alltags = isset($huntinfo->tags) ? $huntinfo->tags : array();
 
 // Get current puzzle tags as array
 $currentTagsStr = $puzzleobj->puzzle->tags ?? '';
