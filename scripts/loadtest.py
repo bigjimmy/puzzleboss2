@@ -428,16 +428,18 @@ class APITaggingModule(TestModule):
         puzzle_id = puzzle['id']
         
         # Get current tags on puzzle
+        # API returns: {"status": "ok", "puzzle": {"id": X, "tags": "tag1,tag2,tag3"}}
         resp = requests.get(f"{self.api_base}/puzzles/{puzzle_id}/tags")
         resp.raise_for_status()
-        current_tags = resp.json().get('tags', [])
+        tags_str = resp.json().get('puzzle', {}).get('tags', '') or ''
+        current_tags = [t.strip() for t in tags_str.split(',') if t.strip()]
         
         if len(current_tags) >= self.MAX_TAGS_PER_PUZZLE:
             # Remove a random tag
             tag_to_remove = random.choice(current_tags)
             resp = requests.post(
                 f"{self.api_base}/puzzles/{puzzle_id}/tags",
-                json={"tags": {"remove": tag_to_remove['name']}}
+                json={"tags": {"remove": tag_to_remove}}
             )
             resp.raise_for_status()
         else:
