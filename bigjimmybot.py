@@ -282,6 +282,19 @@ if __name__ == "__main__":
     debug_log(3, "google drive init succeeded. Hunt folder id: %s" % pblib.huntfolderid)
 
     while True:
+        # Reload config from database each loop to pick up changes
+        try:
+            refresh_config()
+            debug_log(5, "Config reloaded from database")
+        except Exception as e:
+            debug_log(1, "Error refreshing config: %s" % e)
+        
+        # If Google API is disabled, just sleep and loop
+        if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
+            debug_log(4, "SKIP_GOOGLE_API is true, sleeping 5 seconds")
+            time.sleep(5)
+            continue
+        
         # Start timing setup phase
         setup_start_time = time.time()
         
