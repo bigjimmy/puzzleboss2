@@ -299,7 +299,8 @@ class APISolverAssignmentModule(TestModule):
         current_count = len(current_solver_names)
         
         # Check if we need to clear solvers
-        alltime_solvers = puzzle_data.get('allsolvers', '') or ''
+        # Note: API returns 'solvers' for historical, 'cursolvers' for current
+        alltime_solvers = puzzle_data.get('solvers', '') or ''
         alltime_count = len([s for s in alltime_solvers.split(',') if s.strip()])
         
         if alltime_count >= self.MAX_ALLTIME_SOLVERS or current_count >= self.MAX_CURRENT_SOLVERS:
