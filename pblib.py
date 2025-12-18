@@ -2,12 +2,8 @@ import yaml
 import sys
 import inspect
 import datetime
-import bleach
 import smtplib
 import MySQLdb
-from flask import Flask, request
-from flask_restful import Api
-from flask_mysqldb import MySQL
 from email.message import EmailMessage
 
 # Global config variable for YAML config
@@ -123,16 +119,6 @@ def refresh_config():
 
 # Initial configuration load
 refresh_config()
-
-def sanitize_string(mystring):
-    import re
-    if mystring is None:
-        return ""
-    # Keep alphanumeric, emoji, spaces, and common punctuation
-    # But remove control chars and problematic URL/filename chars
-    sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?*]', '', mystring)
-    # Trim whitespace
-    return sanitized.strip()
 
 def sanitize_puzzle_name(mystring):
     import re
