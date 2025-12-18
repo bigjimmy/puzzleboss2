@@ -140,7 +140,7 @@ HTML;
 }
 
 function print_rounds_table($rounds, $mypuzzle) {
-  global $use_text, $username, $mypuzzle;
+  global $use_text, $username, $mypuzzle, $min_hint_time;
   echo '<table border=4 style="vertical-align:top;" class="rounds"><tr>';
   foreach ($rounds as $round) {
     $num_open = 0;
