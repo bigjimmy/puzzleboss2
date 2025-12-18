@@ -2,8 +2,8 @@
 require('puzzlebosslib.php');
 
 // Check for authenticated user
-$uid = getauthenticateduser();
-$solver = readapi("/solvers/$uid")->solver;
+$solver = getauthenticatedsolver();
+$uid = $solver->id;
 $username = $solver->name;
 
 // Get all available tags
@@ -21,9 +21,8 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
     $result = readapi('/search?tag=' . urlencode($search_tag));
     $search_results = $result->puzzles ?? array();
     
-    // Fetch full puzzle details and organize by round
-    foreach ($search_results as $puzzle_summary) {
-      $puzzle = readapi('/puzzles/' . $puzzle_summary->id)->puzzle;
+    // Organize puzzles by round (API now returns full puzzle data)
+    foreach ($search_results as $puzzle) {
       $round_name = $puzzle->roundname ?? 'Unknown Round';
       if (!isset($puzzles_by_round[$round_name])) {
         $puzzles_by_round[$round_name] = array();

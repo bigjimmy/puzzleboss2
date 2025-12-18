@@ -6,22 +6,55 @@ import traceback
 import yaml
 import inspect
 import datetime
-import bleach
-import smtplib
+import json
+import re
+import os
 from flask import Flask, request, jsonify
 from flask_restful import Api
 from flask_mysqldb import MySQL
 from pblib import *
 from pbgooglelib import *
 from pbdiscordlib import *
-from pandas.core.dtypes.generic import ABCIntervalIndex
 from secrets import token_hex
 from flasgger.utils import swag_from
 from pbldaplib import *
 from werkzeug.exceptions import HTTPException
-import json
-import datetime
-import re
+
+# Prometheus multiprocess setup - must be done BEFORE importing prometheus
+# This allows metrics to be aggregated across Gunicorn workers
+PROMETHEUS_MULTIPROC_DIR = os.environ.get('prometheus_multiproc_dir')
+if not PROMETHEUS_MULTIPROC_DIR:
+    # Use /dev/shm (RAM-backed) if available, otherwise /tmp
+    if os.path.exists('/dev/shm'):
+        PROMETHEUS_MULTIPROC_DIR = '/dev/shm/puzzleboss_prometheus'
+    else:
+        PROMETHEUS_MULTIPROC_DIR = '/tmp/puzzleboss_prometheus'
+    os.environ['prometheus_multiproc_dir'] = PROMETHEUS_MULTIPROC_DIR
+
+# Create the directory if it doesn't exist
+if not os.path.exists(PROMETHEUS_MULTIPROC_DIR):
+    try:
+        os.makedirs(PROMETHEUS_MULTIPROC_DIR, exist_ok=True)
+        debug_log(3, f"Created prometheus multiproc dir: {PROMETHEUS_MULTIPROC_DIR}")
+    except Exception as e:
+        debug_log(2, f"Failed to create prometheus multiproc dir: {e}")
+
+# Prometheus metrics - multiprocess mode is enabled via prometheus_multiproc_dir env var
+PROMETHEUS_AVAILABLE = False
+try:
+    from prometheus_flask_exporter import PrometheusMetrics
+    PROMETHEUS_AVAILABLE = True
+    debug_log(3, f"prometheus_flask_exporter available (multiproc_dir: {PROMETHEUS_MULTIPROC_DIR})")
+except ImportError:
+    debug_log(3, "prometheus_flask_exporter not installed - /metrics endpoint unavailable")
+
+# Optional memcache support
+try:
+    from pymemcache.client import base as memcache_client
+    MEMCACHE_AVAILABLE = True
+except ImportError:
+    MEMCACHE_AVAILABLE = False
+    debug_log(3, "pymemcache not installed - caching disabled")
 
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
@@ -33,6 +66,136 @@ app.config["MYSQL_CHARSET"] = "utf8mb4"
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
+
+# Initialize Prometheus metrics (exposes /metrics endpoint)
+# Multiprocess aggregation is handled by prometheus_client when prometheus_multiproc_dir is set
+if PROMETHEUS_AVAILABLE:
+    try:
+        debug_log(3, "Initializing PrometheusMetrics...")
+        metrics = PrometheusMetrics(app, group_by_endpoint=True)
+        # group_by_endpoint=True uses route templates like /puzzles/<id> 
+        # instead of actual paths like /puzzles/1, /puzzles/2, etc.
+        # This reduces metric cardinality significantly.
+        
+        # Add app info label
+        metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
+        debug_log(3, "PrometheusMetrics initialized successfully")
+    except Exception as e:
+        debug_log(0, f"Failed to initialize Prometheus metrics: {e}")
+        PROMETHEUS_AVAILABLE = False
+
+# Periodic config refresh on each request (checks if 60s have passed)
+@app.before_request
+def periodic_config_refresh():
+    maybe_refresh_config()
+
+# Memcache client (initialized later after config is available)
+mc = None
+MEMCACHE_CACHE_KEY = 'puzzleboss:all'
+MEMCACHE_TTL = 60  # seconds
+
+def init_memcache(configstruct):
+    """Initialize memcache client from config. Call after DB config is loaded."""
+    global mc
+    if not MEMCACHE_AVAILABLE:
+        debug_log(3, "Memcache: pymemcache not installed")
+        return
+    
+    try:
+        enabled = configstruct.get('MEMCACHE_ENABLED', 'false').lower() == 'true'
+        host = configstruct.get('MEMCACHE_HOST', '')
+        port = int(configstruct.get('MEMCACHE_PORT', 11211))
+        
+        if not enabled:
+            debug_log(3, "Memcache: disabled in config")
+            return
+        
+        if not host:
+            debug_log(3, "Memcache: no host configured")
+            return
+        
+        mc = memcache_client.Client((host, port), timeout=1, connect_timeout=1)
+        # Test connection
+        mc.set('_test', 'ok', expire=1)
+        debug_log(3, "Memcache: initialized successfully (%s:%d)" % (host, port))
+    except Exception as e:
+        debug_log(2, "Memcache: failed to initialize: %s" % str(e))
+        mc = None
+
+def cache_get(key):
+    """Safe cache get - returns None on error or if disabled"""
+    if mc is None:
+        return None
+    try:
+        value = mc.get(key)
+        if value:
+            debug_log(5, "cache_get: hit for %s" % key)
+        return value
+    except Exception as e:
+        debug_log(3, "cache_get error: %s" % str(e))
+        return None
+
+def cache_set(key, value, ttl=MEMCACHE_TTL):
+    """Safe cache set - fails silently if disabled"""
+    if mc is None:
+        return
+    try:
+        mc.set(key, value, expire=ttl)
+        debug_log(5, "cache_set: stored %s" % key)
+    except Exception as e:
+        debug_log(3, "cache_set error: %s" % str(e))
+
+def cache_delete(key):
+    """Safe cache delete - fails silently if disabled"""
+    if mc is None:
+        return
+    try:
+        mc.delete(key)
+        debug_log(5, "cache_delete: deleted %s" % key)
+    except Exception as e:
+        debug_log(3, "cache_delete error: %s" % str(e))
+
+def invalidate_all_cache():
+    """Invalidate the /all cache. Call when puzzle/round data changes."""
+    ensure_memcache_initialized()
+    cache_delete(MEMCACHE_CACHE_KEY)
+    increment_cache_stat('cache_invalidations_total')
+
+def increment_cache_stat(stat_name):
+    """Increment a cache statistic counter in botstats table."""
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        # Use INSERT ... ON DUPLICATE KEY to atomically increment
+        cursor.execute(
+            """INSERT INTO botstats (`key`, `val`) VALUES (%s, '1') 
+               ON DUPLICATE KEY UPDATE `val` = CAST(`val` AS UNSIGNED) + 1""",
+            (stat_name,)
+        )
+        conn.commit()
+    except Exception as e:
+        debug_log(3, "increment_cache_stat error for %s: %s" % (stat_name, str(e)))
+
+# Flag to track if memcache has been initialized
+_memcache_initialized = False
+
+def ensure_memcache_initialized():
+    """Initialize memcache from DB config on first use."""
+    global _memcache_initialized
+    if _memcache_initialized:
+        return
+    _memcache_initialized = True
+    
+    try:
+        # Query config from database
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT `key`, `val` FROM config WHERE `key` LIKE 'MEMCACHE_%'")
+        rows = cursor.fetchall()
+        mc_config = {row['key']: row['val'] for row in rows}
+        init_memcache(mc_config)
+    except Exception as e:
+        debug_log(2, "Failed to load memcache config from database: %s" % str(e))
 
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -46,7 +209,14 @@ def handle_error(e):
         "traceback": traceback.format_exc()
     }
     
-    debug_log(0, f"Error occurred: {error_details}")
+    # Log level based on error type:
+    # - 4xx client errors (404, 400, etc): SEV3 (info) - not our fault
+    # - 5xx server errors: SEV0 (emergency) - something broke
+    if code >= 500:
+        debug_log(0, f"Server error occurred: {error_details}")
+    elif code >= 400:
+        debug_log(3, f"Client error: {code} {e.__class__.__name__} - {request.method} {request.path}")
+    
     return error_details, code
 
 
@@ -99,6 +269,81 @@ def get_all_all():
         rounds.append(round)
 
     return {"rounds": rounds}
+
+
+@app.route("/allcached", endpoint="allcached", methods=["GET"])
+@swag_from("swag/getallcached.yaml", endpoint="allcached", methods=["GET"])
+def get_all_cached():
+    """Cached version of /all - falls back to DB if cache unavailable"""
+    debug_log(4, "start")
+    
+    # Ensure memcache is initialized (lazy init on first request)
+    ensure_memcache_initialized()
+    
+    # Try cache first if memcache is enabled
+    if mc is not None:
+        cached = cache_get(MEMCACHE_CACHE_KEY)
+        if cached:
+            debug_log(4, "allcached: cache hit")
+            increment_cache_stat('cache_hits_total')
+            return json.loads(cached)
+        debug_log(4, "allcached: cache miss")
+        increment_cache_stat('cache_misses_total')
+    
+    # Fall back to regular /all logic
+    data = get_all_all()
+    
+    # Store in cache for next time (if enabled)
+    if mc is not None:
+        try:
+            cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
+        except Exception as e:
+            debug_log(3, "allcached: failed to cache: %s" % str(e))
+    
+    return data
+
+
+@app.route("/huntinfo", endpoint="huntinfo", methods=["GET"])
+@swag_from("swag/gethuntinfo.yaml", endpoint="huntinfo", methods=["GET"])
+def get_hunt_info():
+    """Get static hunt info: config, statuses, and tags - for reducing HTTP round-trips"""
+    debug_log(5, "start")
+    result = {"status": "ok"}
+    
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Config
+    try:
+        cursor.execute("SELECT * FROM config")
+        config_rows = cursor.fetchall()
+        result["config"] = {row["key"]: row["val"] for row in config_rows}
+    except Exception as e:
+        debug_log(2, "Could not fetch config: %s" % e)
+        result["config"] = {}
+    
+    # Statuses
+    try:
+        cursor.execute("SHOW COLUMNS FROM puzzle WHERE Field = 'status'")
+        row = cursor.fetchone()
+        if row and row.get('Type', '').startswith("enum("):
+            type_str = row['Type']
+            result["statuses"] = [v.strip("'") for v in type_str[5:-1].split("','")]
+        else:
+            result["statuses"] = []
+    except Exception as e:
+        debug_log(2, "Could not fetch statuses: %s" % e)
+        result["statuses"] = []
+    
+    # Tags
+    try:
+        cursor.execute("SELECT id, name FROM tag ORDER BY name")
+        result["tags"] = cursor.fetchall()
+    except Exception as e:
+        debug_log(2, "Could not fetch tags: %s" % e)
+        result["tags"] = []
+    
+    return result
 
 
 @app.route("/puzzles", endpoint="puzzles", methods=["GET"])
@@ -158,8 +403,11 @@ def search_puzzles():
                 return {"status": "ok", "puzzles": []}
         
         # Use MEMBER OF() to leverage the multi-valued JSON index
+        # Return full puzzle data from puzzle_view to avoid N+1 queries on client
         cursor.execute(
-            "SELECT id, name FROM puzzle WHERE %s MEMBER OF(tags)",
+            """SELECT pv.* FROM puzzle_view pv
+               JOIN puzzle p ON p.id = pv.id
+               WHERE %s MEMBER OF(p.tags)""",
             (tag_id,)
         )
         puzzlist = cursor.fetchall()
@@ -233,9 +481,12 @@ def get_one_puzzle(id):
         raise Exception("Exception in fetching puzzle %s from database" % id)
 
     debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
+    
+    # Include lastact to reduce HTTP round-trips for clients
     return {
         "status": "ok",
         "puzzle": puzzle,
+        "lastact": get_last_activity_for_puzzle(id),
     }
 
 
@@ -393,6 +644,29 @@ def get_one_solver(id):
     }
 
 
+@app.route("/solvers/byname/<name>", endpoint="solver_byname", methods=["GET"])
+@swag_from("swag/getsolverbyname.yaml", endpoint="solver_byname", methods=["GET"])
+def get_solver_by_name(name):
+    """Get solver by username - more efficient than fetching all solvers"""
+    debug_log(4, "start. name: %s" % name)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        cursor.execute("SELECT * from solver_view where name = %s", (name,))
+        solver = cursor.fetchone()
+        if solver is None:
+            return {"status": "error", "error": "Solver '%s' not found" % name}, 404
+    except Exception as e:
+        raise Exception("Exception in fetching solver '%s' from database: %s" % (name, e))
+
+    debug_log(4, "fetched solver by name: %s" % name)
+    return {
+        "status": "ok",
+        "solver": solver,
+    }
+
+
 def _solver_exists(id):
     """
     Internal check if solver exists. Returns True/False.
@@ -490,6 +764,10 @@ def update_solver_part(id, part):
             )
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
+        
+        # Invalidate /allcached since solver assignment affects cursolvers
+        invalidate_all_cache()
+        
         return {"status": "ok", "solver": {"id": id, part: value}}
 
     # This is actually a change to the solver's info
@@ -890,6 +1168,9 @@ def create_puzzle():
         % name,
     )
 
+    # Invalidate /allcached since new puzzle was created
+    invalidate_all_cache()
+
     return {
         "status": "ok",
         "puzzle": {
@@ -956,6 +1237,9 @@ def create_round():
         3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri)
     )
 
+    # Invalidate /allcached since new round was created
+    invalidate_all_cache()
+
     return {"status": "ok", "round": {"name": roundname}}
 
 @app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
@@ -1011,6 +1295,9 @@ def update_round_part(id, part):
         )
 
     debug_log(3, "round %s %s updated to %s" % (id, part, value))
+
+    # Invalidate /allcached since round data changed
+    invalidate_all_cache()
 
     return {"status": "ok", "round": {"id": id, part: value}}
 
@@ -1230,6 +1517,7 @@ def update_puzzle_part(id, part):
                 conn.commit()
                 debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
                 tag_changed = True
+                increment_cache_stat('tags_assigned_total')
             else:
                 debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
         
@@ -1250,6 +1538,7 @@ def update_puzzle_part(id, part):
                 conn.commit()
                 debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
                 tag_changed = True
+                increment_cache_stat('tags_assigned_total')
             else:
                 debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
         
@@ -1317,6 +1606,9 @@ def update_puzzle_part(id, part):
         "puzzle name %s, id %s, part %s has been set to %s"
         % (mypuzzle["puzzle"]["name"], id, part, value),
     )
+
+    # Invalidate /allcached since puzzle data changed
+    invalidate_all_cache()
 
     return {"status": "ok", "puzzle": {"id": id, part: value}}
 
@@ -1562,8 +1854,8 @@ def delete_account(username):
 
     return {"status": "ok"}
 
-@app.route("/deletepuzzle/<puzzlename>", endpoint="get_delete_puzzle", methods=["GET"])
-@swag_from("swag/getdeletepuzzle.yaml", endpoint="get_delete_puzzle", methods=["GET"])
+@app.route("/deletepuzzle/<puzzlename>", endpoint="delete_puzzle", methods=["DELETE"])
+@swag_from("swag/deletepuzzle.yaml", endpoint="delete_puzzle", methods=["DELETE"])
 def delete_puzzle(puzzlename):
     debug_log(4, "start. delete puzzle named %s" % puzzlename)
     puzzid = get_puzzle_id_by_name(puzzlename)
@@ -1586,6 +1878,10 @@ def delete_puzzle(puzzlename):
         raise Exception("Puzzle deletion attempt for id %s name %s failed in database operation." % puzzid, puzzlename)
 
     debug_log(2, "puzzle id %s named %s deleted from system!" % (puzzid, puzzlename))
+    
+    # Invalidate /allcached since puzzle was deleted
+    invalidate_all_cache()
+    
     return {"status": "ok"}
     
 
@@ -1974,18 +2270,18 @@ def remove_solver_from_history(id):
     return {"status": "ok"}
 
 
-@app.route("/config/refresh", endpoint="refresh_config", methods=["POST"])
-@swag_from("swag/refreshconfig.yaml", endpoint="refresh_config", methods=["POST"])
-def refresh_config():
-    """Reload configuration from both YAML file and database"""
-    debug_log(4, "Configuration refresh requested")
+@app.route("/cache/invalidate", endpoint="cache_invalidate", methods=["POST"])
+@swag_from("swag/postcacheinvalidate.yaml", endpoint="cache_invalidate", methods=["POST"])
+def force_cache_invalidate():
+    """Force invalidation of all caches"""
+    debug_log(3, "Cache invalidation requested")
     try:
-        from pblib import refresh_config
-        refresh_config()
-        return {"status": "ok", "message": "Configuration refreshed successfully"}
+        invalidate_all_cache()
+        return {"status": "ok", "message": "Cache invalidated successfully"}
     except Exception as e:
-        debug_log(1, f"Error refreshing configuration: {str(e)}")
+        debug_log(1, f"Error invalidating cache: {str(e)}")
         return {"status": "error", "message": str(e)}, 500
+
 
 @app.route("/activity", endpoint="activity", methods=["GET"])
 @swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])

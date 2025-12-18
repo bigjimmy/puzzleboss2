@@ -143,7 +143,10 @@ It will NOT delete the discord chat room. Do that in discord (or find a puzztech
 <hr>
 <h3>Config Edit</h3>
 <p>BE CAREFUL:</br>
-Changes to these configuration values take effect immediately and are not reversible. They may cause irreperable damage or breakage to the hunt if set improperly. Please proceed with caution. Set only one at a time.
+Changes to these configuration values are not reversible and may cause irreparable damage or breakage to the hunt if set improperly. Please proceed with caution. Set only one at a time.
+</p>
+<p style="background-color: #e7f3ff; border: 2px solid #0066cc; border-radius: 6px; color: #004080; padding: 15px;">
+<strong>ℹ️ Automatic Config Refresh:</strong> Configuration changes take effect automatically within <strong>30 seconds</strong> across all API workers and the BigJimmyBot. No manual refresh or restart is required.
 </p>
 <table border="2" cellpadding="3">
 <tr><th>Config Variable</th><th>Current Value</th><th>Desired Value</th></tr>

@@ -299,7 +299,8 @@ class APISolverAssignmentModule(TestModule):
         current_count = len(current_solver_names)
         
         # Check if we need to clear solvers
-        alltime_solvers = puzzle_data.get('allsolvers', '') or ''
+        # Note: API returns 'solvers' for historical, 'cursolvers' for current
+        alltime_solvers = puzzle_data.get('solvers', '') or ''
         alltime_count = len([s for s in alltime_solvers.split(',') if s.strip()])
         
         if alltime_count >= self.MAX_ALLTIME_SOLVERS or current_count >= self.MAX_CURRENT_SOLVERS:
@@ -375,7 +376,11 @@ class APISheetSimulationModule(TestModule):
         # Record activity like bigjimmybot does
         resp = requests.post(
             f"{self.api_base}/puzzles/{puzzle['id']}/lastact",
-            json={"lastact": solver['id']}
+            json={"lastact": {
+                "solver_id": solver['id'],
+                "source": "bigjimmybot",
+                "type": "interact"
+            }}
         )
         resp.raise_for_status()
 
@@ -423,16 +428,18 @@ class APITaggingModule(TestModule):
         puzzle_id = puzzle['id']
         
         # Get current tags on puzzle
+        # API returns: {"status": "ok", "puzzle": {"id": X, "tags": "tag1,tag2,tag3"}}
         resp = requests.get(f"{self.api_base}/puzzles/{puzzle_id}/tags")
         resp.raise_for_status()
-        current_tags = resp.json().get('tags', [])
+        tags_str = resp.json().get('puzzle', {}).get('tags', '') or ''
+        current_tags = [t.strip() for t in tags_str.split(',') if t.strip()]
         
         if len(current_tags) >= self.MAX_TAGS_PER_PUZZLE:
             # Remove a random tag
             tag_to_remove = random.choice(current_tags)
             resp = requests.post(
                 f"{self.api_base}/puzzles/{puzzle_id}/tags",
-                json={"tags": {"remove": tag_to_remove['name']}}
+                json={"tags": {"remove": tag_to_remove}}
             )
             resp.raise_for_status()
         else:

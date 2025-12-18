@@ -1,6 +1,6 @@
 ---
 tags:
-  - puzzle
+  - Puzzles
 summary: Add a solver to a puzzle's historical solver list
 description: Adds a solver to the historical solver list for a puzzle. This is separate from the current solvers list.
 parameters:

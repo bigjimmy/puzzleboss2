@@ -1,0 +1,44 @@
+Get a solver by username.
+More efficient than fetching all solvers when you only need one.
+---
+tags:
+  - Solvers
+parameters:
+  - name: name
+    in: path
+    type: string
+    required: true
+    description: The username of the solver to retrieve
+responses:
+  200:
+    description: Solver found
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        solver:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            fullname:
+              type: string
+            puzz:
+              type: string
+              description: Name of puzzle the solver is currently working on
+  404:
+    description: Solver not found
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          example: "Solver 'username' not found"
+

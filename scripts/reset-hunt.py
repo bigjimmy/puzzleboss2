@@ -5,6 +5,7 @@ import os
 import yaml
 import subprocess
 import datetime
+import requests
 from pathlib import Path
 
 # Get the project root directory (parent of scripts directory)
@@ -200,6 +201,19 @@ def main():
         if not load_sql_file(config, backup_dir / f"{table}.sql"):
             print(f"Failed to restore {table} table. Aborting.")
             sys.exit(1)
+    
+    # Invalidate cache
+    debug_log("Invalidating cache...")
+    try:
+        api_base = config.get("API", {}).get("APIURI", "http://localhost:5000")
+        resp = requests.post(f"{api_base}/cache/invalidate", timeout=10)
+        if resp.ok:
+            debug_log("Cache invalidated successfully")
+        else:
+            debug_log(f"Warning: Cache invalidation returned status {resp.status_code}")
+    except Exception as e:
+        debug_log(f"Warning: Could not invalidate cache: {e}")
+        debug_log("You may need to restart the API server or wait for cache to expire")
     
     print("\nHunt reset completed successfully!")
     print(f"Backups saved in: {backup_dir}")

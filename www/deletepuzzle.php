@@ -65,7 +65,7 @@ Attempting to delete puzzle.<br>
 HTML;
 
   try {
-    $resp = readapi('/deletepuzzle/' . $name);
+    $resp = deleteapi('/deletepuzzle/' . $name);
   } catch (Exception $e) {
     exit_with_api_error($resp);
     throw $e;

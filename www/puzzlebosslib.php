@@ -3,16 +3,13 @@ global $apiroot;
 global $noremoteusertestmode;
 global $pbroot;
 global $bookmarkuri;
+global $config;
+global $huntinfo;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 $apiroot = $yaml['API']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
 $noremoteusertestmode = "true"; //TODO: eliminate this
-
-//TODO: add error handling here for mandatory config values. should direct user to admin page for config editing.
-$config = readapi('/config')->config;
-$bookmarkuri = $config->bookmarklet_js;
-$pbroot = $config->BIN_URI;
 
 function readapi($apicall) {
   $url = $GLOBALS['apiroot'] . $apicall;
@@ -28,6 +25,12 @@ function readapi($apicall) {
   return json_decode($resp);
 }
 
+// Load huntinfo (config + statuses + tags) once for all pages
+$huntinfo = readapi('/huntinfo');
+$config = (object) $huntinfo->config;
+$bookmarkuri = $config->bookmarklet_js ?? '';
+$pbroot = $config->BIN_URI ?? '';
+
 function postapi($apicall, $data) {
   $url = $GLOBALS['apiroot'] . $apicall;
   $curl = curl_init($url);
@@ -41,6 +44,21 @@ function postapi($apicall, $data) {
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
 
   curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
+  $resp = curl_exec($curl);
+  curl_close($curl);
+  return json_decode($resp);
+}
+
+function deleteapi($apicall) {
+  $url = $GLOBALS['apiroot'] . $apicall;
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_URL, $url);
+  curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $headers = array(
+    "Accept: application/json",
+  );
+  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);
   curl_close($curl);
   return json_decode($resp);
@@ -87,17 +105,28 @@ function assert_api_success($responseobj) {
 }
 
 function getuid($username) {
-  $userlist = readapi('/solvers')->solvers;
-  foreach ($userlist as $user) {
-    if ($user->name == $username) {
-      return $user->id;
-    }
+  // Use efficient byname lookup instead of fetching all solvers
+  $result = readapi('/solvers/byname/' . urlencode($username));
+  if (isset($result->solver) && isset($result->solver->id)) {
+    return $result->solver->id;
   }
   return 0;
 }
 
 
 function getauthenticateduser() {
+  $solver = getauthenticatedsolver();
+  return $solver->id;
+}
+
+function getauthenticatedsolver() {
+  // Returns the full solver object for the authenticated user
+  // More efficient than getauthenticateduser() + separate /solvers/{id} call
+  static $cached_solver = null;
+  if ($cached_solver !== null) {
+    return $cached_solver;
+  }
+  
   $username = "";
   global $noremoteusertestmode;
   global $config;
@@ -117,17 +146,22 @@ function getauthenticateduser() {
   else {
     $username = $_SERVER['REMOTE_USER'];
   }
-  $uid = getuid($username);
-  if ($uid == 0) {
+  
+  // Single API call to get full solver by name
+  $result = readapi('/solvers/byname/' . urlencode($username));
+  if (!isset($result->solver)) {
     http_response_code(403);
     die("No solver found for user $username. Check Solvers Database");
   }
+  
   $debugging_usernames = explode(',', $config->debugging_usernames ?? '');
   if (in_array($username, $debugging_usernames)) {
     error_reporting(E_ALL);
     ini_set("display_errors", 1);
   }
-  return $uid;
+  
+  $cached_solver = $result->solver;
+  return $cached_solver;
 }
 
 // Mirrors pblib.py implementation

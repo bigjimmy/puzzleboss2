@@ -59,9 +59,8 @@ if (isset($_GET['submit'])) {
 }
 
 // Check for authenticated user
-$uid = getauthenticateduser();
-$solver = readapi("/solvers/$uid")->solver;
-$fullhunt = array_reverse(readapi('/all')->rounds);
+$solver = getauthenticatedsolver();
+$fullhunt = array_reverse(readapi('/allcached')->rounds);
 
 if (isset($_GET['data'])) {
   header('Content-Type: application/json; charset=utf-8');
@@ -72,6 +71,11 @@ if (isset($_GET['data'])) {
 }
 
 $use_text = isset($_GET['text_only']);
+
+// Minimum time before hints are available (default: 60 minutes)
+// Puzzles created before this timestamp are eligible for hints
+$hint_wait_minutes = isset($config->HINT_WAIT_MINUTES) ? (int)$config->HINT_WAIT_MINUTES : 60;
+$min_hint_time = time() - ($hint_wait_minutes * 60);
 
 $username = $solver->name;
 $mypuzzle = $solver->puzz;
@@ -136,7 +140,7 @@ HTML;
 }
 
 function print_rounds_table($rounds, $mypuzzle) {
-  global $use_text, $username, $mypuzzle;
+  global $use_text, $username, $mypuzzle, $min_hint_time;
   echo '<table border=4 style="vertical-align:top;" class="rounds"><tr>';
   foreach ($rounds as $round) {
     $num_open = 0;

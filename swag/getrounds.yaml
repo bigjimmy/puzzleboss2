@@ -1,3 +1,5 @@
+tags:
+  - Rounds
 responses:
     200:
         description: Basic listing of all rounds

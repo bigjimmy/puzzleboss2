@@ -1,3 +1,5 @@
+tags:
+  - Rounds
 description: Post New Round
 consumes:
     - application/json

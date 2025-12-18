@@ -2,8 +2,7 @@
 require('puzzlebosslib.php');
 
 // Check for authenticated user
-$uid = getauthenticateduser();
-$solver = readapi("/solvers/$uid")->solver;
+$solver = getauthenticatedsolver();
 
 // Get round ID from URL
 $rid = $_GET['rid'] ?? null;
