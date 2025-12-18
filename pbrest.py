@@ -23,6 +23,14 @@ import json
 import datetime
 import re
 
+# Prometheus metrics
+try:
+    from prometheus_flask_exporter import PrometheusMetrics
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    debug_log(3, "prometheus_flask_exporter not installed - /metrics endpoint unavailable")
+
 # Optional memcache support
 try:
     from pymemcache.client import base as memcache_client
@@ -41,6 +49,12 @@ app.config["MYSQL_CHARSET"] = "utf8mb4"
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
+
+# Initialize Prometheus metrics (exposes /metrics endpoint)
+if PROMETHEUS_AVAILABLE:
+    metrics = PrometheusMetrics(app)
+    # Add app info label
+    metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
 
 # Memcache client (initialized later after config is available)
 mc = None
