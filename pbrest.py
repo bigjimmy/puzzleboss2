@@ -1517,6 +1517,7 @@ def update_puzzle_part(id, part):
                 conn.commit()
                 debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
                 tag_changed = True
+                increment_cache_stat('tags_assigned_total')
             else:
                 debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
         
@@ -1537,6 +1538,7 @@ def update_puzzle_part(id, part):
                 conn.commit()
                 debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
                 tag_changed = True
+                increment_cache_stat('tags_assigned_total')
             else:
                 debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
         

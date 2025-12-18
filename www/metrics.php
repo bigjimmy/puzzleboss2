@@ -159,6 +159,11 @@ try {
             $metrics[] = "# HELP puzzleboss_cache_invalidations_total Total cache invalidations";
             $metrics[] = "# TYPE puzzleboss_cache_invalidations_total counter";
             $metrics[] = "puzzleboss_cache_invalidations_total " . ($botstats->cache_invalidations_total->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_tags_assigned_total Total tags assigned to puzzles";
+            $metrics[] = "# TYPE puzzleboss_tags_assigned_total counter";
+            $metrics[] = "puzzleboss_tags_assigned_total " . ($botstats->tags_assigned_total->val ?? 0);
         }
     } catch (Exception $e) {
         // Botstats not available yet, skip
