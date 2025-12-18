@@ -403,8 +403,11 @@ def search_puzzles():
                 return {"status": "ok", "puzzles": []}
         
         # Use MEMBER OF() to leverage the multi-valued JSON index
+        # Return full puzzle data from puzzle_view to avoid N+1 queries on client
         cursor.execute(
-            "SELECT id, name FROM puzzle WHERE %s MEMBER OF(tags)",
+            """SELECT pv.* FROM puzzle_view pv
+               JOIN puzzle p ON p.id = pv.id
+               WHERE %s MEMBER OF(p.tags)""",
             (tag_id,)
         )
         puzzlist = cursor.fetchall()
