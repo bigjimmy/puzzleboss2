@@ -130,6 +130,22 @@ def invalidate_all_cache():
     """Invalidate the /all cache. Call when puzzle/round data changes."""
     ensure_memcache_initialized()
     cache_delete(MEMCACHE_CACHE_KEY)
+    increment_cache_stat('cache_invalidations_total')
+
+def increment_cache_stat(stat_name):
+    """Increment a cache statistic counter in botstats table."""
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        # Use INSERT ... ON DUPLICATE KEY to atomically increment
+        cursor.execute(
+            """INSERT INTO botstats (`key`, `val`) VALUES (%s, '1') 
+               ON DUPLICATE KEY UPDATE `val` = CAST(`val` AS UNSIGNED) + 1""",
+            (stat_name,)
+        )
+        conn.commit()
+    except Exception as e:
+        debug_log(3, "increment_cache_stat error for %s: %s" % (stat_name, str(e)))
 
 # Flag to track if memcache has been initialized
 _memcache_initialized = False
@@ -233,8 +249,10 @@ def get_all_cached():
         cached = cache_get(MEMCACHE_CACHE_KEY)
         if cached:
             debug_log(4, "allcached: cache hit")
+            increment_cache_stat('cache_hits_total')
             return json.loads(cached)
         debug_log(4, "allcached: cache miss")
+        increment_cache_stat('cache_misses_total')
     
     # Fall back to regular /all logic
     data = get_all_all()

@@ -143,6 +143,22 @@ try {
             $metrics[] = "# HELP puzzleboss_bigjimmy_quota_failures_total Total Google API quota failures (429 errors) since bot start";
             $metrics[] = "# TYPE puzzleboss_bigjimmy_quota_failures_total counter";
             $metrics[] = "puzzleboss_bigjimmy_quota_failures_total " . ($botstats->quota_failures->val ?? 0);
+            $metrics[] = "";
+            
+            // Cache metrics
+            $metrics[] = "# HELP puzzleboss_cache_hits_total Total cache hits for /allcached endpoint";
+            $metrics[] = "# TYPE puzzleboss_cache_hits_total counter";
+            $metrics[] = "puzzleboss_cache_hits_total " . ($botstats->cache_hits_total->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_cache_misses_total Total cache misses for /allcached endpoint";
+            $metrics[] = "# TYPE puzzleboss_cache_misses_total counter";
+            $metrics[] = "puzzleboss_cache_misses_total " . ($botstats->cache_misses_total->val ?? 0);
+            $metrics[] = "";
+            
+            $metrics[] = "# HELP puzzleboss_cache_invalidations_total Total cache invalidations";
+            $metrics[] = "# TYPE puzzleboss_cache_invalidations_total counter";
+            $metrics[] = "puzzleboss_cache_invalidations_total " . ($botstats->cache_invalidations_total->val ?? 0);
         }
     } catch (Exception $e) {
         // Botstats not available yet, skip
