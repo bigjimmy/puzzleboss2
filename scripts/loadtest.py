@@ -295,28 +295,26 @@ class APISolverAssignmentModule(TestModule):
         puzzle_data = resp.json().get('puzzle', {})
         
         current_solvers = puzzle_data.get('cursolvers', '') or ''
-        current_count = len([s for s in current_solvers.split(',') if s.strip()])
+        current_solver_names = [s.strip() for s in current_solvers.split(',') if s.strip()]
+        current_count = len(current_solver_names)
         
         # Check if we need to clear solvers
         alltime_solvers = puzzle_data.get('allsolvers', '') or ''
         alltime_count = len([s for s in alltime_solvers.split(',') if s.strip()])
         
-        if alltime_count >= self.MAX_ALLTIME_SOLVERS:
-            # Clear all solvers from this puzzle
-            resp = requests.post(
-                f"{self.api_base}/puzzles/{puzzle_id}/cursolvers",
-                json={"cursolvers": ""}
-            )
-            resp.raise_for_status()
-            return
-        
-        if current_count >= self.MAX_CURRENT_SOLVERS:
-            # Remove a random current solver
-            resp = requests.post(
-                f"{self.api_base}/puzzles/{puzzle_id}/cursolvers",
-                json={"cursolvers": ""}
-            )
-            resp.raise_for_status()
+        if alltime_count >= self.MAX_ALLTIME_SOLVERS or current_count >= self.MAX_CURRENT_SOLVERS:
+            # Unassign a random current solver by setting their puzz to empty
+            if current_solver_names:
+                # Find solver ID by name
+                solver_to_remove = random.choice(current_solver_names)
+                for s in self.hunt_state.solvers:
+                    if s.get('name') == solver_to_remove:
+                        resp = requests.post(
+                            f"{self.api_base}/solvers/{s['id']}/puzz",
+                            json={"puzz": ""}
+                        )
+                        resp.raise_for_status()
+                        break
         else:
             # Assign the solver
             resp = requests.post(
