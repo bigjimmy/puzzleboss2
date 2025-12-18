@@ -23,6 +23,14 @@ import json
 import datetime
 import re
 
+# Optional memcache support
+try:
+    from pymemcache.client import base as memcache_client
+    MEMCACHE_AVAILABLE = True
+except ImportError:
+    MEMCACHE_AVAILABLE = False
+    debug_log(3, "pymemcache not installed - caching disabled")
+
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
@@ -33,6 +41,97 @@ app.config["MYSQL_CHARSET"] = "utf8mb4"
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
+
+# Memcache client (initialized later after config is available)
+mc = None
+MEMCACHE_CACHE_KEY = 'puzzleboss:all'
+MEMCACHE_TTL = 60  # seconds
+
+def init_memcache(configstruct):
+    """Initialize memcache client from config. Call after DB config is loaded."""
+    global mc
+    if not MEMCACHE_AVAILABLE:
+        debug_log(3, "Memcache: pymemcache not installed")
+        return
+    
+    try:
+        enabled = configstruct.get('MEMCACHE_ENABLED', 'false').lower() == 'true'
+        host = configstruct.get('MEMCACHE_HOST', '')
+        port = int(configstruct.get('MEMCACHE_PORT', 11211))
+        
+        if not enabled:
+            debug_log(3, "Memcache: disabled in config")
+            return
+        
+        if not host:
+            debug_log(3, "Memcache: no host configured")
+            return
+        
+        mc = memcache_client.Client((host, port), timeout=1, connect_timeout=1)
+        # Test connection
+        mc.set('_test', 'ok', expire=1)
+        debug_log(3, "Memcache: initialized successfully (%s:%d)" % (host, port))
+    except Exception as e:
+        debug_log(2, "Memcache: failed to initialize: %s" % str(e))
+        mc = None
+
+def cache_get(key):
+    """Safe cache get - returns None on error or if disabled"""
+    if mc is None:
+        return None
+    try:
+        value = mc.get(key)
+        if value:
+            debug_log(5, "cache_get: hit for %s" % key)
+        return value
+    except Exception as e:
+        debug_log(3, "cache_get error: %s" % str(e))
+        return None
+
+def cache_set(key, value, ttl=MEMCACHE_TTL):
+    """Safe cache set - fails silently if disabled"""
+    if mc is None:
+        return
+    try:
+        mc.set(key, value, expire=ttl)
+        debug_log(5, "cache_set: stored %s" % key)
+    except Exception as e:
+        debug_log(3, "cache_set error: %s" % str(e))
+
+def cache_delete(key):
+    """Safe cache delete - fails silently if disabled"""
+    if mc is None:
+        return
+    try:
+        mc.delete(key)
+        debug_log(5, "cache_delete: deleted %s" % key)
+    except Exception as e:
+        debug_log(3, "cache_delete error: %s" % str(e))
+
+def invalidate_all_cache():
+    """Invalidate the /all cache. Call when puzzle/round data changes."""
+    cache_delete(MEMCACHE_CACHE_KEY)
+
+# Flag to track if memcache has been initialized
+_memcache_initialized = False
+
+def ensure_memcache_initialized():
+    """Initialize memcache from DB config on first use."""
+    global _memcache_initialized
+    if _memcache_initialized:
+        return
+    _memcache_initialized = True
+    
+    try:
+        # Query config from database
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT `key`, `val` FROM config WHERE `key` LIKE 'MEMCACHE_%'")
+        rows = cursor.fetchall()
+        mc_config = {row['key']: row['val'] for row in rows}
+        init_memcache(mc_config)
+    except Exception as e:
+        debug_log(2, "Failed to load memcache config from database: %s" % str(e))
 
 @app.errorhandler(Exception)
 def handle_error(e):
@@ -99,6 +198,36 @@ def get_all_all():
         rounds.append(round)
 
     return {"rounds": rounds}
+
+
+@app.route("/allcached", endpoint="allcached", methods=["GET"])
+@swag_from("swag/getallcached.yaml", endpoint="allcached", methods=["GET"])
+def get_all_cached():
+    """Cached version of /all - falls back to DB if cache unavailable"""
+    debug_log(4, "start")
+    
+    # Ensure memcache is initialized (lazy init on first request)
+    ensure_memcache_initialized()
+    
+    # Try cache first if memcache is enabled
+    if mc is not None:
+        cached = cache_get(MEMCACHE_CACHE_KEY)
+        if cached:
+            debug_log(4, "allcached: cache hit")
+            return json.loads(cached)
+        debug_log(4, "allcached: cache miss")
+    
+    # Fall back to regular /all logic
+    data = get_all_all()
+    
+    # Store in cache for next time (if enabled)
+    if mc is not None:
+        try:
+            cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
+        except Exception as e:
+            debug_log(3, "allcached: failed to cache: %s" % str(e))
+    
+    return data
 
 
 @app.route("/huntinfo", endpoint="huntinfo", methods=["GET"])
@@ -559,6 +688,10 @@ def update_solver_part(id, part):
             )
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
+        
+        # Invalidate /allcached since solver assignment affects cursolvers
+        invalidate_all_cache()
+        
         return {"status": "ok", "solver": {"id": id, part: value}}
 
     # This is actually a change to the solver's info
@@ -959,6 +1092,9 @@ def create_puzzle():
         % name,
     )
 
+    # Invalidate /allcached since new puzzle was created
+    invalidate_all_cache()
+
     return {
         "status": "ok",
         "puzzle": {
@@ -1025,6 +1161,9 @@ def create_round():
         3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri)
     )
 
+    # Invalidate /allcached since new round was created
+    invalidate_all_cache()
+
     return {"status": "ok", "round": {"name": roundname}}
 
 @app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
@@ -1080,6 +1219,9 @@ def update_round_part(id, part):
         )
 
     debug_log(3, "round %s %s updated to %s" % (id, part, value))
+
+    # Invalidate /allcached since round data changed
+    invalidate_all_cache()
 
     return {"status": "ok", "round": {"id": id, part: value}}
 
@@ -1387,6 +1529,9 @@ def update_puzzle_part(id, part):
         % (mypuzzle["puzzle"]["name"], id, part, value),
     )
 
+    # Invalidate /allcached since puzzle data changed
+    invalidate_all_cache()
+
     return {"status": "ok", "puzzle": {"id": id, part: value}}
 
 
@@ -1655,6 +1800,10 @@ def delete_puzzle(puzzlename):
         raise Exception("Puzzle deletion attempt for id %s name %s failed in database operation." % puzzid, puzzlename)
 
     debug_log(2, "puzzle id %s named %s deleted from system!" % (puzzid, puzzlename))
+    
+    # Invalidate /allcached since puzzle was deleted
+    invalidate_all_cache()
+    
     return {"status": "ok"}
     
 

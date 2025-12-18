@@ -1,0 +1,31 @@
+tags:
+  - Puzzles
+summary: Get all rounds and puzzles (cached)
+description: |
+  Returns all rounds with their puzzles, using memcache for performance.
+  Falls back to direct database query if cache is unavailable or disabled.
+  
+  Configure caching via config values:
+  - MEMCACHE_ENABLED: 'true' or 'false'
+  - MEMCACHE_HOST: hostname of memcache server
+  - MEMCACHE_PORT: port (default 11211)
+responses:
+  200:
+    description: All rounds with puzzles
+    schema:
+      type: object
+      properties:
+        rounds:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              puzzles:
+                type: array
+                items:
+                  type: object
+

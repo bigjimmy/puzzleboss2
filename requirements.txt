@@ -7,4 +7,5 @@ google-api-python-client
 pandas 
 python-ldap 
 flask_mysqldb 
-google-auth-oauthlib 
+google-auth-oauthlib
+pymemcache
