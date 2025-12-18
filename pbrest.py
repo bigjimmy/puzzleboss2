@@ -110,6 +110,7 @@ def cache_delete(key):
 
 def invalidate_all_cache():
     """Invalidate the /all cache. Call when puzzle/round data changes."""
+    ensure_memcache_initialized()
     cache_delete(MEMCACHE_CACHE_KEY)
 
 # Flag to track if memcache has been initialized
