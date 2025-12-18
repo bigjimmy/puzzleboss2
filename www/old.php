@@ -60,7 +60,7 @@ if (isset($_GET['submit'])) {
 
 // Check for authenticated user
 $solver = getauthenticatedsolver();
-$fullhunt = array_reverse(readapi('/all')->rounds);
+$fullhunt = array_reverse(readapi('/allcached')->rounds);
 
 if (isset($_GET['data'])) {
   header('Content-Type: application/json; charset=utf-8');

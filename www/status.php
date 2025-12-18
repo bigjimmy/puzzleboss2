@@ -31,7 +31,7 @@ $nolocarray = [];
 $rounds;
 
 
-$huntstruct = readapi("/all");
+$huntstruct = readapi("/allcached");
 $rounds = $huntstruct->rounds;
 
 // Fetch available statuses dynamically, excluding ones that shouldn't be manually selectable
