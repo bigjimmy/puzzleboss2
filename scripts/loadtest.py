@@ -757,18 +757,23 @@ def main():
         return
     
     # Load or create config
-    if args.config:
-        config = load_config(args.config)
+    config_path = args.config
+    
+    # Auto-detect config file in same directory if not specified
+    if not config_path:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        default_config = os.path.join(script_dir, 'loadtest_config.yaml')
+        if os.path.exists(default_config):
+            config_path = default_config
+            print(f"Using config: {config_path}")
+    
+    if config_path:
+        config = load_config(config_path)
     else:
-        config = LoadTestConfig()
-        # Enable all modules with default settings for quick testing
-        module_names = [
-            'php_puzzleboss', 'php_status', 'php_editpuzzle',
-            'api_solver_assignment', 'api_status_changing', 'api_location_updating',
-            'api_sheet_simulation', 'api_commenting', 'api_tagging', 'api_tag_searching'
-        ]
-        for attr in module_names:
-            getattr(config, attr).enabled = True
+        print("ERROR: No config file found.")
+        print("  Create scripts/loadtest_config.yaml from scripts/loadtest_config-EXAMPLE.yaml")
+        print("  Or specify with: --config <path>")
+        sys.exit(1)
     
     # Override with CLI args
     if args.duration:
