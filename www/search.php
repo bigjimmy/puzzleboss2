@@ -2,8 +2,8 @@
 require('puzzlebosslib.php');
 
 // Check for authenticated user
-$uid = getauthenticateduser();
-$solver = readapi("/solvers/$uid")->solver;
+$solver = getauthenticatedsolver();
+$uid = $solver->id;
 $username = $solver->name;
 
 // Get all available tags

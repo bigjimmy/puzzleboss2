@@ -59,8 +59,7 @@ if (isset($_GET['submit'])) {
 }
 
 // Check for authenticated user
-$uid = getauthenticateduser();
-$solver = readapi("/solvers/$uid")->solver;
+$solver = getauthenticatedsolver();
 $fullhunt = array_reverse(readapi('/all')->rounds);
 
 if (isset($_GET['data'])) {
