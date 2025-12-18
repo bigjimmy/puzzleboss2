@@ -2268,6 +2268,19 @@ def remove_solver_from_history(id):
     return {"status": "ok"}
 
 
+@app.route("/cache/invalidate", endpoint="cache_invalidate", methods=["POST"])
+@swag_from("swag/postcacheinvalidate.yaml", endpoint="cache_invalidate", methods=["POST"])
+def force_cache_invalidate():
+    """Force invalidation of all caches"""
+    debug_log(3, "Cache invalidation requested")
+    try:
+        invalidate_all_cache()
+        return {"status": "ok", "message": "Cache invalidated successfully"}
+    except Exception as e:
+        debug_log(1, f"Error invalidating cache: {str(e)}")
+        return {"status": "error", "message": str(e)}, 500
+
+
 @app.route("/activity", endpoint="activity", methods=["GET"])
 @swag_from("swag/getactivity.yaml", endpoint="activity", methods=["GET"])
 def get_all_activities():

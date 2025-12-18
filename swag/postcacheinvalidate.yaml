@@ -1,0 +1,33 @@
+Force cache invalidation
+---
+tags:
+  - Cache
+summary: Force invalidation of all caches
+description: |
+  Invalidates the /allcached memcache entry, forcing the next request to 
+  fetch fresh data from the database. Useful after bulk operations like 
+  hunt reset.
+responses:
+  200:
+    description: Cache invalidated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
+          example: Cache invalidated successfully
+  500:
+    description: Error invalidating cache
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        message:
+          type: string
+          description: Error message
+
