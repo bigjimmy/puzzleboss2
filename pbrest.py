@@ -214,7 +214,14 @@ def handle_error(e):
         "traceback": traceback.format_exc()
     }
     
-    debug_log(0, f"Error occurred: {error_details}")
+    # Log level based on error type:
+    # - 4xx client errors (404, 400, etc): SEV3 (info) - not our fault
+    # - 5xx server errors: SEV0 (emergency) - something broke
+    if code >= 500:
+        debug_log(0, f"Server error occurred: {error_details}")
+    elif code >= 400:
+        debug_log(3, f"Client error: {code} {e.__class__.__name__} - {request.method} {request.path}")
+    
     return error_details, code
 
 
