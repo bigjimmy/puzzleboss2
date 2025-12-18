@@ -291,7 +291,7 @@ if __name__ == "__main__":
         
         # If Google API is disabled, just sleep and loop
         if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
-            debug_log(4, "SKIP_GOOGLE_API is true, sleeping 5 seconds")
+            debug_log(3, "SKIP_GOOGLE_API is true, sleeping 5 seconds")
             time.sleep(5)
             continue
         
