@@ -704,9 +704,13 @@ def main():
     else:
         config = LoadTestConfig()
         # Enable all modules with default settings for quick testing
-        for attr in dir(config):
-            if attr.startswith(('php_', 'api_')):
-                getattr(config, attr).enabled = True
+        module_names = [
+            'php_puzzleboss', 'php_status', 'php_editpuzzle',
+            'api_solver_assignment', 'api_status_changing', 'api_location_updating',
+            'api_sheet_simulation', 'api_commenting', 'api_tagging', 'api_tag_searching'
+        ]
+        for attr in module_names:
+            getattr(config, attr).enabled = True
     
     # Override with CLI args
     if args.duration:
