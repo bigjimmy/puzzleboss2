@@ -375,7 +375,11 @@ class APISheetSimulationModule(TestModule):
         # Record activity like bigjimmybot does
         resp = requests.post(
             f"{self.api_base}/puzzles/{puzzle['id']}/lastact",
-            json={"lastact": solver['id']}
+            json={"lastact": {
+                "solver_id": solver['id'],
+                "source": "bigjimmybot",
+                "type": "interact"
+            }}
         )
         resp.raise_for_status()
 
