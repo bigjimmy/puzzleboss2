@@ -76,18 +76,35 @@ swagger = flasgger.Swagger(app)
 
 # Initialize Prometheus metrics (exposes /metrics endpoint)
 if PROMETHEUS_AVAILABLE:
-    if PROMETHEUS_MULTIPROC:
-        # Multiprocess-safe metrics for Gunicorn
-        metrics = GunicornPrometheusMetrics(app, group_by_endpoint=True)
-    else:
-        # Single-process metrics (development)
-        metrics = PrometheusMetrics(app, group_by_endpoint=True)
-    # group_by_endpoint=True uses route templates like /puzzles/<id> 
-    # instead of actual paths like /puzzles/1, /puzzles/2, etc.
-    # This reduces metric cardinality significantly.
-    
-    # Add app info label
-    metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
+    try:
+        if PROMETHEUS_MULTIPROC:
+            # Multiprocess-safe metrics for Gunicorn
+            debug_log(3, "Initializing GunicornPrometheusMetrics...")
+            metrics = GunicornPrometheusMetrics(app, group_by_endpoint=True)
+            debug_log(3, "GunicornPrometheusMetrics initialized successfully")
+        else:
+            # Single-process metrics (development)
+            debug_log(3, "Initializing PrometheusMetrics (single-process)...")
+            metrics = PrometheusMetrics(app, group_by_endpoint=True)
+            debug_log(3, "PrometheusMetrics initialized successfully")
+        # group_by_endpoint=True uses route templates like /puzzles/<id> 
+        # instead of actual paths like /puzzles/1, /puzzles/2, etc.
+        # This reduces metric cardinality significantly.
+        
+        # Add app info label
+        metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
+    except Exception as e:
+        debug_log(1, f"Failed to initialize multiprocess Prometheus metrics: {e}")
+        # Fall back to single-process mode
+        try:
+            from prometheus_flask_exporter import PrometheusMetrics
+            debug_log(3, "Falling back to single-process PrometheusMetrics...")
+            metrics = PrometheusMetrics(app, group_by_endpoint=True)
+            metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
+            debug_log(3, "Single-process PrometheusMetrics initialized as fallback")
+        except Exception as e2:
+            debug_log(0, f"Failed to initialize any Prometheus metrics: {e2}")
+            PROMETHEUS_AVAILABLE = False
 
 # Periodic config refresh on each request (checks if 60s have passed)
 @app.before_request
