@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import requests
 import sys
 from typing import Optional
@@ -117,7 +118,25 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
                 
     return True
 
-def main():
+def run_noninteractive(base_url: str, num_rounds: int, puzzles_per_round: int) -> bool:
+    """Run test data loading non-interactively. Returns True on success."""
+    print("PuzzleBoss Test Data Loader (non-interactive)")
+    print("=" * 45)
+    print(f"API Base: {base_url}")
+    print(f"Rounds: {num_rounds}")
+    print(f"Puzzles per round: {puzzles_per_round}")
+    print()
+    
+    if not create_rounds_and_puzzles(base_url, num_rounds, puzzles_per_round):
+        print("\nFailed to create rounds and puzzles.")
+        return False
+    
+    print("\nTest data creation completed successfully!")
+    return True
+
+
+def run_interactive():
+    """Run test data loading interactively with user prompts."""
     base_url = "http://localhost:5000"
     
     print("PuzzleBoss Test Data Loader")
@@ -158,6 +177,31 @@ def main():
         return
         
     print("\nTest data creation completed successfully!")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='PuzzleBoss Test Data Loader')
+    parser.add_argument('--rounds', '-r', type=int, default=10,
+                        help='Number of rounds to create (default: 10)')
+    parser.add_argument('--puzzles', '-p', type=int, default=15,
+                        help='Number of puzzles per round (default: 15)')
+    parser.add_argument('--api-base', '-a', default='http://localhost:5000',
+                        help='API base URL (default: http://localhost:5000)')
+    parser.add_argument('--no-interactive', '-y', action='store_true',
+                        help='Run non-interactively with provided/default settings')
+    
+    args = parser.parse_args()
+    
+    if args.no_interactive:
+        success = run_noninteractive(
+            base_url=args.api_base,
+            num_rounds=args.rounds,
+            puzzles_per_round=args.puzzles
+        )
+        sys.exit(0 if success else 1)
+    else:
+        run_interactive()
+
 
 if __name__ == "__main__":
     main() 
