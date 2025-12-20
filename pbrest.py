@@ -684,25 +684,13 @@ def _solver_exists(id):
         return False
 
 
-@app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
-@swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
-def update_solver_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        value = data[part]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected %s field missing" % part)
-    # Check if this is a legit solver
-    mysolver = get_one_solver(id)
-    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
-    if "status" not in mysolver or mysolver["status"] != "ok":
-        raise Exception("Error looking up solver %s" % id)
-
-    # This is a change to the solver's claimed puzzle
+def _update_single_solver_part(id, part, value, source='puzzleboss'):
+    """
+    Internal helper to update a single solver part.
+    Returns the updated value.
+    Raises Exception on error.
+    """
+    # Special handling for puzzle assignment
     if part == "puzz":
         if value:
             # Assigning puzzle, so check if puzzle is real
@@ -746,8 +734,6 @@ def update_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            # Get the source from the request data if provided, otherwise use default
-            source = data.get('source', 'puzzleboss')
             cursor.execute(
                 """
                 INSERT INTO activity
@@ -764,26 +750,92 @@ def update_solver_part(id, part):
             )
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
-        
-        # Invalidate /allcached since solver assignment affects cursolvers
-        invalidate_all_cache()
-        
-        return {"status": "ok", "solver": {"id": id, part: value}}
+        return value
 
-    # This is actually a change to the solver's info
+    # For all other parts, just try to update - MySQL will reject invalid columns
     try:
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
-    except:
+    except Exception as e:
         raise Exception(
-            "Exception in modifying %s of solver %s in database" % (part, id)
+            "Exception in modifying %s of solver %s: %s" % (part, id, str(e))
         )
 
     debug_log(3, "solver %s %s updated in database" % (id, part))
+    return value
 
-    return {"status": "ok", "solver": {"id": id, part: value}}
+
+@app.route("/solvers/<id>", endpoint="post_solver_id", methods=["POST"])
+@swag_from("swag/postsolver.yaml", endpoint="post_solver_id", methods=["POST"])
+def update_solver_multi(id):
+    """Update multiple solver parts in a single call."""
+    debug_log(4, "start. id: %s" % id)
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+
+    if not data or not isinstance(data, dict):
+        raise Exception("Expected JSON object with solver parts to update")
+
+    # Check if this is a legit solver
+    mysolver = get_one_solver(id)
+    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % id)
+
+    # Get source for activity logging if provided
+    source = data.pop('source', 'puzzleboss') if 'source' in data else 'puzzleboss'
+
+    updated_parts = {}
+    needs_cache_invalidation = False
+    
+    for part, value in data.items():
+        updated_value = _update_single_solver_part(id, part, value, source)
+        updated_parts[part] = updated_value
+        if part == "puzz":
+            needs_cache_invalidation = True
+
+    # Invalidate cache if puzzle assignment changed
+    if needs_cache_invalidation:
+        invalidate_all_cache()
+
+    return {"status": "ok", "solver": {"id": id, **updated_parts}}
+
+
+@app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
+@swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
+def update_solver_part(id, part):
+    """Update a single solver part."""
+    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+        value = data[part]
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+    except KeyError:
+        raise Exception("Expected %s field missing" % part)
+
+    # Check if this is a legit solver
+    mysolver = get_one_solver(id)
+    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % id)
+
+    # Get source for activity logging if provided
+    source = data.get('source', 'puzzleboss')
+
+    updated_value = _update_single_solver_part(id, part, value, source)
+
+    # Invalidate /allcached if solver assignment changed
+    if part == "puzz":
+        invalidate_all_cache()
+
+    return {"status": "ok", "solver": {"id": id, part: updated_value}}
 
 
 @app.route("/config", endpoint="getconfig", methods=["GET"])
@@ -1268,38 +1320,76 @@ def set_priv(priv,uid):
     return {"status": "ok"}
 
 
+def _update_single_round_part(id, part, value):
+    """
+    Internal helper to update a single round part.
+    Returns the updated value.
+    Raises Exception on error.
+    """
+    if value == "NULL":
+        value = None
+    
+    # Just try to update - MySQL will reject invalid columns
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
+        conn.commit()
+    except Exception as e:
+        raise Exception(
+            "Exception in modifying %s of round %s: %s" % (part, id, str(e))
+        )
+
+    debug_log(3, "round %s %s updated to %s" % (id, part, value))
+    return value
+
+
+@app.route("/rounds/<id>", endpoint="post_round", methods=["POST"])
+@swag_from("swag/postround.yaml", endpoint="post_round", methods=["POST"])
+def update_round_multi(id):
+    """Update multiple round parts in a single call."""
+    debug_log(4, "start. id: %s" % id)
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+
+    if not data or not isinstance(data, dict):
+        raise Exception("Expected JSON object with round parts to update")
+
+    updated_parts = {}
+    
+    for part, value in data.items():
+        updated_value = _update_single_round_part(id, part, value)
+        updated_parts[part] = updated_value
+
+    # Invalidate cache once after all updates
+    invalidate_all_cache()
+
+    return {"status": "ok", "round": {"id": id, **updated_parts}}
+
+
 @app.route("/rounds/<id>/<part>", endpoint="post_round_part", methods=["POST"])
 @swag_from("swag/putroundpart.yaml", endpoint="post_round_part", methods=["POST"])
 def update_round_part(id, part):
+    """Update a single round part."""
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
         data = request.get_json()
         value = data[part]
-        if value == "NULL":
-            value = None
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
         raise Exception("Expected field (%s) missing." % part)
 
-    # Actually insert into the database
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
-        conn.commit()
-    except KeyError:
-        raise Exception(
-            "Exception in modifying %s of round %s into database" % (part, id)
-        )
-
-    debug_log(3, "round %s %s updated to %s" % (id, part, value))
+    updated_value = _update_single_round_part(id, part, value)
 
     # Invalidate /allcached since round data changed
     invalidate_all_cache()
 
-    return {"status": "ok", "round": {"id": id, part: value}}
+    return {"status": "ok", "round": {"id": id, part: updated_value}}
 
 
 @app.route("/solvers", endpoint="post_solver", methods=["POST"])

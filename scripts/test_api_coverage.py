@@ -1425,6 +1425,138 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def test_round_multi_part_update(self, result: TestResult):
+        """Test multi-part round update endpoint POST /rounds/<id>."""
+        self.logger.log_operation("Starting round multi-part update test")
+        
+        try:
+            # Get all existing rounds
+            rounds = self.get_all_rounds()
+            if not rounds:
+                result.fail("No rounds found for testing")
+                return
+                
+            # Select a random round for testing
+            test_round = random.choice(rounds)
+            round_id = test_round['id']
+            self.logger.log_operation(f"Testing multi-part update on round {test_round['name']} (id: {round_id})")
+            
+            # Test 1: Successful multi-part update (status + comments)
+            self.logger.log_operation("Test 1: Successful multi-part update")
+            update_data = {
+                "status": "Being worked",
+                "comments": "Multi-part test comment for round"
+            }
+            response = requests.post(
+                f"{self.base_url}/rounds/{round_id}",
+                json=update_data
+            )
+            if not response.ok:
+                result.fail(f"Round multi-part update failed: {response.text}")
+                return
+            response_data = response.json()
+            if response_data.get('status') != 'ok':
+                result.fail(f"Round multi-part update returned error: {response_data}")
+                return
+            self.logger.log_operation("Test 1 passed: Multi-part update succeeded")
+            
+            # Test 2: Verify the updates took effect
+            self.logger.log_operation("Test 2: Verify updates")
+            verify_response = requests.get(f"{self.base_url}/rounds/{round_id}/comments")
+            if verify_response.ok:
+                verify_data = verify_response.json()
+                if verify_data.get('round', {}).get('comments') != "Multi-part test comment for round":
+                    result.fail("Comments not updated correctly")
+                    return
+            self.logger.log_operation("Test 2 passed: Updates verified")
+            
+            # Test 3: Invalid part name rejected
+            self.logger.log_operation("Test 3: Verify invalid part name is rejected")
+            response = requests.post(
+                f"{self.base_url}/rounds/{round_id}",
+                json={"notarealpart": "somevalue"}
+            )
+            if response.ok:
+                result.fail("Round multi-part update should have rejected invalid part name")
+                return
+            self.logger.log_operation("Test 3 passed: Invalid part name rejected")
+            
+            result.set_success("Round multi-part update test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in round multi-part update test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
+    def test_solver_multi_part_update(self, result: TestResult):
+        """Test multi-part solver update endpoint POST /solvers/<id>."""
+        self.logger.log_operation("Starting solver multi-part update test")
+        
+        try:
+            # Get all solvers
+            solvers = self.get_all_solvers()
+            if not solvers:
+                result.fail("No solvers found for testing")
+                return
+                
+            # Select a random solver for testing
+            test_solver = random.choice(solvers)
+            solver_id = test_solver['id']
+            self.logger.log_operation(f"Testing multi-part update on solver {test_solver['name']} (id: {solver_id})")
+            
+            # Test 1: Successful multi-part update (fullname + chat_name)
+            self.logger.log_operation("Test 1: Successful multi-part update")
+            update_data = {
+                "fullname": "Test Fullname Updated",
+                "chat_name": "test_chat_updated"
+            }
+            response = requests.post(
+                f"{self.base_url}/solvers/{solver_id}",
+                json=update_data
+            )
+            if not response.ok:
+                result.fail(f"Solver multi-part update failed: {response.text}")
+                return
+            response_data = response.json()
+            if response_data.get('status') != 'ok':
+                result.fail(f"Solver multi-part update returned error: {response_data}")
+                return
+            self.logger.log_operation("Test 1 passed: Multi-part update succeeded")
+            
+            # Test 2: Verify the updates took effect
+            self.logger.log_operation("Test 2: Verify updates")
+            solver_details = self.get_solver_details(solver_id)
+            if not solver_details:
+                result.fail("Failed to get solver details after update")
+                return
+            if solver_details.get('fullname') != "Test Fullname Updated":
+                result.fail(f"Fullname not updated. Got: {solver_details.get('fullname')}")
+                return
+            if solver_details.get('chat_name') != "test_chat_updated":
+                result.fail(f"Chat name not updated. Got: {solver_details.get('chat_name')}")
+                return
+            self.logger.log_operation("Test 2 passed: Updates verified")
+            
+            # Test 3: Invalid part name rejected
+            self.logger.log_operation("Test 3: Verify invalid part name is rejected")
+            response = requests.post(
+                f"{self.base_url}/solvers/{solver_id}",
+                json={"notarealpart": "somevalue"}
+            )
+            if response.ok:
+                result.fail("Solver multi-part update should have rejected invalid part name")
+                return
+            self.logger.log_operation("Test 3 passed: Invalid part name rejected")
+            
+            result.set_success("Solver multi-part update test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in solver multi-part update test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def test_sheetcount(self, result: TestResult):
         """Test sheetcount field population, modification, and reading."""
         self.logger.log_operation("Starting sheetcount test")
@@ -1974,8 +2106,10 @@ class TestRunner:
             ("Solver Listing", self.test_solver_listing),
             ("Puzzle Creation", self.test_puzzle_creation),
             ("Puzzle Modification", self.test_puzzle_modification),
-            ("Multi-Part Update", self.test_multi_part_update),
+            ("Puzzle Multi-Part Update", self.test_multi_part_update),
             ("Round Modification", self.test_round_modification),
+            ("Round Multi-Part Update", self.test_round_multi_part_update),
+            ("Solver Multi-Part Update", self.test_solver_multi_part_update),
             ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
             ("Answer Verification", self.test_answer_verification),
             ("Solver Assignments", self.test_solver_assignments),
