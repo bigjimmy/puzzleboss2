@@ -750,6 +750,7 @@ def _update_single_solver_part(id, part, value, source='puzzleboss'):
             )
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
+        debug_log(3, "solver %s puzz updated to %s" % (id, value))
         return value
 
     # For all other parts, just try to update - MySQL will reject invalid columns

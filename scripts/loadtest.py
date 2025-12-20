@@ -220,6 +220,7 @@ class TestModule:
             except Exception as e:
                 latency = time.time() - start
                 self.metrics.record_request(latency, is_error=True)
+                print(f"[{self.name}] Error: {e}")
             
             # Sleep for the configured delay
             if self.config.delay > 0:
@@ -284,6 +285,7 @@ class APISolverAssignmentModule(TestModule):
         solver = self.hunt_state.get_random_solver()
         
         if not puzzle or not solver:
+            print(f"[solver_assignment] Missing: puzzle={puzzle is not None}, solver={solver is not None}, total_solvers={len(self.hunt_state.solvers)}")
             return
         
         puzzle_id = puzzle['id']
