@@ -1583,7 +1583,9 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 debug_log(1, "Failed to log tag activity: %s" % str(e))
 
     else:
-        raise Exception("Invalid part name %s" % part)
+        # For any other part, just try to update it directly
+        # MySQL will reject invalid column names
+        update_puzzle_part_in_db(id, part, value)
 
     debug_log(
         3,
