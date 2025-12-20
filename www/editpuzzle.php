@@ -192,10 +192,10 @@ if (isset($_POST['submit'])) {
       startuseronpuzzle($id, "");
       break;
     case "ismeta":
-      updateroundpart($_POST['rid'], "meta_id", $puzz);
+      updatepuzzlepart($puzz, "ismeta", 1);
       break;
     case "isnotmeta":
-      updateroundpart($_POST['rid'], "meta_id", "NULL");
+      updatepuzzlepart($puzz, "ismeta", 0);
       break;
     case "partupdate":
       updatepuzzlepart($puzz, $_POST['part'], $_POST['value']);
