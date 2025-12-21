@@ -150,15 +150,6 @@ if (isset($_POST['submit'])) {
     $whatdo = "stopwork";
   }
 
-  if (isset($_POST['ismeta'])) {
-    if ($_POST['ismeta'] == "yes") {
-      $whatdo = "ismeta";
-    } else {
-      $whatdo = "isnotmeta";
-    }
-  }
-
-
   if (isset($_POST['partupdate'])) {
     $whatdo = "partupdate";
     if (!isset($_POST['part']) || !isset($_POST['value'])) {
@@ -190,12 +181,6 @@ if (isset($_POST['submit'])) {
       break;
     case "stopwork":
       startuseronpuzzle($id, "");
-      break;
-    case "ismeta":
-      updateroundpart($_POST['rid'], "meta_id", $puzz);
-      break;
-    case "isnotmeta":
-      updateroundpart($_POST['rid'], "meta_id", "NULL");
       break;
     case "partupdate":
       updatepuzzlepart($puzz, $_POST['part'], $_POST['value']);

@@ -684,25 +684,13 @@ def _solver_exists(id):
         return False
 
 
-@app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
-@swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
-def update_solver_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        value = data[part]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected %s field missing" % part)
-    # Check if this is a legit solver
-    mysolver = get_one_solver(id)
-    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
-    if "status" not in mysolver or mysolver["status"] != "ok":
-        raise Exception("Error looking up solver %s" % id)
-
-    # This is a change to the solver's claimed puzzle
+def _update_single_solver_part(id, part, value, source='puzzleboss'):
+    """
+    Internal helper to update a single solver part.
+    Returns the updated value.
+    Raises Exception on error.
+    """
+    # Special handling for puzzle assignment
     if part == "puzz":
         if value:
             # Assigning puzzle, so check if puzzle is real
@@ -713,6 +701,12 @@ def update_solver_part(id, part):
                 raise Exception(
                     "Error retrieving info on puzzle %s, which user %s is attempting to claim"
                     % (value, id)
+                )
+            # Reject assignment to solved puzzles
+            if mypuzz["puzzle"]["status"] == "Solved":
+                raise Exception(
+                    "Cannot assign solver to puzzle %s - puzzle is already solved"
+                    % value
                 )
             # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
             if mypuzz["puzzle"]["status"] == "New":
@@ -746,8 +740,6 @@ def update_solver_part(id, part):
         try:
             conn = mysql.connection
             cursor = conn.cursor()
-            # Get the source from the request data if provided, otherwise use default
-            source = data.get('source', 'puzzleboss')
             cursor.execute(
                 """
                 INSERT INTO activity
@@ -764,26 +756,93 @@ def update_solver_part(id, part):
             )
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
-        
-        # Invalidate /allcached since solver assignment affects cursolvers
-        invalidate_all_cache()
-        
-        return {"status": "ok", "solver": {"id": id, part: value}}
+        debug_log(3, "solver %s puzz updated to %s" % (id, value))
+        return value
 
-    # This is actually a change to the solver's info
+    # For all other parts, just try to update - MySQL will reject invalid columns
     try:
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
-    except:
+    except Exception as e:
         raise Exception(
-            "Exception in modifying %s of solver %s in database" % (part, id)
+            "Exception in modifying %s of solver %s: %s" % (part, id, str(e))
         )
 
     debug_log(3, "solver %s %s updated in database" % (id, part))
+    return value
 
-    return {"status": "ok", "solver": {"id": id, part: value}}
+
+@app.route("/solvers/<id>", endpoint="post_solver_id", methods=["POST"])
+@swag_from("swag/postsolver.yaml", endpoint="post_solver_id", methods=["POST"])
+def update_solver_multi(id):
+    """Update multiple solver parts in a single call."""
+    debug_log(4, "start. id: %s" % id)
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+
+    if not data or not isinstance(data, dict):
+        raise Exception("Expected JSON object with solver parts to update")
+
+    # Check if this is a legit solver
+    mysolver = get_one_solver(id)
+    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % id)
+
+    # Get source for activity logging if provided
+    source = data.pop('source', 'puzzleboss') if 'source' in data else 'puzzleboss'
+
+    updated_parts = {}
+    needs_cache_invalidation = False
+    
+    for part, value in data.items():
+        updated_value = _update_single_solver_part(id, part, value, source)
+        updated_parts[part] = updated_value
+        if part == "puzz":
+            needs_cache_invalidation = True
+
+    # Invalidate cache if puzzle assignment changed
+    if needs_cache_invalidation:
+        invalidate_all_cache()
+
+    return {"status": "ok", "solver": {"id": id, **updated_parts}}
+
+
+@app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
+@swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
+def update_solver_part(id, part):
+    """Update a single solver part."""
+    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+        value = data[part]
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+    except KeyError:
+        raise Exception("Expected %s field missing" % part)
+
+    # Check if this is a legit solver
+    mysolver = get_one_solver(id)
+    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % id)
+
+    # Get source for activity logging if provided
+    source = data.get('source', 'puzzleboss')
+
+    updated_value = _update_single_solver_part(id, part, value, source)
+
+    # Invalidate /allcached if solver assignment changed
+    if part == "puzz":
+        invalidate_all_cache()
+
+    return {"status": "ok", "solver": {"id": id, part: updated_value}}
 
 
 @app.route("/config", endpoint="getconfig", methods=["GET"])
@@ -1268,38 +1327,76 @@ def set_priv(priv,uid):
     return {"status": "ok"}
 
 
+def _update_single_round_part(id, part, value):
+    """
+    Internal helper to update a single round part.
+    Returns the updated value.
+    Raises Exception on error.
+    """
+    if value == "NULL":
+        value = None
+    
+    # Just try to update - MySQL will reject invalid columns
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
+        conn.commit()
+    except Exception as e:
+        raise Exception(
+            "Exception in modifying %s of round %s: %s" % (part, id, str(e))
+        )
+
+    debug_log(3, "round %s %s updated to %s" % (id, part, value))
+    return value
+
+
+@app.route("/rounds/<id>", endpoint="post_round", methods=["POST"])
+@swag_from("swag/postround.yaml", endpoint="post_round", methods=["POST"])
+def update_round_multi(id):
+    """Update multiple round parts in a single call."""
+    debug_log(4, "start. id: %s" % id)
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+
+    if not data or not isinstance(data, dict):
+        raise Exception("Expected JSON object with round parts to update")
+
+    updated_parts = {}
+    
+    for part, value in data.items():
+        updated_value = _update_single_round_part(id, part, value)
+        updated_parts[part] = updated_value
+
+    # Invalidate cache once after all updates
+    invalidate_all_cache()
+
+    return {"status": "ok", "round": {"id": id, **updated_parts}}
+
+
 @app.route("/rounds/<id>/<part>", endpoint="post_round_part", methods=["POST"])
 @swag_from("swag/putroundpart.yaml", endpoint="post_round_part", methods=["POST"])
 def update_round_part(id, part):
+    """Update a single round part."""
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
         data = request.get_json()
         value = data[part]
-        if value == "NULL":
-            value = None
         debug_log(5, "request data is - %s" % str(data))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
         raise Exception("Expected field (%s) missing." % part)
 
-    # Actually insert into the database
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
-        conn.commit()
-    except KeyError:
-        raise Exception(
-            "Exception in modifying %s of round %s into database" % (part, id)
-        )
-
-    debug_log(3, "round %s %s updated to %s" % (id, part, value))
+    updated_value = _update_single_round_part(id, part, value)
 
     # Invalidate /allcached since round data changed
     invalidate_all_cache()
 
-    return {"status": "ok", "round": {"id": id, part: value}}
+    return {"status": "ok", "round": {"id": id, part: updated_value}}
 
 
 @app.route("/solvers", endpoint="post_solver", methods=["POST"])
@@ -1337,28 +1434,12 @@ def create_solver():
     return {"status": "ok", "solver": {"name": name, "fullname": fullname}}
 
 
-@app.route("/puzzles/<id>/<part>", endpoint="post_puzzle_part", methods=["POST"])
-@swag_from("swag/putpuzzlepart.yaml", endpoint="post_puzzle_part", methods=["POST"])
-def update_puzzle_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        value = data[part]
-        # Strip spaces if this is a name update
-        if part == "name":
-            value = value.replace(" ", "")
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected %s field missing" % part)
-
-    # Check if this is a legit puzzle
-    mypuzzle = get_one_puzzle(id)
-    debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
-    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
-        raise Exception("Error looking up puzzle %s" % id)
-
+def _update_single_puzzle_part(id, part, value, mypuzzle):
+    """
+    Internal helper to update a single puzzle part.
+    Returns the updated value (may be modified, e.g. uppercased answer).
+    Raises Exception on error.
+    """
     if part == "lastact":
         set_new_activity_for_puzzle(id, value)
 
@@ -1415,7 +1496,7 @@ def update_puzzle_part(id, part):
             debug_log(3, "puzzle xyzloc removed. skipping discord announcement")
 
     elif part == "answer":
-        if data != "" and data != None:
+        if value != "" and value != None:
             # Mark puzzle as solved automatically when answer is filled in
             update_puzzle_part_in_db(id, "status", "Solved")
             value = value.upper()
@@ -1599,7 +1680,9 @@ def update_puzzle_part(id, part):
                 debug_log(1, "Failed to log tag activity: %s" % str(e))
 
     else:
-        raise Exception("Invalid part name %s" % part)
+        # For any other part, just try to update it directly
+        # MySQL will reject invalid column names
+        update_puzzle_part_in_db(id, part, value)
 
     debug_log(
         3,
@@ -1607,10 +1690,84 @@ def update_puzzle_part(id, part):
         % (mypuzzle["puzzle"]["name"], id, part, value),
     )
 
-    # Invalidate /allcached since puzzle data changed
+    return value
+
+
+@app.route("/puzzles/<id>", endpoint="post_puzzle", methods=["POST"])
+@swag_from("swag/postpuzzle.yaml", endpoint="post_puzzle", methods=["POST"])
+def update_puzzle_multi(id):
+    """Update multiple puzzle parts in a single call."""
+    debug_log(4, "start. id: %s" % id)
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+
+    if not data or not isinstance(data, dict):
+        raise Exception("Expected JSON object with puzzle parts to update")
+
+    # Reject sensitive operations that should use single-part endpoint for safety
+    if 'answer' in data:
+        raise Exception(
+            "Cannot update 'answer' via multi-part endpoint. Use POST /puzzles/<id>/answer instead."
+        )
+    if 'status' in data and data['status'] == 'Solved':
+        raise Exception(
+            "Cannot set status to 'Solved' via multi-part endpoint. Use POST /puzzles/<id>/status instead."
+        )
+
+    # Check if this is a legit puzzle
+    mypuzzle = get_one_puzzle(id)
+    debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
+    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
+        raise Exception("Error looking up puzzle %s" % id)
+
+    updated_parts = {}
+    
+    for part, value in data.items():
+        # Strip spaces if this is a name update
+        if part == "name":
+            value = value.replace(" ", "")
+        
+        updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
+        updated_parts[part] = updated_value
+
+    # Invalidate cache once after all updates
     invalidate_all_cache()
 
-    return {"status": "ok", "puzzle": {"id": id, part: value}}
+    return {"status": "ok", "puzzle": {"id": id, **updated_parts}}
+
+
+@app.route("/puzzles/<id>/<part>", endpoint="post_puzzle_part", methods=["POST"])
+@swag_from("swag/putpuzzlepart.yaml", endpoint="post_puzzle_part", methods=["POST"])
+def update_puzzle_part(id, part):
+    """Update a single puzzle part."""
+    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    try:
+        data = request.get_json()
+        debug_log(5, "request data is - %s" % str(data))
+        value = data[part]
+        # Strip spaces if this is a name update
+        if part == "name":
+            value = value.replace(" ", "")
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+    except KeyError:
+        raise Exception("Expected %s field missing" % part)
+
+    # Check if this is a legit puzzle
+    mypuzzle = get_one_puzzle(id)
+    debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
+    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
+        raise Exception("Error looking up puzzle %s" % id)
+
+    updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
+
+    # Invalidate cache
+    invalidate_all_cache()
+
+    return {"status": "ok", "puzzle": {"id": id, part: updated_value}}
 
 
 @app.route("/account", endpoint="post_new_account", methods=["POST"])
