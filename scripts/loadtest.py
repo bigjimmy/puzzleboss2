@@ -294,6 +294,10 @@ class APISolverAssignmentModule(TestModule):
         resp.raise_for_status()
         puzzle_data = resp.json().get('puzzle', {})
         
+        # Skip solved puzzles - can't assign solvers to them
+        if puzzle_data.get('status') == 'Solved':
+            return
+        
         current_solvers = puzzle_data.get('cursolvers', '') or ''
         current_solver_names = [s.strip() for s in current_solvers.split(',') if s.strip()]
         current_count = len(current_solver_names)

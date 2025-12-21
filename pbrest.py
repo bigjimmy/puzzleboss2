@@ -702,6 +702,12 @@ def _update_single_solver_part(id, part, value, source='puzzleboss'):
                     "Error retrieving info on puzzle %s, which user %s is attempting to claim"
                     % (value, id)
                 )
+            # Reject assignment to solved puzzles
+            if mypuzz["puzzle"]["status"] == "Solved":
+                raise Exception(
+                    "Cannot assign solver to puzzle %s - puzzle is already solved"
+                    % value
+                )
             # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
             if mypuzz["puzzle"]["status"] == "New":
                 debug_log(
