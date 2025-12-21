@@ -155,8 +155,12 @@ def initdrive():
 
 def get_puzzle_sheet_info(myfileid):
     """
-    Get both revisions and sheet count for a puzzle spreadsheet in one call.
-    Returns dict with 'revisions' (list) and 'sheetcount' (int or None).
+    Get editor activity metadata and sheet count for a puzzle spreadsheet.
+    Returns dict with 'editors' (list of {solvername, timestamp}) and 'sheetcount' (int or None).
+    
+    Editor activity is stored in DeveloperMetadata with keys like 'PB_ACTIVITY:solvername'
+    and values like '{"t": 1766277287}' (Unix timestamp).
+    
     THREAD SAFE.
     Includes retry logic for rate limit (429) errors.
     """
@@ -166,7 +170,7 @@ def get_puzzle_sheet_info(myfileid):
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
     
     result = {
-        "revisions": [],
+        "editors": [],
         "sheetcount": None
     }
     
@@ -174,46 +178,72 @@ def get_puzzle_sheet_info(myfileid):
         debug_log(3, "google API skipped by config.")
         return result
     
-    # Create single threadsafe HTTP object for both API calls
+    # Create single threadsafe HTTP object for API calls
     threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
     
-    # Get revisions from Drive API (with retry on rate limit)
-    revisions_success = False
+    # Get editor activity from DeveloperMetadata (with retry on rate limit)
+    metadata_success = False
     for attempt in range(max_retries):
         try:
-            retval = (
-                service.revisions()
-                .list(fileId=myfileid, fields="*")
+            sheetsservice = build("sheets", "v4", credentials=creds)
+            
+            # Search for all spreadsheet-level metadata
+            search_request = {
+                "dataFilters": [
+                    {
+                        "developerMetadataLookup": {
+                            "locationType": "SPREADSHEET"
+                        }
+                    }
+                ]
+            }
+            
+            response = (
+                sheetsservice.spreadsheets()
+                .developerMetadata()
+                .search(spreadsheetId=myfileid, body=search_request)
                 .execute(http=threadsafe_http)
             )
-            if type(retval) == str:
-                debug_log(1, "Revisions API returned string (error) for %s: %s" % (myfileid, retval))
-            else:
-                all_revisions = retval.get("revisions", [])
-                debug_log(5, "Revisions API returned %d total revisions for %s" % (len(all_revisions), myfileid))
-                for revision in all_revisions:
-                    last_user = revision.get("lastModifyingUser", {})
-                    user_email = last_user.get("emailAddress", "unknown")
-                    is_me = last_user.get("me", False)
-                    debug_log(5, "Revision by %s (me=%s) at %s" % (user_email, is_me, revision.get("modifiedTime", "unknown")))
-                    debug_log(5, "Full revision: %s" % revision)
-                    if not is_me:
-                        result["revisions"].append(revision)
-                debug_log(5, "After filtering, %d revisions for %s" % (len(result["revisions"]), myfileid))
-            revisions_success = True
+            
+            matched_metadata = response.get("matchedDeveloperMetadata", [])
+            debug_log(4, "DeveloperMetadata search returned %d items for %s" % (len(matched_metadata), myfileid))
+            
+            for item in matched_metadata:
+                metadata = item.get("developerMetadata", {})
+                key = metadata.get("metadataKey", "")
+                value = metadata.get("metadataValue", "")
+                debug_log(4, "Metadata: key=%s value=%s" % (key, value))
+                
+                # Look for PB_ACTIVITY:<solvername> keys
+                if key.startswith("PB_ACTIVITY:"):
+                    solvername = key[len("PB_ACTIVITY:"):]
+                    try:
+                        value_data = json.loads(value)
+                        timestamp = value_data.get("t")
+                        if timestamp:
+                            result["editors"].append({
+                                "solvername": solvername,
+                                "timestamp": timestamp  # Unix timestamp
+                            })
+                            debug_log(4, "Parsed editor activity: solver=%s timestamp=%s" % (solvername, timestamp))
+                    except json.JSONDecodeError as e:
+                        debug_log(2, "Failed to parse metadata value for %s: %s" % (key, e))
+            
+            debug_log(5, "Found %d editors with activity for %s" % (len(result["editors"]), myfileid))
+            metadata_success = True
             break  # Success, exit retry loop
         except Exception as e:
             if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
                 _increment_quota_failure()
-                debug_log(3, "Rate limit hit fetching revisions for %s, waiting %d seconds (attempt %d/%d)" 
+                debug_log(3, "Rate limit hit fetching metadata for %s, waiting %d seconds (attempt %d/%d)" 
                           % (myfileid, retry_delay, attempt + 1, max_retries))
                 time.sleep(retry_delay)
             else:
-                debug_log(1, "Error fetching revisions for %s: %s" % (myfileid, e))
+                debug_log(1, "Error fetching metadata for %s: %s" % (myfileid, e))
                 break  # Non-rate-limit error, don't retry
     
-    if not revisions_success and max_retries > 0:
-        debug_log(1, "EXHAUSTED all %d retries fetching revisions for %s - giving up" % (max_retries, myfileid))
+    if not metadata_success and max_retries > 0:
+        debug_log(1, "EXHAUSTED all %d retries fetching metadata for %s - giving up" % (max_retries, myfileid))
     
     # Get sheet count from Sheets API (with retry on rate limit)
     sheetcount_success = False

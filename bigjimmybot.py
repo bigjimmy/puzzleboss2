@@ -67,10 +67,7 @@ def check_puzzle_from_queue(threadname, q):
                 except Exception as e:
                     debug_log(1, "[Thread: %s] Error updating sheetcount: %s" % (threadname, e))
 
-            # Lots of annoying time string conversions here between mysql and google
-            # Use lastsheetact (not lastact) to only compare against sheet revisions,
-            # not status changes, comments, etc.
-            lastsheetacttime = datetime.datetime.fromordinal(1)
+            # Fetch last sheet activity for this puzzle to compare against editor timestamps
             myreq = "%s/puzzles/%s/lastsheetact" % (
                 config["API"]["APIURI"],
                 mypuzzle["id"],
@@ -95,43 +92,40 @@ def check_puzzle_from_queue(threadname, q):
                 % (mypuzzle["id"], str(mypuzzlelastsheetact)),
             )
 
+            # Convert lastsheetact time to Unix timestamp for comparison
+            lastsheetact_ts = 0
             if mypuzzlelastsheetact:
                 lastsheetacttime = datetime.datetime.strptime(
                     mypuzzlelastsheetact["time"], "%a, %d %b %Y %H:%M:%S %Z"
                 )
+                lastsheetact_ts = lastsheetacttime.timestamp()
 
-            # Go through all revisions for the puzzle and see if any are newer than lastsheetact
-            for revision in sheet_info["revisions"]:
-                revisiontime = datetime.datetime.strptime(
-                    revision["modifiedTime"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                )
+            # Go through all editors from DeveloperMetadata and see if any are newer than lastsheetact
+            for editor in sheet_info["editors"]:
+                solvername = editor["solvername"]
+                edit_ts = editor["timestamp"]  # Unix timestamp
 
-                if revisiontime > lastsheetacttime:
-                    # This revision is newer than the last recorded sheet activity
+                if edit_ts > lastsheetact_ts:
+                    # This edit is newer than the last recorded sheet activity
                     debug_log(
                         3,
-                        "[Thread: %s] New revision on puzzle %s by %s at %s (last sheet activity was %s)"
+                        "[Thread: %s] New edit on puzzle %s by %s at %s (last sheet activity was %s)"
                         % (
                             threadname,
                             mypuzzle["name"],
-                            revision["lastModifyingUser"]["emailAddress"],
-                            revision["modifiedTime"],
-                            lastsheetacttime,
+                            solvername,
+                            datetime.datetime.fromtimestamp(edit_ts),
+                            datetime.datetime.fromtimestamp(lastsheetact_ts) if lastsheetact_ts else "never",
                         ),
                     )
 
-                    mysolverid = solver_from_email(
-                        revision["lastModifyingUser"]["emailAddress"]
-                    )
+                    mysolverid = solver_from_name(solvername)
 
                     if mysolverid == 0:
                         debug_log(
                             1,
-                            "[Thread: %s] solver %s not found in solver db? This shouldn't happen. Skipping revision."
-                            % (
-                                threadname,
-                                revision["lastModifyingUser"]["emailAddress"],
-                            ),
+                            "[Thread: %s] solver %s not found in solver db? This shouldn't happen. Skipping."
+                            % (threadname, solvername),
                         )
                         continue
 
@@ -147,10 +141,7 @@ def check_puzzle_from_queue(threadname, q):
                         # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
                         databody = {
                             "lastact": {
-                                "solver_id": "%s"
-                                % solver_from_email(
-                                    revision["lastModifyingUser"]["emailAddress"]
-                                ),
+                                "solver_id": "%s" % mysolverid,
                                 "source": "bigjimmybot",
                                 "type": "revise",
                             }
@@ -181,21 +172,21 @@ def check_puzzle_from_queue(threadname, q):
                     if solverinfo["puzz"] != mypuzzle["name"]:
                         # This potential solver is not currently on this puzzle. Interesting.
                         if not solverinfo["lastact"]:
-                            lastsolveracttime = datetime.datetime.fromisoformat(
-                                "1980-01-01"
-                            )
+                            lastsolveract_ts = 0
                         else:
                             lastsolveracttime = datetime.datetime.strptime(
                                 solverinfo["lastact"]["time"],
                                 "%a, %d %b %Y %H:%M:%S %Z",
                             )
+                            lastsolveract_ts = lastsolveracttime.timestamp()
                         debug_log(
                             4,
                             "[Thread: %s] Last solver activity for %s was at %s"
-                            % (threadname, solverinfo["name"], lastsolveracttime),
+                            % (threadname, solverinfo["name"], 
+                               datetime.datetime.fromtimestamp(lastsolveract_ts) if lastsolveract_ts else "never"),
                         )
                         if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
-                            if revisiontime > lastsolveracttime:
+                            if edit_ts > lastsolveract_ts:
                                 debug_log(
                                     3,
                                     "[Thread: %s] Assigning solver %s to puzzle %s."
@@ -233,6 +224,7 @@ def check_puzzle_from_queue(threadname, q):
 
 
 def solver_from_email(email):
+    """Look up solver ID by email address (extracts username from email)."""
     debug_log(4, "start. called with %s" % email)
     solverslist = json.loads(
         requests.get("%s/solvers" % config["API"]["APIURI"]).text
@@ -240,6 +232,19 @@ def solver_from_email(email):
     for solver in solverslist:
         if solver["name"].lower() == email.split("@")[0].lower():
             debug_log(4, "Solver %s is id: %s" % (email, solver["id"]))
+            return solver["id"]
+    return 0
+
+
+def solver_from_name(name):
+    """Look up solver ID by solver name directly."""
+    debug_log(4, "start. called with %s" % name)
+    solverslist = json.loads(
+        requests.get("%s/solvers" % config["API"]["APIURI"]).text
+    )["solvers"]
+    for solver in solverslist:
+        if solver["name"].lower() == name.lower():
+            debug_log(4, "Solver %s is id: %s" % (name, solver["id"]))
             return solver["id"]
     return 0
 
