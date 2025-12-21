@@ -496,6 +496,8 @@ def get_puzzle_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     if part == "lastact":
         rv = get_last_activity_for_puzzle(id)
+    elif part == "lastsheetact":
+        rv = get_last_sheet_activity_for_puzzle(id)
     else:
         try:
             conn = mysql.connection
@@ -2147,6 +2149,23 @@ def get_last_activity_for_puzzle(id):
         return cursor.fetchone()
     except IndexError:
         debug_log(4, "No Activity for Puzzle %s found in database yet" % id)
+        return None
+
+
+def get_last_sheet_activity_for_puzzle(id):
+    """Get the last 'revise' type activity for a puzzle (sheet edits only)."""
+    debug_log(4, "start, called with: %s" % id)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        cursor.execute(
+            """SELECT * from activity where puzzle_id = %s AND type = 'revise' ORDER BY time DESC LIMIT 1""",
+            (id,),
+        )
+        return cursor.fetchone()
+    except IndexError:
+        debug_log(4, "No Sheet Activity for Puzzle %s found in database yet" % id)
         return None
 
 
