@@ -12,3 +12,4 @@ pymemcache
 prometheus_flask_exporter
 google-genai
 chromadb
+urllib3
