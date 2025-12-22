@@ -364,13 +364,21 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         "metadata": {
             "sheetId": 1,
             "title": "Metadata",
-            "gridProperties": {"rowCount": 7, "columnCount": 2},
+            "gridProperties": {
+                "rowCount": 7,
+                "columnCount": 2,
+                "hideGridlines": true,
+            },
             "index": 0,
         },
         "work": {
             "sheetId": 0,
             "title": "Work",
-            "gridProperties": {"rowCount": 100, "columnCount": 26},
+            "gridProperties": {
+                "rowCount": 100,
+                "columnCount": 26,
+                "frozenRowCount": 1,
+            },
             "index": 2,
         },
     }
@@ -472,7 +480,10 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                 "rows": [
                     {
                         "values": [
-                            {"userEnteredValue": {"stringValue": "Round:"}},
+                            {
+                                "userEnteredValue": {"stringValue": "Round Name:"},
+                                "userEnteredFormat": {"bold": true},
+                            },
                             {
                                 "userEnteredValue": {
                                     "stringValue": puzzledict["roundname"]
@@ -482,13 +493,19 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                     },
                     {
                         "values": [
-                            {"userEnteredValue": {"stringValue": "Puzzle:"}},
+                            {
+                                "userEnteredValue": {"stringValue": "Puzzle Name:"},
+                                "userEnteredFormat": {"bold": true},
+                            },
                             {"userEnteredValue": {"stringValue": puzzledict["name"]}},
                         ]
                     },
                     {
                         "values": [
-                            {"userEnteredValue": {"stringValue": "Actual Puzzle URL:"}},
+                            {
+                                "userEnteredValue": {"stringValue": "Puzzle URL:"},
+                                "userEnteredFormat": {"bold": true},
+                            },
                             {
                                 "userEnteredValue": {
                                     "formulaValue": hyperlink(puzzledict["puzzle_uri"])
@@ -498,14 +515,22 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                     },
                     {
                         "values": [
-                            {"userEnteredValue": {"stringValue": "Chat URL:"}},
+                            {
+                                "userEnteredValue": {"stringValue": "Discord Channel:"},
+                                "userEnteredFormat": {"bold": true},
+                            },
                             {
                                 "userEnteredValue": {
                                     "formulaValue": hyperlink(
                                         puzzledict["chat_uri"],
-                                        label="Discord channel #" + puzzledict["name"],
+                                        label="#" + puzzledict["name"],
                                     )
-                                }
+                                },
+                                "userEnteredFormat": {
+                                    "textFormat": {
+                                        "fontFamily": "Roboto Mono",
+                                    },
+                                },
                             },
                         ]
                     },
