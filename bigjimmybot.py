@@ -53,7 +53,7 @@ def check_puzzle_from_queue(threadname, q):
             # force_sheet_edit(mypuzzle['drive_id'])
 
             # Get revisions AND sheet count in a single combined call
-            sheet_info = get_puzzle_sheet_info(mypuzzle["drive_id"])
+            sheet_info = get_puzzle_sheet_info(mypuzzle["drive_id"], mypuzzle["name"])
             
             # Update sheet count only if changed
             if sheet_info["sheetcount"] is not None and sheet_info["sheetcount"] != mypuzzle.get("sheetcount"):
@@ -109,6 +109,11 @@ def check_puzzle_from_queue(threadname, q):
                 solvername = editor["solvername"]
                 edit_ts = editor["timestamp"]  # Unix timestamp
 
+                # Skip bot's own activity silently
+                if solvername.lower() == "bigjimmy":
+                    debug_log(5, "[Thread: %s] Skipping bot's own activity on %s" % (threadname, mypuzzle["name"]))
+                    continue
+
                 if edit_ts > lastsheetact_ts:
                     # This edit is newer than the last recorded sheet activity
                     debug_log(
@@ -127,8 +132,8 @@ def check_puzzle_from_queue(threadname, q):
 
                     if mysolverid == 0:
                         debug_log(
-                            1,
-                            "[Thread: %s] solver %s not found in solver db? This shouldn't happen. Skipping."
+                            2,
+                            "[Thread: %s] solver %s not found in solver db. Skipping."
                             % (threadname, solvername),
                         )
                         continue
