@@ -82,7 +82,7 @@ def get_gemini_tools():
                 ),
                 types.FunctionDeclaration(
                     name="get_solver_activity",
-                    description="Get information about what puzzles a specific solver/user has worked on.",
+                    description="Get solver info. Returns: currently_assigned_puzzle (the ONE puzzle they are working on right now, or null if none), and puzzle_history (list of ALL puzzles they have ever worked on). These are different - currently_assigned_puzzle is their active assignment.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
@@ -254,7 +254,7 @@ def get_puzzles_by_tag(tag_name, cursor):
 
 
 def get_solver_activity(solver_name, cursor):
-    """Get puzzles a solver has worked on."""
+    """Get solver's current assignment and puzzle history."""
     # Find solver
     cursor.execute("SELECT * FROM solver_view WHERE LOWER(name) = LOWER(%s)", (solver_name,))
     solver = cursor.fetchone()
@@ -268,9 +268,11 @@ def get_solver_activity(solver_name, cursor):
     result = {
         "solver_name": solver.get("name"),
         "fullname": solver.get("fullname"),
-        "current_puzzle": current_puzzle if current_puzzle else None,
-        "puzzles_worked_on": [p.strip() for p in puzzles_worked.split(",") if p.strip()],
-        "total_puzzles_worked": len([p for p in puzzles_worked.split(",") if p.strip()])
+        # The ONE puzzle they are actively assigned to right now (or null if none)
+        "currently_assigned_puzzle": current_puzzle if current_puzzle else None,
+        # Historical list of ALL puzzles they have ever worked on
+        "puzzle_history": [p.strip() for p in puzzles_worked.split(",") if p.strip()],
+        "total_puzzles_in_history": len([p for p in puzzles_worked.split(",") if p.strip()])
     }
     
     return result
