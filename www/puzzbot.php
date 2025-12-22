@@ -339,7 +339,6 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
     
     <script>
         const username = <?php echo json_encode($username); ?>;
-        const apiRoot = <?php echo json_encode($pbroot); ?>;
         const chatContainer = document.getElementById('chat-container');
         const queryInput = document.getElementById('query-input');
         const sendBtn = document.getElementById('send-btn');
@@ -383,7 +382,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             sendBtn.disabled = true;
             
             try {
-                const response = await fetch(apiRoot + '/v1/query', {
+                const response = await fetch('apicall.php?apicall=query', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

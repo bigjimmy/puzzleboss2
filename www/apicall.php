@@ -44,6 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     case "round":
       echo json_encode(postapi(('/rounds/' . $apiparam1 . '/' . $apiparam2), $post));
       break;
+    case "query":
+      echo json_encode(postapi('/v1/query', $post));
+      break;
     default:
       http_response_code(500);
       die('Error: improper apicall specified.');
