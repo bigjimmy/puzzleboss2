@@ -223,10 +223,9 @@ def handle_error(e):
 # GET/READ Operations
 
 
-@app.route("/all", endpoint="all", methods=["GET"])
-# @swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
-def get_all_all():
-    debug_log(4, "start")
+def _get_all_from_db():
+    """Internal function to fetch all rounds/puzzles from database."""
+    debug_log(4, "fetching all from database")
     try:
         conn = mysql.connection
         cursor = conn.cursor()
@@ -271,10 +270,8 @@ def get_all_all():
     return {"rounds": rounds}
 
 
-@app.route("/allcached", endpoint="allcached", methods=["GET"])
-@swag_from("swag/getallcached.yaml", endpoint="allcached", methods=["GET"])
-def get_all_cached():
-    """Cached version of /all - falls back to DB if cache unavailable"""
+def _get_all_with_cache():
+    """Get all rounds/puzzles, using cache if available."""
     debug_log(4, "start")
     
     # Ensure memcache is initialized (lazy init on first request)
@@ -284,23 +281,37 @@ def get_all_cached():
     if mc is not None:
         cached = cache_get(MEMCACHE_CACHE_KEY)
         if cached:
-            debug_log(4, "allcached: cache hit")
+            debug_log(4, "cache hit")
             increment_cache_stat('cache_hits_total')
             return json.loads(cached)
-        debug_log(4, "allcached: cache miss")
+        debug_log(4, "cache miss")
         increment_cache_stat('cache_misses_total')
     
-    # Fall back to regular /all logic
-    data = get_all_all()
+    # Fall back to database
+    data = _get_all_from_db()
     
     # Store in cache for next time (if enabled)
     if mc is not None:
         try:
             cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
         except Exception as e:
-            debug_log(3, "allcached: failed to cache: %s" % str(e))
+            debug_log(3, "failed to cache: %s" % str(e))
     
     return data
+
+
+@app.route("/all", endpoint="all", methods=["GET"])
+@swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
+def get_all_all():
+    """Get all rounds and puzzles (uses cache if available)."""
+    return _get_all_with_cache()
+
+
+@app.route("/allcached", endpoint="allcached", methods=["GET"])
+@swag_from("swag/getallcached.yaml", endpoint="allcached", methods=["GET"])
+def get_all_cached():
+    """Get all rounds and puzzles (uses cache if available). Alias for /all."""
+    return _get_all_with_cache()
 
 
 @app.route("/huntinfo", endpoint="huntinfo", methods=["GET"])

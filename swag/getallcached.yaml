@@ -5,6 +5,8 @@ description: |
   Returns all rounds with their puzzles, using memcache for performance.
   Falls back to direct database query if cache is unavailable or disabled.
   
+  Note: This is now equivalent to /all - both endpoints use caching.
+  
   Configure caching via config values:
   - MEMCACHE_ENABLED: 'true' or 'false'
   - MEMCACHE_HOST: hostname of memcache server
