@@ -379,6 +379,39 @@ def get_all_puzzles():
     }
 
 
+def get_puzzles_by_tag_id(tag_id):
+    """Get all puzzles with a specific tag ID. Reusable helper function."""
+    debug_log(4, "start with tag_id: %s" % tag_id)
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Use MEMBER OF() to leverage the multi-valued JSON index
+    # Return full puzzle data from puzzle_view to avoid N+1 queries on client
+    cursor.execute(
+        """SELECT pv.* FROM puzzle_view pv
+           JOIN puzzle p ON p.id = pv.id
+           WHERE %s MEMBER OF(p.tags)""",
+        (tag_id,)
+    )
+    puzzlist = cursor.fetchall()
+    
+    debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
+    return puzzlist
+
+
+def get_tag_id_by_name(tag_name):
+    """Get tag ID by name (case-insensitive). Returns None if not found."""
+    debug_log(4, "start with tag_name: %s" % tag_name)
+    conn = mysql.connection
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM tag WHERE LOWER(name) = LOWER(%s)", (tag_name,))
+    tag_row = cursor.fetchone()
+    if not tag_row:
+        debug_log(4, "tag '%s' not found" % tag_name)
+        return None
+    return tag_row["id"]
+
+
 @app.route("/search", endpoint="search", methods=["GET"])
 @swag_from("swag/getsearch.yaml", endpoint="search", methods=["GET"])
 def search_puzzles():
@@ -392,17 +425,11 @@ def search_puzzles():
         return {"status": "error", "error": "Must provide 'tag' or 'tag_id' parameter"}, 400
     
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        
         # If tag name provided, look up the tag_id first
         if tag_name:
-            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
-            tag_row = cursor.fetchone()
-            if not tag_row:
-                debug_log(4, "tag '%s' not found" % tag_name)
+            tag_id = get_tag_id_by_name(tag_name)
+            if tag_id is None:
                 return {"status": "ok", "puzzles": []}
-            tag_id = tag_row["id"]
         else:
             # Validate tag_id is an integer
             try:
@@ -411,22 +438,14 @@ def search_puzzles():
                 return {"status": "error", "error": "tag_id must be an integer"}, 400
             
             # Verify the tag exists
+            conn = mysql.connection
+            cursor = conn.cursor()
             cursor.execute("SELECT id FROM tag WHERE id = %s", (tag_id,))
             if not cursor.fetchone():
                 debug_log(4, "tag_id %s not found" % tag_id)
                 return {"status": "ok", "puzzles": []}
         
-        # Use MEMBER OF() to leverage the multi-valued JSON index
-        # Return full puzzle data from puzzle_view to avoid N+1 queries on client
-        cursor.execute(
-            """SELECT pv.* FROM puzzle_view pv
-               JOIN puzzle p ON p.id = pv.id
-               WHERE %s MEMBER OF(p.tags)""",
-            (tag_id,)
-        )
-        puzzlist = cursor.fetchall()
-        
-        debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
+        puzzlist = get_puzzles_by_tag_id(tag_id)
         return {
             "status": "ok",
             "puzzles": puzzlist,
@@ -2608,7 +2627,9 @@ def llm_query():
         get_last_sheet_activity_fn=get_last_sheet_activity_for_puzzle,
         get_puzzle_id_by_name_fn=get_puzzle_id_by_name,
         get_one_puzzle_fn=get_one_puzzle,
-        get_one_solver_fn=get_one_solver
+        get_one_solver_fn=get_one_solver,
+        get_tag_id_by_name_fn=get_tag_id_by_name,
+        get_puzzles_by_tag_id_fn=get_puzzles_by_tag_id
     )
     
     if result.get("status") == "error":

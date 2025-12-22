@@ -258,22 +258,15 @@ def get_open_puzzles_in_round(round_name, get_all_data_fn):
     }
 
 
-def get_puzzles_by_tag(tag_name, cursor):
-    """Get all puzzles with a specific tag."""
+def get_puzzles_by_tag(tag_name, get_tag_id_by_name_fn, get_puzzles_by_tag_id_fn):
+    """Get all puzzles with a specific tag using injected functions from pbrest.py."""
     # Find tag ID
-    cursor.execute("SELECT id FROM tag WHERE LOWER(name) = LOWER(%s)", (tag_name,))
-    tag_row = cursor.fetchone()
-    if not tag_row:
+    tag_id = get_tag_id_by_name_fn(tag_name)
+    if tag_id is None:
         return {"error": f"Tag '{tag_name}' not found", "puzzles": []}
     
-    tag_id = tag_row["id"]
-    
-    # Find puzzles with this tag
-    cursor.execute(
-        "SELECT * FROM puzzle_view WHERE %s MEMBER OF(tags)",
-        (tag_id,)
-    )
-    puzzles = cursor.fetchall()
+    # Get puzzles with this tag
+    puzzles = get_puzzles_by_tag_id_fn(tag_id)
     
     return {
         "tag": tag_name,
@@ -366,7 +359,8 @@ def get_puzzle_activity(puzzle_name, get_puzzle_id_by_name_fn, get_one_puzzle_fn
 
 
 def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
-                  get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, get_one_solver_fn=None):
+                  get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, 
+                  get_one_solver_fn=None, get_tag_id_by_name_fn=None, get_puzzles_by_tag_id_fn=None):
     """Execute an LLM tool and return the result."""
     if tool_name == "get_hunt_summary":
         return get_hunt_summary(get_all_data_fn)
@@ -375,7 +369,7 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor,
     elif tool_name == "get_open_puzzles_in_round":
         return get_open_puzzles_in_round(tool_args.get("round_name", ""), get_all_data_fn)
     elif tool_name == "get_puzzles_by_tag":
-        return get_puzzles_by_tag(tool_args.get("tag_name", ""), cursor)
+        return get_puzzles_by_tag(tool_args.get("tag_name", ""), get_tag_id_by_name_fn, get_puzzles_by_tag_id_fn)
     elif tool_name == "get_solver_activity":
         return get_solver_activity(tool_args.get("solver_name", ""), cursor)
     elif tool_name == "get_solver_by_id":
@@ -395,7 +389,8 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor,
 # ============================================================================
 
 def process_query(query_text, api_key, system_instruction, model, get_all_data_fn, cursor, user_id="unknown", 
-                   get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, get_one_solver_fn=None):
+                   get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, 
+                   get_one_solver_fn=None, get_tag_id_by_name_fn=None, get_puzzles_by_tag_id_fn=None):
     """
     Process a natural language query using Google Gemini.
     
@@ -411,6 +406,8 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
         get_puzzle_id_by_name_fn: Function to get puzzle ID by name (from pbrest.py)
         get_one_puzzle_fn: Function to get full puzzle info by ID (from pbrest.py)
         get_one_solver_fn: Function to get solver info by ID (from pbrest.py)
+        get_tag_id_by_name_fn: Function to get tag ID by name (from pbrest.py)
+        get_puzzles_by_tag_id_fn: Function to get puzzles by tag ID (from pbrest.py)
     
     Returns:
         dict with 'status', 'response', and 'user_id'
@@ -475,7 +472,8 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
                 
                 debug_log(4, f"LLM calling tool: {tool_name} with {tool_args}")
                 result = execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
-                                     get_last_sheet_activity_fn, get_puzzle_id_by_name_fn, get_one_puzzle_fn, get_one_solver_fn)
+                                     get_last_sheet_activity_fn, get_puzzle_id_by_name_fn, get_one_puzzle_fn, 
+                                     get_one_solver_fn, get_tag_id_by_name_fn, get_puzzles_by_tag_id_fn)
                 
                 function_responses.append(
                     types.Part.from_function_response(
