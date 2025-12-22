@@ -124,7 +124,7 @@ def get_gemini_tools():
                 ),
                 types.FunctionDeclaration(
                     name="get_puzzle_activity",
-                    description="Get activity information for a specific puzzle. Returns lastact (last activity of any type including status changes, comments, assignments) and lastsheetact (last sheet edit specifically). Use this to check when a puzzle was last worked on or edited.",
+                    description="Get activity information for a specific puzzle. Returns lastact (last activity of any type including status changes, comments, assignments), lastsheetact (last sheet edit specifically), and xyzloc (physical location where puzzle is being worked on). Use this to check when a puzzle was last worked on or edited.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
@@ -138,7 +138,7 @@ def get_gemini_tools():
                 ),
                 types.FunctionDeclaration(
                     name="get_all_data",
-                    description="FALLBACK: Get complete hunt data including all rounds and all puzzles with full details. Puzzle fields include: name, status, answer, roundname, sheetcount (number of sheets in spreadsheet), cursolvers, xyzloc, comments, ismeta, tags, drive_uri, drive_id, chat_channel_name, lastact (last activity of any type with solver_id, type, and time), lastsheetact (last sheet edit specifically with solver_id, type='revise', and time). Use this when other tools don't have the data needed.",
+                    description="FALLBACK: Get complete hunt data including all rounds and all puzzles with full details. Puzzle fields include: name, status, answer, roundname, sheetcount (number of sheets in spreadsheet), cursolvers, xyzloc (physical location where puzzle is being worked on, e.g. room name or table), comments, ismeta, tags, drive_uri, drive_id, chat_channel_name, lastact (last activity of any type with solver_id, type, and time), lastsheetact (last sheet edit specifically with solver_id, type='revise', and time). Use this when other tools don't have the data needed.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={},
@@ -341,7 +341,7 @@ def get_puzzle_activity(puzzle_name, cursor, get_last_activity_fn, get_last_shee
     """Get activity information for a specific puzzle using injected activity functions."""
     # Find puzzle by name
     cursor.execute(
-        "SELECT id, name, status, roundname, cursolvers FROM puzzle_view WHERE LOWER(name) = LOWER(%s)",
+        "SELECT id, name, status, roundname, cursolvers, xyzloc FROM puzzle_view WHERE LOWER(name) = LOWER(%s)",
         (puzzle_name,)
     )
     puzzle = cursor.fetchone()
@@ -360,7 +360,8 @@ def get_puzzle_activity(puzzle_name, cursor, get_last_activity_fn, get_last_shee
         "status": puzzle["status"],
         "lastact": lastact,  # Last activity of any type (status change, comment, assignment, etc.)
         "lastsheetact": lastsheetact,  # Last sheet edit (revise type activity)
-        "cursolvers": puzzle["cursolvers"]
+        "cursolvers": puzzle["cursolvers"],
+        "xyzloc": puzzle["xyzloc"]  # Physical location where puzzle is being worked on
     }
 
 
