@@ -1666,13 +1666,14 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             raise Exception("Invalid tags operation. Use {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}")
         
         # Log tag change to activity table using system solver_id (100)
+        # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
             try:
                 cursor.execute(
                     """
                     INSERT INTO activity
                     (puzzle_id, solver_id, source, type)
-                    VALUES (%s, %s, 'puzzleboss', 'revise')
+                    VALUES (%s, %s, 'puzzleboss', 'comment')
                     """,
                     (id, 100),
                 )
