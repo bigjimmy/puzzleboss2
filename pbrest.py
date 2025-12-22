@@ -56,6 +56,9 @@ except ImportError:
     MEMCACHE_AVAILABLE = False
     debug_log(3, "pymemcache not installed - caching disabled")
 
+# LLM query support (via pbllmlib)
+from pbllmlib import GEMINI_AVAILABLE, process_query as llm_process_query
+
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
@@ -2548,6 +2551,55 @@ def get_all_activities():
     except Exception as e:
         debug_log(1, "Exception in getting activity counts: %s" % e)
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
+# ============================================================================
+# LLM Query Endpoint - Natural language queries about hunt status
+# ============================================================================
+
+@app.route("/v1/query", endpoint="llm_query", methods=["POST"])
+@swag_from("swag/postquery.yaml", endpoint="llm_query", methods=["POST"])
+def llm_query():
+    """
+    Natural language query endpoint powered by Google Gemini.
+    Accepts a text query and returns a natural language response about hunt status.
+    Intended for localhost use only (e.g., Discord bot on same server).
+    """
+    if not GEMINI_AVAILABLE:
+        return jsonify({"status": "error", "error": "Google Generative AI SDK not installed"}), 503
+    
+    # Check for API key in database config
+    api_key = configstruct.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return jsonify({"status": "error", "error": "GEMINI_API_KEY not configured in database"}), 503
+    
+    # Parse request
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"status": "error", "error": "Missing 'text' field in request"}), 400
+    
+    user_id = data.get("user_id", "unknown")
+    query_text = data.get("text", "")
+    
+    # Get database cursor for the library
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Process the query using the LLM library
+    # Uses cached data when available, falls back to DB
+    result = llm_process_query(
+        query_text=query_text,
+        api_key=api_key,
+        get_all_data_fn=_get_all_with_cache,
+        cursor=cursor,
+        user_id=user_id
+    )
+    
+    if result.get("status") == "error":
+        return jsonify(result), 500
+    
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     if initdrive() != 0:

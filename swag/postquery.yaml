@@ -1,0 +1,88 @@
+tags:
+  - LLM Query
+summary: Natural language query about hunt status
+description: |
+  Submit a natural language query about the hunt and receive a natural language response.
+  Powered by Google Gemini with access to hunt data tools.
+  
+  Example queries:
+  - "How many puzzles are open in round ROUND3?"
+  - "What puzzles are tagged as conundrums?"
+  - "What puzzles has user dannybd worked on?"
+  - "What's the general status of the hunt?"
+  
+  Intended for localhost use only (e.g., Discord bot on same server).
+  Requires GEMINI_API_KEY to be configured in the database.
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - text
+      properties:
+        user_id:
+          type: string
+          description: Discord user ID or username making the query
+          example: "dannybd"
+        text:
+          type: string
+          description: The natural language query
+          example: "How many puzzles are open in round ROUND3?"
+        context:
+          type: object
+          description: Optional context about the query
+          properties:
+            channel_id:
+              type: string
+              description: Discord channel ID where query originated
+responses:
+  200:
+    description: Successful query response
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        response:
+          type: string
+          description: Natural language response to the query
+          example: "There are 5 open puzzles in ROUND3: puzzle1 (Being worked), puzzle2 (Needs eyes)..."
+        user_id:
+          type: string
+          description: Echo of the user_id from request
+  400:
+    description: Bad request - missing text field
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: string
+          example: "Missing 'text' field in request"
+  503:
+    description: Service unavailable - Gemini not configured
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: string
+          example: "GEMINI_API_KEY not configured"
+  500:
+    description: Internal server error
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: string
+
