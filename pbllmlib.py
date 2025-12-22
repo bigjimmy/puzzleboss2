@@ -3,7 +3,7 @@ PuzzleBoss LLM Library - Natural language query support via Google Gemini
 
 This module provides LLM-powered natural language querying of hunt data.
 It uses Google Gemini with function calling to interpret queries and
-fetch relevant data.
+fetch relevant data. Also includes RAG support for wiki content.
 """
 
 from pblib import debug_log
@@ -19,6 +19,21 @@ try:
     debug_log(3, "google-genai SDK available for LLM queries")
 except ImportError:
     debug_log(3, "google-genai not installed - /v1/query endpoint unavailable")
+
+# Optional ChromaDB support for wiki RAG
+CHROMADB_AVAILABLE = False
+chromadb = None
+try:
+    import chromadb
+    from chromadb.config import Settings
+    CHROMADB_AVAILABLE = True
+    debug_log(3, "ChromaDB available for wiki RAG")
+except ImportError:
+    debug_log(3, "chromadb not installed - wiki search unavailable")
+
+# Global ChromaDB client (lazy initialized)
+_chroma_client = None
+_wiki_collection = None
 
 
 def get_gemini_tools():
@@ -145,6 +160,20 @@ def get_gemini_tools():
                         required=[]
                     )
                 ),
+                types.FunctionDeclaration(
+                    name="search_wiki",
+                    description="Search the team wiki for information about puzzle-solving techniques, team resources, policies, historical knowledge, and general reference material. Use this for questions about 'how to solve X type puzzles', 'what tools do we have for Y', 'team policies', or any general knowledge questions.",
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "query": types.Schema(
+                                type=types.Type.STRING,
+                                description="The search query - describe what information you're looking for"
+                            )
+                        },
+                        required=["query"]
+                    )
+                ),
             ]
         )
     ]
@@ -157,6 +186,96 @@ def get_gemini_tools():
 def get_all_data(get_all_data_fn):
     """Get complete hunt data - use as fallback when specific tools aren't sufficient."""
     return get_all_data_fn()
+
+
+def _init_wiki_search(chromadb_path, api_key):
+    """Initialize ChromaDB client and collection for wiki search."""
+    global _chroma_client, _wiki_collection
+    
+    if not CHROMADB_AVAILABLE:
+        return None
+    
+    if _wiki_collection is not None:
+        return _wiki_collection
+    
+    try:
+        import os
+        if not os.path.exists(chromadb_path):
+            debug_log(3, f"ChromaDB path does not exist: {chromadb_path}")
+            return None
+        
+        _chroma_client = chromadb.PersistentClient(
+            path=chromadb_path,
+            settings=Settings(anonymized_telemetry=False)
+        )
+        
+        # Try to get existing collection
+        try:
+            _wiki_collection = _chroma_client.get_collection("wiki_pages")
+            debug_log(3, f"Wiki collection loaded with {_wiki_collection.count()} documents")
+        except Exception:
+            debug_log(3, "Wiki collection not found - run wiki_indexer.py first")
+            return None
+        
+        return _wiki_collection
+        
+    except Exception as e:
+        debug_log(2, f"Error initializing wiki search: {e}")
+        return None
+
+
+def search_wiki(query, chromadb_path, api_key, n_results=5):
+    """Search the wiki for relevant content using semantic search."""
+    if not CHROMADB_AVAILABLE:
+        return {"error": "Wiki search not available - chromadb not installed"}
+    
+    if not GEMINI_AVAILABLE:
+        return {"error": "Wiki search not available - google-genai not installed"}
+    
+    collection = _init_wiki_search(chromadb_path, api_key)
+    if collection is None:
+        return {"error": "Wiki not indexed yet - run wiki_indexer.py first", "results": []}
+    
+    try:
+        # Create embedding for query using Gemini
+        client = genai.Client(api_key=api_key)
+        result = client.models.embed_content(
+            model="text-embedding-004",
+            contents=query
+        )
+        query_embedding = result.embeddings[0].values
+        
+        # Search ChromaDB
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=n_results,
+            include=["documents", "metadatas", "distances"]
+        )
+        
+        # Format results
+        wiki_results = []
+        if results and results['documents'] and results['documents'][0]:
+            for i, doc in enumerate(results['documents'][0]):
+                metadata = results['metadatas'][0][i] if results['metadatas'] else {}
+                distance = results['distances'][0][i] if results['distances'] else None
+                
+                wiki_results.append({
+                    "title": metadata.get("title", "Unknown"),
+                    "content": doc,
+                    "relevance": 1 - distance if distance else None  # Convert distance to similarity
+                })
+        
+        debug_log(4, f"Wiki search for '{query}' returned {len(wiki_results)} results")
+        
+        return {
+            "query": query,
+            "count": len(wiki_results),
+            "results": wiki_results
+        }
+        
+    except Exception as e:
+        debug_log(2, f"Wiki search error: {e}")
+        return {"error": str(e), "results": []}
 
 
 def get_hunt_summary(get_all_data_fn):
@@ -360,7 +479,8 @@ def get_puzzle_activity(puzzle_name, get_puzzle_id_by_name_fn, get_one_puzzle_fn
 
 def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
                   get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, 
-                  get_one_solver_fn=None, get_tag_id_by_name_fn=None, get_puzzles_by_tag_id_fn=None):
+                  get_one_solver_fn=None, get_tag_id_by_name_fn=None, get_puzzles_by_tag_id_fn=None,
+                  wiki_chromadb_path=None, api_key=None):
     """Execute an LLM tool and return the result."""
     if tool_name == "get_hunt_summary":
         return get_hunt_summary(get_all_data_fn)
@@ -380,6 +500,8 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor,
         return get_puzzle_activity(tool_args.get("puzzle_name", ""), get_puzzle_id_by_name_fn, get_one_puzzle_fn, get_last_sheet_activity_fn)
     elif tool_name == "get_all_data":
         return get_all_data(get_all_data_fn)
+    elif tool_name == "search_wiki":
+        return search_wiki(tool_args.get("query", ""), wiki_chromadb_path, api_key)
     else:
         return {"error": f"Unknown tool: {tool_name}"}
 
@@ -390,7 +512,8 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor,
 
 def process_query(query_text, api_key, system_instruction, model, get_all_data_fn, cursor, user_id="unknown", 
                    get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, 
-                   get_one_solver_fn=None, get_tag_id_by_name_fn=None, get_puzzles_by_tag_id_fn=None):
+                   get_one_solver_fn=None, get_tag_id_by_name_fn=None, get_puzzles_by_tag_id_fn=None,
+                   wiki_chromadb_path=None):
     """
     Process a natural language query using Google Gemini.
     
@@ -408,6 +531,7 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
         get_one_solver_fn: Function to get solver info by ID (from pbrest.py)
         get_tag_id_by_name_fn: Function to get tag ID by name (from pbrest.py)
         get_puzzles_by_tag_id_fn: Function to get puzzles by tag ID (from pbrest.py)
+        wiki_chromadb_path: Path to ChromaDB storage for wiki RAG
     
     Returns:
         dict with 'status', 'response', and 'user_id'
@@ -473,7 +597,8 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
                 debug_log(4, f"LLM calling tool: {tool_name} with {tool_args}")
                 result = execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
                                      get_last_sheet_activity_fn, get_puzzle_id_by_name_fn, get_one_puzzle_fn, 
-                                     get_one_solver_fn, get_tag_id_by_name_fn, get_puzzles_by_tag_id_fn)
+                                     get_one_solver_fn, get_tag_id_by_name_fn, get_puzzles_by_tag_id_fn,
+                                     wiki_chromadb_path, api_key)
                 
                 function_responses.append(
                     types.Part.from_function_response(

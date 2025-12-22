@@ -59,6 +59,44 @@ except ImportError:
 # LLM query support (via pbllmlib)
 from pbllmlib import GEMINI_AVAILABLE, process_query as llm_process_query
 
+# Wiki indexer for RAG (optional)
+import threading
+WIKI_INDEXER_AVAILABLE = False
+try:
+    from scripts.wiki_indexer import index_wiki, load_config as load_wiki_config
+    WIKI_INDEXER_AVAILABLE = True
+except ImportError:
+    debug_log(3, "wiki_indexer not available - wiki RAG disabled")
+
+
+def _run_wiki_index_background():
+    """Run wiki indexing in background thread at startup."""
+    if not WIKI_INDEXER_AVAILABLE:
+        return
+    
+    try:
+        wiki_config = load_wiki_config()
+        wiki_url = wiki_config.get('WIKI_URL', '')
+        
+        if not wiki_url:
+            debug_log(3, "WIKI_URL not configured - skipping wiki index")
+            return
+        
+        debug_log(3, "Starting background wiki index...")
+        success = index_wiki(wiki_config, full_reindex=False)
+        if success:
+            debug_log(3, "Background wiki index completed successfully")
+        else:
+            debug_log(2, "Background wiki index failed")
+    except Exception as e:
+        debug_log(2, f"Background wiki index error: {e}")
+
+
+# Start wiki indexing in background thread (non-blocking)
+if WIKI_INDEXER_AVAILABLE:
+    wiki_thread = threading.Thread(target=_run_wiki_index_background, daemon=True)
+    wiki_thread.start()
+
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
@@ -2629,7 +2667,8 @@ def llm_query():
         get_one_puzzle_fn=get_one_puzzle,
         get_one_solver_fn=get_one_solver,
         get_tag_id_by_name_fn=get_tag_id_by_name,
-        get_puzzles_by_tag_id_fn=get_puzzles_by_tag_id
+        get_puzzles_by_tag_id_fn=get_puzzles_by_tag_id,
+        wiki_chromadb_path=configstruct.get("WIKI_CHROMADB_PATH", "")
     )
     
     if result.get("status") == "error":

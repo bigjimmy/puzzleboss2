@@ -325,6 +325,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
                 <h3>📊 Data I Can Access</h3>
                 <ul>
                     <li>All puzzles, rounds, and their statuses</li>
+                    <li>Team wiki (puzzle-solving techniques, resources, policies)</li>
                     <li>Puzzle details: answers, tags, sheet counts, comments, locations</li>
                     <li>Solver information: current assignments and puzzle history</li>
                     <li>Hunt statistics: open/solved counts, progress by round</li>
@@ -341,6 +342,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
                 <span class="example-chip" onclick="askExample(this)">What puzzles have I worked on?</span>
                 <span class="example-chip" onclick="askExample(this)">Which round has the most open puzzles?</span>
                 <span class="example-chip" onclick="askExample(this)">What puzzles are critical?</span>
+                <span class="example-chip" onclick="askExample(this)">How do I solve a cryptic crossword?</span>
             </div>
         </div>
     </div>

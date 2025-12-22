@@ -144,7 +144,9 @@ INSERT INTO `config` VALUES
   ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
   ('SKIP_GOOGLE_API', 'true'),
   ('SKIP_PUZZCORD', 'true'),
-  ('TEAMNAME', 'Default Team Name');
+  ('TEAMNAME', 'Default Team Name'),
+  ('WIKI_CHROMADB_PATH', '/var/lib/puzzleboss/chromadb'),
+  ('WIKI_URL', 'https://localhost/wiki/');
 /*!40000 ALTER TABLE `config` ENABLE KEYS */;
 UNLOCK TABLES;
 
