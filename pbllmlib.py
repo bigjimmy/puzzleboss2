@@ -82,7 +82,7 @@ def get_gemini_tools():
                 ),
                 types.FunctionDeclaration(
                     name="get_solver_activity",
-                    description="Get solver info. Returns: currently_assigned_puzzle (the ONE puzzle they are working on right now, or null if none), and puzzle_history (list of ALL puzzles they have ever worked on). These are different - currently_assigned_puzzle is their active assignment.",
+                    description="Get solver info by username. Returns: id, name, fullname, chat_uid, chat_name, currently_assigned_puzzle (the ONE puzzle they are working on right now), and puzzle_history (list of ALL puzzles they have ever worked on).",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
@@ -92,6 +92,20 @@ def get_gemini_tools():
                             )
                         },
                         required=["solver_name"]
+                    )
+                ),
+                types.FunctionDeclaration(
+                    name="get_solver_by_id",
+                    description="Get solver info by ID number. Returns: id, name, fullname, chat_uid, chat_name, currently_assigned_puzzle, and puzzle_history. Use this when you have a solver_id (e.g., from activity records) and need to find out who that solver is.",
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "solver_id": types.Schema(
+                                type=types.Type.INTEGER,
+                                description="The numeric ID of the solver"
+                            )
+                        },
+                        required=["solver_id"]
                     )
                 ),
                 types.FunctionDeclaration(
@@ -269,29 +283,43 @@ def get_puzzles_by_tag(tag_name, cursor):
     }
 
 
-def get_solver_activity(solver_name, cursor):
-    """Get solver's current assignment and puzzle history."""
-    # Find solver
-    cursor.execute("SELECT * FROM solver_view WHERE LOWER(name) = LOWER(%s)", (solver_name,))
-    solver = cursor.fetchone()
-    if not solver:
-        return {"error": f"Solver '{solver_name}' not found"}
-    
-    # Get their puzzle history
+def _format_solver_result(solver):
+    """Helper to format solver data consistently."""
     puzzles_worked = solver.get("puzzles", "") or ""
     current_puzzle = solver.get("puzz", "")
     
-    result = {
-        "solver_name": solver.get("name"),
+    return {
+        "id": solver.get("id"),
+        "name": solver.get("name"),
         "fullname": solver.get("fullname"),
+        "chat_uid": solver.get("chat_uid"),
+        "chat_name": solver.get("chat_name"),
         # The ONE puzzle they are actively assigned to right now (or null if none)
         "currently_assigned_puzzle": current_puzzle if current_puzzle else None,
         # Historical list of ALL puzzles they have ever worked on
         "puzzle_history": [p.strip() for p in puzzles_worked.split(",") if p.strip()],
         "total_puzzles_in_history": len([p for p in puzzles_worked.split(",") if p.strip()])
     }
+
+
+def get_solver_activity(solver_name, cursor):
+    """Get solver's info and puzzle history by username."""
+    cursor.execute("SELECT * FROM solver_view WHERE LOWER(name) = LOWER(%s)", (solver_name,))
+    solver = cursor.fetchone()
+    if not solver:
+        return {"error": f"Solver '{solver_name}' not found"}
     
-    return result
+    return _format_solver_result(solver)
+
+
+def get_solver_by_id(solver_id, cursor):
+    """Get solver's info and puzzle history by ID."""
+    cursor.execute("SELECT * FROM solver_view WHERE id = %s", (solver_id,))
+    solver = cursor.fetchone()
+    if not solver:
+        return {"error": f"Solver with ID {solver_id} not found"}
+    
+    return _format_solver_result(solver)
 
 
 def search_puzzles(query, cursor):
@@ -348,6 +376,8 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, get_last_activit
         return get_puzzles_by_tag(tool_args.get("tag_name", ""), cursor)
     elif tool_name == "get_solver_activity":
         return get_solver_activity(tool_args.get("solver_name", ""), cursor)
+    elif tool_name == "get_solver_by_id":
+        return get_solver_by_id(tool_args.get("solver_id", 0), cursor)
     elif tool_name == "search_puzzles":
         return search_puzzles(tool_args.get("query", ""), cursor)
     elif tool_name == "get_puzzle_activity":
