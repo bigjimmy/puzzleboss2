@@ -2604,7 +2604,9 @@ def llm_query():
         model=model,
         get_all_data_fn=_get_all_with_cache,
         cursor=cursor,
-        user_id=user_id
+        user_id=user_id,
+        get_last_activity_fn=get_last_activity_for_puzzle,
+        get_last_sheet_activity_fn=get_last_sheet_activity_for_puzzle
     )
     
     if result.get("status") == "error":

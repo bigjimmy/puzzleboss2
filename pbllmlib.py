@@ -309,29 +309,34 @@ def search_puzzles(query, cursor):
     }
 
 
-def get_puzzle_activity(puzzle_name, get_all_data_fn):
-    """Get activity information for a specific puzzle."""
-    data = get_all_data_fn()
+def get_puzzle_activity(puzzle_name, cursor, get_last_activity_fn, get_last_sheet_activity_fn):
+    """Get activity information for a specific puzzle using injected activity functions."""
+    # Find puzzle by name
+    cursor.execute(
+        "SELECT id, name, status, roundname, cursolvers FROM puzzle_view WHERE LOWER(name) = LOWER(%s)",
+        (puzzle_name,)
+    )
+    puzzle = cursor.fetchone()
+    if not puzzle:
+        return {"error": f"Puzzle '{puzzle_name}' not found"}
     
-    for round in data.get("rounds", []):
-        for puzzle in round.get("puzzles", []):
-            if puzzle.get("name", "").lower() == puzzle_name.lower():
-                lastact = puzzle.get("lastact")
-                lastsheetact = puzzle.get("lastsheetact")
-                
-                return {
-                    "puzzle_name": puzzle.get("name"),
-                    "round_name": round.get("name"),
-                    "status": puzzle.get("status"),
-                    "lastact": lastact,  # Last activity of any type (status change, comment, assignment, etc.)
-                    "lastsheetact": lastsheetact,  # Last sheet edit (revise type activity)
-                    "cursolvers": puzzle.get("cursolvers")
-                }
+    puzzle_id = puzzle["id"]
     
-    return {"error": f"Puzzle '{puzzle_name}' not found"}
+    # Use the injected functions from pbrest.py
+    lastact = get_last_activity_fn(puzzle_id)
+    lastsheetact = get_last_sheet_activity_fn(puzzle_id)
+    
+    return {
+        "puzzle_name": puzzle["name"],
+        "round_name": puzzle["roundname"],
+        "status": puzzle["status"],
+        "lastact": lastact,  # Last activity of any type (status change, comment, assignment, etc.)
+        "lastsheetact": lastsheetact,  # Last sheet edit (revise type activity)
+        "cursolvers": puzzle["cursolvers"]
+    }
 
 
-def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
+def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, get_last_activity_fn=None, get_last_sheet_activity_fn=None):
     """Execute an LLM tool and return the result."""
     if tool_name == "get_hunt_summary":
         return get_hunt_summary(get_all_data_fn)
@@ -346,7 +351,7 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
     elif tool_name == "search_puzzles":
         return search_puzzles(tool_args.get("query", ""), cursor)
     elif tool_name == "get_puzzle_activity":
-        return get_puzzle_activity(tool_args.get("puzzle_name", ""), get_all_data_fn)
+        return get_puzzle_activity(tool_args.get("puzzle_name", ""), cursor, get_last_activity_fn, get_last_sheet_activity_fn)
     elif tool_name == "get_all_data":
         return get_all_data(get_all_data_fn)
     else:
@@ -357,7 +362,8 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
 # Main Query Processing
 # ============================================================================
 
-def process_query(query_text, api_key, system_instruction, model, get_all_data_fn, cursor, user_id="unknown"):
+def process_query(query_text, api_key, system_instruction, model, get_all_data_fn, cursor, user_id="unknown", 
+                   get_last_activity_fn=None, get_last_sheet_activity_fn=None):
     """
     Process a natural language query using Google Gemini.
     
@@ -369,6 +375,8 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
         get_all_data_fn: Function that returns all hunt data (rounds/puzzles)
         cursor: Database cursor for direct queries
         user_id: ID of the user making the query (for logging)
+        get_last_activity_fn: Function to get last activity for a puzzle (from pbrest.py)
+        get_last_sheet_activity_fn: Function to get last sheet activity for a puzzle (from pbrest.py)
     
     Returns:
         dict with 'status', 'response', and 'user_id'
@@ -432,7 +440,8 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
                 tool_args = dict(fc.args) if fc.args else {}
                 
                 debug_log(4, f"LLM calling tool: {tool_name} with {tool_args}")
-                result = execute_tool(tool_name, tool_args, get_all_data_fn, cursor)
+                result = execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
+                                     get_last_activity_fn, get_last_sheet_activity_fn)
                 
                 function_responses.append(
                     types.Part.from_function_response(
