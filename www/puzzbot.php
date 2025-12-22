@@ -125,6 +125,27 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             60%, 100% { content: '...'; }
         }
         
+        .message code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+        
+        .message ul, .message ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+        
+        .message li {
+            margin: 0.25rem 0;
+        }
+        
+        .message strong {
+            color: #fff;
+        }
+        
         .input-area {
             background: var(--bg-card);
             padding: 1rem 2rem;
@@ -287,6 +308,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             line-height: 1.4;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <header>
@@ -363,7 +385,14 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             
             const msg = document.createElement('div');
             msg.className = 'message ' + type;
-            msg.textContent = text;
+            
+            // Format bot messages with markdown, plain text for user messages
+            if (type === 'bot') {
+                msg.innerHTML = marked.parse(text);
+            } else {
+                msg.textContent = text;
+            }
+            
             chatContainer.appendChild(msg);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             return msg;
