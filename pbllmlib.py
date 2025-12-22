@@ -337,21 +337,19 @@ def search_puzzles(query, cursor):
     }
 
 
-def get_puzzle_activity(puzzle_name, cursor, get_last_activity_fn, get_last_sheet_activity_fn):
-    """Get activity information for a specific puzzle using injected activity functions."""
-    # Find puzzle by name
-    cursor.execute(
-        "SELECT id, name, status, roundname, cursolvers, xyzloc FROM puzzle_view WHERE LOWER(name) = LOWER(%s)",
-        (puzzle_name,)
-    )
-    puzzle = cursor.fetchone()
-    if not puzzle:
+def get_puzzle_activity(puzzle_name, get_puzzle_id_by_name_fn, get_one_puzzle_fn, get_last_sheet_activity_fn):
+    """Get activity information for a specific puzzle using injected functions from pbrest.py."""
+    # Find puzzle ID by name
+    puzzle_id = get_puzzle_id_by_name_fn(puzzle_name)
+    if not puzzle_id:
         return {"error": f"Puzzle '{puzzle_name}' not found"}
     
-    puzzle_id = puzzle["id"]
+    # Get full puzzle info (includes lastact)
+    puzzle_data = get_one_puzzle_fn(puzzle_id)
+    puzzle = puzzle_data["puzzle"]
+    lastact = puzzle_data.get("lastact")
     
-    # Use the injected functions from pbrest.py
-    lastact = get_last_activity_fn(puzzle_id)
+    # Get lastsheetact separately (not included in get_one_puzzle)
     lastsheetact = get_last_sheet_activity_fn(puzzle_id)
     
     return {
@@ -365,7 +363,8 @@ def get_puzzle_activity(puzzle_name, cursor, get_last_activity_fn, get_last_shee
     }
 
 
-def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, get_last_activity_fn=None, get_last_sheet_activity_fn=None):
+def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
+                  get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None):
     """Execute an LLM tool and return the result."""
     if tool_name == "get_hunt_summary":
         return get_hunt_summary(get_all_data_fn)
@@ -382,7 +381,7 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, get_last_activit
     elif tool_name == "search_puzzles":
         return search_puzzles(tool_args.get("query", ""), cursor)
     elif tool_name == "get_puzzle_activity":
-        return get_puzzle_activity(tool_args.get("puzzle_name", ""), cursor, get_last_activity_fn, get_last_sheet_activity_fn)
+        return get_puzzle_activity(tool_args.get("puzzle_name", ""), get_puzzle_id_by_name_fn, get_one_puzzle_fn, get_last_sheet_activity_fn)
     elif tool_name == "get_all_data":
         return get_all_data(get_all_data_fn)
     else:
@@ -394,7 +393,7 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, get_last_activit
 # ============================================================================
 
 def process_query(query_text, api_key, system_instruction, model, get_all_data_fn, cursor, user_id="unknown", 
-                   get_last_activity_fn=None, get_last_sheet_activity_fn=None):
+                   get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None):
     """
     Process a natural language query using Google Gemini.
     
@@ -406,8 +405,9 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
         get_all_data_fn: Function that returns all hunt data (rounds/puzzles)
         cursor: Database cursor for direct queries
         user_id: ID of the user making the query (for logging)
-        get_last_activity_fn: Function to get last activity for a puzzle (from pbrest.py)
         get_last_sheet_activity_fn: Function to get last sheet activity for a puzzle (from pbrest.py)
+        get_puzzle_id_by_name_fn: Function to get puzzle ID by name (from pbrest.py)
+        get_one_puzzle_fn: Function to get full puzzle info by ID (from pbrest.py)
     
     Returns:
         dict with 'status', 'response', and 'user_id'
@@ -472,7 +472,7 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
                 
                 debug_log(4, f"LLM calling tool: {tool_name} with {tool_args}")
                 result = execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
-                                     get_last_activity_fn, get_last_sheet_activity_fn)
+                                     get_last_sheet_activity_fn, get_puzzle_id_by_name_fn, get_one_puzzle_fn)
                 
                 function_responses.append(
                     types.Part.from_function_response(
