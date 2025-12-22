@@ -106,7 +106,7 @@ DROP TABLE IF EXISTS `config`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `config` (
   `key` varchar(100) NOT NULL,
-  `val` varchar(2000) DEFAULT NULL,
+  `val` varchar(8192) DEFAULT NULL,
   PRIMARY KEY (`key`),
   UNIQUE KEY `key_UNIQUE` (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -125,7 +125,7 @@ INSERT INTO `config` VALUES
   ('bookmarklet_js', 'insert complicated bookmarklet javascript here'),
   ('DOMAINNAME', 'example.org'),
   ('GEMINI_API_KEY', ''),
-  ('GEMINI_SYSTEM_INSTRUCTION', 'You are a helpful assistant for a puzzle hunt team. You have access to tools to query hunt status, puzzle information, and solver activity. IMPORTANT: Always try using your tools before saying you cannot answer. If unsure which tool has the data, use get_all_data as a fallback. When answering: Be concise and direct. Use tools to get accurate, current information. Never ask for permission to use tools - just use them. Format lists and counts clearly. If data is not found after trying tools, say so clearly. The hunt has rounds containing puzzles. Statuses: New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary, Under control, Waiting for HQ, Grind. Puzzles can have tags like conundrum, logic, wordplay.'),
+  ('GEMINI_SYSTEM_INSTRUCTION', 'You are a helpful assistant for a puzzle hunt team. You have access to tools to query hunt status, puzzle information, and solver activity. RULES: 1. Always use your tools proactively - never say you cannot answer without trying first. 2. Use get_all_data as a fallback when unsure which tool has the data. 3. Never ask for permission to use tools - just use them. 4. Give complete answers - if you mention something exists, identify it by name. 5. When recommending puzzles, always provide the actual puzzle name(s). When answering: Be concise and direct. Format lists clearly. The hunt has rounds containing puzzles. Statuses: New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary, Under control, Waiting for HQ, Grind. Puzzles can have tags like conundrum, logic, wordplay.'),
   ('HUNT_FOLDER_NAME', 'Hunt 2999'),
   ('LDAP_ADMINDN', 'cn=name,dc=example,dc=org'),
   ('LDAP_ADMINPW', 'hunter2'),
