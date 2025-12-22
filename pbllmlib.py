@@ -317,7 +317,7 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
 # Main Query Processing
 # ============================================================================
 
-def process_query(query_text, api_key, system_instruction, get_all_data_fn, cursor, user_id="unknown"):
+def process_query(query_text, api_key, system_instruction, model, get_all_data_fn, cursor, user_id="unknown"):
     """
     Process a natural language query using Google Gemini.
     
@@ -325,6 +325,7 @@ def process_query(query_text, api_key, system_instruction, get_all_data_fn, curs
         query_text: The natural language query
         api_key: Google Gemini API key
         system_instruction: System prompt for the LLM (required)
+        model: Gemini model name (e.g. "gemini-2.0-flash-exp")
         get_all_data_fn: Function that returns all hunt data (rounds/puzzles)
         cursor: Database cursor for direct queries
         user_id: ID of the user making the query (for logging)
@@ -340,6 +341,9 @@ def process_query(query_text, api_key, system_instruction, get_all_data_fn, curs
     
     if not system_instruction:
         return {"status": "error", "error": "GEMINI_SYSTEM_INSTRUCTION not configured"}
+    
+    if not model:
+        return {"status": "error", "error": "GEMINI_MODEL not configured"}
     
     debug_log(3, f"LLM query from user {user_id}: {query_text[:100]}")
     
@@ -358,7 +362,7 @@ def process_query(query_text, api_key, system_instruction, get_all_data_fn, curs
         
         # Start chat
         chat = client.chats.create(
-            model="gemini-2.0-flash-exp",
+            model=model,
             config=config
         )
         

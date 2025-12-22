@@ -2586,6 +2586,11 @@ def llm_query():
     if not system_instruction:
         return jsonify({"status": "error", "error": "GEMINI_SYSTEM_INSTRUCTION not configured in database"}), 503
     
+    # Get model from config (required for LLM to be enabled)
+    model = configstruct.get("GEMINI_MODEL", "")
+    if not model:
+        return jsonify({"status": "error", "error": "GEMINI_MODEL not configured in database"}), 503
+    
     # Get database cursor for the library
     conn = mysql.connection
     cursor = conn.cursor()
@@ -2596,6 +2601,7 @@ def llm_query():
         query_text=query_text,
         api_key=api_key,
         system_instruction=system_instruction,
+        model=model,
         get_all_data_fn=_get_all_with_cache,
         cursor=cursor,
         user_id=user_id
