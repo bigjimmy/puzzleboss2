@@ -31,7 +31,7 @@ def get_gemini_tools():
             function_declarations=[
                 types.FunctionDeclaration(
                     name="get_hunt_summary",
-                    description="Get overall hunt status including total puzzles, solved count, open count, metas solved, and breakdown by status.",
+                    description="Get overall hunt status including total puzzles, solved count, open count, metas solved, breakdown by status, AND per-round summary with open/solved counts for each round. Use this to compare rounds.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={},
@@ -108,6 +108,15 @@ def get_gemini_tools():
                         required=["query"]
                     )
                 ),
+                types.FunctionDeclaration(
+                    name="get_all_data",
+                    description="FALLBACK: Get complete hunt data including all rounds and all puzzles with full details. Use this ONLY when other tools don't provide the data needed. Returns large amount of data - prefer specific tools when possible.",
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={},
+                        required=[]
+                    )
+                ),
             ]
         )
     ]
@@ -117,8 +126,13 @@ def get_gemini_tools():
 # Tool Implementation Functions
 # ============================================================================
 
+def get_all_data(get_all_data_fn):
+    """Get complete hunt data - use as fallback when specific tools aren't sufficient."""
+    return get_all_data_fn()
+
+
 def get_hunt_summary(get_all_data_fn):
-    """Get overall hunt status summary."""
+    """Get overall hunt status summary including per-round breakdown."""
     data = get_all_data_fn()
     rounds = data.get("rounds", [])
     
@@ -128,22 +142,37 @@ def get_hunt_summary(get_all_data_fn):
     metas_solved = 0
     metas_total = 0
     puzzles_by_status = {}
+    rounds_summary = []
     
     for round in rounds:
+        round_total = 0
+        round_solved = 0
+        round_open = 0
+        
         for puzzle in round.get("puzzles", []):
             total_puzzles += 1
+            round_total += 1
             status = puzzle.get("status", "Unknown")
             puzzles_by_status[status] = puzzles_by_status.get(status, 0) + 1
             
             if status == "Solved":
                 solved_puzzles += 1
+                round_solved += 1
             elif status != "[hidden]" and status != "Unnecessary":
                 open_puzzles += 1
+                round_open += 1
             
             if puzzle.get("ismeta"):
                 metas_total += 1
                 if status == "Solved":
                     metas_solved += 1
+        
+        rounds_summary.append({
+            "name": round.get("name"),
+            "total_puzzles": round_total,
+            "solved_puzzles": round_solved,
+            "open_puzzles": round_open
+        })
     
     return {
         "total_rounds": len(rounds),
@@ -152,7 +181,8 @@ def get_hunt_summary(get_all_data_fn):
         "open_puzzles": open_puzzles,
         "metas_solved": metas_solved,
         "metas_total": metas_total,
-        "puzzles_by_status": puzzles_by_status
+        "puzzles_by_status": puzzles_by_status,
+        "rounds": rounds_summary
     }
 
 
@@ -275,6 +305,8 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
         return get_solver_activity(tool_args.get("solver_name", ""), cursor)
     elif tool_name == "search_puzzles":
         return search_puzzles(tool_args.get("query", ""), cursor)
+    elif tool_name == "get_all_data":
+        return get_all_data(get_all_data_fn)
     else:
         return {"error": f"Unknown tool: {tool_name}"}
 
