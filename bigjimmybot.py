@@ -80,9 +80,13 @@ def check_puzzle_from_queue(threadname, q):
               continue
 
             try:
-                mypuzzlelastsheetact = json.loads(responsestring)["puzzle"]["lastsheetact"]
+                response_json = json.loads(responsestring)
+                if "error" in response_json:
+                    debug_log(2, "[Thread: %s] API error for puzzle %s: %s" % (threadname, mypuzzle["id"], response_json.get("error")))
+                    continue
+                mypuzzlelastsheetact = response_json["puzzle"]["lastsheetact"]
             except Exception as e:
-              debug_log(1, "Error interpreting puzzle info from puzzleboss. Corruption?: %s" % e)
+              debug_log(1, "Error interpreting puzzle info from puzzleboss. Response: %s, Error: %s" % (responsestring[:200], e))
               time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
               continue
 
