@@ -110,7 +110,7 @@ def get_gemini_tools():
                 ),
                 types.FunctionDeclaration(
                     name="get_all_data",
-                    description="FALLBACK: Get complete hunt data including all rounds and all puzzles with full details. Use this ONLY when other tools don't provide the data needed. Returns large amount of data - prefer specific tools when possible.",
+                    description="FALLBACK: Get complete hunt data including all rounds and all puzzles with full details. Puzzle fields include: name, status, answer, roundname, sheetcount (number of sheets in spreadsheet), cursolvers, xyzloc, comments, ismeta, tags, drive_uri, drive_id, chat_channel_name. Use this when other tools don't have the data needed.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={},
