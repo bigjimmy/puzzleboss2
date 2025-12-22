@@ -310,6 +310,9 @@ def process_query(query_text, api_key, system_instruction, get_all_data_fn, curs
     debug_log(3, f"LLM query from user {user_id}: {query_text[:100]}")
     
     try:
+        # Prepend user context to query so LLM knows who is asking
+        contextualized_query = f"[The user asking this question is: {user_id}]\n\n{query_text}"
+        
         # Create Gemini client
         client = genai.Client(api_key=api_key)
         
@@ -325,7 +328,7 @@ def process_query(query_text, api_key, system_instruction, get_all_data_fn, curs
             config=config
         )
         
-        response = chat.send_message(query_text)
+        response = chat.send_message(contextualized_query)
         
         # Handle function calling loop
         max_iterations = 10
