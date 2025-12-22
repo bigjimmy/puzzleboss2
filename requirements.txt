@@ -10,4 +10,4 @@ flask_mysqldb
 google-auth-oauthlib
 pymemcache
 prometheus_flask_exporter
-google-generativeai
+google-genai

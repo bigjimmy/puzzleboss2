@@ -11,26 +11,14 @@ from pblib import debug_log
 # Optional Google Gemini support for LLM queries
 GEMINI_AVAILABLE = False
 genai = None
+types = None
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
     GEMINI_AVAILABLE = True
-    debug_log(3, "google-generativeai SDK available for LLM queries")
+    debug_log(3, "google-genai SDK available for LLM queries")
 except ImportError:
-    debug_log(3, "google-generativeai not installed - /v1/query endpoint unavailable")
-
-
-# System prompt for the LLM
-SYSTEM_INSTRUCTION = """You are a helpful assistant for a puzzle hunt team. You have access to tools to query the current hunt status, puzzle information, and solver activity.
-
-When answering questions:
-- Be concise and direct
-- Use the tools to get accurate, current information
-- Format lists and counts clearly
-- If a round or puzzle isn't found, say so clearly
-
-The hunt has multiple rounds, each containing puzzles. Puzzles can have statuses like: New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary, Under control, Waiting for HQ, Grind.
-Puzzles can also have tags like 'conundrum', 'logic', 'wordplay', etc.
-"""
+    debug_log(3, "google-genai not installed - /v1/query endpoint unavailable")
 
 
 def get_gemini_tools():
@@ -39,81 +27,81 @@ def get_gemini_tools():
         return []
     
     return [
-        genai.protos.Tool(
+        types.Tool(
             function_declarations=[
-                genai.protos.FunctionDeclaration(
+                types.FunctionDeclaration(
                     name="get_hunt_summary",
                     description="Get overall hunt status including total puzzles, solved count, open count, metas solved, and breakdown by status.",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
                         properties={},
                         required=[]
                     )
                 ),
-                genai.protos.FunctionDeclaration(
+                types.FunctionDeclaration(
                     name="get_round_status",
                     description="Get the status of all puzzles in a specific round. Returns puzzle names, statuses, answers, and current solvers.",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
                         properties={
-                            "round_name": genai.protos.Schema(
-                                type=genai.protos.Type.STRING,
+                            "round_name": types.Schema(
+                                type=types.Type.STRING,
                                 description="The name of the round to query"
                             )
                         },
                         required=["round_name"]
                     )
                 ),
-                genai.protos.FunctionDeclaration(
+                types.FunctionDeclaration(
                     name="get_open_puzzles_in_round",
                     description="Get only the open (unsolved) puzzles in a specific round.",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
                         properties={
-                            "round_name": genai.protos.Schema(
-                                type=genai.protos.Type.STRING,
+                            "round_name": types.Schema(
+                                type=types.Type.STRING,
                                 description="The name of the round to query"
                             )
                         },
                         required=["round_name"]
                     )
                 ),
-                genai.protos.FunctionDeclaration(
+                types.FunctionDeclaration(
                     name="get_puzzles_by_tag",
                     description="Get all puzzles that have a specific tag (like 'conundrum', 'logic', 'wordplay', etc).",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
                         properties={
-                            "tag_name": genai.protos.Schema(
-                                type=genai.protos.Type.STRING,
+                            "tag_name": types.Schema(
+                                type=types.Type.STRING,
                                 description="The tag to search for"
                             )
                         },
                         required=["tag_name"]
                     )
                 ),
-                genai.protos.FunctionDeclaration(
+                types.FunctionDeclaration(
                     name="get_solver_activity",
                     description="Get information about what puzzles a specific solver/user has worked on.",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
                         properties={
-                            "solver_name": genai.protos.Schema(
-                                type=genai.protos.Type.STRING,
+                            "solver_name": types.Schema(
+                                type=types.Type.STRING,
                                 description="The username of the solver"
                             )
                         },
                         required=["solver_name"]
                     )
                 ),
-                genai.protos.FunctionDeclaration(
+                types.FunctionDeclaration(
                     name="search_puzzles",
                     description="Search for puzzles by name pattern.",
-                    parameters=genai.protos.Schema(
-                        type=genai.protos.Type.OBJECT,
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
                         properties={
-                            "query": genai.protos.Schema(
-                                type=genai.protos.Type.STRING,
+                            "query": types.Schema(
+                                type=types.Type.STRING,
                                 description="The search query (partial name match)"
                             )
                         },
@@ -295,13 +283,14 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
 # Main Query Processing
 # ============================================================================
 
-def process_query(query_text, api_key, get_all_data_fn, cursor, user_id="unknown"):
+def process_query(query_text, api_key, system_instruction, get_all_data_fn, cursor, user_id="unknown"):
     """
     Process a natural language query using Google Gemini.
     
     Args:
         query_text: The natural language query
         api_key: Google Gemini API key
+        system_instruction: System prompt for the LLM (required)
         get_all_data_fn: Function that returns all hunt data (rounds/puzzles)
         cursor: Database cursor for direct queries
         user_id: ID of the user making the query (for logging)
@@ -315,30 +304,41 @@ def process_query(query_text, api_key, get_all_data_fn, cursor, user_id="unknown
     if not api_key:
         return {"status": "error", "error": "GEMINI_API_KEY not configured"}
     
+    if not system_instruction:
+        return {"status": "error", "error": "GEMINI_SYSTEM_INSTRUCTION not configured"}
+    
     debug_log(3, f"LLM query from user {user_id}: {query_text[:100]}")
     
     try:
-        # Configure Gemini
-        genai.configure(api_key=api_key)
+        # Create Gemini client
+        client = genai.Client(api_key=api_key)
         
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            system_instruction=SYSTEM_INSTRUCTION,
+        # Create config with tools
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
             tools=get_gemini_tools()
         )
         
-        chat = model.start_chat()
+        # Start chat
+        chat = client.chats.create(
+            model="gemini-2.0-flash-exp",
+            config=config
+        )
+        
         response = chat.send_message(query_text)
         
         # Handle function calling loop
         max_iterations = 10
         iteration = 0
-        while response.candidates[0].content.parts and iteration < max_iterations:
+        while iteration < max_iterations:
             iteration += 1
             
             # Check if there are function calls to handle
-            function_calls = [part for part in response.candidates[0].content.parts 
-                            if hasattr(part, 'function_call') and part.function_call.name]
+            function_calls = []
+            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'function_call') and part.function_call and part.function_call.name:
+                        function_calls.append(part)
             
             if not function_calls:
                 break
@@ -354,11 +354,9 @@ def process_query(query_text, api_key, get_all_data_fn, cursor, user_id="unknown
                 result = execute_tool(tool_name, tool_args, get_all_data_fn, cursor)
                 
                 function_responses.append(
-                    genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=tool_name,
-                            response={"result": result}
-                        )
+                    types.Part.from_function_response(
+                        name=tool_name,
+                        response={"result": result}
                     )
                 )
             
@@ -367,9 +365,10 @@ def process_query(query_text, api_key, get_all_data_fn, cursor, user_id="unknown
         
         # Extract final text response
         final_response = ""
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'text') and part.text:
-                final_response += part.text
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'text') and part.text:
+                    final_response += part.text
         
         debug_log(4, f"LLM response: {final_response[:200]}")
         
@@ -382,4 +381,3 @@ def process_query(query_text, api_key, get_all_data_fn, cursor, user_id="unknown
     except Exception as e:
         debug_log(1, f"LLM query error: {str(e)}")
         return {"status": "error", "error": str(e)}
-

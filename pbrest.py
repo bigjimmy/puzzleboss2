@@ -2581,6 +2581,11 @@ def llm_query():
     user_id = data.get("user_id", "unknown")
     query_text = data.get("text", "")
     
+    # Get system instruction from config (required for LLM to be enabled)
+    system_instruction = configstruct.get("GEMINI_SYSTEM_INSTRUCTION", "")
+    if not system_instruction:
+        return jsonify({"status": "error", "error": "GEMINI_SYSTEM_INSTRUCTION not configured in database"}), 503
+    
     # Get database cursor for the library
     conn = mysql.connection
     cursor = conn.cursor()
@@ -2590,6 +2595,7 @@ def llm_query():
     result = llm_process_query(
         query_text=query_text,
         api_key=api_key,
+        system_instruction=system_instruction,
         get_all_data_fn=_get_all_with_cache,
         cursor=cursor,
         user_id=user_id
