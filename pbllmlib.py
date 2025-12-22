@@ -40,7 +40,7 @@ def get_gemini_tools():
                 ),
                 types.FunctionDeclaration(
                     name="get_round_status",
-                    description="Get the status of all puzzles in a specific round. Returns puzzle names, statuses, answers, and current solvers.",
+                    description="Get the status of all puzzles in a specific round. Returns puzzle names, statuses, answers, current solvers, lastact (last activity of any type), and lastsheetact (last sheet edit).",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={
@@ -109,8 +109,22 @@ def get_gemini_tools():
                     )
                 ),
                 types.FunctionDeclaration(
+                    name="get_puzzle_activity",
+                    description="Get activity information for a specific puzzle. Returns lastact (last activity of any type including status changes, comments, assignments) and lastsheetact (last sheet edit specifically). Use this to check when a puzzle was last worked on or edited.",
+                    parameters=types.Schema(
+                        type=types.Type.OBJECT,
+                        properties={
+                            "puzzle_name": types.Schema(
+                                type=types.Type.STRING,
+                                description="The name of the puzzle"
+                            )
+                        },
+                        required=["puzzle_name"]
+                    )
+                ),
+                types.FunctionDeclaration(
                     name="get_all_data",
-                    description="FALLBACK: Get complete hunt data including all rounds and all puzzles with full details. Puzzle fields include: name, status, answer, roundname, sheetcount (number of sheets in spreadsheet), cursolvers, xyzloc, comments, ismeta, tags, drive_uri, drive_id, chat_channel_name. Use this when other tools don't have the data needed.",
+                    description="FALLBACK: Get complete hunt data including all rounds and all puzzles with full details. Puzzle fields include: name, status, answer, roundname, sheetcount (number of sheets in spreadsheet), cursolvers, xyzloc, comments, ismeta, tags, drive_uri, drive_id, chat_channel_name, lastact (last activity of any type with solver_id, type, and time), lastsheetact (last sheet edit specifically with solver_id, type='revise', and time). Use this when other tools don't have the data needed.",
                     parameters=types.Schema(
                         type=types.Type.OBJECT,
                         properties={},
@@ -200,7 +214,9 @@ def get_round_status(round_name, get_all_data_fn):
                     "answer": puzzle.get("answer"),
                     "ismeta": puzzle.get("ismeta"),
                     "cursolvers": puzzle.get("cursolvers"),
-                    "tags": puzzle.get("tags")
+                    "tags": puzzle.get("tags"),
+                    "lastact": puzzle.get("lastact"),  # Last activity of any type
+                    "lastsheetact": puzzle.get("lastsheetact")  # Last sheet edit specifically
                 })
             return {
                 "round_name": round.get("name"),
@@ -293,6 +309,28 @@ def search_puzzles(query, cursor):
     }
 
 
+def get_puzzle_activity(puzzle_name, get_all_data_fn):
+    """Get activity information for a specific puzzle."""
+    data = get_all_data_fn()
+    
+    for round in data.get("rounds", []):
+        for puzzle in round.get("puzzles", []):
+            if puzzle.get("name", "").lower() == puzzle_name.lower():
+                lastact = puzzle.get("lastact")
+                lastsheetact = puzzle.get("lastsheetact")
+                
+                return {
+                    "puzzle_name": puzzle.get("name"),
+                    "round_name": round.get("name"),
+                    "status": puzzle.get("status"),
+                    "lastact": lastact,  # Last activity of any type (status change, comment, assignment, etc.)
+                    "lastsheetact": lastsheetact,  # Last sheet edit (revise type activity)
+                    "cursolvers": puzzle.get("cursolvers")
+                }
+    
+    return {"error": f"Puzzle '{puzzle_name}' not found"}
+
+
 def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
     """Execute an LLM tool and return the result."""
     if tool_name == "get_hunt_summary":
@@ -307,6 +345,8 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor):
         return get_solver_activity(tool_args.get("solver_name", ""), cursor)
     elif tool_name == "search_puzzles":
         return search_puzzles(tool_args.get("query", ""), cursor)
+    elif tool_name == "get_puzzle_activity":
+        return get_puzzle_activity(tool_args.get("puzzle_name", ""), get_all_data_fn)
     elif tool_name == "get_all_data":
         return get_all_data(get_all_data_fn)
     else:
