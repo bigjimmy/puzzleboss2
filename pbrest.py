@@ -2607,7 +2607,8 @@ def llm_query():
         user_id=user_id,
         get_last_sheet_activity_fn=get_last_sheet_activity_for_puzzle,
         get_puzzle_id_by_name_fn=get_puzzle_id_by_name,
-        get_one_puzzle_fn=get_one_puzzle
+        get_one_puzzle_fn=get_one_puzzle,
+        get_one_solver_fn=get_one_solver
     )
     
     if result.get("status") == "error":

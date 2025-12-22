@@ -312,14 +312,16 @@ def get_solver_activity(solver_name, cursor):
     return _format_solver_result(solver)
 
 
-def get_solver_by_id(solver_id, cursor):
-    """Get solver's info and puzzle history by ID."""
-    cursor.execute("SELECT * FROM solver_view WHERE id = %s", (solver_id,))
-    solver = cursor.fetchone()
-    if not solver:
+def get_solver_by_id(solver_id, get_one_solver_fn):
+    """Get solver's info and puzzle history by ID using pbrest function."""
+    try:
+        result = get_one_solver_fn(solver_id)
+        solver = result.get("solver")
+        if not solver:
+            return {"error": f"Solver with ID {solver_id} not found"}
+        return _format_solver_result(solver)
+    except Exception:
         return {"error": f"Solver with ID {solver_id} not found"}
-    
-    return _format_solver_result(solver)
 
 
 def search_puzzles(query, cursor):
@@ -364,7 +366,7 @@ def get_puzzle_activity(puzzle_name, get_puzzle_id_by_name_fn, get_one_puzzle_fn
 
 
 def execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
-                  get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None):
+                  get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, get_one_solver_fn=None):
     """Execute an LLM tool and return the result."""
     if tool_name == "get_hunt_summary":
         return get_hunt_summary(get_all_data_fn)
@@ -377,7 +379,7 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor,
     elif tool_name == "get_solver_activity":
         return get_solver_activity(tool_args.get("solver_name", ""), cursor)
     elif tool_name == "get_solver_by_id":
-        return get_solver_by_id(tool_args.get("solver_id", 0), cursor)
+        return get_solver_by_id(tool_args.get("solver_id", 0), get_one_solver_fn)
     elif tool_name == "search_puzzles":
         return search_puzzles(tool_args.get("query", ""), cursor)
     elif tool_name == "get_puzzle_activity":
@@ -393,7 +395,7 @@ def execute_tool(tool_name, tool_args, get_all_data_fn, cursor,
 # ============================================================================
 
 def process_query(query_text, api_key, system_instruction, model, get_all_data_fn, cursor, user_id="unknown", 
-                   get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None):
+                   get_last_sheet_activity_fn=None, get_puzzle_id_by_name_fn=None, get_one_puzzle_fn=None, get_one_solver_fn=None):
     """
     Process a natural language query using Google Gemini.
     
@@ -408,6 +410,7 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
         get_last_sheet_activity_fn: Function to get last sheet activity for a puzzle (from pbrest.py)
         get_puzzle_id_by_name_fn: Function to get puzzle ID by name (from pbrest.py)
         get_one_puzzle_fn: Function to get full puzzle info by ID (from pbrest.py)
+        get_one_solver_fn: Function to get solver info by ID (from pbrest.py)
     
     Returns:
         dict with 'status', 'response', and 'user_id'
@@ -472,7 +475,7 @@ def process_query(query_text, api_key, system_instruction, model, get_all_data_f
                 
                 debug_log(4, f"LLM calling tool: {tool_name} with {tool_args}")
                 result = execute_tool(tool_name, tool_args, get_all_data_fn, cursor, 
-                                     get_last_sheet_activity_fn, get_puzzle_id_by_name_fn, get_one_puzzle_fn)
+                                     get_last_sheet_activity_fn, get_puzzle_id_by_name_fn, get_one_puzzle_fn, get_one_solver_fn)
                 
                 function_responses.append(
                     types.Part.from_function_response(
