@@ -74,9 +74,12 @@ def load_config():
     return db_config
 
 
-def get_all_wiki_pages(wiki_url):
-    """Fetch all page titles from MediaWiki."""
+def get_all_wiki_pages(wiki_url, exclude_prefixes=None):
+    """Fetch all page titles from MediaWiki with last modified times."""
     debug_log(3, f"Fetching page list from {wiki_url}")
+    
+    if exclude_prefixes is None:
+        exclude_prefixes = []
     
     api_url = wiki_url.rstrip('/') + '/api.php'
     pages = []
@@ -96,9 +99,21 @@ def get_all_wiki_pages(wiki_url):
         data = response.json()
         
         for page in data.get('query', {}).get('allpages', []):
+            title = page['title']
+            
+            # Skip excluded pages
+            skip = False
+            for prefix in exclude_prefixes:
+                if title.startswith(prefix) or title.lower().startswith(prefix.lower()):
+                    debug_log(4, f"Skipping excluded page: {title}")
+                    skip = True
+                    break
+            if skip:
+                continue
+            
             pages.append({
                 'pageid': page['pageid'],
-                'title': page['title']
+                'title': title
             })
         
         if 'continue' in data:
@@ -106,19 +121,19 @@ def get_all_wiki_pages(wiki_url):
         else:
             break
     
-    debug_log(3, f"Found {len(pages)} wiki pages")
+    debug_log(3, f"Found {len(pages)} wiki pages (after exclusions)")
     return pages
 
 
 def get_page_content(wiki_url, title):
-    """Fetch the content of a specific wiki page."""
+    """Fetch the content and last modified time of a specific wiki page."""
     api_url = wiki_url.rstrip('/') + '/api.php'
     
     params = {
         'action': 'query',
         'titles': title,
         'prop': 'revisions',
-        'rvprop': 'content',
+        'rvprop': 'content|timestamp',  # Also get timestamp
         'rvslots': 'main',
         'format': 'json'
     }
@@ -129,14 +144,17 @@ def get_page_content(wiki_url, title):
     pages = data.get('query', {}).get('pages', {})
     for page_id, page_data in pages.items():
         if page_id == '-1':
-            return None
+            return None, None
         revisions = page_data.get('revisions', [])
         if revisions:
-            slots = revisions[0].get('slots', {})
+            revision = revisions[0]
+            timestamp = revision.get('timestamp', '')  # e.g., "2024-01-15T12:30:00Z"
+            slots = revision.get('slots', {})
             main = slots.get('main', {})
-            return main.get('*', '')
+            content = main.get('*', '')
+            return content, timestamp
     
-    return None
+    return None, None
 
 
 def clean_wiki_content(content):
@@ -277,7 +295,22 @@ def index_wiki(config, full_reindex=False):
         debug_log(1, "GEMINI_API_KEY not configured - cannot create embeddings")
         return False
     
+    # Get optional config for page filtering
+    # WIKI_EXCLUDE_PREFIXES: comma-separated list of page title prefixes to skip
+    # e.g., "Hunt 2023,Hunt 2022,Archive:"
+    exclude_prefixes_str = config.get('WIKI_EXCLUDE_PREFIXES', '')
+    exclude_prefixes = [p.strip() for p in exclude_prefixes_str.split(',') if p.strip()]
+    
+    # WIKI_PRIORITY_PAGES: comma-separated list of important page titles
+    # e.g., "Main Page,Team Info,Current Hunt"
+    priority_pages_str = config.get('WIKI_PRIORITY_PAGES', '')
+    priority_pages = [p.strip().lower() for p in priority_pages_str.split(',') if p.strip()]
+    
     debug_log(3, f"Starting wiki indexing from {wiki_url}")
+    if exclude_prefixes:
+        debug_log(3, f"Excluding pages with prefixes: {exclude_prefixes}")
+    if priority_pages:
+        debug_log(3, f"Priority pages: {priority_pages}")
     
     # Ensure ChromaDB directory exists
     os.makedirs(chromadb_path, exist_ok=True)
@@ -306,7 +339,7 @@ def index_wiki(config, full_reindex=False):
     
     # Fetch all wiki pages
     try:
-        pages = get_all_wiki_pages(wiki_url)
+        pages = get_all_wiki_pages(wiki_url, exclude_prefixes)
     except Exception as e:
         debug_log(1, f"Error fetching wiki pages: {e}")
         return False
@@ -321,13 +354,16 @@ def index_wiki(config, full_reindex=False):
         debug_log(4, f"Processing: {title}")
         
         try:
-            content = get_page_content(wiki_url, title)
+            content, timestamp = get_page_content(wiki_url, title)
             if not content:
                 continue
             
             cleaned = clean_wiki_content(content)
             if not cleaned or len(cleaned) < 50:  # Skip very short pages
                 continue
+            
+            # Check if this is a priority page
+            is_priority = title.lower() in priority_pages
             
             chunks = chunk_content(title, cleaned)
             
@@ -345,7 +381,9 @@ def index_wiki(config, full_reindex=False):
                 all_metadatas.append({
                     'title': title,
                     'pageid': page['pageid'],
-                    'chunk_index': chunk['chunk_index']
+                    'chunk_index': chunk['chunk_index'],
+                    'last_modified': timestamp or '',
+                    'is_priority': is_priority
                 })
                 
         except Exception as e:

@@ -200,8 +200,18 @@ def _init_wiki_search(chromadb_path, api_key):
     
     try:
         import os
+        if not chromadb_path:
+            debug_log(3, "WIKI_CHROMADB_PATH not configured")
+            return None
+            
         if not os.path.exists(chromadb_path):
-            debug_log(3, f"ChromaDB path does not exist: {chromadb_path}")
+            debug_log(3, f"ChromaDB path does not exist: {chromadb_path} - run wiki_indexer.py --full first")
+            return None
+        
+        # Check if ChromaDB has been initialized (look for chroma.sqlite3)
+        chroma_db_file = os.path.join(chromadb_path, "chroma.sqlite3")
+        if not os.path.exists(chroma_db_file):
+            debug_log(3, f"ChromaDB not initialized at {chromadb_path} - run wiki_indexer.py --full first")
             return None
         
         _chroma_client = chromadb.PersistentClient(
@@ -214,7 +224,7 @@ def _init_wiki_search(chromadb_path, api_key):
             _wiki_collection = _chroma_client.get_collection("wiki_pages")
             debug_log(3, f"Wiki collection loaded with {_wiki_collection.count()} documents")
         except Exception:
-            debug_log(3, "Wiki collection not found - run wiki_indexer.py first")
+            debug_log(3, "Wiki collection 'wiki_pages' not found - run wiki_indexer.py --full first")
             return None
         
         return _wiki_collection
@@ -225,7 +235,12 @@ def _init_wiki_search(chromadb_path, api_key):
 
 
 def search_wiki(query, chromadb_path, api_key, n_results=5):
-    """Search the wiki for relevant content using semantic search."""
+    """Search the wiki for relevant content using semantic search.
+    
+    Results are boosted by:
+    - Priority pages (marked in WIKI_PRIORITY_PAGES config)
+    - Recency (more recently modified pages rank higher)
+    """
     if not CHROMADB_AVAILABLE:
         return {"error": "Wiki search not available - chromadb not installed"}
     
@@ -234,7 +249,7 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
     
     collection = _init_wiki_search(chromadb_path, api_key)
     if collection is None:
-        return {"error": "Wiki not indexed yet - run wiki_indexer.py first", "results": []}
+        return {"error": "Wiki search not available - wiki has not been indexed yet", "results": []}
     
     try:
         # Create embedding for query using Gemini
@@ -245,25 +260,56 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
         )
         query_embedding = result.embeddings[0].values
         
-        # Search ChromaDB
+        # Search ChromaDB - fetch more than needed for re-ranking
         results = collection.query(
             query_embeddings=[query_embedding],
-            n_results=n_results,
+            n_results=n_results * 3,  # Fetch extra for re-ranking
             include=["documents", "metadatas", "distances"]
         )
         
-        # Format results
+        # Format and score results
         wiki_results = []
         if results and results['documents'] and results['documents'][0]:
             for i, doc in enumerate(results['documents'][0]):
                 metadata = results['metadatas'][0][i] if results['metadatas'] else {}
-                distance = results['distances'][0][i] if results['distances'] else None
+                distance = results['distances'][0][i] if results['distances'] else 1.0
+                
+                # Base relevance score (1 - distance, so higher is better)
+                base_score = 1 - distance
+                
+                # Boost priority pages
+                is_priority = metadata.get("is_priority", False)
+                priority_boost = 0.15 if is_priority else 0
+                
+                # Boost recent pages (within last year gets a boost)
+                recency_boost = 0
+                last_modified = metadata.get("last_modified", "")
+                if last_modified:
+                    try:
+                        from datetime import datetime
+                        mod_date = datetime.fromisoformat(last_modified.replace('Z', '+00:00'))
+                        now = datetime.now(mod_date.tzinfo)
+                        days_old = (now - mod_date).days
+                        if days_old < 30:
+                            recency_boost = 0.1
+                        elif days_old < 365:
+                            recency_boost = 0.05
+                    except Exception:
+                        pass
+                
+                final_score = base_score + priority_boost + recency_boost
                 
                 wiki_results.append({
                     "title": metadata.get("title", "Unknown"),
                     "content": doc,
-                    "relevance": 1 - distance if distance else None  # Convert distance to similarity
+                    "relevance": round(final_score, 3),
+                    "is_priority": is_priority,
+                    "last_modified": last_modified
                 })
+        
+        # Sort by final score and take top n_results
+        wiki_results.sort(key=lambda x: x['relevance'], reverse=True)
+        wiki_results = wiki_results[:n_results]
         
         debug_log(4, f"Wiki search for '{query}' returned {len(wiki_results)} results")
         

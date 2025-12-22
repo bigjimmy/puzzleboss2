@@ -146,6 +146,8 @@ INSERT INTO `config` VALUES
   ('SKIP_PUZZCORD', 'true'),
   ('TEAMNAME', 'Default Team Name'),
   ('WIKI_CHROMADB_PATH', '/var/lib/puzzleboss/chromadb'),
+  ('WIKI_EXCLUDE_PREFIXES', ''),
+  ('WIKI_PRIORITY_PAGES', 'Main Page'),
   ('WIKI_URL', 'https://localhost/wiki/');
 /*!40000 ALTER TABLE `config` ENABLE KEYS */;
 UNLOCK TABLES;
