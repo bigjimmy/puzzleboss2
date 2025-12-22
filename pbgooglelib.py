@@ -234,12 +234,13 @@ def get_puzzle_sheet_info(myfileid, puzzlename=None):
                     except json.JSONDecodeError as e:
                         debug_log(2, "[%s] Failed to parse metadata value for %s: %s" % (puzz_label, key, e))
                 
-                # Look for PB_SPREADSHEET key for sheet count
+                # Look for PB_SPREADSHEET key for sheet count (value is JSON like {"num_sheets": 5})
                 elif key == "PB_SPREADSHEET":
                     try:
-                        result["sheetcount"] = int(value)
+                        value_data = json.loads(value)
+                        result["sheetcount"] = int(value_data.get("num_sheets", 0))
                         debug_log(4, "[%s] Sheet count from metadata: %s" % (puzz_label, result["sheetcount"]))
-                    except (ValueError, TypeError) as e:
+                    except (json.JSONDecodeError, ValueError, TypeError) as e:
                         debug_log(2, "[%s] Failed to parse sheet count from PB_SPREADSHEET: %s" % (puzz_label, e))
             
             debug_log(5, "[%s] Found %d editors with activity, sheetcount=%s" % (puzz_label, len(result["editors"]), result["sheetcount"]))
