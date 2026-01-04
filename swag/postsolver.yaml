@@ -1,0 +1,54 @@
+tags:
+  - Solvers
+summary: Update multiple solver parts
+description: |
+  Update multiple solver properties in a single API call. This is more efficient
+  than making separate calls for each property.
+  
+  Pass a JSON object where keys are the part names and values are the new values.
+  
+  Special handling for 'puzz' field:
+  - Setting 'puzz' to a puzzle ID assigns the solver to that puzzle
+  - Setting 'puzz' to empty/null unassigns the solver from their current puzzle
+  - Puzzle assignment automatically logs activity and may change puzzle status
+  
+  Optional 'source' field can be provided for activity logging (default: 'puzzleboss').
+parameters:
+  - name: id
+    in: path
+    required: true
+    type: integer
+    description: The solver ID
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      description: Object containing solver parts to update
+      example:
+        fullname: "John Doe"
+        chat_name: "johndoe"
+responses:
+  200:
+    description: Solver parts updated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        solver:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: The solver ID
+          additionalProperties: true
+          description: Object containing the updated parts and their new values
+  400:
+    description: Invalid request (missing fields, invalid JSON, etc.)
+  404:
+    description: Solver not found
+  500:
+    description: Internal server error
+

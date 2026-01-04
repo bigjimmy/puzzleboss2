@@ -2,8 +2,8 @@
 require('puzzlebosslib.php');
 
 // Check for authenticated user
-$uid = getauthenticateduser();
-$solver = readapi("/solvers/$uid")->solver;
+$solver = getauthenticatedsolver();
+$uid = $solver->id;
 $username = $solver->name;
 
 // Get all available tags
@@ -21,9 +21,8 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
     $result = readapi('/search?tag=' . urlencode($search_tag));
     $search_results = $result->puzzles ?? array();
     
-    // Fetch full puzzle details and organize by round
-    foreach ($search_results as $puzzle_summary) {
-      $puzzle = readapi('/puzzles/' . $puzzle_summary->id)->puzzle;
+    // Organize puzzles by round (API now returns full puzzle data)
+    foreach ($search_results as $puzzle) {
       $round_name = $puzzle->roundname ?? 'Unknown Round';
       if (!isset($puzzles_by_round[$round_name])) {
         $puzzles_by_round[$round_name] = array();
@@ -163,20 +162,7 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
         </tr>
         <?php foreach ($puzzles as $puzzle): ?>
         <tr>
-          <td>
-            <?php
-            switch ($puzzle->status) {
-              case "New": echo '🆕'; break;
-              case "Being worked": echo '🙇'; break;
-              case "Needs eyes": echo '👀'; break;
-              case "WTF": echo '☢️'; break;
-              case "Critical": echo '⚠️'; break;
-              case "Solved": echo '✅'; break;
-              case "Unnecessary": echo '😶‍🌫️'; break;
-              default: echo $puzzle->status;
-            }
-            ?>
-          </td>
+          <td><?php echo get_status_display($puzzle->status); ?></td>
           <td>
             <a href="<?= htmlentities($puzzle->puzzle_uri ?? '#') ?>" target="_blank"><?= htmlentities($puzzle->name) ?></a>
             <?php if ($puzzle->ismeta): ?><span title="Meta">🎯</span><?php endif; ?>

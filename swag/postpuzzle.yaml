@@ -1,0 +1,57 @@
+tags:
+  - Puzzles
+summary: Update multiple puzzle parts
+description: |
+  Update multiple puzzle properties in a single API call. This is more efficient
+  than making separate calls for each property.
+  
+  Pass a JSON object where keys are the part names and values are the new values.
+  
+  **Restrictions:**
+  - `answer` - Not allowed. Use `POST /puzzles/<id>/answer` instead.
+  - `status: Solved` - Not allowed. Use `POST /puzzles/<id>/status` instead.
+  - Other status values (Being worked, Needs eyes, etc.) ARE allowed.
+  
+  **Allowed parts:** name, status (non-Solved), xyzloc, comments, round, ismeta, sheetcount, lastact, tags, etc.
+  
+  Note for tags: Requires nested object with {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}
+parameters:
+  - name: id
+    in: path
+    required: true
+    type: integer
+    description: The puzzle ID
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      description: Object containing puzzle parts to update
+      example:
+        status: "Being worked"
+        xyzloc: "Room 123"
+        comments: "Working on extraction"
+responses:
+  200:
+    description: Puzzle parts updated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        puzzle:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: The puzzle ID
+          additionalProperties: true
+          description: Object containing the updated parts and their new values
+  400:
+    description: Invalid request (missing fields, invalid JSON, etc.)
+  404:
+    description: Puzzle not found
+  500:
+    description: Internal server error
+

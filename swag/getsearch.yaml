@@ -15,7 +15,7 @@ parameters:
     description: Tag ID to search for
 responses:
   200:
-    description: List of puzzles matching the search criteria
+    description: List of puzzles matching the search criteria (full puzzle data from puzzle_view)
     schema:
       type: object
       properties:
@@ -24,6 +24,7 @@ responses:
           example: ok
         puzzles:
           type: array
+          description: Full puzzle objects from puzzle_view
           items:
             type: object
             properties:
@@ -33,6 +34,39 @@ responses:
               name:
                 type: string
                 example: crossword-puzzle
+              status:
+                type: string
+                example: Being worked
+              answer:
+                type: string
+                example: SOLUTION
+              roundname:
+                type: string
+                example: Round 1
+              round_id:
+                type: integer
+                example: 1
+              comments:
+                type: string
+              drive_uri:
+                type: string
+              chat_channel_link:
+                type: string
+              puzzle_uri:
+                type: string
+              ismeta:
+                type: boolean
+              cursolvers:
+                type: string
+                description: Comma-separated current solver names
+              solvers:
+                type: string
+                description: Comma-separated historical solver names
+              tags:
+                type: string
+                description: Comma-separated tag names
+              xyzloc:
+                type: string
   400:
     description: Bad request - missing or invalid parameters
     schema:

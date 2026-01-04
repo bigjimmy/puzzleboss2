@@ -16,23 +16,29 @@ $unsolvedrounds = 0;
 $totpuzz = 0;
 $solvedpuzz = 0;
 $unsolvedpuzz = 0;
-$newcnt = 0;
-$workcnt = 0;
-$wtfcnt = 0;
-$eyescnt = 0;
-$critcnt = 0;
-$critarray = [];
-$eyesarray = [];
-$newarray = [];
-$workonarray = [];
+
+// Dynamic status tracking - counts and puzzle arrays keyed by status name
+$status_counts = [];
+$status_puzzles = [];
+
+// Statuses EXCLUDED from the count table
+$excluded_from_count_table = ['[hidden]', 'Solved'];
+
+// Statuses EXCLUDED from the "work on" list
+$excluded_from_workon = ['[hidden]', 'Unnecessary', 'Solved'];
+
 $nolocarray = [];
-$workarray = [];
-$wtfarray = [];
 $rounds;
 
 
-$huntstruct = readapi("/all");
+$huntstruct = readapi("/allcached");
 $rounds = $huntstruct->rounds;
+
+// Fetch available statuses dynamically, excluding ones that shouldn't be manually selectable
+$excluded_statuses_for_dropdown = ['Solved', '[hidden]'];
+// Fetch available statuses dynamically from database
+$statusobj = readapi('/statuses');
+$allstatuses = $statusobj->statuses;
 
 // Create a cache of puzzle meta statuses
 $puzzle_meta_cache = [];
@@ -74,33 +80,23 @@ foreach ($rounds as $round) {
       continue;
     }
     $totpuzz += 1;
-    switch ($puzzle->status) {
-      case "New":
-        $newcnt += 1;
-        array_push($newarray, $puzzle);
-        break;
-      case "Being worked":
-        $workcnt += 1;
-	array_push($workarray, $puzzle);
-        break;
-      case "WTF":
-        $wtfcnt += 1;
-	array_push($wtfarray, $puzzle);
-        break;
-      case "Needs eyes":
-        $eyescnt += 1;
-        array_push($eyesarray, $puzzle);
-        break;
-      case "Critical":
-        $critcnt += 1;
-        array_push($critarray, $puzzle);
-        break;
-      case "Solved":
-	$solvedpuzz += 1;
-        if ($puzzle->ismeta) {
-          $round_metas_solved += 1;
-        }
-        break;
+    
+    $pstatus = $puzzle->status;
+    
+    // Track counts and puzzles by status dynamically
+    if (!isset($status_counts[$pstatus])) {
+      $status_counts[$pstatus] = 0;
+      $status_puzzles[$pstatus] = [];
+    }
+    $status_counts[$pstatus] += 1;
+    $status_puzzles[$pstatus][] = $puzzle;
+    
+    // Special handling for Solved (track separately for round completion)
+    if ($pstatus == 'Solved') {
+      $solvedpuzz += 1;
+      if ($puzzle->ismeta) {
+        $round_metas_solved += 1;
+      }
     }
     if ($puzzle->ismeta) {
       $round_metas += 1;
@@ -124,11 +120,13 @@ echo '</table><br><br>';
 
 echo '<table border=3>';
 echo '<tr><th>Status</th><th>Open Puzzle Count</th></tr>';
-echo '<tr><td>New</td><td>' . $newcnt . '</td></tr>';
-echo '<tr><td>Being worked</td><td>' . $workcnt . '</td></tr>';
-echo '<tr><td>WTF</td><td>' . $wtfcnt . '</td></tr>';
-echo '<tr><td>Needs Eyes</td><td>' . $eyescnt . '</td></tr>';
-echo '<tr><td>Critical</td><td>' . $critcnt . '</td></tr>';
+// Display counts for all statuses except excluded ones
+foreach ($allstatuses as $st) {
+  if (!in_array($st, $excluded_from_count_table)) {
+    $cnt = isset($status_counts[$st]) ? $status_counts[$st] : 0;
+    echo '<tr><td>' . htmlentities($st) . '</td><td>' . $cnt . '</td></tr>';
+  }
+}
 echo '</table><br><br>';
 
 echo 'Unsolved Puzzles Missing Location<br>';
@@ -152,10 +150,10 @@ foreach ($nolocarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
   $styleinsert = "";
-  if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+  if ($puzzle->ismeta && $puzzle->status != "Critical") {
     $styleinsert .= " bgcolor='Gainsboro' ";
   }
-  if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+  if ($puzzle->status == "New" && !$puzzle->ismeta) {
     $styleinsert .= " bgcolor='aquamarine' ";
   }
   if ($puzzle->status == "Critical") {
@@ -167,29 +165,7 @@ foreach ($nolocarray as $puzzle) {
     //}
     echo '<tr ' . $styleinsert . '>';
     echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '" target="_blank">';
-    switch ($puzzle->status) {
-      case "New":
-        echo "New";
-        break;
-      case "Being worked":
-        echo "Work";
-        break;
-      case "Needs eyes":
-        echo "Eyes";
-        break;
-      case "WTF":
-        echo "WTF";
-        break;
-      case "Critical":
-        echo "Crit";
-        break;
-      case "Solved":
-        echo "*";
-		break;
-      case "Unnecessary":
-        echo "Unnecessary";
-        break;
-    }
+    echo htmlentities($puzzle->status);
     echo '</a></td>';
     echo '<td>' . ispuzzlemeta($puzzle->id) . '</td>';
     echo '<td><a href="' . $puzzle->puzzle_uri . '">'. $puzzlename . '</a></td>';
@@ -212,17 +188,23 @@ echo '</table><br><br>';
 
 echo 'Total Hunt Overview:<br>';
 
-$workonarray = array_merge($critarray, $eyesarray, $wtfarray, $newarray, $workarray);
+// Build workonarray from all statuses except excluded ones
+$workonarray = [];
+foreach ($allstatuses as $st) {
+  if (!in_array($st, $excluded_from_workon) && isset($status_puzzles[$st])) {
+    $workonarray = array_merge($workonarray, $status_puzzles[$st]);
+  }
+}
 echo '<table border = 3>';
 echo '<tr><th>Status</th><th>Round</th><th>Meta</th><th>Name</th><th>Doc</th><th>Chat</th><th>Solvers(current)</th><th>Solvers(all time)</th><th>Location</th><th>Comment</th></tr>';
 foreach ($workonarray as $puzzle) {
   $puzzleid = $puzzle->id;
   $puzzlename = $puzzle->name;
   $styleinsert = "";
-  if ($puzzleid == $metapuzzle && $puzzle->status != "Critical") {
+  if ($puzzle->ismeta && $puzzle->status != "Critical") {
     $styleinsert .= " bgcolor='Gainsboro' ";
   }
-  if ($puzzle->status == "New" && $puzzleid != $metapuzzle) {
+  if ($puzzle->status == "New" && !$puzzle->ismeta) {
     $styleinsert .= " bgcolor='aquamarine' ";
   }
   if ($puzzle->status == "Critical") {
@@ -240,56 +222,12 @@ foreach ($workonarray as $puzzle) {
     echo '<input type="hidden" name="uid" value="' . $uid . '">';
     echo '<input type="hidden" name="part" value="status">';
     echo '<select id="value" name="value"/>';
-
-    switch ($puzzle->status) {
-      case "New":
-    echo '<option value="New" selected>New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Being worked":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked" selected>Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Needs eyes":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes" selected>Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "WTF":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF" selected>WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Critical":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical" selected>Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary">Unnecessary</option>';
-        break;
-      case "Unnecessary":
-    echo '<option value="New">New</option>';
-    echo '<option value="Being worked">Being worked</option>';
-    echo '<option value="Needs eyes">Needs eyes</option>';
-    echo '<option value="Critical">Critical</option>';
-    echo '<option value="WTF">WTF</option>';
-    echo '<option value="Unnecessary" selected>Unnecessary</option>';
-        break;
+    // Dynamic status dropdown - excludes Solved and [hidden]
+    foreach ($allstatuses as $statusval) {
+      if (!in_array($statusval, $excluded_statuses_for_dropdown)) {
+        $selected = ($puzzle->status == $statusval) ? ' selected' : '';
+        echo '<option value="' . htmlentities($statusval) . '"' . $selected . '>' . htmlentities($statusval) . '</option>';
+      }
     }
     echo '<input type="submit" name="submit" value="submit"></td>';
     echo '</form>';

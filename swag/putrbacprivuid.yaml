@@ -1,3 +1,5 @@
+tags:
+  - RBAC
 description: Post Priv Change/Set
 consumes:
     - application/json

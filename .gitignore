@@ -9,6 +9,7 @@ token.json
 admintoken.json
 puzzleboss2env/
 scripts/solvertable*
+scripts/loadtest_config.yaml
 deploy.sh
 pushbranchtoprod.sh
 __pycache__/

@@ -114,7 +114,7 @@ CREATE TABLE `config` (
 
 LOCK TABLES `config` WRITE;
 /*!40000 ALTER TABLE `config` DISABLE KEYS */;
-INSERT INTO `config` VALUES ('ACCT_URI', 'https://yourdomain.org/account'), ('BIN_URI', 'https://yourdomain.org/pb'), ('bookmarklet_js', 'insert complicated bookmarklet javascript here'), ('LOGLEVEL','3'), ('MAILRELAY', 'mail-server.yourdomain.org'), ('REGEMAIL', 'admin@yourdomain.org'), ('TEAMNAME', 'Default Team Name'), ('LDAP_ADMINDN', 'cn=name,dc=example,dc=org'), ('LDAP_ADMINPW', 'hunter2'), ('LDAP_DOMAIN', 'ou=people,dc=example,dc=org'),('LDAP_HOST', 'ldapserver.example.org'), ('LDAP_LDAP0', 'ldap domain name'), ('DOMAINNAME', 'example.org'), ('HUNT_FOLDER_NAME', 'Hunt 2999'), ('SKIP_GOOGLE_API', 'true'), ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'), ('PUZZCORD_HOST', 'puzzcord-server.example.org'), ('PUZZCORD_PORT', '3141'), ('SKIP_PUZZCORD', 'true'), ('BIGJIMMY_AUTOASSIGN', 'false'), ('BIGJIMMY_PUZZLEPAUSETIME', '1'), ('BIGJIMMY_THREADCOUNT', '2'), ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '10'), ('BIGJIMMY_QUOTAFAIL_DELAY', '5'); 
+INSERT INTO `config` VALUES ('ACCT_URI', 'https://yourdomain.org/account'), ('BIN_URI', 'https://yourdomain.org/pb'), ('bookmarklet_js', 'insert complicated bookmarklet javascript here'), ('LOGLEVEL','3'), ('MAILRELAY', 'mail-server.yourdomain.org'), ('REGEMAIL', 'admin@yourdomain.org'), ('TEAMNAME', 'Default Team Name'), ('LDAP_ADMINDN', 'cn=name,dc=example,dc=org'), ('LDAP_ADMINPW', 'hunter2'), ('LDAP_DOMAIN', 'ou=people,dc=example,dc=org'),('LDAP_HOST', 'ldapserver.example.org'), ('LDAP_LDAP0', 'ldap domain name'), ('DOMAINNAME', 'example.org'), ('HUNT_FOLDER_NAME', 'Hunt 2999'), ('SKIP_GOOGLE_API', 'true'), ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'), ('PUZZCORD_HOST', 'puzzcord-server.example.org'), ('PUZZCORD_PORT', '3141'), ('SKIP_PUZZCORD', 'true'), ('BIGJIMMY_AUTOASSIGN', 'false'), ('BIGJIMMY_PUZZLEPAUSETIME', '1'), ('BIGJIMMY_THREADCOUNT', '2'), ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '10'), ('BIGJIMMY_QUOTAFAIL_DELAY', '5'), ('MEMCACHE_HOST', ''), ('MEMCACHE_PORT', '11211'), ('MEMCACHE_ENABLED', 'false'); 
 /*!40000 ALTER TABLE `config` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -154,7 +154,7 @@ CREATE TABLE `puzzle` (
   `chat_channel_id` varchar(500) DEFAULT NULL,
   `chat_channel_link` varchar(255) DEFAULT NULL,
   `comments` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','[hidden]') NOT NULL,
+  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','Under control','Waiting for HQ','Grind','[hidden]') NOT NULL,
   `answer` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `round_id` int(11) NOT NULL,
   `drive_id` varchar(100) DEFAULT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE `round` (
   `round_uri` text,
   `drive_uri` varchar(255) DEFAULT NULL,
   `drive_id` varchar(100) DEFAULT NULL,
-  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','[hidden]') NOT NULL DEFAULT 'New',
+  `status` enum('New','Being worked','Needs eyes','Solved','Critical','Unnecessary','WTF','Under control','Waiting for HQ','Grind','[hidden]') NOT NULL DEFAULT 'New',
   `comments` text DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`)

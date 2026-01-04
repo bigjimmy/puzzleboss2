@@ -1,0 +1,47 @@
+tags:
+  - Rounds
+summary: Update multiple round parts
+description: |
+  Update multiple round properties in a single API call. This is more efficient
+  than making separate calls for each property.
+  
+  Pass a JSON object where keys are the part names and values are the new values.
+parameters:
+  - name: id
+    in: path
+    required: true
+    type: integer
+    description: The round ID
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      description: Object containing round parts to update
+      example:
+        status: "Being worked"
+        comments: "Working on this round"
+responses:
+  200:
+    description: Round parts updated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        round:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: The round ID
+          additionalProperties: true
+          description: Object containing the updated parts and their new values
+  400:
+    description: Invalid request (missing fields, invalid JSON, etc.)
+  404:
+    description: Round not found
+  500:
+    description: Internal server error
+

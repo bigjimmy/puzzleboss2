@@ -1,0 +1,23 @@
+tags:
+  - Puzzles
+summary: Delete a puzzle
+description: |
+  Deletes a puzzle by name. Also deletes the associated Google Sheet.
+parameters:
+  - name: puzzlename
+    in: path
+    type: string
+    required: true
+    description: Name of the puzzle to delete
+responses:
+  200:
+    description: Puzzle deleted successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
+          example: "Puzzle examplepuzzle deleted"

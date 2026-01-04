@@ -635,6 +635,143 @@ class TestRunner:
                 
         result.set_success("Puzzle modification test completed successfully")
 
+    def test_multi_part_update(self, result: TestResult):
+        """Test multi-part puzzle update endpoint POST /puzzles/<id>."""
+        self.logger.log_operation("Starting multi-part update test")
+        
+        # Get a puzzle to test with
+        puzzles = self.get_all_puzzles()
+        if not puzzles:
+            result.fail("No puzzles available for testing")
+            return
+            
+        # Find an unsolved puzzle
+        test_puzzle = None
+        for puzzle in puzzles:
+            details = self.get_puzzle_details(puzzle['id'])
+            if details and details.get('status') != 'Solved':
+                test_puzzle = details
+                break
+                
+        if not test_puzzle:
+            result.fail("No unsolved puzzles available for testing")
+            return
+            
+        puzzle_id = test_puzzle['id']
+        self.logger.log_operation(f"Testing multi-part update on puzzle {test_puzzle['name']} (id: {puzzle_id})")
+        
+        # Test 1: Successful multi-part update (status + xyzloc + comments)
+        self.logger.log_operation("Test 1: Successful multi-part update")
+        update_data = {
+            "status": "Being worked",
+            "xyzloc": "Test Room 999",
+            "comments": "Multi-part test comment"
+        }
+        try:
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}",
+                json=update_data
+            )
+            if not response.ok:
+                result.fail(f"Multi-part update failed: {response.text}")
+                return
+            response_data = response.json()
+            if response_data.get('status') != 'ok':
+                result.fail(f"Multi-part update returned error: {response_data}")
+                return
+        except Exception as e:
+            result.fail(f"Exception in multi-part update: {str(e)}")
+            return
+            
+        # Verify all fields were updated
+        updated_puzzle = self.get_puzzle_details(puzzle_id)
+        if not updated_puzzle:
+            result.fail("Failed to fetch puzzle after multi-part update")
+            return
+            
+        if updated_puzzle['status'] != "Being worked":
+            result.fail(f"Status not updated. Expected 'Being worked', got '{updated_puzzle['status']}'")
+            return
+        if updated_puzzle['xyzloc'] != "Test Room 999":
+            result.fail(f"Location not updated. Expected 'Test Room 999', got '{updated_puzzle['xyzloc']}'")
+            return
+        if updated_puzzle['comments'] != "Multi-part test comment":
+            result.fail(f"Comments not updated. Expected 'Multi-part test comment', got '{updated_puzzle['comments']}'")
+            return
+        self.logger.log_operation("Test 1 passed: All fields updated correctly")
+        
+        # Test 2: Rejected - trying to set answer via multi-part
+        self.logger.log_operation("Test 2: Verify 'answer' is rejected")
+        try:
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}",
+                json={"answer": "TESTANSWER", "xyzloc": "Another Room"}
+            )
+            if response.ok:
+                result.fail("Multi-part update should have rejected 'answer' field but succeeded")
+                return
+            # Check that error message mentions answer
+            error_text = response.text.lower()
+            if "answer" not in error_text:
+                self.logger.log_warning(f"Error message doesn't mention 'answer': {response.text}")
+        except Exception as e:
+            result.fail(f"Exception testing answer rejection: {str(e)}")
+            return
+        self.logger.log_operation("Test 2 passed: 'answer' correctly rejected")
+        
+        # Test 3: Rejected - trying to set status to 'Solved'
+        self.logger.log_operation("Test 3: Verify 'status: Solved' is rejected")
+        try:
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}",
+                json={"status": "Solved", "xyzloc": "Final Room"}
+            )
+            if response.ok:
+                result.fail("Multi-part update should have rejected 'status: Solved' but succeeded")
+                return
+            # Check that error message mentions solved
+            error_text = response.text.lower()
+            if "solved" not in error_text:
+                self.logger.log_warning(f"Error message doesn't mention 'Solved': {response.text}")
+        except Exception as e:
+            result.fail(f"Exception testing Solved rejection: {str(e)}")
+            return
+        self.logger.log_operation("Test 3 passed: 'status: Solved' correctly rejected")
+        
+        # Test 4: Non-Solved status values ARE allowed
+        self.logger.log_operation("Test 4: Verify other status values are allowed")
+        allowed_statuses = ["Needs eyes", "Critical", "Being worked"]
+        for test_status in allowed_statuses:
+            try:
+                response = requests.post(
+                    f"{self.base_url}/puzzles/{puzzle_id}",
+                    json={"status": test_status}
+                )
+                if not response.ok:
+                    result.fail(f"Multi-part update rejected valid status '{test_status}': {response.text}")
+                    return
+            except Exception as e:
+                result.fail(f"Exception testing status '{test_status}': {str(e)}")
+                return
+        self.logger.log_operation("Test 4 passed: Non-Solved statuses accepted")
+        
+        # Test 5: Invalid part name rejected
+        self.logger.log_operation("Test 5: Verify invalid part name is rejected")
+        try:
+            response = requests.post(
+                f"{self.base_url}/puzzles/{puzzle_id}",
+                json={"notarealpart": "somevalue"}
+            )
+            if response.ok:
+                result.fail("Multi-part update should have rejected invalid part name")
+                return
+        except Exception as e:
+            result.fail(f"Exception testing invalid part: {str(e)}")
+            return
+        self.logger.log_operation("Test 5 passed: Invalid part name rejected")
+        
+        result.set_success("Multi-part update test completed successfully")
+
     def test_meta_puzzles_and_round_completion(self, result: TestResult):
         """Test meta puzzle functionality and round completion logic."""
         self.logger.log_operation("Starting meta puzzles and round completion test")
@@ -1288,6 +1425,138 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def test_round_multi_part_update(self, result: TestResult):
+        """Test multi-part round update endpoint POST /rounds/<id>."""
+        self.logger.log_operation("Starting round multi-part update test")
+        
+        try:
+            # Get all existing rounds
+            rounds = self.get_all_rounds()
+            if not rounds:
+                result.fail("No rounds found for testing")
+                return
+                
+            # Select a random round for testing
+            test_round = random.choice(rounds)
+            round_id = test_round['id']
+            self.logger.log_operation(f"Testing multi-part update on round {test_round['name']} (id: {round_id})")
+            
+            # Test 1: Successful multi-part update (status + comments)
+            self.logger.log_operation("Test 1: Successful multi-part update")
+            update_data = {
+                "status": "Being worked",
+                "comments": "Multi-part test comment for round"
+            }
+            response = requests.post(
+                f"{self.base_url}/rounds/{round_id}",
+                json=update_data
+            )
+            if not response.ok:
+                result.fail(f"Round multi-part update failed: {response.text}")
+                return
+            response_data = response.json()
+            if response_data.get('status') != 'ok':
+                result.fail(f"Round multi-part update returned error: {response_data}")
+                return
+            self.logger.log_operation("Test 1 passed: Multi-part update succeeded")
+            
+            # Test 2: Verify the updates took effect
+            self.logger.log_operation("Test 2: Verify updates")
+            verify_response = requests.get(f"{self.base_url}/rounds/{round_id}/comments")
+            if verify_response.ok:
+                verify_data = verify_response.json()
+                if verify_data.get('round', {}).get('comments') != "Multi-part test comment for round":
+                    result.fail("Comments not updated correctly")
+                    return
+            self.logger.log_operation("Test 2 passed: Updates verified")
+            
+            # Test 3: Invalid part name rejected
+            self.logger.log_operation("Test 3: Verify invalid part name is rejected")
+            response = requests.post(
+                f"{self.base_url}/rounds/{round_id}",
+                json={"notarealpart": "somevalue"}
+            )
+            if response.ok:
+                result.fail("Round multi-part update should have rejected invalid part name")
+                return
+            self.logger.log_operation("Test 3 passed: Invalid part name rejected")
+            
+            result.set_success("Round multi-part update test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in round multi-part update test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
+    def test_solver_multi_part_update(self, result: TestResult):
+        """Test multi-part solver update endpoint POST /solvers/<id>."""
+        self.logger.log_operation("Starting solver multi-part update test")
+        
+        try:
+            # Get all solvers
+            solvers = self.get_all_solvers()
+            if not solvers:
+                result.fail("No solvers found for testing")
+                return
+                
+            # Select a random solver for testing
+            test_solver = random.choice(solvers)
+            solver_id = test_solver['id']
+            self.logger.log_operation(f"Testing multi-part update on solver {test_solver['name']} (id: {solver_id})")
+            
+            # Test 1: Successful multi-part update (fullname + chat_name)
+            self.logger.log_operation("Test 1: Successful multi-part update")
+            update_data = {
+                "fullname": "Test Fullname Updated",
+                "chat_name": "test_chat_updated"
+            }
+            response = requests.post(
+                f"{self.base_url}/solvers/{solver_id}",
+                json=update_data
+            )
+            if not response.ok:
+                result.fail(f"Solver multi-part update failed: {response.text}")
+                return
+            response_data = response.json()
+            if response_data.get('status') != 'ok':
+                result.fail(f"Solver multi-part update returned error: {response_data}")
+                return
+            self.logger.log_operation("Test 1 passed: Multi-part update succeeded")
+            
+            # Test 2: Verify the updates took effect
+            self.logger.log_operation("Test 2: Verify updates")
+            solver_details = self.get_solver_details(solver_id)
+            if not solver_details:
+                result.fail("Failed to get solver details after update")
+                return
+            if solver_details.get('fullname') != "Test Fullname Updated":
+                result.fail(f"Fullname not updated. Got: {solver_details.get('fullname')}")
+                return
+            if solver_details.get('chat_name') != "test_chat_updated":
+                result.fail(f"Chat name not updated. Got: {solver_details.get('chat_name')}")
+                return
+            self.logger.log_operation("Test 2 passed: Updates verified")
+            
+            # Test 3: Invalid part name rejected
+            self.logger.log_operation("Test 3: Verify invalid part name is rejected")
+            response = requests.post(
+                f"{self.base_url}/solvers/{solver_id}",
+                json={"notarealpart": "somevalue"}
+            )
+            if response.ok:
+                result.fail("Solver multi-part update should have rejected invalid part name")
+                return
+            self.logger.log_operation("Test 3 passed: Invalid part name rejected")
+            
+            result.set_success("Solver multi-part update test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in solver multi-part update test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def test_sheetcount(self, result: TestResult):
         """Test sheetcount field population, modification, and reading."""
         self.logger.log_operation("Starting sheetcount test")
@@ -1725,6 +1994,92 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def test_puzzle_deletion(self, result: TestResult):
+        """Test puzzle deletion functionality."""
+        self.logger.log_operation("Starting puzzle deletion test")
+        
+        try:
+            # First, we need a round to create a puzzle in
+            timestamp = str(int(time.time()))
+            round_name = f"DeleteTestRound {timestamp}"
+            
+            self.logger.log_operation(f"Creating test round: {round_name}")
+            test_round = self.create_round(round_name)
+            if not test_round:
+                result.fail("Failed to create test round for deletion test")
+                return
+            
+            # Create a puzzle to delete
+            puzzle_name = f"DeleteTestPuzzle {timestamp}"
+            self.logger.log_operation(f"Creating test puzzle: {puzzle_name}")
+            test_puzzle = self.create_puzzle(puzzle_name, str(test_round['id']))
+            if not test_puzzle:
+                result.fail("Failed to create test puzzle for deletion test")
+                return
+            
+            puzzle_id = test_puzzle['id']
+            # The puzzle name gets spaces stripped
+            expected_name = puzzle_name.replace(" ", "")
+            self.logger.log_operation(f"Created puzzle '{expected_name}' with id {puzzle_id}")
+            
+            # Verify puzzle exists before deletion
+            puzzle_details = self.get_puzzle_details(puzzle_id)
+            if not puzzle_details:
+                result.fail(f"Failed to verify puzzle exists before deletion")
+                return
+            self.logger.log_operation(f"Verified puzzle exists: {puzzle_details['name']}")
+            
+            # Delete the puzzle using DELETE method
+            self.logger.log_operation(f"Deleting puzzle via DELETE /deletepuzzle/{expected_name}")
+            response = requests.delete(f"{self.base_url}/deletepuzzle/{expected_name}")
+            
+            if not response.ok:
+                result.fail(f"Failed to delete puzzle: {response.status_code} - {response.text}")
+                return
+            
+            delete_response = response.json()
+            if delete_response.get('status') != 'ok':
+                result.fail(f"Unexpected response from delete: {delete_response}")
+                return
+            
+            self.logger.log_operation(f"Delete response: {delete_response}")
+            
+            # Verify puzzle no longer exists
+            self.logger.log_operation("Verifying puzzle no longer exists")
+            
+            # Try to get the puzzle - should fail
+            verify_response = requests.get(f"{self.base_url}/puzzles/{puzzle_id}")
+            if verify_response.ok:
+                # If we got a response, check if the puzzle data is actually there
+                verify_data = verify_response.json()
+                if verify_data.get('puzzle'):
+                    result.fail(f"Puzzle still exists after deletion!")
+                    return
+            
+            # Also check in the puzzles list
+            all_puzzles = self.get_all_puzzles()
+            puzzle_names = [p['name'] for p in all_puzzles]
+            if expected_name in puzzle_names:
+                result.fail(f"Deleted puzzle still appears in puzzles list")
+                return
+            
+            self.logger.log_operation(f"Verified puzzle '{expected_name}' no longer exists")
+            
+            # Test deleting a non-existent puzzle (should handle gracefully)
+            self.logger.log_operation("Testing deletion of non-existent puzzle")
+            fake_name = f"NonExistentPuzzle{timestamp}"
+            response = requests.delete(f"{self.base_url}/deletepuzzle/{fake_name}")
+            # This might return an error, which is expected - just log it
+            self.logger.log_operation(f"Delete non-existent puzzle response: {response.status_code}")
+            
+            result.set_success("Puzzle deletion test completed successfully")
+            
+        except Exception as e:
+            result.fail(f"Error in puzzle deletion test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def run_all_tests(self):
         """Run all test cases."""
         # Check if system is empty before running tests
@@ -1751,7 +2106,10 @@ class TestRunner:
             ("Solver Listing", self.test_solver_listing),
             ("Puzzle Creation", self.test_puzzle_creation),
             ("Puzzle Modification", self.test_puzzle_modification),
+            ("Puzzle Multi-Part Update", self.test_multi_part_update),
             ("Round Modification", self.test_round_modification),
+            ("Round Multi-Part Update", self.test_round_multi_part_update),
+            ("Solver Multi-Part Update", self.test_solver_multi_part_update),
             ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
             ("Answer Verification", self.test_answer_verification),
             ("Solver Assignments", self.test_solver_assignments),
@@ -1760,6 +2118,7 @@ class TestRunner:
             ("Solver History", self.test_solver_history),
             ("Sheetcount", self.test_sheetcount),
             ("Tagging", self.test_tagging),
+            ("Puzzle Deletion", self.test_puzzle_deletion),
             ("API Endpoints", self.test_api_endpoints)
         ]
         

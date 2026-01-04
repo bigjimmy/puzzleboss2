@@ -59,9 +59,8 @@ if (isset($_GET['submit'])) {
 }
 
 // Check for authenticated user
-$uid = getauthenticateduser();
-$solver = readapi("/solvers/$uid")->solver;
-$fullhunt = array_reverse(readapi('/all')->rounds);
+$solver = getauthenticatedsolver();
+$fullhunt = array_reverse(readapi('/allcached')->rounds);
 
 if (isset($_GET['data'])) {
   header('Content-Type: application/json; charset=utf-8');
@@ -72,6 +71,11 @@ if (isset($_GET['data'])) {
 }
 
 $use_text = isset($_GET['text_only']);
+
+// Minimum time before hints are available (default: 60 minutes)
+// Puzzles created before this timestamp are eligible for hints
+$hint_wait_minutes = isset($config->HINT_WAIT_MINUTES) ? (int)$config->HINT_WAIT_MINUTES : 60;
+$min_hint_time = time() - ($hint_wait_minutes * 60);
 
 $username = $solver->name;
 $mypuzzle = $solver->puzz;
@@ -136,7 +140,7 @@ HTML;
 }
 
 function print_rounds_table($rounds, $mypuzzle) {
-  global $use_text, $username, $mypuzzle;
+  global $use_text, $username, $mypuzzle, $min_hint_time;
   echo '<table border=4 style="vertical-align:top;" class="rounds"><tr>';
   foreach ($rounds as $round) {
     $num_open = 0;
@@ -214,29 +218,7 @@ function print_rounds_table($rounds, $mypuzzle) {
       }
       echo '<tr ' . $styleinsert . '>';
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
-      switch ($puzzle->status) {
-        case "New":
-          echo $use_text ? '.' : '🆕';
-          break;
-        case "Being worked":
-          echo $use_text ? 'O' : '🙇';
-          break;
-        case "Needs eyes":
-          echo $use_text ? 'E' : '👀';
-          break;
-        case "WTF":
-          echo $use_text ? '?' : '☢️';
-          break;
-        case "Critical":
-          echo $use_text ? '!' : '⚠️';
-          break;
-        case "Solved":
-          echo $use_text ? '*' : '✅';
-          break;
-        case "Unnecessary":
-          echo $use_text ? 'X' : '😶‍🌫️';
-          break;
-      }
+      echo get_status_display($puzzle->status, $use_text);
       echo '</a></td>';
       echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
       if ($puzzle->ismeta) {
@@ -460,7 +442,7 @@ if (count($comparison) > 0) {
 ?>
 <?= $wifi_warning ?>
 You are: <?= $username ?><br>
-<a href="status.php">Hunt Status Overview / Puzzle Suggester</a><br>
+<a href="status.php">Hunt Status Overview / Puzzle Suggester</a> | <a href="search.php">Search Puzzles by Tag</a><br>
 <?php
 $unsolved_rounds = array();
 $solved_rounds = array();
@@ -486,7 +468,7 @@ if (count($solved_rounds) > 0) {
 }
 ?>
 <br>
-<a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round)</a>
+<a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round, manage tags)</a>
 <br><h3>Legend:</h3>
 <table>
   <tr bgcolor="Gainsboro"><td><?= $use_text ? '.' : '🆕' ?></td><td>Meta Puzzle</td></tr>
