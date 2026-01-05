@@ -5,6 +5,10 @@ description: |
   Retrieve a specific part/field of a puzzle.
   
   For tags, returns comma-separated tag names (e.g., "logic,wordplay,meta").
+  
+  Special activity fields:
+  - lastact: Returns the most recent activity of ANY type on the puzzle
+  - lastsheetact: Returns the most recent sheet revision (type='revise') activity only
 parameters:
     - in: path
       name: id
@@ -34,6 +38,7 @@ parameters:
         - cursolvers
         - xyzloc
         - lastact
+        - lastsheetact
         - sheetcount
         - tags
 responses:

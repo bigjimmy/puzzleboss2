@@ -106,7 +106,7 @@ DROP TABLE IF EXISTS `config`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `config` (
   `key` varchar(100) NOT NULL,
-  `val` varchar(2000) DEFAULT NULL,
+  `val` varchar(8192) DEFAULT NULL,
   PRIMARY KEY (`key`),
   UNIQUE KEY `key_UNIQUE` (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
@@ -114,7 +114,41 @@ CREATE TABLE `config` (
 
 LOCK TABLES `config` WRITE;
 /*!40000 ALTER TABLE `config` DISABLE KEYS */;
-INSERT INTO `config` VALUES ('ACCT_URI', 'https://yourdomain.org/account'), ('BIN_URI', 'https://yourdomain.org/pb'), ('bookmarklet_js', 'insert complicated bookmarklet javascript here'), ('LOGLEVEL','3'), ('MAILRELAY', 'mail-server.yourdomain.org'), ('REGEMAIL', 'admin@yourdomain.org'), ('TEAMNAME', 'Default Team Name'), ('LDAP_ADMINDN', 'cn=name,dc=example,dc=org'), ('LDAP_ADMINPW', 'hunter2'), ('LDAP_DOMAIN', 'ou=people,dc=example,dc=org'),('LDAP_HOST', 'ldapserver.example.org'), ('LDAP_LDAP0', 'ldap domain name'), ('DOMAINNAME', 'example.org'), ('HUNT_FOLDER_NAME', 'Hunt 2999'), ('SKIP_GOOGLE_API', 'true'), ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'), ('PUZZCORD_HOST', 'puzzcord-server.example.org'), ('PUZZCORD_PORT', '3141'), ('SKIP_PUZZCORD', 'true'), ('BIGJIMMY_AUTOASSIGN', 'false'), ('BIGJIMMY_PUZZLEPAUSETIME', '1'), ('BIGJIMMY_THREADCOUNT', '2'), ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '10'), ('BIGJIMMY_QUOTAFAIL_DELAY', '5'), ('MEMCACHE_HOST', ''), ('MEMCACHE_PORT', '11211'), ('MEMCACHE_ENABLED', 'false'); 
+INSERT INTO `config` VALUES
+  ('ACCT_URI', 'https://yourdomain.org/account'),
+  ('BIN_URI', 'https://yourdomain.org/pb'),
+  ('BIGJIMMY_AUTOASSIGN', 'false'),
+  ('BIGJIMMY_PUZZLEPAUSETIME', '1'),
+  ('BIGJIMMY_QUOTAFAIL_DELAY', '5'),
+  ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '10'),
+  ('BIGJIMMY_THREADCOUNT', '2'),
+  ('bookmarklet_js', 'insert complicated bookmarklet javascript here'),
+  ('DOMAINNAME', 'example.org'),
+  ('GEMINI_API_KEY', ''),
+  ('GEMINI_MODEL', 'gemini-3-flash-preview'),
+  ('GEMINI_SYSTEM_INSTRUCTION', 'You are a helpful assistant for a puzzle hunt team. You have access to tools to query hunt status, puzzle information, and solver activity. RULES: 1. Always use your tools proactively - never say you cannot answer without trying first. 2. Use get_all_data as a fallback when unsure which tool has the data. 3. Never ask for permission to use tools - just use them. 4. Give complete answers - if you mention something exists, identify it by name. 5. When recommending puzzles, always provide the actual puzzle name(s). When answering: Be concise and direct. Format lists clearly. The hunt has rounds containing puzzles. Statuses: New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary, Under control, Waiting for HQ, Grind. Puzzles can have tags like conundrum, logic, wordplay.'),
+  ('HUNT_FOLDER_NAME', 'Hunt 2999'),
+  ('LDAP_ADMINDN', 'cn=name,dc=example,dc=org'),
+  ('LDAP_ADMINPW', 'hunter2'),
+  ('LDAP_DOMAIN', 'ou=people,dc=example,dc=org'),
+  ('LDAP_HOST', 'ldapserver.example.org'),
+  ('LDAP_LDAP0', 'ldap domain name'),
+  ('LOGLEVEL', '3'),
+  ('MAILRELAY', 'mail-server.yourdomain.org'),
+  ('MEMCACHE_ENABLED', 'false'),
+  ('MEMCACHE_HOST', ''),
+  ('MEMCACHE_PORT', '11211'),
+  ('PUZZCORD_HOST', 'puzzcord-server.example.org'),
+  ('PUZZCORD_PORT', '3141'),
+  ('REGEMAIL', 'admin@yourdomain.org'),
+  ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
+  ('SKIP_GOOGLE_API', 'true'),
+  ('SKIP_PUZZCORD', 'true'),
+  ('TEAMNAME', 'Default Team Name'),
+  ('WIKI_CHROMADB_PATH', '/var/lib/puzzleboss/chromadb'),
+  ('WIKI_EXCLUDE_PREFIXES', ''),
+  ('WIKI_PRIORITY_PAGES', 'Main Page'),
+  ('WIKI_URL', 'https://localhost/wiki/');
 /*!40000 ALTER TABLE `config` ENABLE KEYS */;
 UNLOCK TABLES;
 
