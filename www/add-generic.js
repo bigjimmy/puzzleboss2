@@ -30,7 +30,7 @@ export default {
         uid: Number,
         
         // whether the puzzle is a meta (status)
-        ismeta: Boolean,
+        ismeta: Number,
         // list of statuses, or "puzzle filter keys" (status)
         pfk: Object,
         // list of solvers,
@@ -55,6 +55,9 @@ export default {
                 return ((this.puzzle.comments === null) || (this.puzzle.comments.length === 0)) ? 
                         '➕' : '📝'
             }
+            if (this.type === 'tags') {
+                return '🏷️';
+            }
             return '🤡!';
         },
         //
@@ -72,6 +75,10 @@ export default {
                     desc += ` at #${this.puzzle.xyzloc}`;
                 }
                 return desc;
+            }
+
+            if (this.type === 'tags') {
+                return ((this.puzzle.tags) && this.puzzle.tags.length > 0) ? this.puzzle.tags : 'no tags!';
             }
 
             var desc = "This puzzle is being worked on";
@@ -390,7 +397,11 @@ export default {
         <p v-if="type === 'work state'">Location: <input ref="modal-input" v-model="stateStrA"></input></p>
 
         <!-- note/comments -->
-        <p><textarea v-if="type === 'note' || type === 'comments'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
+        <p v-if="type === 'note' || type === 'comments'"><textarea ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
+
+        <!-- tags (WIP) -->
+        <p v-if="type === 'tags'">Current tags: {{puzzle.tags ? puzzle.tags : 'none'}} <br/>
+                                  Adding tags is WIP.</p>
 
         <!-- status -->
         <p v-if="type === 'status'">
