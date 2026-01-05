@@ -11,26 +11,31 @@
             <h2>Hello, {{username}}! It is currently {{time}} TIMEMIT.</h2>
             <div id = "status">
                 <p>{{roundStats["solved"]}} rounds solved out of {{roundStats["count"]}} open.
-                    {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open ({{puzzleStats["New"]}} new, {{puzzleStats["Being worked"]}} being worked, {{puzzleStats["Critical"]}} critical, {{puzzleStats["Needs eyes"]}} needs eyes, {{puzzleStats["WTF"]}} WTF). Page status: </p>
+                    {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open. Page status: </p>
                 <div :class = updateState></div>
             </div>
             <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp; <button @click="showControls = !showControls">{{showControls ? 'Hide ' : 'Show '}}all controls</button></p>
 
             <div v-if="showControls" id= "controls"> 
-            <button @click="applyShow(false)">Hide All Rounds</button>
-            <button @click="applyShow(true)">Show All Rounds</button>
-
-            Show puzzles:
-            <div
-                v-for="key in puzzleFilterKeys"
-                class="filter"
-                @click="toggleKey(key)"
-                >
-                {{key}} <input type="checkbox" v-model="puzzleFilter[key]"/>
+            <div>
+                <button @click="applyShow(false)">Hide All Rounds</button>
+                <button @click="applyShow(true)">Show All Rounds</button>
             </div>
-            <button @click="applyShowFilter(false)">Hide All Puzzles</button>
-            <button @click="applyShowFilter(true)">Show All Puzzles</button>
-            <p>Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/></p>
+            <div>
+                Show puzzles:
+                <div
+                    v-for="key in puzzleFilterKeys"
+                    class="filter"
+                    @click="toggleKey(key)"
+                    >
+                    {{key}} <input type="checkbox" v-model="puzzleFilter[key]"/>
+                </div>
+                <button @click="applyShowFilter(false)">Hide All Puzzles</button>
+                <button @click="applyShowFilter(true)">Show All Puzzles</button>
+            </div>
+            <div>
+                <p>Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/></p>
+            </div>
             </div>
 
             <div id = "allrounds" :class = "{'usecolumns': useColumns}">
@@ -47,6 +52,7 @@
                         :uid="uid"
                         :sortpuzzles="sortPuzzles"
                         :currpuzz="currPuzz"
+                        :solvers="solvers"
                         @toggle-body="toggleBody"
                         @please-fetch = "fetchData"
                     ></round>
@@ -83,6 +89,7 @@
         import { createApp, ref, useTemplateRef, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
         import Round from './round.js'
         import solvesound from './solve-sound.js'
+        import Consts from './consts.js'
 
         createApp({
             components: {
@@ -138,12 +145,12 @@
                 const showBody = ref([])
                 const highlight = ref([])
                 const puzzleFilterKeys = ref(
-                    ['Solved', 'WTF', 'Critical', 'Being worked', 'New', 'Needs eyes', 'Unnecessary']
-                )
-                const puzzleFilter = ref({
-                    'Solved': true, 'WTF': true, 'Critical': true, 'Being worked': true, 'New': true, 'Needs eyes': true, 'Unnecessary': true
-                })
-                const showControls = ref(true);
+                    Consts.statuses.slice()
+                );
+                const puzzleFilter = ref(
+                    Object.fromEntries(Consts.statuses.map((status) => [status, true]))
+                );
+                const showControls = ref(false);
 
                 const sortPuzzles = ref(false);
                 const roundStats = ref({})
@@ -160,7 +167,12 @@
                 const currPuzz = ref(0);
 
                 const solveSoundRef = useTemplateRef('solveSound');
+
+                const solvers = ref(null);
                 
+                //
+                // Replace this for local testing.
+                //
                 <?php
                      echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\");";
                 ?>
@@ -190,8 +202,9 @@
 
                         if (firstUpdate) {
                             const url = `./apicall.php?&apicall=solvers`;
-                            let solvers = await (await fetch(url)).json();
-                            uid.value = solvers.solvers.filter(s => s.name === username.value)[0].id;
+                            const solversData = await (await fetch(url)).json();
+                            solvers.value = solversData.solvers;
+                            uid.value = solversData.solvers.filter(s => s.name === username.value)[0].id;
                         }
 
                         const solver_url = `./apicall.php?&apicall=solver&apiparam1=${uid.value}`
@@ -264,17 +277,12 @@
                     let roundStatsLocal = {'count': 0, 'solved': 0};
                     data.value.rounds.forEach((round) => {
                         roundStatsLocal['count'] += 1;
-                        const roundSolved = round.puzzles.filter(puzzle => puzzle.status === 'Solved')
-                                                         .filter(puzzle => puzzle.id === round.meta_id)
-                                                         .length; 
-
-                        roundStatsLocal['solved'] += roundSolved;
-
+                        roundStatsLocal['solved'] += Consts.isRoundSolved(round) ? 1 : 0;
                     });
 
                     roundStats['unsolved'] = roundStats['count'] - roundStats['solved'];
 
-                    let puzzleStatsLocal = {'Count': 0, 'Solved': 0, 'WTF': 0, 'Critical': 0, 'Being worked': 0, 'New': 0, 'Needs eyes': 0, 'Unnecessary': 0};
+                    let puzzleStatsLocal = Object.fromEntries([['Count', 0]].concat(Consts.statuses.map((status) => [status, 0])));
                     data.value.rounds.flatMap((round) => {
                         return round.puzzles.map(puzzle => puzzle.status);
                     }).forEach((status) => {
@@ -406,7 +414,8 @@
                     time, updateState,
                     fetchData,
                     useColumns, scrollSpeed,
-                    uid, username, currPuzz
+                    uid, username, currPuzz,
+                    solvers
                 }
             },
         }).mount('#main');

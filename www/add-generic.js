@@ -1,19 +1,27 @@
 import { ref, useTemplateRef, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
+import Consts from './consts.js';
 
 //
 // This component represents one of three update icons on each puzzle. Much of
 // that functionality is shared, so I refactored it into one file. You can
 // argue about whether that was a good idea.
 //
-// There are three kinds of update icons: "note", which updates comments,
-// "work state", which updates location and your "currently solving" state, and
-// "status", which updates puzzle status (including answers and whether it is a
-// meta for the round).
+// There are five kinds of update icons:
 //
+// round:
+// - "comments": updates a round's comments
+//
+// puzzle:
+// - "note": updates a puzzle's comments
+// - "work state": updates location and your currently solving state
+// - "status": updates puzzle status (including answer, meta)
+// - "tags" (WIP): updates puzzle tags
+//
+
 export default {
     props: {
     
-        // the puzzle from the puzzboss API
+        // the puzzle or round from the puzzboss API
         puzzle: Object,
         // the type of update icon
         type: String,
@@ -24,14 +32,15 @@ export default {
         // whether the puzzle is a meta (status)
         ismeta: Boolean,
         // list of statuses, or "puzzle filter keys" (status)
-        pfk: Object
+        pfk: Object,
+        // list of solvers,
+        solvers: Object
     },
     computed: {
         //
         // Computes the icon to be displayed.
         //
         icon() {
-            if (this.type === 'note') return this.puzzle.comments == null ? '➕' : 'ℹ️';
             if (this.type === 'work state') {
                 if (this.puzzle.cursolvers !== null && this.puzzle.cursolvers.length !== 0) return '👥';
                 if (this.puzzle.xyzloc !== null && this.puzzle.xyzloc.length !== 0) return '📍'
@@ -39,9 +48,12 @@ export default {
             }
             if (this.type === 'status') {
                 if (this.ismeta) return 'Ⓜ️';
-                const map = {'New': '🆕', 'Being worked': '🙇', 'Unnecessary': '🙃', 'WTF': '☢️', 'Critical': '⚠️', 'Solved': '✅', 'Needs eyes': '👀'}
-                const ret = map[this.puzzle.status];
-                return (ret === undefined) ? '🤡' : ret;
+                const idx = Consts.statuses.indexOf(this.puzzle.status);
+                return (idx === -1) ? '🤡' : Consts.emoji[idx];
+            }
+            if ((this.type === 'note') || (this.type === 'comments')) {
+                return ((this.puzzle.comments === null) || (this.puzzle.comments.length === 0)) ? 
+                        '➕' : '📝'
             }
             return '🤡!';
         },
@@ -49,7 +61,11 @@ export default {
         // Computes the description, or hover text, for the icon.
         //
         description() {
-            if (this.type === 'note') return this.puzzle.comments == null ? 'add note' : this.puzzle.comments;
+            if ((this.type === 'note') || (this.type === 'comments')) {
+                return ((this.puzzle.comments == null) || (this.puzzle.comments.length == 0)) ? 
+                    'add note' : this.puzzle.comments;
+            }
+
             if (this.type === 'status') {
                 var desc = (this.ismeta ? '(Meta) ' : '') + this.puzzle.status;
                 if (this.puzzle.xyzloc !== null && this.puzzle.xyzloc.length !== 0) {
@@ -113,10 +129,10 @@ export default {
         const puzzle = useTemplateRef('puzzle-tag');
 
         //
-        // stateStrA is shared by all types. It represents comments for "note",
-        // location (xyzloc) for "work state", and status for "status". It
-        // shadows the true value of the puzzle state until the user commits
-        // the change with the save button. 
+        // stateStrA is shared by all types. It represents comments for
+        // "note/comments", location (xyzloc) for "work state", and status for
+        // "status". It shadows the true value of the puzzle state until the
+        // user commits the change with the save button. 
         //
         const stateStrA = ref("");
         
@@ -128,9 +144,10 @@ export default {
         const isMetaLoc = ref(false);
         
         //
-        // Time since last activity (for status modal)
+        // Last activity (for status modal)
         //
-        const timeSinceLastAct = ref("");
+        const lastActInfo = ref("");
+        const lastActTime = ref("");
 
         // Force answers to be all uppercase.
         watch(answer, () => {
@@ -171,7 +188,7 @@ export default {
                 //
                 // Type-specific initalization of state variables.
                 //
-                if (props.type === 'note') {
+                if ((props.type === 'note') || (props.type === 'comments')) {
                     stateStrA.value = props.puzzle.comments;
                 } else if (props.type === 'work state') {
                     stateStrA.value = props.puzzle.xyzloc;
@@ -183,30 +200,37 @@ export default {
                     showStatus.value = true;
                 } else if (props.type === 'status') {
                     stateStrA.value = props.puzzle.status;           
-                    isMetaLoc.value = props.ismeta;
+                    isMetaLoc.value = props.ismeta != 0 ? true : false;
                     answer.value = props.puzzle.answer !== null ? props.puzzle.answer : "";
                     
-                    // Fetch last activity time
+                    // Fetch last activity information
                     try {
                         const lastActUrl = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=lastact`;
                         let lastActData = await(await fetch(lastActUrl)).json();
-                        if (lastActData.puzzle && lastActData.puzzle.lastact && lastActData.puzzle.lastact.time) {
-                            const lastActTime = new Date(lastActData.puzzle.lastact.time);
+                        if (lastActData.lastact && lastActData.lastact.time) {
+                            const lastActDate = new Date(lastActData.lastact.time);
                             const now = new Date();
-                            const diffMs = now - lastActTime;
+                            const diffMs = now - lastActDate;
                             if (diffMs >= 0) {
                                 const diffSec = Math.floor(diffMs / 1000);
                                 const hours = Math.floor(diffSec / 3600);
                                 const minutes = Math.floor((diffSec % 3600) / 60);
                                 const seconds = diffSec % 60;
-                                timeSinceLastAct.value = `${hours}h ${minutes}m ${seconds}s ago`;
+                                lastActTime.value = `${hours}h ${minutes}m ${seconds}s ago`;
+
+                                const activity = lastActData.lastact.type[0].toUpperCase() + lastActData.lastact.type.slice(1);
+                                const solvers = props.solvers.filter(s => s.id === lastActData.lastact.solver_id);
+                                const solver = solvers.length > 0 ? ` by ${solvers[0].name}`: '';
+                                lastActInfo.value = `${activity}${solver},`;
                             }
                         } else {
-                            timeSinceLastAct.value = "";
+                            lastActInfo.value = "";
+                            lastActTime.value = "";
                         }
                     } catch (e) {
                         console.log("Failed to fetch lastact:", e);
-                        timeSinceLastAct.value = "";
+                        lastActInfo.value = "";
+                        lastActTime.value = "";
                     }
                 }
 
@@ -233,7 +257,10 @@ export default {
                 // read stateStrA and assign it to the appropriate property
                 // before fetching the appropriate endpoint.
                 //
-                if (props.type === 'note') what = 'comments';
+                if ((props.type === 'note') || (props.type === 'comments')) {
+                    what = 'comments';
+                }
+
                 if (props.type === 'work state') what = 'xyzloc';
                 if (props.type === 'status') what = 'status';
 
@@ -262,7 +289,10 @@ export default {
                 //
                 // Hit the backend with the appropriate API parameters.
                 //
-                const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}`;
+                const url = (props.type === 'comments') ?
+                                `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.id}&apiparam2=${what}` :
+                                `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}` ;
+
                 if (emitFetch) {
                     try {
                         await fetch(url, {
@@ -279,16 +309,14 @@ export default {
 
                 //
                 // We do special handling of the meta location update, since
-                // it can be updated at the same time as status, and it hits
-                // the round API as a property of the round, rather than the
-                // puzzle.
+                // it can be updated at the same time as status.
                 //
-                if (props.type === 'status' && (isMetaLoc.value != props.ismeta)) {
-                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.round_id}&apiparam2=meta_id`
+                if (props.type === 'status' && (isMetaLoc.value !== (props.ismeta != 0 ? true : false ))) {
+                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=ismeta`
                     try {
                         await fetch(url, {
                             method: 'POST',
-                            body: JSON.stringify({ "meta_id": isMetaLoc.value ? props.puzzle.id : null }),
+                            body: JSON.stringify({ "ismeta": isMetaLoc.value }),
                         });
                         if (!emitFetch) context.emit('please-fetch');
 
@@ -344,13 +372,13 @@ export default {
         return {
             showModal, toggleModal, warning,
             stateStrA,
-            answer, isMetaLoc, timeSinceLastAct,
+            answer, isMetaLoc, lastActInfo, lastActTime,
             showStatus, currentlyWorking, claimCurrentPuzzle
         };
     },
 
     template: `
-    <p class="puzzle-icon" ref="puzzle-tag" :title="description" @click.prevent="toggleModal(false)">{{icon}}</p>
+    <p class="puzzle-icon" ref="puzzle-tag" :title="description" @click.stop="toggleModal(false)">{{icon}}</p>
     <dialog v-if='showModal' open>
         <h4>Editing {{type}} for {{puzzle.name}}:</h4>
         <p v-if="warning.length !== 0">{{warning}}</p>
@@ -361,12 +389,19 @@ export default {
         <p v-if="(!currentlyWorking) && showStatus">You are not marked as currently working on this puzzle. Would you like to be? <button @click="claimCurrentPuzzle">Yes</button></p>
         <p v-if="type === 'work state'">Location: <input ref="modal-input" v-model="stateStrA"></input></p>
 
-        <!-- note -->
-        <p><textarea v-if="type === 'note'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
+        <!-- note/comments -->
+        <p><textarea v-if="type === 'note' || type === 'comments'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
 
         <!-- status -->
-        <p v-if="type === 'status' && puzzle.sheetcount">Sheets in spreadsheet: {{puzzle.sheetcount}}</p>
-        <p v-if="type === 'status' && timeSinceLastAct">Last activity: {{timeSinceLastAct}}</p>
+        <p v-if="type === 'status'">
+            <em v-if="puzzle.sheetcount">Sheets in spreadsheet: </em>
+            {{puzzle.sheetcount ? puzzle.sheetcount : ''}}
+            <br v-if="lastActTime"/>
+            <em v-if="lastActTime">Last activity:</em>
+            {{lastActInfo ? lastActInfo : ''}}
+            <br v-if="lastActInfo"/>
+            {{lastActTime ? lastActTime : ''}}
+        </p>
         <p v-if="type === 'status'">Is Meta: <input type="checkbox" v-model="isMetaLoc"></input></p>
         <p v-if="type === 'status'"> Status:
             <select ref="modal-input" class="dropdown" v-model="stateStrA" :disabled="puzzle.status === 'Solved'">
@@ -379,8 +414,8 @@ export default {
             </select>
         </p>
         <p v-if="type === 'status' && stateStrA === 'Solved'">Answer: <input v-model = "answer"></input></p>
-        <button @click="toggleModal(false)">Close</button>
-        <button @click="toggleModal(true)">Save</button>
+        <button @click.stop="toggleModal(false)">Close</button>
+        <button @click.stop="toggleModal(true)">Save</button>
     </dialog>
     `
   }
