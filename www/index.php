@@ -88,6 +88,14 @@
                 <solvesound ref="solveSound"></solvesound>
             </div>
 
+            <datalist id="taglist">
+                <option
+                    v-for="tag in tags"
+                    :key="tag.id"
+                    :value="tag.name">
+                </option>
+            </datalist>
+
         </div>
     <script type="module">
 
@@ -185,6 +193,7 @@
                 ?>
                 const uid = ref(0);
 
+                const tags = ref([]);
                 const tagFilter = ref("");
 
                 //
@@ -214,6 +223,15 @@
                             const solversData = await (await fetch(url)).json();
                             solvers.value = solversData.solvers;
                             uid.value = solversData.solvers.filter(s => s.name === username.value)[0].id;
+
+                            //
+                            // Read tags once at first update. This could be moved
+                            // out of the if block if we find that new tags are
+                            // being created more often than people reload.
+                            //
+                            const tags_url = `${Consts.api}/apicall.php?&apicall=tags`;
+                            const tagsData = await (await fetch(tags_url)).json();
+                            tags.value = tagsData.tags;
                         }
 
                         const solver_url = `${Consts.api}/apicall.php?&apicall=solver&apiparam1=${uid.value}`
@@ -425,7 +443,7 @@
                     useColumns, scrollSpeed,
                     uid, username, currPuzz,
                     solvers,
-                    tagFilter
+                    tags, tagFilter
                 }
             },
         }).mount('#main');

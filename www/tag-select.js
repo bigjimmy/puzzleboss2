@@ -4,11 +4,21 @@ export default {
       allowAdd: Boolean,
       current: String
     },
-    emits: ['update:current'],
+    emits: ['update:current', 'complete-transaction'],
     setup(props) {
-        return {};
+        function focus() {
+            this.$refs["tag-select"].focus();
+        }
+
+        return {focus};
     },
-    template: `<input type="text"
-                :value="current"
-                @input="$emit('update:current', $event.target.value.toLowerCase())">`
+    template: `
+        <input 
+            ref="tag-select"
+            list="taglist"
+            type="text"
+            :value="current"
+            @input="$emit('update:current', $event.target.value.toLowerCase())"
+            @keyup.enter="$emit('complete-transaction')">
+    `
   }
