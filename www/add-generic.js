@@ -1,4 +1,5 @@
 import { ref, useTemplateRef, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
+import TagSelect from './tag-select.js';
 import Consts from './consts.js';
 
 //
@@ -19,6 +20,9 @@ import Consts from './consts.js';
 //
 
 export default {
+    components: {
+        TagSelect
+    },
     props: {
     
         // the puzzle or round from the puzzboss API
@@ -155,10 +159,21 @@ export default {
         //
         const lastActInfo = ref("");
         const lastActTime = ref("");
+        
+        //
+        // Contains the next tag to be added to the list, if any.
+        //
+        const nextTag = ref("");
 
         // Force answers to be all uppercase.
         watch(answer, () => {
             answer.value = answer.value.toUpperCase();
+        });
+
+        // Force all new tags to conform to regex.
+        watch(nextTag, () => {
+            const tagRegex = /[^a-zA-Z0-9_-]/i
+            nextTag.value = nextTag.value.replace(tagRegex, "");
         });
 
         //
@@ -239,6 +254,8 @@ export default {
                         lastActInfo.value = "";
                         lastActTime.value = "";
                     }
+                } else if (props.type === 'tags') {
+                    stateStrA.value = props.puzzle.tags.split(",");
                 }
 
                 //
@@ -270,6 +287,11 @@ export default {
 
                 if (props.type === 'work state') what = 'xyzloc';
                 if (props.type === 'status') what = 'status';
+                if (props.type === 'tags') what = 'tags';
+
+                const url = (props.type === 'comments') ?
+                    `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.id}&apiparam2=${what}` :
+                    `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}` ;
 
                 //
                 // Solved status updates have special handling - we verify the
@@ -288,6 +310,36 @@ export default {
                         emitFetch = true;
                     }
 
+                //
+                // Tags have very special handling!
+                //
+
+                } else if (props.type === 'tags') {
+                    const oldTags = props.puzzle.tags.split(",");
+                    const addTags = stateStrA.value.filter(tag => !oldTags.includes(tag));
+                    const removeTags = oldTags.filter(tag => !stateStrA.value.includes(tag));
+
+                    try {
+                        await Promise.all(addTags.map(async (tag) => {
+                            payload[what] = {add: tag};
+                            await fetch(url, {
+                                method: 'POST',
+                                body: JSON.stringify(payload),
+                            });
+                        }));
+                        await Promise.all(removeTags.map(async (tag) => {
+                            payload[what] = {remove: tag};
+                            await fetch(url, {
+                                method: 'POST',
+                                body: JSON.stringify(payload),
+                            });
+                        }));
+                        context.emit('please-fetch');
+                    } catch (e) {
+                        warning.value = "failed to POST; check devtools";
+                        console.log(e);
+                        showModal.value = true;
+                    }
                 } else if (stateStrA.value !== props.puzzle[what]) {
                     payload[what] = stateStrA.value;
                     emitFetch = true;
@@ -296,9 +348,6 @@ export default {
                 //
                 // Hit the backend with the appropriate API parameters.
                 //
-                const url = (props.type === 'comments') ?
-                                `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.id}&apiparam2=${what}` :
-                                `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}` ;
 
                 if (emitFetch) {
                     try {
@@ -376,10 +425,21 @@ export default {
             }
         }
 
+        function updateTags(tag, add) {
+            if (tag === "") return;
+
+            stateStrA.value = stateStrA.value.filter(stateTag => stateTag !== tag);
+            if (add) {
+                stateStrA.value.push(tag);
+                nextTag.value = "";
+            }
+        }
+
         return {
             showModal, toggleModal, warning,
             stateStrA,
             answer, isMetaLoc, lastActInfo, lastActTime,
+            nextTag, updateTags,
             showStatus, currentlyWorking, claimCurrentPuzzle
         };
     },
@@ -400,8 +460,32 @@ export default {
         <p v-if="type === 'note' || type === 'comments'"><textarea ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
 
         <!-- tags (WIP) -->
-        <p v-if="type === 'tags'">Current tags: {{puzzle.tags ? puzzle.tags : 'none'}} <br/>
-                                  Adding tags is WIP.</p>
+        <p v-if="type === 'tags'">Current tags:</p>
+        <ul v-if="type === 'tags'">
+            <li
+                v-for="tag in stateStrA"
+                key="tag">
+                {{tag}}
+                <p
+                    class="puzzle-icon"
+                    title="remove"
+                    @click="updateTags(tag, false)"
+                >🗑️</p>
+            </li>
+        </ul>
+        <p v-if="type === 'tags'">
+            Add tag:
+            <TagSelect
+                ref="modal-input"
+                v-model:current="nextTag"
+                @complete-transaction="updateTags(nextTag, true)">
+            </TagSelect>
+            <span
+                class="puzzle-icon"
+                title="add"
+                @click="updateTags(nextTag, true)"
+            >➕</span>
+        </p>
 
         <!-- status -->
         <p v-if="type === 'status'">
