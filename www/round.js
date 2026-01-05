@@ -180,11 +180,6 @@ export default {
         </div>
         <div :class = "{'round-body': true, hiding: !showbody}">
             <div
-                v-if="hiddenCount > 0"
-                class="puzzle">
-                <p><i>{{hiddenCount}} puzzles hidden by filters.</i></p>
-            </div>
-            <div
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
                 :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] === true ? ' highlighted' : '')">
@@ -207,6 +202,11 @@ export default {
                     :class = "{'answer': true, 'spoil': spoilAll, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
                     {{ puzzle.answer.padStart(16) }}
                 </p>
+            </div>
+            <div
+                v-if="hiddenCount > 0"
+                class="puzzle">
+                <p><i>{{hiddenCount}} puzzles hidden by filters.</i></p>
             </div>
         </div>
     </div>  `
