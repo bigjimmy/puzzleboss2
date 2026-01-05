@@ -225,6 +225,7 @@ p.meta, p.meta.solved {
     background-color: lightgray;
 }
 
+/* Reconsider status-based colors if desired.
 div.critical, div.meta.critical {
     background-color: coral;
 }
@@ -235,7 +236,7 @@ div.needseyes, div.meta.needseyes {
 
 div.wtf, div.meta.wtf {
     background-color: rgb(173, 255, 47, 0.8);
-}
+} */
 
 div.currpuzz {
     outline: 6px rgba(173,255,47,1);

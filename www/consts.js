@@ -1,11 +1,11 @@
 export default {
-    "statuses": ['Solved', 'WTF', 'Critical', 'Being worked', 'Under control', 'New', 'Needs eyes', 'Grind', 'Waiting for HQ', 'Unnecessary'],
+    "statuses": ['WTF', 'Critical', 'Needs eyes', 'Being worked', 'Under control', 'New', 'Grind', 'Waiting for HQ', 'Solved', 'Unnecessary'],
 
     //
     // Must be in the same order as statuses.
     //
 
-    "emoji": ['✅', '☢️', '⚠️', '🙇', '🤝', '🆕', '👀', '⛏️', '⌛', '🙃'],
+    "emoji": ['☢️', '⚠️', '👀', '🙇', '🤝', '🆕', '⛏️', '⌛', '✅', '🙃'],
 
     //
     // We consider a round solved when all its metas have been solved.

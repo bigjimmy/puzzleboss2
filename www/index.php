@@ -52,6 +52,7 @@
                         :uid="uid"
                         :sortpuzzles="sortPuzzles"
                         :currpuzz="currPuzz"
+                        :solvers="solvers"
                         @toggle-body="toggleBody"
                         @please-fetch = "fetchData"
                     ></round>
@@ -166,6 +167,8 @@
                 const currPuzz = ref(0);
 
                 const solveSoundRef = useTemplateRef('solveSound');
+
+                const solvers = ref(null);
                 
                 //
                 // Replace this for local testing.
@@ -199,8 +202,9 @@
 
                         if (firstUpdate) {
                             const url = `./apicall.php?&apicall=solvers`;
-                            let solvers = await (await fetch(url)).json();
-                            uid.value = solvers.solvers.filter(s => s.name === username.value)[0].id;
+                            const solversData = await (await fetch(url)).json();
+                            solvers.value = solversData.solvers;
+                            uid.value = solversData.solvers.filter(s => s.name === username.value)[0].id;
                         }
 
                         const solver_url = `./apicall.php?&apicall=solver&apiparam1=${uid.value}`
@@ -410,7 +414,8 @@
                     time, updateState,
                     fetchData,
                     useColumns, scrollSpeed,
-                    uid, username, currPuzz
+                    uid, username, currPuzz,
+                    solvers
                 }
             },
         }).mount('#main');

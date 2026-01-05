@@ -12,7 +12,8 @@ export default {
       scrollspeed: Number,
       sortpuzzles: Boolean,
       currpuzz: String,
-      uid: Number
+      uid: Number,
+      solvers: Object
     },
     emits: ['please-fetch'],
     computed: {
@@ -183,7 +184,7 @@ export default {
                 :key='puzzle.id'
                 :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] === true ? ' highlighted' : '')">
                 <div class="puzzle-icons">
-                    <AddGeneric type="status" :puzzle='puzzle' :ismeta='puzzle.ismeta' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
+                    <AddGeneric type="status" :puzzle='puzzle' :ismeta='puzzle.ismeta' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)" :solvers="solvers"></AddGeneric>
                     <AddGeneric type="work state" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="highlight(puzzle.id)"></AddGeneric>
                     <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                     <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>

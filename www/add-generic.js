@@ -6,11 +6,18 @@ import Consts from './consts.js';
 // that functionality is shared, so I refactored it into one file. You can
 // argue about whether that was a good idea.
 //
-// There are four kinds of update icons: "note", which updates comments,
-// "work state", which updates location and your "currently solving" state,
-// "comments", which updates a round's notes, and "status", which updates
-// puzzle status (including answers and whether it is a meta for the round).
+// There are five kinds of update icons:
 //
+// round:
+// - "comments": updates a round's comments
+//
+// puzzle:
+// - "note": updates a puzzle's comments
+// - "work state": updates location and your currently solving state
+// - "status": updates puzzle status (including answer, meta)
+// - "tags" (WIP): updates puzzle tags
+//
+
 export default {
     props: {
     
@@ -25,7 +32,9 @@ export default {
         // whether the puzzle is a meta (status)
         ismeta: Boolean,
         // list of statuses, or "puzzle filter keys" (status)
-        pfk: Object
+        pfk: Object,
+        // list of solvers,
+        solvers: Object
     },
     computed: {
         //
@@ -135,9 +144,10 @@ export default {
         const isMetaLoc = ref(false);
         
         //
-        // Time since last activity (for status modal)
+        // Last activity (for status modal)
         //
-        const timeSinceLastAct = ref("");
+        const lastActInfo = ref("");
+        const lastActTime = ref("");
 
         // Force answers to be all uppercase.
         watch(answer, () => {
@@ -193,27 +203,34 @@ export default {
                     isMetaLoc.value = props.ismeta != 0 ? true : false;
                     answer.value = props.puzzle.answer !== null ? props.puzzle.answer : "";
                     
-                    // Fetch last activity time
+                    // Fetch last activity information
                     try {
                         const lastActUrl = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=lastact`;
                         let lastActData = await(await fetch(lastActUrl)).json();
-                        if (lastActData.puzzle && lastActData.puzzle.lastact && lastActData.puzzle.lastact.time) {
-                            const lastActTime = new Date(lastActData.puzzle.lastact.time);
+                        if (lastActData.lastact && lastActData.lastact.time) {
+                            const lastActDate = new Date(lastActData.lastact.time);
                             const now = new Date();
-                            const diffMs = now - lastActTime;
+                            const diffMs = now - lastActDate;
                             if (diffMs >= 0) {
                                 const diffSec = Math.floor(diffMs / 1000);
                                 const hours = Math.floor(diffSec / 3600);
                                 const minutes = Math.floor((diffSec % 3600) / 60);
                                 const seconds = diffSec % 60;
-                                timeSinceLastAct.value = `${hours}h ${minutes}m ${seconds}s ago`;
+                                lastActTime.value = `${hours}h ${minutes}m ${seconds}s ago`;
+
+                                const activity = lastActData.lastact.type[0].toUpperCase() + lastActData.lastact.type.slice(1);
+                                const solvers = props.solvers.filter(s => s.id === lastActData.lastact.solver_id);
+                                const solver = solvers.length > 0 ? ` by ${solvers[0].name}`: '';
+                                lastActInfo.value = `${activity}${solver},`;
                             }
                         } else {
-                            timeSinceLastAct.value = "";
+                            lastActInfo.value = "";
+                            lastActTime.value = "";
                         }
                     } catch (e) {
                         console.log("Failed to fetch lastact:", e);
-                        timeSinceLastAct.value = "";
+                        lastActInfo.value = "";
+                        lastActTime.value = "";
                     }
                 }
 
@@ -355,7 +372,7 @@ export default {
         return {
             showModal, toggleModal, warning,
             stateStrA,
-            answer, isMetaLoc, timeSinceLastAct,
+            answer, isMetaLoc, lastActInfo, lastActTime,
             showStatus, currentlyWorking, claimCurrentPuzzle
         };
     },
@@ -376,8 +393,15 @@ export default {
         <p><textarea v-if="type === 'note' || type === 'comments'" ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
 
         <!-- status -->
-        <p v-if="type === 'status' && puzzle.sheetcount">Sheets in spreadsheet: {{puzzle.sheetcount}}</p>
-        <p v-if="type === 'status' && timeSinceLastAct">Last activity: {{timeSinceLastAct}}</p>
+        <p v-if="type === 'status'">
+            <em v-if="puzzle.sheetcount">Sheets in spreadsheet: </em>
+            {{puzzle.sheetcount ? puzzle.sheetcount : ''}}
+            <br v-if="lastActTime"/>
+            <em v-if="lastActTime">Last activity:</em>
+            {{lastActInfo ? lastActInfo : ''}}
+            <br v-if="lastActInfo"/>
+            {{lastActTime ? lastActTime : ''}}
+        </p>
         <p v-if="type === 'status'">Is Meta: <input type="checkbox" v-model="isMetaLoc"></input></p>
         <p v-if="type === 'status'"> Status:
             <select ref="modal-input" class="dropdown" v-model="stateStrA" :disabled="puzzle.status === 'Solved'">
