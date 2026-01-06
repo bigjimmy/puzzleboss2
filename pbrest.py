@@ -1902,7 +1902,7 @@ def new_account():
             return {"status": "error", "error": "Username %s not found in system to reset." % username}, 400
         if verify_email_for_user(email, username) != 1:
             debug_log(2, "Password reset rejected: username %s does not match email %s" % (username, email))
-            return {"status": "error", "error": "Username %s does not match email %s in the system." % (username, email)}, 400
+            return {"status": "error", "error": "Username %s does not match email %s in the system. Email must match the email used to initially sign up for the account. If you cannot determine the email or no longer have access to it, please contact puzzleboss/puzztech for help." % (username, email)}, 400
 
     # Generate the code
     code = token_hex(4)
