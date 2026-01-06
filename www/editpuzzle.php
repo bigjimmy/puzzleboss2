@@ -219,16 +219,48 @@ $puzzleobj = readapi('/puzzles/' . $puzzid);
 $puzname = $puzzleobj->puzzle->name;
 
 // Calculate time since last activity (now included in puzzle response)
-$timeSinceLastAct = 'N/A';
+$lastActDisplay = 'N/A';
 if (isset($puzzleobj->lastact->time)) {
   $lastActTime = strtotime($puzzleobj->lastact->time);
   $now = time();
   $diff = $now - $lastActTime;
+  
+  // Format time ago
+  $timeAgo = 'just now';
   if ($diff >= 0) {
     $hours = floor($diff / 3600);
     $minutes = floor(($diff % 3600) / 60);
     $seconds = $diff % 60;
-    $timeSinceLastAct = sprintf('%dh %dm %ds ago', $hours, $minutes, $seconds);
+    $timeAgo = sprintf('%dh %dm %ds ago', $hours, $minutes, $seconds);
+  }
+  
+  // Get activity type with friendly name
+  $actType = $puzzleobj->lastact->type ?? 'unknown';
+  $actTypeDisplay = [
+    'revise' => '📝 Sheet edit',
+    'comment' => '📋 Puzzle info change',
+    'interact' => '👋 Assignment',
+    'solve' => '✅ Solve',
+    'create' => '🆕 Created',
+    'open' => '📂 Opened',
+  ][$actType] ?? $actType;
+  
+  // Get solver name from solver_id (100 = system/API changes, skip "by" part)
+  $solverName = null;
+  if (isset($puzzleobj->lastact->solver_id) && $puzzleobj->lastact->solver_id != 100) {
+    try {
+      $solverInfo = readapi('/solvers/' . $puzzleobj->lastact->solver_id);
+      $solverName = $solverInfo->solver->name ?? null;
+    } catch (Exception $e) {
+      $solverName = 'solver #' . $puzzleobj->lastact->solver_id;
+    }
+  }
+  
+  // Build display string (omit "by" part for system/API changes)
+  if ($solverName) {
+    $lastActDisplay = sprintf('%s by <b>%s</b> (%s)', $actTypeDisplay, htmlentities($solverName), $timeAgo);
+  } else {
+    $lastActDisplay = sprintf('%s (%s)', $actTypeDisplay, $timeAgo);
   }
 }
 
@@ -246,7 +278,7 @@ echo '<tr><td><b>Meta For Round</b></td><td>';
 echo $puzzleobj->puzzle->ismeta ? "Yes" : "No";
 echo '</td></tr>';
 echo '<tr><td><b>Sheet Count</b></td><td>' . ($puzzleobj->puzzle->sheetcount ?? 'N/A') . '</td></tr>';
-echo '<tr><td><b>Last Activity</b></td><td>' . $timeSinceLastAct . '</td></tr>';
+echo '<tr><td><b>Last Activity</b></td><td>' . $lastActDisplay . '</td></tr>';
 echo '<tr><td><b>Tags</b></td><td>' . htmlentities($puzzleobj->puzzle->tags ?? 'none') . '</td></tr>';
 echo '</table>';
 

@@ -56,6 +56,69 @@ except ImportError:
     MEMCACHE_AVAILABLE = False
     debug_log(3, "pymemcache not installed - caching disabled")
 
+# LLM query support (via pbllmlib)
+from pbllmlib import GEMINI_AVAILABLE, process_query as llm_process_query
+
+# Wiki indexer for RAG (optional)
+import threading
+import fcntl
+WIKI_INDEXER_AVAILABLE = False
+try:
+    from scripts.wiki_indexer import index_wiki, load_config as load_wiki_config
+    WIKI_INDEXER_AVAILABLE = True
+except ImportError:
+    debug_log(3, "wiki_indexer not available - wiki RAG disabled")
+
+
+def _run_wiki_index_background():
+    """Run wiki indexing in background thread at startup. Uses file lock to prevent multiple workers from indexing."""
+    if not WIKI_INDEXER_AVAILABLE:
+        return
+    
+    try:
+        wiki_config = load_wiki_config()
+        wiki_url = wiki_config.get('WIKI_URL', '')
+        chromadb_path = wiki_config.get('WIKI_CHROMADB_PATH', '/var/lib/puzzleboss/chromadb')
+        
+        if not wiki_url:
+            debug_log(3, "WIKI_URL not configured - skipping wiki index")
+            return
+        
+        # Use a lock file to ensure only one worker indexes at a time
+        lock_file_path = os.path.join(chromadb_path, '.wiki_index.lock')
+        
+        # Ensure directory exists
+        os.makedirs(chromadb_path, exist_ok=True)
+        
+        try:
+            lock_file = open(lock_file_path, 'w')
+            # Try to acquire exclusive lock (non-blocking)
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (IOError, OSError):
+            debug_log(4, "Another worker is already indexing wiki - skipping")
+            return
+        
+        try:
+            debug_log(3, "Starting background wiki index (acquired lock)...")
+            success = index_wiki(wiki_config, full_reindex=False)
+            if success:
+                debug_log(3, "Background wiki index completed successfully")
+            else:
+                debug_log(2, "Background wiki index failed")
+        finally:
+            # Release lock
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
+            
+    except Exception as e:
+        debug_log(2, f"Background wiki index error: {e}")
+
+
+# Start wiki indexing in background thread (non-blocking)
+if WIKI_INDEXER_AVAILABLE:
+    wiki_thread = threading.Thread(target=_run_wiki_index_background, daemon=True)
+    wiki_thread.start()
+
 app = Flask(__name__)
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
@@ -223,10 +286,9 @@ def handle_error(e):
 # GET/READ Operations
 
 
-@app.route("/all", endpoint="all", methods=["GET"])
-# @swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
-def get_all_all():
-    debug_log(4, "start")
+def _get_all_from_db():
+    """Internal function to fetch all rounds/puzzles from database."""
+    debug_log(4, "fetching all from database")
     try:
         conn = mysql.connection
         cursor = conn.cursor()
@@ -271,10 +333,8 @@ def get_all_all():
     return {"rounds": rounds}
 
 
-@app.route("/allcached", endpoint="allcached", methods=["GET"])
-@swag_from("swag/getallcached.yaml", endpoint="allcached", methods=["GET"])
-def get_all_cached():
-    """Cached version of /all - falls back to DB if cache unavailable"""
+def _get_all_with_cache():
+    """Get all rounds/puzzles, using cache if available."""
     debug_log(4, "start")
     
     # Ensure memcache is initialized (lazy init on first request)
@@ -284,23 +344,37 @@ def get_all_cached():
     if mc is not None:
         cached = cache_get(MEMCACHE_CACHE_KEY)
         if cached:
-            debug_log(4, "allcached: cache hit")
+            debug_log(4, "cache hit")
             increment_cache_stat('cache_hits_total')
             return json.loads(cached)
-        debug_log(4, "allcached: cache miss")
+        debug_log(4, "cache miss")
         increment_cache_stat('cache_misses_total')
     
-    # Fall back to regular /all logic
-    data = get_all_all()
+    # Fall back to database
+    data = _get_all_from_db()
     
     # Store in cache for next time (if enabled)
     if mc is not None:
         try:
             cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
         except Exception as e:
-            debug_log(3, "allcached: failed to cache: %s" % str(e))
+            debug_log(3, "failed to cache: %s" % str(e))
     
     return data
+
+
+@app.route("/all", endpoint="all", methods=["GET"])
+@swag_from("swag/getall.yaml", endpoint="all", methods=["GET"])
+def get_all_all():
+    """Get all rounds and puzzles (uses cache if available)."""
+    return _get_all_with_cache()
+
+
+@app.route("/allcached", endpoint="allcached", methods=["GET"])
+@swag_from("swag/getallcached.yaml", endpoint="allcached", methods=["GET"])
+def get_all_cached():
+    """Get all rounds and puzzles (uses cache if available). Alias for /all."""
+    return _get_all_with_cache()
 
 
 @app.route("/huntinfo", endpoint="huntinfo", methods=["GET"])
@@ -365,6 +439,39 @@ def get_all_puzzles():
     }
 
 
+def get_puzzles_by_tag_id(tag_id):
+    """Get all puzzles with a specific tag ID. Reusable helper function."""
+    debug_log(4, "start with tag_id: %s" % tag_id)
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Use MEMBER OF() to leverage the multi-valued JSON index
+    # Return full puzzle data from puzzle_view to avoid N+1 queries on client
+    cursor.execute(
+        """SELECT pv.* FROM puzzle_view pv
+           JOIN puzzle p ON p.id = pv.id
+           WHERE %s MEMBER OF(p.tags)""",
+        (tag_id,)
+    )
+    puzzlist = cursor.fetchall()
+    
+    debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
+    return puzzlist
+
+
+def get_tag_id_by_name(tag_name):
+    """Get tag ID by name (case-insensitive). Returns None if not found."""
+    debug_log(4, "start with tag_name: %s" % tag_name)
+    conn = mysql.connection
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM tag WHERE LOWER(name) = LOWER(%s)", (tag_name,))
+    tag_row = cursor.fetchone()
+    if not tag_row:
+        debug_log(4, "tag '%s' not found" % tag_name)
+        return None
+    return tag_row["id"]
+
+
 @app.route("/search", endpoint="search", methods=["GET"])
 @swag_from("swag/getsearch.yaml", endpoint="search", methods=["GET"])
 def search_puzzles():
@@ -378,17 +485,11 @@ def search_puzzles():
         return {"status": "error", "error": "Must provide 'tag' or 'tag_id' parameter"}, 400
     
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        
         # If tag name provided, look up the tag_id first
         if tag_name:
-            cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
-            tag_row = cursor.fetchone()
-            if not tag_row:
-                debug_log(4, "tag '%s' not found" % tag_name)
+            tag_id = get_tag_id_by_name(tag_name)
+            if tag_id is None:
                 return {"status": "ok", "puzzles": []}
-            tag_id = tag_row["id"]
         else:
             # Validate tag_id is an integer
             try:
@@ -397,22 +498,14 @@ def search_puzzles():
                 return {"status": "error", "error": "tag_id must be an integer"}, 400
             
             # Verify the tag exists
+            conn = mysql.connection
+            cursor = conn.cursor()
             cursor.execute("SELECT id FROM tag WHERE id = %s", (tag_id,))
             if not cursor.fetchone():
                 debug_log(4, "tag_id %s not found" % tag_id)
                 return {"status": "ok", "puzzles": []}
         
-        # Use MEMBER OF() to leverage the multi-valued JSON index
-        # Return full puzzle data from puzzle_view to avoid N+1 queries on client
-        cursor.execute(
-            """SELECT pv.* FROM puzzle_view pv
-               JOIN puzzle p ON p.id = pv.id
-               WHERE %s MEMBER OF(p.tags)""",
-            (tag_id,)
-        )
-        puzzlist = cursor.fetchall()
-        
-        debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
+        puzzlist = get_puzzles_by_tag_id(tag_id)
         return {
             "status": "ok",
             "puzzles": puzzlist,
@@ -496,6 +589,8 @@ def get_puzzle_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     if part == "lastact":
         rv = get_last_activity_for_puzzle(id)
+    elif part == "lastsheetact":
+        rv = get_last_sheet_activity_for_puzzle(id)
     else:
         try:
             conn = mysql.connection
@@ -1664,13 +1759,14 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             raise Exception("Invalid tags operation. Use {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}")
         
         # Log tag change to activity table using system solver_id (100)
+        # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
             try:
                 cursor.execute(
                     """
                     INSERT INTO activity
                     (puzzle_id, solver_id, source, type)
-                    VALUES (%s, %s, 'puzzleboss', 'revise')
+                    VALUES (%s, %s, 'puzzleboss', 'comment')
                     """,
                     (id, 100),
                 )
@@ -2150,6 +2246,23 @@ def get_last_activity_for_puzzle(id):
         return None
 
 
+def get_last_sheet_activity_for_puzzle(id):
+    """Get the last 'revise' type activity for a puzzle (sheet edits only)."""
+    debug_log(4, "start, called with: %s" % id)
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        cursor.execute(
+            """SELECT * from activity where puzzle_id = %s AND type = 'revise' ORDER BY time DESC LIMIT 1""",
+            (id,),
+        )
+        return cursor.fetchone()
+    except IndexError:
+        debug_log(4, "No Sheet Activity for Puzzle %s found in database yet" % id)
+        return None
+
+
 def get_last_activity_for_solver(id):
     debug_log(4, "start, called with: %s" % id)
     try:
@@ -2517,6 +2630,74 @@ def get_all_activities():
     except Exception as e:
         debug_log(1, "Exception in getting activity counts: %s" % e)
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
+# ============================================================================
+# LLM Query Endpoint - Natural language queries about hunt status
+# ============================================================================
+
+@app.route("/v1/query", endpoint="llm_query", methods=["POST"])
+@swag_from("swag/postquery.yaml", endpoint="llm_query", methods=["POST"])
+def llm_query():
+    """
+    Natural language query endpoint powered by Google Gemini.
+    Accepts a text query and returns a natural language response about hunt status.
+    Intended for localhost use only (e.g., Discord bot on same server).
+    """
+    if not GEMINI_AVAILABLE:
+        return jsonify({"status": "error", "error": "Google Generative AI SDK not installed"}), 503
+    
+    # Check for API key in database config
+    api_key = configstruct.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return jsonify({"status": "error", "error": "GEMINI_API_KEY not configured in database"}), 503
+    
+    # Parse request
+    data = request.get_json()
+    if not data or "text" not in data:
+        return jsonify({"status": "error", "error": "Missing 'text' field in request"}), 400
+    
+    user_id = data.get("user_id", "unknown")
+    query_text = data.get("text", "")
+    
+    # Get system instruction from config (required for LLM to be enabled)
+    system_instruction = configstruct.get("GEMINI_SYSTEM_INSTRUCTION", "")
+    if not system_instruction:
+        return jsonify({"status": "error", "error": "GEMINI_SYSTEM_INSTRUCTION not configured in database"}), 503
+    
+    # Get model from config (required for LLM to be enabled)
+    model = configstruct.get("GEMINI_MODEL", "")
+    if not model:
+        return jsonify({"status": "error", "error": "GEMINI_MODEL not configured in database"}), 503
+    
+    # Get database cursor for the library
+    conn = mysql.connection
+    cursor = conn.cursor()
+    
+    # Process the query using the LLM library
+    # Uses cached data when available, falls back to DB
+    result = llm_process_query(
+        query_text=query_text,
+        api_key=api_key,
+        system_instruction=system_instruction,
+        model=model,
+        get_all_data_fn=_get_all_with_cache,
+        cursor=cursor,
+        user_id=user_id,
+        get_last_sheet_activity_fn=get_last_sheet_activity_for_puzzle,
+        get_puzzle_id_by_name_fn=get_puzzle_id_by_name,
+        get_one_puzzle_fn=get_one_puzzle,
+        get_one_solver_fn=get_one_solver,
+        get_tag_id_by_name_fn=get_tag_id_by_name,
+        get_puzzles_by_tag_id_fn=get_puzzles_by_tag_id,
+        wiki_chromadb_path=configstruct.get("WIKI_CHROMADB_PATH", "")
+    )
+    
+    if result.get("status") == "error":
+        return jsonify(result), 500
+    
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     if initdrive() != 0:

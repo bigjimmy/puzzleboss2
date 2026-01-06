@@ -25,7 +25,7 @@ export default {
         //
         filteredPuzzles() {
             const fp = this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status])
-                                         .filter(puzzle => puzzle.tags && puzzle.tags.includes(this.tagfilter));
+                                         .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter)));
 
             if(!this.sortpuzzles) return fp;
 
@@ -47,7 +47,7 @@ export default {
         hiddenCount() {
             return this.round.puzzles.length - 
                 this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status])
-                                  .filter(puzzle => puzzle.tags && puzzle.tags.includes(this.tagfilter)).length;
+                                  .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter))).length;
         },
 
         isSolved() {
