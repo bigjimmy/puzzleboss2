@@ -123,6 +123,7 @@ INSERT INTO `config` VALUES
   ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '10'),
   ('BIGJIMMY_THREADCOUNT', '2'),
   ('bookmarklet_js', 'insert complicated bookmarklet javascript here'),
+  ('DISCORD_EMAIL_WEBHOOK', ''),
   ('DOMAINNAME', 'example.org'),
   ('GEMINI_API_KEY', ''),
   ('GEMINI_MODEL', 'gemini-3-flash-preview'),
