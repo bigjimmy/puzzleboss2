@@ -16,5 +16,7 @@ export default {
         return (metas.length > 0) &&
                (metas.filter(puzzle => puzzle.status !== 'Solved').length === 0);
         
-    }
+    },
+
+    "api": ".",
 }

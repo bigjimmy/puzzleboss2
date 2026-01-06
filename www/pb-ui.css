@@ -209,8 +209,9 @@ textarea {
     overflow: hidden;
 }
 
-.puzzle-icons > p, .puzzle > p {
+.puzzle-icons > p, .puzzle > p, .puzzle-icon {
     margin: 0px;
+    display: inline;
 }
 
 div.meta, div.meta.solved {

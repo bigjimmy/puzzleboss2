@@ -14,7 +14,10 @@
                     {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open. Page status: </p>
                 <div :class = updateState></div>
             </div>
-            <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp; <button @click="showControls = !showControls">{{showControls ? 'Hide ' : 'Show '}}all controls</button></p>
+            <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp;
+               tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect> &nbsp; &nbsp; &nbsp;
+               <button @click="showControls = !showControls">{{showControls ? 'Hide ' : 'Show '}}all controls</button>
+            </p>
 
             <div v-if="showControls" id= "controls"> 
             <div>
@@ -45,6 +48,7 @@
                         :round="round"
                         :showbody="showBody[round.id]"
                         :highlighted="highlight[round.id]"
+                        :tagfilter="tagFilter"
                         :puzzlefilter="puzzleFilter"
                         :pfk="puzzleFilterKeys"
                         :key="round.id"
@@ -64,6 +68,7 @@
                         :round="round"
                         :showbody="showBody[round.id]"
                         :highlighted="highlight[round.id]"
+                        :tagfilter="tagFilter"
                         :puzzlefilter="puzzleFilter"
                         :key="round.id"
                         :pfk="puzzleFilterKeys"
@@ -83,18 +88,28 @@
                 <solvesound ref="solveSound"></solvesound>
             </div>
 
+            <datalist id="taglist">
+                <option
+                    v-for="tag in tags"
+                    :key="tag.id"
+                    :value="tag.name">
+                </option>
+            </datalist>
+
         </div>
     <script type="module">
 
         import { createApp, ref, useTemplateRef, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
-        import Round from './round.js'
-        import solvesound from './solve-sound.js'
-        import Consts from './consts.js'
+        import Round from './round.js';
+        import solvesound from './solve-sound.js';
+        import Consts from './consts.js';
+        import tagselect from './tag-select.js';
 
         createApp({
             components: {
                 Round,
-                solvesound
+                solvesound,
+                tagselect,
             },
             computed: {
                 
@@ -117,7 +132,7 @@
                 }
             },
             setup() {
-                
+
                 //
                 // Our application stores six pieces of global state:
                 // 
@@ -164,7 +179,7 @@
                 const useColumns = ref(true);
                 const scrollSpeed = ref(1);
                 
-                const currPuzz = ref(0);
+                const currPuzz = ref("0");
 
                 const solveSoundRef = useTemplateRef('solveSound');
 
@@ -177,6 +192,9 @@
                      echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\");";
                 ?>
                 const uid = ref(0);
+
+                const tags = ref([]);
+                const tagFilter = ref("");
 
                 //
                 // This function fetches data from an endpoint and updates the
@@ -193,7 +211,7 @@
                     // never reads stale data for too long.
                     //
 
-                    const url = `./apicall.php?apicall=all`
+                    const url = `${Consts.api}/apicall.php?apicall=all`
                     let success = false;
                     let temp = {'rounds': []};
                     try {
@@ -201,13 +219,22 @@
                         data.value = temp;
 
                         if (firstUpdate) {
-                            const url = `./apicall.php?&apicall=solvers`;
+                            const url = `${Consts.api}/apicall.php?&apicall=solvers`;
                             const solversData = await (await fetch(url)).json();
                             solvers.value = solversData.solvers;
                             uid.value = solversData.solvers.filter(s => s.name === username.value)[0].id;
+
+                            //
+                            // Read tags once at first update. This could be moved
+                            // out of the if block if we find that new tags are
+                            // being created more often than people reload.
+                            //
+                            const tags_url = `${Consts.api}/apicall.php?&apicall=tags`;
+                            const tagsData = await (await fetch(tags_url)).json();
+                            tags.value = tagsData.tags;
                         }
 
-                        const solver_url = `./apicall.php?&apicall=solver&apiparam1=${uid.value}`
+                        const solver_url = `${Consts.api}/apicall.php?&apicall=solver&apiparam1=${uid.value}`
                         let solver = await(await fetch(solver_url)).json();
 
                         currPuzz.value = solver.solver.puzz;
@@ -415,7 +442,8 @@
                     fetchData,
                     useColumns, scrollSpeed,
                     uid, username, currPuzz,
-                    solvers
+                    solvers,
+                    tags, tagFilter
                 }
             },
         }).mount('#main');

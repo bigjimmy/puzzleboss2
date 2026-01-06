@@ -281,7 +281,8 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
                 is_priority = metadata.get("is_priority", False)
                 priority_boost = 0.15 if is_priority else 0
                 
-                # Boost recent pages (within last year gets a boost)
+                # Boost recent pages, penalize old pages
+                # Pages older than 3 years are heavily penalized (essentially ignored)
                 recency_boost = 0
                 last_modified = metadata.get("last_modified", "")
                 if last_modified:
@@ -294,10 +295,20 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
                             recency_boost = 0.1
                         elif days_old < 365:
                             recency_boost = 0.05
+                        elif days_old < 730:  # 1-2 years old
+                            recency_boost = -0.1
+                        elif days_old < 1095:  # 2-3 years old
+                            recency_boost = -0.3
+                        else:  # 3+ years old - heavily penalize
+                            recency_boost = -0.8
                     except Exception:
                         pass
                 
                 final_score = base_score + priority_boost + recency_boost
+                
+                # Skip pages with very low scores (heavily penalized old pages)
+                if final_score < 0.1:
+                    continue
                 
                 wiki_results.append({
                     "title": metadata.get("title", "Unknown"),

@@ -6,6 +6,7 @@ export default {
     props: {
       round: Object,
       showbody: Boolean,
+      tagfilter: String,
       puzzlefilter: Object,
       highlighted: Boolean,
       pfk: Object,
@@ -23,7 +24,9 @@ export default {
         // current filters. 
         //
         filteredPuzzles() {
-            const fp = this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status]);
+            const fp = this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status])
+                                         .filter(puzzle => puzzle.tags && puzzle.tags.includes(this.tagfilter));
+
             if(!this.sortpuzzles) return fp;
 
             function pri(puzzle) {
@@ -42,7 +45,9 @@ export default {
         // filters.
         //
         hiddenCount() {
-            return this.round.puzzles.filter(puzzle => !this.puzzlefilter[puzzle.status]).length;
+            return this.round.puzzles.length - 
+                this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status])
+                                  .filter(puzzle => puzzle.tags && puzzle.tags.includes(this.tagfilter)).length;
         },
 
         isSolved() {
@@ -168,17 +173,12 @@ export default {
             <p>({{solved}} solved / {{open}} open)</p>
             <div class="round-header-icons">
                 <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
-                <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')" @click.stop></AddGeneric>
+                <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
             </div>
             </div>
             <button v-if="showbody" @click.stop="toggleSpoil">{{ spoilAll ? 'Hide' : 'Show' }} Spoilers</button>
         </div>
         <div :class = "{'round-body': true, hiding: !showbody}">
-            <div
-                v-if="hiddenCount > 0"
-                class="puzzle">
-                <p><i>{{hiddenCount}} puzzles hidden by filters.</i></p>
-            </div>
             <div
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
@@ -190,6 +190,7 @@ export default {
                     <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
                     <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
                     <AddGeneric type="note" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
+                    <AddGeneric type="tags" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
                 </div>
                 <p 
                     v-if = "puzzle.answer === null"
@@ -201,6 +202,11 @@ export default {
                     :class = "{'answer': true, 'spoil': spoilAll, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
                     {{ puzzle.answer.padStart(16) }}
                 </p>
+            </div>
+            <div
+                v-if="hiddenCount > 0"
+                class="puzzle">
+                <p><i>{{hiddenCount}} puzzles hidden by filters.</i></p>
             </div>
         </div>
     </div>  `
