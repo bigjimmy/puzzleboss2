@@ -19,14 +19,9 @@ from email import policy
 from email.parser import BytesParser
 import requests
 import yaml
-import MySQLdb
-import MySQLdb.cursors
 from datetime import datetime
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Configuration file path
+# Configuration file path (only needed for API_URI)
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "puzzleboss.yaml")
 
 # Simple logging since we may not have full pblib available in mail context
@@ -37,7 +32,7 @@ def log(level, message):
 
 
 def load_config():
-    """Load configuration from YAML file and database."""
+    """Load configuration from YAML file (for API_URI) and then fetch config via API."""
     try:
         with open(CONFIG_FILE, 'r') as f:
             yaml_config = yaml.safe_load(f)
@@ -45,21 +40,20 @@ def load_config():
         log("ERROR", f"Failed to load YAML config: {e}")
         return None
     
+    api_uri = yaml_config.get('API_URI', 'http://localhost:5000')
+    
     try:
-        conn = MySQLdb.connect(
-            host=yaml_config['MYSQL']['HOST'],
-            user=yaml_config['MYSQL']['USERNAME'],
-            passwd=yaml_config['MYSQL']['PASSWORD'],
-            db=yaml_config['MYSQL']['DATABASE'],
-            charset='utf8mb4'
-        )
-        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute("SELECT `key`, `val` FROM config")
-        db_config = {row['key']: row['val'] for row in cursor.fetchall()}
-        conn.close()
-        return db_config
+        response = requests.get(f"{api_uri}/config", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get('status') != 'ok':
+            log("ERROR", f"Config API returned error: {data}")
+            return None
+        
+        return data.get('config', {})
     except Exception as e:
-        log("ERROR", f"Failed to load DB config: {e}")
+        log("ERROR", f"Failed to fetch config from API: {e}")
         return None
 
 
