@@ -200,6 +200,7 @@ CREATE TABLE `puzzle` (
   `current_solvers` JSON DEFAULT NULL,
   `solver_history` JSON DEFAULT NULL,
   `sheetcount` int(11) DEFAULT NULL,
+  `sheetenabled` tinyint(1) NOT NULL DEFAULT 0,
   `tags` JSON DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
@@ -402,6 +403,7 @@ SELECT
     ) AS cursolvers,
     p.xyzloc,
     p.sheetcount,
+    p.sheetenabled,
     (
         SELECT GROUP_CONCAT(DISTINCT t.name ORDER BY t.name)
         FROM JSON_TABLE(
