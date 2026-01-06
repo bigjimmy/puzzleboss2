@@ -263,6 +263,173 @@ def get_puzzle_sheet_info(myfileid, puzzlename=None):
     return result
 
 
+def check_developer_metadata_exists(myfileid, puzzlename=None):
+    """
+    Quick check to see if PuzzleBoss developer metadata exists on a sheet.
+    Returns True if PB_ACTIVITY or PB_SPREADSHEET metadata is found, False otherwise.
+    
+    This is used to determine if the Chrome extension has been enabled for this sheet.
+    
+    THREAD SAFE.
+    """
+    puzz_label = puzzlename if puzzlename else myfileid
+    debug_log(5, "Checking developer metadata existence for %s (fileid: %s)" % (puzz_label, myfileid))
+    
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    
+    if configstruct["SKIP_GOOGLE_API"] == "true":
+        debug_log(3, "google API skipped by config.")
+        return False
+    
+    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    
+    for attempt in range(max_retries):
+        try:
+            sheetsservice = build("sheets", "v4", credentials=creds)
+            
+            # Search for spreadsheet-level metadata
+            search_request = {
+                "dataFilters": [
+                    {
+                        "developerMetadataLookup": {
+                            "locationType": "SPREADSHEET"
+                        }
+                    }
+                ]
+            }
+            
+            response = (
+                sheetsservice.spreadsheets()
+                .developerMetadata()
+                .search(spreadsheetId=myfileid, body=search_request)
+                .execute(http=threadsafe_http)
+            )
+            
+            matched_metadata = response.get("matchedDeveloperMetadata", [])
+            
+            # Check if any PB_ keys exist
+            for item in matched_metadata:
+                metadata = item.get("developerMetadata", {})
+                key = metadata.get("metadataKey", "")
+                if key.startswith("PB_ACTIVITY:") or key == "PB_SPREADSHEET":
+                    debug_log(4, "[%s] Developer metadata found (key: %s)" % (puzz_label, key))
+                    return True
+            
+            debug_log(4, "[%s] No PuzzleBoss developer metadata found" % puzz_label)
+            return False
+            
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(3, "[%s] Rate limit hit checking metadata, waiting %d seconds (attempt %d/%d)" 
+                          % (puzz_label, retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Error checking metadata existence: %s" % (puzz_label, e))
+                return False
+    
+    debug_log(1, "[%s] EXHAUSTED all %d retries checking metadata - giving up" % (puzz_label, max_retries))
+    return False
+
+
+def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
+    """
+    Get revisions and sheet count using the old API approach (Revisions API + Sheets API).
+    Returns dict with 'revisions' (list) and 'sheetcount' (int or None).
+    
+    This is the fallback method for sheets that don't have the Chrome extension enabled.
+    
+    THREAD SAFE.
+    Includes retry logic for rate limit (429) errors.
+    
+    Args:
+        myfileid: Google Sheets file ID
+        puzzlename: Optional puzzle name for logging
+    """
+    puzz_label = puzzlename if puzzlename else myfileid
+    debug_log(5, "start (legacy) for puzzle %s (fileid: %s)" % (puzz_label, myfileid))
+    
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    
+    result = {
+        "revisions": [],
+        "sheetcount": None
+    }
+    
+    if configstruct["SKIP_GOOGLE_API"] == "true":
+        debug_log(3, "google API skipped by config.")
+        return result
+    
+    # Create single threadsafe HTTP object for both API calls
+    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    
+    # Get revisions from Drive API (with retry on rate limit)
+    revisions_success = False
+    for attempt in range(max_retries):
+        try:
+            retval = (
+                service.revisions()
+                .list(fileId=myfileid, fields="*")
+                .execute(http=threadsafe_http)
+            )
+            if type(retval) == str:
+                debug_log(1, "[%s] Revisions API returned string (error): %s" % (puzz_label, retval))
+            else:
+                all_revisions = retval.get("revisions", [])
+                debug_log(5, "[%s] Revisions API returned %d total revisions" % (puzz_label, len(all_revisions)))
+                for revision in all_revisions:
+                    last_user = revision.get("lastModifyingUser", {})
+                    is_me = last_user.get("me", False)
+                    if not is_me:
+                        result["revisions"].append(revision)
+                debug_log(5, "[%s] After filtering, %d revisions" % (puzz_label, len(result["revisions"])))
+            revisions_success = True
+            break  # Success, exit retry loop
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(3, "[%s] Rate limit hit fetching revisions, waiting %d seconds (attempt %d/%d)" 
+                          % (puzz_label, retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Error fetching revisions: %s" % (puzz_label, e))
+                break  # Non-rate-limit error, don't retry
+    
+    if not revisions_success and max_retries > 0:
+        debug_log(1, "[%s] EXHAUSTED all %d retries fetching revisions - giving up" % (puzz_label, max_retries))
+    
+    # Get sheet count from Sheets API (with retry on rate limit)
+    sheetcount_success = False
+    for attempt in range(max_retries):
+        try:
+            sheetsservice = build("sheets", "v4", credentials=creds)
+            spreadsheet = (
+                sheetsservice.spreadsheets()
+                .get(spreadsheetId=myfileid, fields="sheets.properties.title")
+                .execute(http=threadsafe_http)
+            )
+            result["sheetcount"] = len(spreadsheet.get("sheets", []))
+            debug_log(5, "[%s] Sheet count: %s" % (puzz_label, result["sheetcount"]))
+            sheetcount_success = True
+            break  # Success, exit retry loop
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(3, "[%s] Rate limit hit getting sheet count, waiting %d seconds (attempt %d/%d)" 
+                          % (puzz_label, retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Error getting sheet count: %s" % (puzz_label, e))
+                break  # Non-rate-limit error, don't retry
+    
+    if not sheetcount_success and max_retries > 0:
+        debug_log(1, "[%s] EXHAUSTED all %d retries getting sheet count - giving up" % (puzz_label, max_retries))
+    
+    return result
+
+
 def create_round_folder(foldername):
     debug_log(4, "start with foldername: %s" % foldername)
 
