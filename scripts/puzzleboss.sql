@@ -143,6 +143,7 @@ INSERT INTO `config` VALUES
   ('PUZZCORD_PORT', '3141'),
   ('REGEMAIL', 'admin@yourdomain.org'),
   ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
+  ('SLACK_EMAIL_WEBHOOK', ''),
   ('SKIP_GOOGLE_API', 'true'),
   ('SKIP_PUZZCORD', 'true'),
   ('TEAMNAME', 'Default Team Name'),

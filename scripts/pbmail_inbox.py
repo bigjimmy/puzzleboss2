@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-PuzzleBoss Email to Discord Forwarder
+PuzzleBoss Email to Discord/Slack Forwarder
 
 This script receives email via stdin (piped from /etc/aliases) and forwards
-it to a Discord channel via webhook.
+it to Discord and/or Slack channels via webhooks.
 
 Usage in /etc/aliases:
     puzzleboss: "|/path/to/python /path/to/pbmail_inbox.py"
 
 Configuration:
-    Set DISCORD_EMAIL_WEBHOOK in the puzzleboss config table to the webhook URL.
+    Set DISCORD_EMAIL_WEBHOOK in the puzzleboss config table for Discord.
+    Set SLACK_EMAIL_WEBHOOK in the puzzleboss config table for Slack.
+    Either or both can be configured.
 """
 
 import sys
@@ -202,6 +204,108 @@ def send_to_discord(webhook_url, email_data):
         return False
 
 
+def send_to_slack(webhook_url, email_data):
+    """Send parsed email to Slack webhook."""
+    
+    # Build attachment text
+    body_text = truncate_text(email_data['body'].strip(), 3000)
+    
+    attachment_text = ""
+    if email_data['attachments']:
+        attachment_list = ", ".join(email_data['attachments'][:10])
+        if len(email_data['attachments']) > 10:
+            attachment_list += f" (+{len(email_data['attachments']) - 10} more)"
+        attachment_text = f"\n📎 *Attachments:* {attachment_list}"
+    
+    # Build Slack message with blocks for nice formatting
+    payload = {
+        "blocks": [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"📧 {truncate_text(email_data['subject'], 150)}",
+                    "emoji": True
+                }
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*From:*\n{truncate_text(email_data['from'], 100)}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*To:*\n{truncate_text(email_data['to'], 100)}"
+                    }
+                ]
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Date:*\n{email_data['date']}"
+                    }
+                ]
+            },
+            {
+                "type": "divider"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": body_text if body_text else "(no body)"
+                }
+            }
+        ]
+    }
+    
+    # Add attachments section if any
+    if attachment_text:
+        payload["blocks"].append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": attachment_text
+            }
+        })
+    
+    # Add footer
+    payload["blocks"].append({
+        "type": "context",
+        "elements": [
+            {
+                "type": "mrkdwn",
+                "text": f"_PuzzleBoss Email Forwarder • {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}_"
+            }
+        ]
+    })
+    
+    try:
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            log("INFO", f"Email forwarded to Slack successfully: {email_data['subject']}")
+            return True
+        else:
+            log("ERROR", f"Slack webhook returned {response.status_code}: {response.text}")
+            return False
+            
+    except requests.exceptions.Timeout:
+        log("ERROR", "Slack webhook request timed out")
+        return False
+    except Exception as e:
+        log("ERROR", f"Failed to send to Slack: {e}")
+        return False
+
+
 def main():
     """Main entry point."""
     log("INFO", "Receiving email...")
@@ -225,10 +329,12 @@ def main():
         log("ERROR", "Failed to load configuration")
         sys.exit(1)
     
-    # Get webhook URL
-    webhook_url = config.get('DISCORD_EMAIL_WEBHOOK', '')
-    if not webhook_url:
-        log("ERROR", "DISCORD_EMAIL_WEBHOOK not configured in database")
+    # Get webhook URLs
+    discord_webhook = config.get('DISCORD_EMAIL_WEBHOOK', '')
+    slack_webhook = config.get('SLACK_EMAIL_WEBHOOK', '')
+    
+    if not discord_webhook and not slack_webhook:
+        log("ERROR", "Neither DISCORD_EMAIL_WEBHOOK nor SLACK_EMAIL_WEBHOOK configured")
         sys.exit(1)
     
     # Parse email
@@ -239,14 +345,24 @@ def main():
     
     log("INFO", f"Parsed email: From={email_data['from']}, Subject={email_data['subject']}")
     
-    # Send to Discord
-    success = send_to_discord(webhook_url, email_data)
+    # Track success for each destination
+    any_success = False
     
-    if success:
-        log("INFO", "Email forwarded successfully")
+    # Send to Discord if configured
+    if discord_webhook:
+        if send_to_discord(discord_webhook, email_data):
+            any_success = True
+    
+    # Send to Slack if configured
+    if slack_webhook:
+        if send_to_slack(slack_webhook, email_data):
+            any_success = True
+    
+    if any_success:
+        log("INFO", "Email forwarded successfully to at least one destination")
         sys.exit(0)
     else:
-        log("ERROR", "Failed to forward email")
+        log("ERROR", "Failed to forward email to any destination")
         sys.exit(1)
 
 
