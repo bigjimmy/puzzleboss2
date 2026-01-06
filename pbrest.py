@@ -762,20 +762,27 @@ def get_solver_by_name(name):
     }
 
 
-def _solver_exists(id):
+def _solver_exists(identifier):
     """
     Internal check if solver exists. Returns True/False.
+    Accepts either an integer id or a string username.
     Does not raise exceptions or log errors for missing solvers.
     """
     try:
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-        cursor.execute("SELECT id FROM solver WHERE id = %s", (id,))
+        
+        # Check by id if integer, by name if string
+        if isinstance(identifier, int):
+            cursor.execute("SELECT id FROM solver WHERE id = %s", (identifier,))
+        else:
+            cursor.execute("SELECT id FROM solver WHERE name = %s", (identifier,))
+        
         solver = cursor.fetchone()
         return solver is not None
     except Exception as e:
-        debug_log(1, "Error checking solver existence for %s: %s" % (id, e))
+        debug_log(1, "Error checking solver existence for %s: %s" % (identifier, e))
         return False
 
 
