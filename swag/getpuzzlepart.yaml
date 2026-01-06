@@ -40,6 +40,7 @@ parameters:
         - lastact
         - lastsheetact
         - sheetcount
+        - sheetenabled
         - tags
 responses:
     200:

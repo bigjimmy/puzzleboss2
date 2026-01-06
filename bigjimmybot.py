@@ -11,6 +11,7 @@ from queue import *
 from threading import *
 from pblib import *
 from pbgooglelib import *
+from pbgooglelib import check_developer_metadata_exists, get_puzzle_sheet_info_legacy
 from pbdiscordlib import *
 
 exitFlag = 0
@@ -52,8 +53,39 @@ def check_puzzle_from_queue(threadname, q):
             # Feeble attempt to inject a new revision to split up grouping periodically
             # force_sheet_edit(mypuzzle['drive_id'])
 
-            # Get revisions AND sheet count in a single combined call
-            sheet_info = get_puzzle_sheet_info(mypuzzle["drive_id"], mypuzzle["name"])
+            # HYBRID APPROACH: Check sheetenabled to determine which method to use
+            sheetenabled = mypuzzle.get("sheetenabled", 0)
+            use_developer_metadata = False
+            
+            if sheetenabled == 1:
+                # Sheet has developer metadata enabled, use the new approach
+                debug_log(4, "[Thread: %s] Using developer metadata for %s (sheetenabled=1)" % (threadname, mypuzzle["name"]))
+                use_developer_metadata = True
+            else:
+                # Check if developer metadata has been populated yet
+                debug_log(4, "[Thread: %s] Checking for developer metadata on %s (sheetenabled=0)" % (threadname, mypuzzle["name"]))
+                if check_developer_metadata_exists(mypuzzle["drive_id"], mypuzzle["name"]):
+                    # Developer metadata found! Enable sheetenabled and skip this cycle
+                    debug_log(3, "[Thread: %s] Developer metadata found on %s, enabling sheetenabled" % (threadname, mypuzzle["name"]))
+                    try:
+                        requests.post(
+                            "%s/puzzles/%s/sheetenabled" % (config["API"]["APIURI"], mypuzzle["id"]),
+                            json={"sheetenabled": 1},
+                        )
+                    except Exception as e:
+                        debug_log(1, "[Thread: %s] Error enabling sheetenabled: %s" % (threadname, e))
+                    # Skip to next puzzle - will be processed with developer metadata on next loop
+                    continue
+                else:
+                    # No developer metadata, use legacy approach
+                    debug_log(4, "[Thread: %s] No developer metadata on %s, using legacy Revisions API" % (threadname, mypuzzle["name"]))
+                    use_developer_metadata = False
+            
+            # Get sheet info using appropriate method
+            if use_developer_metadata:
+                sheet_info = get_puzzle_sheet_info(mypuzzle["drive_id"], mypuzzle["name"])
+            else:
+                sheet_info = get_puzzle_sheet_info_legacy(mypuzzle["drive_id"], mypuzzle["name"])
             
             # Update sheet count only if changed
             if sheet_info["sheetcount"] is not None and sheet_info["sheetcount"] != mypuzzle.get("sheetcount"):
@@ -96,129 +128,255 @@ def check_puzzle_from_queue(threadname, q):
                 % (mypuzzle["id"], str(mypuzzlelastsheetact)),
             )
 
-            # Convert lastsheetact time to Unix timestamp for comparison
-            lastsheetact_ts = 0
-            if mypuzzlelastsheetact:
-                lastsheetacttime = datetime.datetime.strptime(
-                    mypuzzlelastsheetact["time"], "%a, %d %b %Y %H:%M:%S %Z"
-                )
-                lastsheetact_ts = lastsheetacttime.timestamp()
-
-            # Go through all editors from DeveloperMetadata and see if any are newer than lastsheetact
-            for editor in sheet_info["editors"]:
-                solvername = editor["solvername"]
-                edit_ts = editor["timestamp"]  # Unix timestamp
-
-                # Skip bot's own activity silently
-                if solvername.lower() == "bigjimmy":
-                    debug_log(5, "[Thread: %s] Skipping bot's own activity on %s" % (threadname, mypuzzle["name"]))
-                    continue
-
-                if edit_ts > lastsheetact_ts:
-                    # This edit is newer than the last recorded sheet activity
-                    debug_log(
-                        3,
-                        "[Thread: %s] New edit on puzzle %s by %s at %s (last sheet activity was %s)"
-                        % (
-                            threadname,
-                            mypuzzle["name"],
-                            solvername,
-                            datetime.datetime.fromtimestamp(edit_ts),
-                            datetime.datetime.fromtimestamp(lastsheetact_ts) if lastsheetact_ts else "never",
-                        ),
+            if use_developer_metadata:
+                # DEVELOPER METADATA APPROACH: Compare unix timestamps
+                lastsheetact_ts = 0
+                if mypuzzlelastsheetact:
+                    lastsheetacttime = datetime.datetime.strptime(
+                        mypuzzlelastsheetact["time"], "%a, %d %b %Y %H:%M:%S %Z"
                     )
+                    lastsheetact_ts = lastsheetacttime.timestamp()
 
-                    mysolverid = solver_from_name(solvername)
+                # Go through all editors from DeveloperMetadata and see if any are newer than lastsheetact
+                for editor in sheet_info["editors"]:
+                    solvername = editor["solvername"]
+                    edit_ts = editor["timestamp"]  # Unix timestamp
 
-                    if mysolverid == 0:
-                        debug_log(
-                            2,
-                            "[Thread: %s] solver %s not found in solver db. Skipping."
-                            % (threadname, solvername),
-                        )
+                    # Skip bot's own activity silently
+                    if solvername.lower() == "bigjimmy":
+                        debug_log(5, "[Thread: %s] Skipping bot's own activity on %s" % (threadname, mypuzzle["name"]))
                         continue
 
-                    # Fetch last activity (actually all info) for this solver PRIOR to this one. We'll use it in just a bit.
-                    solverinfo = json.loads(
-                        requests.get(
-                            "%s/solvers/%s"
-                            % (config["API"]["APIURI"], mysolverid)
-                        ).text
-                    )["solver"]
-
-                    if solverinfo["puzz"] != mypuzzle["name"]:
-                        # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
-                        databody = {
-                            "lastact": {
-                                "solver_id": "%s" % mysolverid,
-                                "source": "bigjimmybot",
-                                "type": "revise",
-                            }
-                        }
-                        actupresponse = requests.post(
-                            "%s/puzzles/%s/lastact"
-                            % (config["API"]["APIURI"], mypuzzle["id"]),
-                            json=databody,
-                        )
-
-                        debug_log(
-                            4,
-                            "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
-                            % (threadname, databody, actupresponse.text),
-                        )
-                        debug_log(
-                            4,
-                            "[Thread: %s] Solver %s has current puzzle of %s"
-                            % (threadname, mysolverid, solverinfo["puzz"]),
-                        )
-                    else:
+                    if edit_ts > lastsheetact_ts:
+                        # This edit is newer than the last recorded sheet activity
                         debug_log(
                             3,
-                            "[Thread: %s] Solver already on this puzzle. Skipping activity update"
-                            % threadname,
+                            "[Thread: %s] New edit on puzzle %s by %s at %s (last sheet activity was %s)"
+                            % (
+                                threadname,
+                                mypuzzle["name"],
+                                solvername,
+                                datetime.datetime.fromtimestamp(edit_ts),
+                                datetime.datetime.fromtimestamp(lastsheetact_ts) if lastsheetact_ts else "never",
+                            ),
                         )
 
-                    if solverinfo["puzz"] != mypuzzle["name"]:
-                        # This potential solver is not currently on this puzzle. Interesting.
-                        if not solverinfo["lastact"]:
-                            lastsolveract_ts = 0
-                        else:
-                            lastsolveracttime = datetime.datetime.strptime(
-                                solverinfo["lastact"]["time"],
-                                "%a, %d %b %Y %H:%M:%S %Z",
+                        mysolverid = solver_from_name(solvername)
+
+                        if mysolverid == 0:
+                            debug_log(
+                                2,
+                                "[Thread: %s] solver %s not found in solver db. Skipping."
+                                % (threadname, solvername),
                             )
-                            lastsolveract_ts = lastsolveracttime.timestamp()
+                            continue
+
+                        # Fetch last activity (actually all info) for this solver PRIOR to this one
+                        solverinfo = json.loads(
+                            requests.get(
+                                "%s/solvers/%s"
+                                % (config["API"]["APIURI"], mysolverid)
+                            ).text
+                        )["solver"]
+
+                        if solverinfo["puzz"] != mypuzzle["name"]:
+                            # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
+                            databody = {
+                                "lastact": {
+                                    "solver_id": "%s" % mysolverid,
+                                    "source": "bigjimmybot",
+                                    "type": "revise",
+                                }
+                            }
+                            actupresponse = requests.post(
+                                "%s/puzzles/%s/lastact"
+                                % (config["API"]["APIURI"], mypuzzle["id"]),
+                                json=databody,
+                            )
+
+                            debug_log(
+                                4,
+                                "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
+                                % (threadname, databody, actupresponse.text),
+                            )
+                            debug_log(
+                                4,
+                                "[Thread: %s] Solver %s has current puzzle of %s"
+                                % (threadname, mysolverid, solverinfo["puzz"]),
+                            )
+                        else:
+                            debug_log(
+                                3,
+                                "[Thread: %s] Solver already on this puzzle. Skipping activity update"
+                                % threadname,
+                            )
+
+                        if solverinfo["puzz"] != mypuzzle["name"]:
+                            # This potential solver is not currently on this puzzle
+                            if not solverinfo["lastact"]:
+                                lastsolveract_ts = 0
+                            else:
+                                lastsolveracttime = datetime.datetime.strptime(
+                                    solverinfo["lastact"]["time"],
+                                    "%a, %d %b %Y %H:%M:%S %Z",
+                                )
+                                lastsolveract_ts = lastsolveracttime.timestamp()
+                            debug_log(
+                                4,
+                                "[Thread: %s] Last solver activity for %s was at %s"
+                                % (threadname, solverinfo["name"], 
+                                   datetime.datetime.fromtimestamp(lastsolveract_ts) if lastsolveract_ts else "never"),
+                            )
+                            if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
+                                if edit_ts > lastsolveract_ts:
+                                    debug_log(
+                                        3,
+                                        "[Thread: %s] Assigning solver %s to puzzle %s."
+                                        % (threadname, mysolverid, mypuzzle["id"]),
+                                    )
+
+                                    databody = {"puzz": "%s" % mypuzzle["id"]}
+
+                                    assignmentresponse = requests.post(
+                                        "%s/solvers/%s/puzz"
+                                        % (config["API"]["APIURI"], mysolverid),
+                                        json=databody,
+                                    )
+                                    debug_log(
+                                        4,
+                                        "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
+                                        % (
+                                            threadname,
+                                            databody,
+                                            mysolverid,
+                                            assignmentresponse.text,
+                                        ),
+                                    )
+            else:
+                # LEGACY REVISIONS API APPROACH: Compare datetime objects
+                lastsheetacttime = datetime.datetime.fromordinal(1)
+                if mypuzzlelastsheetact:
+                    lastsheetacttime = datetime.datetime.strptime(
+                        mypuzzlelastsheetact["time"], "%a, %d %b %Y %H:%M:%S %Z"
+                    )
+
+                # Go through all revisions and see if any are newer than lastsheetact
+                for revision in sheet_info["revisions"]:
+                    revisiontime = datetime.datetime.strptime(
+                        revision["modifiedTime"], "%Y-%m-%dT%H:%M:%S.%fZ"
+                    )
+
+                    if revisiontime > lastsheetacttime:
+                        # This revision is newer than the last recorded sheet activity
                         debug_log(
-                            4,
-                            "[Thread: %s] Last solver activity for %s was at %s"
-                            % (threadname, solverinfo["name"], 
-                               datetime.datetime.fromtimestamp(lastsolveract_ts) if lastsolveract_ts else "never"),
+                            3,
+                            "[Thread: %s] New revision on puzzle %s by %s at %s (last sheet activity was %s)"
+                            % (
+                                threadname,
+                                mypuzzle["name"],
+                                revision["lastModifyingUser"]["emailAddress"],
+                                revision["modifiedTime"],
+                                lastsheetacttime,
+                            ),
                         )
-                        if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
-                            if edit_ts > lastsolveract_ts:
-                                debug_log(
-                                    3,
-                                    "[Thread: %s] Assigning solver %s to puzzle %s."
-                                    % (threadname, mysolverid, mypuzzle["id"]),
-                                )
 
-                                databody = {"puzz": "%s" % mypuzzle["id"]}
+                        mysolverid = solver_from_email(
+                            revision["lastModifyingUser"]["emailAddress"]
+                        )
 
-                                assignmentresponse = requests.post(
-                                    "%s/solvers/%s/puzz"
-                                    % (config["API"]["APIURI"], mysolverid),
-                                    json=databody,
-                                )
-                                debug_log(
-                                    4,
-                                    "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
-                                    % (
-                                        threadname,
-                                        databody,
-                                        mysolverid,
-                                        assignmentresponse.text,
+                        if mysolverid == 0:
+                            debug_log(
+                                2,
+                                "[Thread: %s] solver %s not found in solver db. Skipping."
+                                % (threadname, revision["lastModifyingUser"]["emailAddress"]),
+                            )
+                            continue
+
+                        # Fetch last activity (actually all info) for this solver
+                        solverinfo = json.loads(
+                            requests.get(
+                                "%s/solvers/%s"
+                                % (config["API"]["APIURI"], mysolverid)
+                            ).text
+                        )["solver"]
+
+                        if solverinfo["puzz"] != mypuzzle["name"]:
+                            # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
+                            databody = {
+                                "lastact": {
+                                    "solver_id": "%s"
+                                    % solver_from_email(
+                                        revision["lastModifyingUser"]["emailAddress"]
                                     ),
+                                    "source": "bigjimmybot",
+                                    "type": "revise",
+                                }
+                            }
+                            actupresponse = requests.post(
+                                "%s/puzzles/%s/lastact"
+                                % (config["API"]["APIURI"], mypuzzle["id"]),
+                                json=databody,
+                            )
+
+                            debug_log(
+                                4,
+                                "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
+                                % (threadname, databody, actupresponse.text),
+                            )
+                            debug_log(
+                                4,
+                                "[Thread: %s] Solver %s has current puzzle of %s"
+                                % (threadname, mysolverid, solverinfo["puzz"]),
+                            )
+                        else:
+                            debug_log(
+                                3,
+                                "[Thread: %s] Solver already on this puzzle. Skipping activity update"
+                                % threadname,
+                            )
+
+                        if solverinfo["puzz"] != mypuzzle["name"]:
+                            # This potential solver is not currently on this puzzle
+                            if not solverinfo["lastact"]:
+                                lastsolveract_ts = 0
+                            else:
+                                lastsolveracttime = datetime.datetime.strptime(
+                                    solverinfo["lastact"]["time"],
+                                    "%a, %d %b %Y %H:%M:%S %Z",
                                 )
+                                lastsolveract_ts = lastsolveracttime.timestamp()
+                            debug_log(
+                                4,
+                                "[Thread: %s] Last solver activity for %s was at %s"
+                                % (threadname, solverinfo["name"], 
+                                   datetime.datetime.fromtimestamp(lastsolveract_ts) if lastsolveract_ts else "never"),
+                            )
+                            if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
+                                revision_ts = revisiontime.timestamp()
+                                if revision_ts > lastsolveract_ts:
+                                    debug_log(
+                                        3,
+                                        "[Thread: %s] Assigning solver %s to puzzle %s."
+                                        % (threadname, mysolverid, mypuzzle["id"]),
+                                    )
+
+                                    databody = {"puzz": "%s" % mypuzzle["id"]}
+
+                                    assignmentresponse = requests.post(
+                                        "%s/solvers/%s/puzz"
+                                        % (config["API"]["APIURI"], mysolverid),
+                                        json=databody,
+                                    )
+                                    debug_log(
+                                        4,
+                                        "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
+                                        % (
+                                            threadname,
+                                            databody,
+                                            mysolverid,
+                                            assignmentresponse.text,
+                                        ),
+                                    )
             
             # Log per-puzzle timing
             puzzle_elapsed = time.time() - puzzle_start_time
