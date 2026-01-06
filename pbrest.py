@@ -99,8 +99,8 @@ def _run_wiki_index_background():
             return
         
         try:
-            debug_log(3, "Starting background wiki index (acquired lock)...")
-            success = index_wiki(wiki_config, full_reindex=False)
+            debug_log(3, "Starting background wiki full reindex (acquired lock)...")
+            success = index_wiki(wiki_config, full_reindex=True)
             if success:
                 debug_log(3, "Background wiki index completed successfully")
             else:
