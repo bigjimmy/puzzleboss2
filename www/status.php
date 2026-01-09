@@ -512,7 +512,8 @@
 
                 const sheetDisabledPuzzles = computed(() => {
                     return allPuzzles.value.filter(p =>
-                        p.sheetenabled === 0 || p.sheetenabled === false
+                        (p.sheetenabled === 0 || p.sheetenabled === false) &&
+                        p.status !== 'Solved'
                     )
                 })
                 
