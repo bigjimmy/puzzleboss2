@@ -215,7 +215,7 @@ export default {
                 } else if (props.type === 'work state') {
                     stateStrA.value = props.puzzle.xyzloc;
 
-                    const url = `https://importanthuntpoll.org/pb/apicall.php?&apicall=solver&apiparam1=${props.uid}`
+                    const url = `${Consts.api}/apicall.php?&apicall=solver&apiparam1=${props.uid}`
                     let solver = await(await fetch(url)).json();
 
                     currentlyWorking.value = (solver.solver.puzz === props.puzzle.name);
@@ -227,7 +227,7 @@ export default {
                     
                     // Fetch last activity information
                     try {
-                        const lastActUrl = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=lastact`;
+                        const lastActUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=lastact`;
                         let lastActData = await(await fetch(lastActUrl)).json();
                         if (lastActData.lastact && lastActData.lastact.time) {
                             const lastActDate = new Date(lastActData.lastact.time);
@@ -290,8 +290,8 @@ export default {
                 if (props.type === 'tags') what = 'tags';
 
                 const url = (props.type === 'comments') ?
-                    `https://importanthuntpoll.org/pb/apicall.php?apicall=round&apiparam1=${props.puzzle.id}&apiparam2=${what}` :
-                    `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}` ;
+                    `${Consts.api}/apicall.php?apicall=round&apiparam1=${props.puzzle.id}&apiparam2=${what}` :
+                    `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=${what}` ;
 
                 //
                 // Solved status updates have special handling - we verify the
@@ -368,7 +368,7 @@ export default {
                 // it can be updated at the same time as status.
                 //
                 if (props.type === 'status' && (isMetaLoc.value !== (props.ismeta != 0 ? true : false ))) {
-                    const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=ismeta`
+                    const url = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=ismeta`
                     try {
                         await fetch(url, {
                             method: 'POST',
@@ -400,7 +400,7 @@ export default {
         //
         async function claimCurrentPuzzle() {
 
-            const url = `https://importanthuntpoll.org/pb/apicall.php?apicall=solver&apiparam1=${props.uid}&apiparam2=puzz`
+            const url = `${Consts.api}/apicall.php?apicall=solver&apiparam1=${props.uid}&apiparam2=puzz`
             
             try {
                 await fetch(url, {
