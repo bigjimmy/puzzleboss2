@@ -13,3 +13,7 @@ scripts/loadtest_config.yaml
 deploy.sh
 pushbranchtoprod.sh
 __pycache__/
+
+# Docker volumes and runtime files
+*.log
+.dockerignore

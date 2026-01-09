@@ -122,7 +122,7 @@ INSERT INTO `config` VALUES
   ('BIGJIMMY_QUOTAFAIL_DELAY', '5'),
   ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '10'),
   ('BIGJIMMY_THREADCOUNT', '2'),
-  ('bookmarklet_js', 'insert complicated bookmarklet javascript here'),
+  ('bookmarklet_js', 'javascript:puzzurl=location.href.split(''#'')[0];puzzid=(document.querySelector(''header h1 span'')?.innerText || document.title.replace(/ - Google Docs$/, ''''));roundname=Object.values(window.initialTeamState.rounds).find(r => Object.values(r.slots).some(p => p.slug===window.puzzleSlug))?.title?.replace(/[^A-Za-z0-9]+/g, '''');pbPath=`addpuzzle.php?puzzurl=${encodeURIComponent(puzzurl)}&puzzid=${encodeURIComponent(puzzid)}&roundname=${encodeURIComponent(roundname)}`;window.open(''<<>>''+pbPath);'),
   ('DISCORD_EMAIL_WEBHOOK', ''),
   ('DOMAINNAME', 'example.org'),
   ('GEMINI_API_KEY', ''),

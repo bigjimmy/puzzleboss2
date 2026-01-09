@@ -1,15 +1,29 @@
-gunicorn
-mysqlclient
+# Core web framework
+Flask
+flask_restful
+flask_mysqldb
 flasgger
-bleach
-flask_restful  
-google-api-python-client  
-pandas 
-python-ldap 
-flask_mysqldb 
+gunicorn
+
+# Database
+mysqlclient
+
+# Google API dependencies
+google-api-python-client
+google-auth
 google-auth-oauthlib
+httplib2
+
+# Utilities
+PyYAML
+requests
+bleach
+urllib3
+
+# Optional dependencies
+pandas
+python-ldap
 pymemcache
 prometheus_flask_exporter
 google-genai
 chromadb
-urllib3

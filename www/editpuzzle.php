@@ -445,6 +445,6 @@ echo '<small><em>Tag names can only contain letters, numbers, hyphens, and under
 
 ?>
 </main>
-<footer><br><hr><br><a href="/pb/">Puzzleboss Home</a></footer>
+<footer><br><hr><br><a href="index.php">Puzzleboss Home</a></footer>
 </body>
 </html>

@@ -378,7 +378,7 @@
         </div>
         
         <footer>
-            <a href="/pb/">Puzzleboss Home</a> | 
+            <a href="index.php">Puzzleboss Home</a> | 
             Last updated: {{ lastUpdate }}
         </footer>
     </div>

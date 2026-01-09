@@ -120,6 +120,7 @@ if WIKI_INDEXER_AVAILABLE:
     wiki_thread.start()
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False  # Allow trailing slashes on all routes
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
 app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]

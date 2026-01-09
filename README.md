@@ -5,6 +5,18 @@
 
 **Owner**: Benjamin O'Connor (benoc@alum.mit.edu)
 
+## Quick Start (Docker)
+
+For local development and testing, use Docker:
+
+```bash
+docker-compose up --build
+```
+
+Then visit http://localhost?assumedid=testuser
+
+See `docker/README.md` for details, or continue reading for production setup.
+
 ## Setup:
 
 - git clone onto server
@@ -14,10 +26,11 @@
     - Apache (see below for config)
     - MySQL (see below for schema load and config instructions)
     
-- copy puzzleboss-SAMPLE.yaml into puzzleboss.yaml and edit appropriately:
-    - database access parameters
-    - API endpoint access parameters
-    - Other config as noted in sample file
+- Copy puzzleboss-SAMPLE.yaml to puzzleboss.yaml and edit for production:
+    - Change MYSQL HOST from "mysql" to "127.0.0.1" (for native install)
+    - Update MYSQL PASSWORD to a secure password
+    - Update API endpoint if not using localhost:5000
+    - Configure other settings as needed (see comments in file)
 
 - Apache config:
     - www subdir should be a web docroot or alias

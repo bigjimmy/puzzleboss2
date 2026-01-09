@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: puzzleboss-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: puzzleboss
+      MYSQL_USER: puzzleboss
+      MYSQL_PASSWORD: puzzleboss123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/puzzleboss.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - puzzleboss
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: puzzleboss-app
+    ports:
+      - "80:80"
+      - "5000:5000"  # Direct API access for debugging/Swagger
+    volumes:
+      # Mount code for live development (optional - comment out for production)
+      - ./www:/app/www
+      - ./pbrest.py:/app/pbrest.py
+      - ./pblib.py:/app/pblib.py
+      - ./pbgooglelib.py:/app/pbgooglelib.py
+      - ./pbdiscordlib.py:/app/pbdiscordlib.py
+      - ./pbllmlib.py:/app/pbllmlib.py
+      - ./pbldaplib.py:/app/pbldaplib.py
+      - ./bigjimmybot.py:/app/bigjimmybot.py
+      - ./wsgi.py:/app/wsgi.py
+      - ./gunicorn_config.py:/app/gunicorn_config.py
+      - ./scripts:/app/scripts
+      - ./swag:/app/swag
+      # Optional: Mount custom config (uncomment to use your own puzzleboss.yaml)
+      # - ./puzzleboss.yaml:/app/puzzleboss.yaml
+    environment:
+      - PYTHONUNBUFFERED=1
+      - prometheus_multiproc_dir=/dev/shm/puzzleboss_prometheus
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - puzzleboss
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  puzzleboss:
+    driver: bridge
