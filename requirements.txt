@@ -18,7 +18,7 @@ httplib2
 PyYAML
 requests
 bleach
-urllib3
+urllib3>=2.6.3  # CVE-2026-21441 fix
 
 # Optional dependencies
 pandas

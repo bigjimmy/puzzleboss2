@@ -23,6 +23,9 @@ RUN a2enmod rewrite proxy proxy_http headers
 # Set working directory
 WORKDIR /app
 
+# Upgrade pip to fix CVE-2025-8869 (affects pip <= 25.2)
+RUN pip install --upgrade pip>=25.3
+
 # Copy Python requirements and install
 COPY requirements.txt .
 # Suppress setuptools deprecation warnings during build (they're from the packages, not our code)
