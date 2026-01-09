@@ -37,7 +37,7 @@
                 <button @click="applyShowFilter(true)">Show All Puzzles</button>
             </div>
             <div>
-                <p>Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/></p>
+                <p>Spoil all puzzles: <input type="checkbox" v-model="spoilAll" /> | Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/></p>
             </div>
             </div>
 
@@ -46,6 +46,7 @@
                     <round
                         v-for="round in roundsSorted"
                         :round="round"
+                        :spoil="spoilAll"
                         :showbody="showBody[round.id]"
                         :highlighted="highlight[round.id]"
                         :tagfilter="tagFilter"
@@ -66,6 +67,7 @@
                     <round
                         v-for="round in roundsSortedHidden"
                         :round="round"
+                        :spoil="spoilAll"
                         :showbody="showBody[round.id]"
                         :highlighted="highlight[round.id]"
                         :tagfilter="tagFilter"
@@ -167,7 +169,8 @@
                 );
                 const showControls = ref(false);
 
-                const sortPuzzles = ref(false);
+                const spoilAll = ref(false);
+                const sortPuzzles = ref(true);
                 const roundStats = ref({})
                 const puzzleStats = ref({})
                 const time = ref("")
@@ -354,6 +357,9 @@
                     const sc = localStorage.getItem("showControls");
                     if (sc !== null && sc !== undefined) showControls.value = JSON.parse(sc);
 
+                    const sa = localStorage.getItem("spoilAll");
+                    if (sa !== null && sa !== undefined) spoilAll.value = JSON.parse(sa);
+
                     await fetchData(true);
                     setInterval(fetchData, 5000);
                 });
@@ -432,9 +438,13 @@
                     persist("showControls", update);
                 });
 
+                watch(spoilAll, (update) => {
+                    persist("spoilAll", update);
+                })
+
                 return {
                     data,
-                    showBody, highlight, showControls,
+                    showBody, highlight, spoilAll, showControls,
                     puzzleFilter, puzzleFilterKeys, sortPuzzles,
                     toggleBody, toggleKey,
                     applyShow, applyShowFilter,

@@ -390,7 +390,7 @@ export default {
             //
             if (showModal.value == false) {
                 puzzle.value.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
-                context.emit('highlight-me');
+                context.emit('highlight-me', save ? 'saved' : 'closed');
             }
         }
 
