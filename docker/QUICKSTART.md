@@ -205,7 +205,7 @@ docker exec puzzleboss-app tail -100 /var/log/gunicorn/error.log
 
 ## Optional: Enable Features
 
-### Enable BigJimmy Bot (requires Google credentials):
+### Enable BigJimmy Bot (requires Google credentials -- TODO: NOT WORKING YET):
 1. Get credentials.json from Google Cloud Console
 2. Place in project root
 3. Generate token: `docker exec -it puzzleboss-app python gdriveinit.py`
