@@ -1,7 +1,8 @@
 <?php
 require('puzzlebosslib.php');
 
-$bookmarkuri = trim(str_replace('<<<PBROOTURI>>>', $pbroot, $bookmarkuri));
+// Replace placeholder with actual BIN_URI (supports both <<>> and <<<PBROOTURI>>> formats)
+$bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot], $bookmarkuri));
 
 ?>
 <!doctype html>
@@ -212,8 +213,8 @@ try {
 <?php endif; ?>
 
 </main>
-<footer><br><hr><br><a href="/pb/">Puzzleboss Home</a>
-<br><a href="/pb/admin.php">Puzztech-only Puzzleboss Admininstration Page</a>
+<footer><br><hr><br><a href="index.php">Puzzleboss Home</a>
+<br><a href="admin.php">Puzztech-only Puzzleboss Administration Page</a>
 </footer>
 </body>
 </html>

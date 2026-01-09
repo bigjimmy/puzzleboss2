@@ -11,6 +11,10 @@ Or with custom settings:
 import os
 import shutil
 
+# Server socket
+bind = "0.0.0.0:5000"
+workers = 4
+
 # Prometheus multiprocess directory
 prometheus_multiproc_dir = os.environ.get('prometheus_multiproc_dir')
 if not prometheus_multiproc_dir:

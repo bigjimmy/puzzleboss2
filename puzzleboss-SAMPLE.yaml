@@ -1,7 +1,21 @@
+# Puzzleboss Configuration
+#
+# Docker/Local Development (default):
+#   - Just copy this file to puzzleboss.yaml and run: docker-compose up --build
+#   - No changes needed!
+#
+# Production Deployment:
+#   1. Copy this file to puzzleboss.yaml
+#   2. Change MYSQL HOST to your MySQL server IP (e.g., 127.0.0.1 or your DB host)
+#   3. Update PASSWORD to a secure password
+#   4. Update APIURI to your production API endpoint
+#   5. Set SKIP_GOOGLE_API and SKIP_PUZZCORD to "false" if using those features
+
 MYSQL:
     USERNAME: puzzleboss
-    PASSWORD: YOURPASSWORD
-    HOST: 127.0.0.1
+    PASSWORD: puzzleboss123
+    HOST: mysql              # For Docker (docker-compose service name)
+                             # For native: Change to "127.0.0.1" or your MySQL host
     PORT: 3306
     DATABASE: puzzleboss
 

@@ -99,8 +99,8 @@ def _run_wiki_index_background():
             return
         
         try:
-            debug_log(3, "Starting background wiki index (acquired lock)...")
-            success = index_wiki(wiki_config, full_reindex=False)
+            debug_log(3, "Starting background wiki full reindex (acquired lock)...")
+            success = index_wiki(wiki_config, full_reindex=True)
             if success:
                 debug_log(3, "Background wiki index completed successfully")
             else:
@@ -120,6 +120,7 @@ if WIKI_INDEXER_AVAILABLE:
     wiki_thread.start()
 
 app = Flask(__name__)
+app.url_map.strict_slashes = False  # Allow trailing slashes on all routes
 app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
 app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
 app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
@@ -762,20 +763,27 @@ def get_solver_by_name(name):
     }
 
 
-def _solver_exists(id):
+def _solver_exists(identifier):
     """
     Internal check if solver exists. Returns True/False.
+    Accepts either an integer id or a string username.
     Does not raise exceptions or log errors for missing solvers.
     """
     try:
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-        cursor.execute("SELECT id FROM solver WHERE id = %s", (id,))
+        
+        # Check by id if integer, by name if string
+        if isinstance(identifier, int):
+            cursor.execute("SELECT id FROM solver WHERE id = %s", (identifier,))
+        else:
+            cursor.execute("SELECT id FROM solver WHERE name = %s", (identifier,))
+        
         solver = cursor.fetchone()
         return solver is not None
     except Exception as e:
-        debug_log(1, "Error checking solver existence for %s: %s" % (id, e))
+        debug_log(1, "Error checking solver existence for %s: %s" % (identifier, e))
         return False
 
 
@@ -1902,7 +1910,7 @@ def new_account():
             return {"status": "error", "error": "Username %s not found in system to reset." % username}, 400
         if verify_email_for_user(email, username) != 1:
             debug_log(2, "Password reset rejected: username %s does not match email %s" % (username, email))
-            return {"status": "error", "error": "Username %s does not match email %s in the system." % (username, email)}, 400
+            return {"status": "error", "error": "Username %s does not match email %s in the system. Email must match the email used to initially sign up for the account. If you cannot determine the email or no longer have access to it, please contact puzzleboss/puzztech for help." % (username, email)}, 400
 
     # Generate the code
     code = token_hex(4)

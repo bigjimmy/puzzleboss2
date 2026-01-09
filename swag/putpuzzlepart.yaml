@@ -40,6 +40,7 @@ parameters:
         - puzzle_uri: Original puzzle URL
         - xyzloc: Physical location where puzzle is being worked
         - sheetcount: Number of sheets in Google spreadsheet
+        - sheetenabled: Whether sheet activity tracking is enabled (true/false)
         - ismeta: Whether puzzle is a meta (true/false)
         - tags: Tag manipulation (uses object with add/add_id/remove)
     - name: body
@@ -94,6 +95,9 @@ parameters:
           sheetcount:
             type: integer
             description: Number of sheets/tabs in the puzzle's Google spreadsheet
+          sheetenabled:
+            type: boolean
+            description: Whether sheet activity tracking is enabled for this puzzle (default false)
           ismeta:
             type: boolean
             description: Whether this puzzle is a meta puzzle

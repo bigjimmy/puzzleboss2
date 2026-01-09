@@ -122,7 +122,8 @@ INSERT INTO `config` VALUES
   ('BIGJIMMY_QUOTAFAIL_DELAY', '5'),
   ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '10'),
   ('BIGJIMMY_THREADCOUNT', '2'),
-  ('bookmarklet_js', 'insert complicated bookmarklet javascript here'),
+  ('bookmarklet_js', 'javascript:puzzurl=location.href.split(''#'')[0];puzzid=(document.querySelector(''header h1 span'')?.innerText || document.title.replace(/ - Google Docs$/, ''''));roundname=Object.values(window.initialTeamState.rounds).find(r => Object.values(r.slots).some(p => p.slug===window.puzzleSlug))?.title?.replace(/[^A-Za-z0-9]+/g, '''');pbPath=`addpuzzle.php?puzzurl=${encodeURIComponent(puzzurl)}&puzzid=${encodeURIComponent(puzzid)}&roundname=${encodeURIComponent(roundname)}`;window.open(''<<>>''+pbPath);'),
+  ('DISCORD_EMAIL_WEBHOOK', ''),
   ('DOMAINNAME', 'example.org'),
   ('GEMINI_API_KEY', ''),
   ('GEMINI_MODEL', 'gemini-3-flash-preview'),
@@ -142,6 +143,7 @@ INSERT INTO `config` VALUES
   ('PUZZCORD_PORT', '3141'),
   ('REGEMAIL', 'admin@yourdomain.org'),
   ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
+  ('SLACK_EMAIL_WEBHOOK', ''),
   ('SKIP_GOOGLE_API', 'true'),
   ('SKIP_PUZZCORD', 'true'),
   ('TEAMNAME', 'Default Team Name'),
@@ -198,6 +200,7 @@ CREATE TABLE `puzzle` (
   `current_solvers` JSON DEFAULT NULL,
   `solver_history` JSON DEFAULT NULL,
   `sheetcount` int(11) DEFAULT NULL,
+  `sheetenabled` tinyint(1) NOT NULL DEFAULT 0,
   `tags` JSON DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
@@ -400,6 +403,7 @@ SELECT
     ) AS cursolvers,
     p.xyzloc,
     p.sheetcount,
+    p.sheetenabled,
     (
         SELECT GROUP_CONCAT(DISTINCT t.name ORDER BY t.name)
         FROM JSON_TABLE(
