@@ -184,14 +184,16 @@
                 const solveSoundRef = useTemplateRef('solveSound');
 
                 const solvers = ref(null);
-                
+
                 //
-                // Replace this for local testing.
+                // Get authenticated username (with test mode support)
                 //
                 <?php
-                     echo "const username = ref(\"" . $_SERVER['REMOTE_USER'] . "\");";
+                require_once('puzzlebosslib.php');
+                $auth_solver = getauthenticatedsolver();
+                echo "const username = ref(\"" . $auth_solver->name . "\");";
                 ?>
-                const uid = ref(0);
+                const uid = ref(<?php echo $auth_solver->id; ?>);
 
                 const tags = ref([]);
                 const tagFilter = ref("");
