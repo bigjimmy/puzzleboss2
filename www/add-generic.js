@@ -315,7 +315,7 @@ export default {
                 //
 
                 } else if (props.type === 'tags') {
-                    const oldTags = props.puzzle.tags.split(",");
+                    const oldTags = props.puzzle.tags ? props.puzzle.tags.split(",") : [];
                     const addTags = stateStrA.value.filter(tag => !oldTags.includes(tag));
                     const removeTags = oldTags.filter(tag => !stateStrA.value.includes(tag));
 
