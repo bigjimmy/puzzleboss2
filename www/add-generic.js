@@ -255,7 +255,7 @@ export default {
                         lastActTime.value = "";
                     }
                 } else if (props.type === 'tags') {
-                    stateStrA.value = props.puzzle.tags.split(",");
+                    stateStrA.value = props.puzzle.tags ? props.puzzle.tags.split(",") : [];
                 }
 
                 //
