@@ -556,8 +556,9 @@
                 }
                 
                 function formatTags(tags) {
-                    if (!tags || !Array.isArray(tags) || tags.length === 0) return ''
-                    return tags.map(t => t.name).join(', ')
+                    // tags comes as a comma-separated string from puzzle_view
+                    if (!tags) return ''
+                    return tags
                 }
                 
                 async function fetchData() {
