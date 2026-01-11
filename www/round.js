@@ -14,7 +14,8 @@ export default {
       sortpuzzles: Boolean,
       currpuzz: String,
       uid: Number,
-      solvers: Object
+      solvers: Object,
+      spoil: Boolean,
     },
     emits: ['please-fetch'],
     computed: {
@@ -62,7 +63,7 @@ export default {
         //
         // This component contains five pieces of state:
         //
-        // spoilAll indicates whether or not to display all answers from the
+        // spoilRound indicates whether or not to display all answers from the
         // given round.
         //
         // scrolling indicates whether the puzzle title is currently scrolling
@@ -75,17 +76,17 @@ export default {
         // because we just closed a modal associated with it from AddGeneric.
         //
 
-        const spoilAll = ref(false);
+        const spoilRound = ref(false);
         const solved = ref(0);
         const open = ref(0);
         const scrolling = ref(null);
         const highlightedPuzzle = ref({});
 
         //
-        // This function toggles the spoilAll state.
+        // This function toggles the spoilRound state.
         //
         function toggleSpoil() {
-            spoilAll.value = !spoilAll.value;
+            spoilRound.value = !spoilRound.value;
         }
 
         //
@@ -135,8 +136,8 @@ export default {
         // This function highlights a puzzle with a given puzzle id (and
         // fires a timer to unhighlight it).
         //
-        function highlight(pid) {
-            highlightedPuzzle.value[pid] = true;
+        function highlight(pid, state) {
+            highlightedPuzzle.value[pid] = state;
             setTimeout(
                 () => {highlightedPuzzle.value[pid] = false}, 750);
         }
@@ -153,7 +154,7 @@ export default {
         });
 
         return {
-            spoilAll, toggleSpoil,
+            spoilRound, toggleSpoil,
             open, solved,
             scroll, stopscroll, highlight, highlightedPuzzle
         }
@@ -169,28 +170,37 @@ export default {
             <p v-if="showbody" class="puzzle-icon">▼</p>
             <p v-if="!showbody" class="puzzle-icon">▶</p>
             <h3 @mouseover="scroll($event, 0)" @mouseout="stopscroll">{{round.name}}</h3>
-            <div class="round-header-column">
-            <p>({{solved}} solved / {{open}} open)</p>
-            <div class="round-header-icons">
+
+            <!-- spoiled layout -->
+            <p v-if="spoil">({{solved}} solved / {{open}} open)</p>
+            <div class="round-header-icons" v-if="spoil">
                 <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
                 <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
             </div>
+
+            <!-- unspoiled layout -->
+            <div class="round-header-column" v-if="!spoil">
+                <p>({{solved}} solved / {{open}} open)</p>
+                <div class="round-header-icons">
+                    <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
+                    <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
+                </div>
             </div>
-            <button v-if="showbody" @click.stop="toggleSpoil">{{ spoilAll ? 'Hide' : 'Show' }} Spoilers</button>
+            <button v-if="showbody && !spoil" @click.stop="toggleSpoil">{{ spoilRound ? 'Hide' : 'Show' }} Spoilers</button>
         </div>
         <div :class = "{'round-body': true, hiding: !showbody}">
             <div
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
-                :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] === true ? ' highlighted' : '')">
+                :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] ? ' ' + highlightedPuzzle[puzzle.id] : '')">
                 <div class="puzzle-icons">
-                    <AddGeneric type="status" :puzzle='puzzle' :ismeta='puzzle.ismeta' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)" :solvers="solvers"></AddGeneric>
-                    <AddGeneric type="work state" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="highlight(puzzle.id)"></AddGeneric>
+                    <AddGeneric type="status" :puzzle='puzzle' :ismeta='puzzle.ismeta' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers"></AddGeneric>
+                    <AddGeneric type="work state" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                     <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                     <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
                     <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
-                    <AddGeneric type="note" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
-                    <AddGeneric type="tags" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="highlight(puzzle.id)"></AddGeneric>
+                    <AddGeneric type="note" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
+                    <AddGeneric type="tags" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 </div>
                 <p 
                     v-if = "puzzle.answer === null"
@@ -199,14 +209,18 @@ export default {
                 </p>
                 <p 
                     v-if = "puzzle.answer !== null"
-                    :class = "{'answer': true, 'spoil': spoilAll, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
+                    :class = "{'answer': true, 'spoil': spoil || spoilRound, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
                     {{ puzzle.answer.padStart(16) }}
                 </p>
             </div>
             <div
                 v-if="hiddenCount > 0"
                 class="puzzle">
-                <p><i>{{hiddenCount}} puzzles hidden by filters.</i></p>
+                <p><i>
+                    {{hiddenCount == this.round.puzzles.length ? "No applicable puzzles (" : ""}}{{hiddenCount}}
+                    {{hiddenCount == this.round.puzzles.length ? "" : "puzzles"}} hidden by
+                    filters{{hiddenCount == this.round.puzzles.length ? ").": "."}}
+                    </i></p>
             </div>
         </div>
     </div>  `

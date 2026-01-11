@@ -98,7 +98,7 @@
     gap: 4px;
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
+    justify-content: space-around;
     padding: 10px;
     box-shadow: 0 0 8px 0 rgba(0,0,0,0.5);
     background-color: rgba(0,0,0,0.1);
@@ -157,6 +157,11 @@ textarea {
     font-size: small;
 }
 
+.round-header-column.spoiled {
+    flex-direction: row;
+    justify-content: space-between;
+}
+
 .round-header-column p {
     margin: 0px;
 }
@@ -184,8 +189,13 @@ textarea {
     transition: background-color 0.5s ease;
 }
 
-.puzzle.highlighted {
-    background-color: orangered;
+.puzzle.saved, .puzzle.meta.saved, .puzzle.meta.solved.saved {
+    background-color: green;
+    transition: background-color 0.2s ease;
+}
+
+.puzzle.closed, .puzzle.meta.closed, .puzzle.meta.solved.closed {
+    background-color: gray;
     transition: background-color 0.2s ease;
 }
 
@@ -214,7 +224,7 @@ textarea {
     display: inline;
 }
 
-div.meta, div.meta.solved {
+.puzzle.meta, .puzzle.meta.solved {
     background-color: rgba(120, 255, 255, 0.8);
 }
 
