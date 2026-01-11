@@ -667,7 +667,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Round Name:"},
-                                "userEnteredFormat": {"bold": True},
+                                "userEnteredFormat": {"textFormat": {"bold": True}},
                             },
                             {
                                 "userEnteredValue": {
@@ -680,7 +680,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Puzzle Name:"},
-                                "userEnteredFormat": {"bold": True},
+                                "userEnteredFormat": {"textFormat": {"bold": True}},
                             },
                             {"userEnteredValue": {"stringValue": puzzledict["name"]}},
                         ]
@@ -689,7 +689,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Puzzle URL:"},
-                                "userEnteredFormat": {"bold": True},
+                                "userEnteredFormat": {"textFormat": {"bold": True}},
                             },
                             {
                                 "userEnteredValue": {
@@ -702,7 +702,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Discord Channel:"},
-                                "userEnteredFormat": {"bold": True},
+                                "userEnteredFormat": {"textFormat": {"bold": True}},
                             },
                             {
                                 "userEnteredValue": {
