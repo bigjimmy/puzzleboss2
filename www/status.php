@@ -323,6 +323,28 @@
         </div>
 
         <div class="puzzle-table">
+            <div class="section-header collapsible-header" @click="showSheetDisabled = !showSheetDisabled">
+                <h2>
+                    <span class="collapse-icon" :class="{ collapsed: !showSheetDisabled }">▼</span>
+                    Puzzles Without Sheet Tracking Enabled
+                </h2>
+                <span class="badge">{{ sheetDisabledPuzzles.length }} puzzles</span>
+            </div>
+            <table v-show="showSheetDisabled">
+                <tr>
+                    <th>Round</th>
+                    <th>Name</th>
+                    <th>Sheet Link</th>
+                </tr>
+                <tr v-for="puzzle in sheetDisabledPuzzles" :key="puzzle.id">
+                    <td>{{ getRoundName(puzzle.id) }}</td>
+                    <td><a :href="puzzle.puzzle_uri" target="_blank">{{ puzzle.name }}</a></td>
+                    <td><a :href="puzzle.drive_uri" target="_blank">Open Sheet</a></td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="puzzle-table">
             <div class="section-header collapsible-header" @click="showOverview = !showOverview">
                 <h2>
                     <span class="collapse-icon" :class="{ collapsed: !showOverview }">▼</span>
@@ -402,6 +424,7 @@
                 const staleTimer = ref(null)
                 
                 const showNoLoc = ref(true)
+                const showSheetDisabled = ref(true)
                 const showOverview = ref(true)
                 
                 const commentEdits = ref({})
@@ -482,8 +505,15 @@
                 })
                 
                 const workOnPuzzles = computed(() => {
-                    return allPuzzles.value.filter(p => 
+                    return allPuzzles.value.filter(p =>
                         !excludedFromWorkOn.includes(p.status)
+                    )
+                })
+
+                const sheetDisabledPuzzles = computed(() => {
+                    return allPuzzles.value.filter(p =>
+                        (p.sheetenabled === 0 || p.sheetenabled === false) &&
+                        p.status !== 'Solved'
                     )
                 })
                 
@@ -620,10 +650,12 @@
                     displayStatuses,
                     selectableStatuses,
                     noLocPuzzles,
+                    sheetDisabledPuzzles,
                     workOnPuzzles,
                     updateState,
                     lastUpdate,
                     showNoLoc,
+                    showSheetDisabled,
                     showOverview,
                     commentEdits,
                     statusEdits,

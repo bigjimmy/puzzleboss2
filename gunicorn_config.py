@@ -30,11 +30,13 @@ def on_starting(server):
     Clean up any stale prometheus metric files from previous runs.
     """
     if os.path.exists(prometheus_multiproc_dir):
-        # Remove all files in the directory
+        # Remove all files in the directory, including corrupted/empty ones
         for filename in os.listdir(prometheus_multiproc_dir):
             filepath = os.path.join(prometheus_multiproc_dir, filename)
             try:
-                os.unlink(filepath)
+                # Remove file even if it's empty or corrupted
+                if os.path.isfile(filepath):
+                    os.unlink(filepath)
             except Exception as e:
                 print(f"Warning: Could not remove {filepath}: {e}")
         print(f"Cleaned prometheus multiproc dir: {prometheus_multiproc_dir}")
