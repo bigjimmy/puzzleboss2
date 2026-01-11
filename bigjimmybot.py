@@ -179,38 +179,27 @@ def check_puzzle_from_queue(threadname, q):
                             ).text
                         )["solver"]
 
-                        if solverinfo["puzz"] != mypuzzle["name"]:
-                            # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
-                            databody = {
-                                "lastact": {
-                                    "solver_id": "%s" % mysolverid,
-                                    "source": "bigjimmybot",
-                                    "type": "revise",
-                                }
+                        # Always record activity, even if solver is already on puzzle
+                        databody = {
+                            "lastact": {
+                                "solver_id": "%s" % mysolverid,
+                                "source": "bigjimmybot",
+                                "type": "revise",
                             }
-                            actupresponse = requests.post(
-                                "%s/puzzles/%s/lastact"
-                                % (config["API"]["APIURI"], mypuzzle["id"]),
-                                json=databody,
-                            )
+                        }
+                        actupresponse = requests.post(
+                            "%s/puzzles/%s/lastact"
+                            % (config["API"]["APIURI"], mypuzzle["id"]),
+                            json=databody,
+                        )
 
-                            debug_log(
-                                4,
-                                "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
-                                % (threadname, databody, actupresponse.text),
-                            )
-                            debug_log(
-                                4,
-                                "[Thread: %s] Solver %s has current puzzle of %s"
-                                % (threadname, mysolverid, solverinfo["puzz"]),
-                            )
-                        else:
-                            debug_log(
-                                3,
-                                "[Thread: %s] Solver already on this puzzle. Skipping activity update"
-                                % threadname,
-                            )
+                        debug_log(
+                            4,
+                            "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
+                            % (threadname, databody, actupresponse.text),
+                        )
 
+                        # Only auto-assign if solver is not already on this puzzle
                         if solverinfo["puzz"] != mypuzzle["name"]:
                             # This potential solver is not currently on this puzzle
                             if not solverinfo["lastact"]:
@@ -300,43 +289,28 @@ def check_puzzle_from_queue(threadname, q):
                             ).text
                         )["solver"]
 
-                        if solverinfo["puzz"] != mypuzzle["name"]:
-                            # Insert this activity into the activity DB for this puzzle/solver pair if not already on it
-                            databody = {
-                                "lastact": {
-                                    "solver_id": "%s"
-                                    % solver_from_email(
-                                        revision["lastModifyingUser"]["emailAddress"]
-                                    ),
-                                    "source": "bigjimmybot",
-                                    "type": "revise",
-                                }
+                        # Always record activity, even if solver is already on puzzle
+                        databody = {
+                            "lastact": {
+                                "solver_id": "%s" % mysolverid,
+                                "source": "bigjimmybot",
+                                "type": "revise",
                             }
-                            actupresponse = requests.post(
-                                "%s/puzzles/%s/lastact"
-                                % (config["API"]["APIURI"], mypuzzle["id"]),
-                                json=databody,
-                            )
+                        }
+                        actupresponse = requests.post(
+                            "%s/puzzles/%s/lastact"
+                            % (config["API"]["APIURI"], mypuzzle["id"]),
+                            json=databody,
+                        )
 
-                            debug_log(
-                                4,
-                                "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
-                                % (threadname, databody, actupresponse.text),
-                            )
-                            debug_log(
-                                4,
-                                "[Thread: %s] Solver %s has current puzzle of %s"
-                                % (threadname, mysolverid, solverinfo["puzz"]),
-                            )
-                        else:
-                            debug_log(
-                                3,
-                                "[Thread: %s] Solver already on this puzzle. Skipping activity update"
-                                % threadname,
-                            )
+                        debug_log(
+                            4,
+                            "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
+                            % (threadname, databody, actupresponse.text),
+                        )
 
+                        # Only auto-assign if solver is not already on this puzzle
                         if solverinfo["puzz"] != mypuzzle["name"]:
-                            # This potential solver is not currently on this puzzle
                             if not solverinfo["lastact"]:
                                 lastsolveract_ts = 0
                             else:
