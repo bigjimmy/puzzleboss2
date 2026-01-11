@@ -552,7 +552,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
             "gridProperties": {
                 "rowCount": 7,
                 "columnCount": 2,
-                "hideGridlines": true,
+                "hideGridlines": True,
             },
             "index": 0,
         },
@@ -667,7 +667,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Round Name:"},
-                                "userEnteredFormat": {"bold": true},
+                                "userEnteredFormat": {"bold": True},
                             },
                             {
                                 "userEnteredValue": {
@@ -680,7 +680,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Puzzle Name:"},
-                                "userEnteredFormat": {"bold": true},
+                                "userEnteredFormat": {"bold": True},
                             },
                             {"userEnteredValue": {"stringValue": puzzledict["name"]}},
                         ]
@@ -689,7 +689,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Puzzle URL:"},
-                                "userEnteredFormat": {"bold": true},
+                                "userEnteredFormat": {"bold": True},
                             },
                             {
                                 "userEnteredValue": {
@@ -702,7 +702,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                         "values": [
                             {
                                 "userEnteredValue": {"stringValue": "Discord Channel:"},
-                                "userEnteredFormat": {"bold": true},
+                                "userEnteredFormat": {"bold": True},
                             },
                             {
                                 "userEnteredValue": {
