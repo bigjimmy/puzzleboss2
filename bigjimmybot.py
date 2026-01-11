@@ -1,6 +1,5 @@
 import sys
 import pblib
-import pbrest
 import requests
 import json
 import time
