@@ -340,7 +340,7 @@
             </table>
         </div>
 
-        <div class="puzzle-table">
+        <div class="puzzle-table" v-if="sheetDisabledPuzzles.length > 0">
             <div class="section-header collapsible-header" @click="showSheetDisabled = !showSheetDisabled">
                 <h2>
                     <span class="collapse-icon" :class="{ collapsed: !showSheetDisabled }">▼</span>
