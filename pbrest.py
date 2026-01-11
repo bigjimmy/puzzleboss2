@@ -1565,6 +1565,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     % (id, mypuzzle["puzzle"]["name"]),
                 )
                 clear_puzzle_solvers(id)
+                update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
                 update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
                 
@@ -1610,6 +1611,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 % (id, mypuzzle["puzzle"]["name"]),
             )
             clear_puzzle_solvers(id)
+            update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
             chat_announce_solved(mypuzzle["puzzle"]["name"])
             
             # Add activity entry for puzzle being solved
