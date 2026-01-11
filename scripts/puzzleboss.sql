@@ -142,6 +142,8 @@ INSERT INTO `config` VALUES
   ('PUZZCORD_HOST', 'puzzcord-server.example.org'),
   ('PUZZCORD_PORT', '3141'),
   ('REGEMAIL', 'admin@yourdomain.org'),
+  ('SELENIUM_SAML_PASSWORD', ''),
+  ('SELENIUM_SAML_USERNAME', ''),
   ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
   ('SLACK_EMAIL_WEBHOOK', ''),
   ('SKIP_GOOGLE_API', 'true'),

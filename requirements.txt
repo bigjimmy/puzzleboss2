@@ -27,3 +27,6 @@ pymemcache
 prometheus_flask_exporter
 google-genai
 chromadb
+
+# Browser automation (for sheet extension enablement)
+selenium
