@@ -232,11 +232,15 @@ p.meta, p.meta.solved {
     font-weight: bold;
 }
 
-.solved, .unnecessary {
+.solved {
     background-color: lightgray;
 }
 
 /* Reconsider status-based colors if desired.
+.unnecessary {
+    background-color: lightgray;
+}
+
 div.critical, div.meta.critical {
     background-color: coral;
 }

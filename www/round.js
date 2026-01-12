@@ -16,6 +16,7 @@ export default {
       uid: Number,
       solvers: Object,
       spoil: Boolean,
+      showtags: Boolean
     },
     emits: ['please-fetch'],
     computed: {
@@ -197,15 +198,22 @@ export default {
                     <AddGeneric type="status" :puzzle='puzzle' :ismeta='puzzle.ismeta' :pfk='pfk' @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers"></AddGeneric>
                     <AddGeneric type="work state" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                     <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
-                    <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">🗒️</a></p>
+                    <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">📊</a></p>
                     <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
                     <AddGeneric type="note" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                     <AddGeneric type="tags" :puzzle='puzzle' @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 </div>
                 <p 
                     v-if = "puzzle.answer === null"
-                    :class = "{'answer': true, 'spoil': true}">
-                    {{ puzzle.name === currpuzz ? 'CURRENT PUZZLE'.padStart(16) : "".padStart(16) }}
+                    :class = "{'answer': true, 'spoil': true}"
+                    @mouseover="scroll($event, 300)"
+                    @mouseout="stopscroll" >
+
+                    <em>{{ puzzle.name === currpuzz ?
+                               'CURRENT PUZZLE'.padStart(16) : 
+                                ( showtags ? 
+                                     (puzzle.tags ? puzzle.tags.padStart(16) : '' )
+                                     : '') }}</em>
                 </p>
                 <p 
                     v-if = "puzzle.answer !== null"
