@@ -16,7 +16,6 @@ Configuration:
 
 import sys
 import os
-import email
 from email import policy
 from email.parser import BytesParser
 import requests

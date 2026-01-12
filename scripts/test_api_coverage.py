@@ -3,8 +3,8 @@
 import requests
 import random
 import time
-from typing import List, Dict, Optional, Tuple
-from datetime import datetime, timedelta, timezone
+from typing import List, Dict
+from datetime import datetime
 import json
 import sys
 import traceback
@@ -1898,7 +1898,7 @@ class TestRunner:
                 puzzle_details = self.get_puzzle_details(puzzle["id"])
                 if not puzzle_details:
                     result.fail(
-                        f"Failed to get puzzle details after setting sheetcount"
+                        "Failed to get puzzle details after setting sheetcount"
                     )
                     return
 
@@ -1926,7 +1926,7 @@ class TestRunner:
                 puzzle_details = self.get_puzzle_details(puzzle["id"])
                 if not puzzle_details:
                     result.fail(
-                        f"Failed to get puzzle details after updating sheetcount"
+                        "Failed to get puzzle details after updating sheetcount"
                     )
                     return
 
@@ -1943,7 +1943,7 @@ class TestRunner:
                 # Verify sheetcount is included in /all endpoint
                 response = requests.get(f"{self.base_url}/all")
                 if not response.ok:
-                    result.fail(f"Failed to get /all endpoint")
+                    result.fail("Failed to get /all endpoint")
                     return
 
                 all_data = response.json()
@@ -1967,7 +1967,7 @@ class TestRunner:
                     return
 
                 self.logger.log_operation(
-                    f"Sheetcount correctly included in /all endpoint"
+                    "Sheetcount correctly included in /all endpoint"
                 )
 
             result.set_success("Sheetcount test completed successfully")
@@ -2078,10 +2078,10 @@ class TestRunner:
             )
             if response.ok and response.json().get("status") == "ok":
                 result.fail(
-                    f"Tag with spaces should have been rejected but was accepted"
+                    "Tag with spaces should have been rejected but was accepted"
                 )
                 return
-            self.logger.log_operation(f"Invalid tag correctly rejected")
+            self.logger.log_operation("Invalid tag correctly rejected")
 
             # ============================================
             # Test 4: Create a new tag by associating it with a puzzle (auto-create)
@@ -2152,9 +2152,9 @@ class TestRunner:
                 json={"tags": {"add_id": nonexistent_id}},
             )
             if response.ok and response.json().get("status") == "ok":
-                result.fail(f"Adding non-existent tag id should have failed")
+                result.fail("Adding non-existent tag id should have failed")
                 return
-            self.logger.log_operation(f"Non-existent tag id correctly rejected")
+            self.logger.log_operation("Non-existent tag id correctly rejected")
 
             # ============================================
             # Test 7: Make sure a puzzle having multiple tags works
@@ -2164,11 +2164,11 @@ class TestRunner:
             )
             puzzle_details = self.get_puzzle_details(puzzle_id)
             if not puzzle_details:
-                result.fail(f"Failed to get puzzle details")
+                result.fail("Failed to get puzzle details")
                 return
             puzzle_tags = puzzle_details.get("tags", "")
             if not puzzle_tags:
-                result.fail(f"Puzzle has no tags")
+                result.fail("Puzzle has no tags")
                 return
             tag_list = [t.strip() for t in puzzle_tags.split(",")]
             if len(tag_list) < 2:
@@ -2407,7 +2407,7 @@ class TestRunner:
             # Verify puzzle exists before deletion
             puzzle_details = self.get_puzzle_details(puzzle_id)
             if not puzzle_details:
-                result.fail(f"Failed to verify puzzle exists before deletion")
+                result.fail("Failed to verify puzzle exists before deletion")
                 return
             self.logger.log_operation(
                 f"Verified puzzle exists: {puzzle_details['name']}"
@@ -2441,14 +2441,14 @@ class TestRunner:
                 # If we got a response, check if the puzzle data is actually there
                 verify_data = verify_response.json()
                 if verify_data.get("puzzle"):
-                    result.fail(f"Puzzle still exists after deletion!")
+                    result.fail("Puzzle still exists after deletion!")
                     return
 
             # Also check in the puzzles list
             all_puzzles = self.get_all_puzzles()
             puzzle_names = [p["name"] for p in all_puzzles]
             if expected_name in puzzle_names:
-                result.fail(f"Deleted puzzle still appears in puzzles list")
+                result.fail("Deleted puzzle still appears in puzzles list")
                 return
 
             self.logger.log_operation(

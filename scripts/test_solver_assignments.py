@@ -2,8 +2,7 @@
 
 import requests
 import random
-import time
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 BASE_URL = "http://localhost:5000"
 
@@ -48,7 +47,7 @@ def get_puzzle_details(puzzle_id: str) -> Dict:
 
 def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
     """Assign a solver to a puzzle."""
-    print(f"DEBUG - Before API call:")
+    print("DEBUG - Before API call:")
     print(f"  Puzzle ID: {puzzle_id}")
     print(f"  Solver ID: {solver_id}")
 
@@ -57,7 +56,7 @@ def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
             f"{BASE_URL}/solvers/{solver_id}/puzz", json={"puzz": puzzle_id}
         )
 
-        print(f"DEBUG - After API call:")
+        print("DEBUG - After API call:")
         print(f"  Request URL: {BASE_URL}/solvers/{solver_id}/puzz")
         print(f"  Request Body: {{'puzz': {puzzle_id}}}")
         print(f"  Response Status: {response.status_code}")

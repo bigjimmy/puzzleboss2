@@ -16,7 +16,6 @@ import subprocess
 import threading
 import time
 import random
-import string
 import requests
 import yaml
 import sys
@@ -25,9 +24,7 @@ import urllib3
 # Suppress SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Callable
-from concurrent.futures import ThreadPoolExecutor
-from collections import defaultdict
+from typing import Dict, List, Optional
 import statistics
 
 # ============================================================================
@@ -241,7 +238,7 @@ class TestModule:
                 self.run_single_request()
                 latency = time.time() - start
                 self.metrics.record_request(latency, is_error=False)
-            except Exception as e:
+            except Exception:
                 latency = time.time() - start
                 self.metrics.record_request(latency, is_error=True)
 

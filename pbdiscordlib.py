@@ -1,8 +1,6 @@
 from pblib import *
 import socket
-import sys
 import json
-import re
 
 
 def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):

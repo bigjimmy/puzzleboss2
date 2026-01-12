@@ -1,11 +1,7 @@
 import ldap
-import json
 import requests
-import pblib
-import pbgooglelib
 from pblib import *
 from pbgooglelib import *
-from ldap import modlist
 
 
 def verify_email_for_user(email, username):

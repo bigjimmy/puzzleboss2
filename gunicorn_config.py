@@ -9,7 +9,6 @@ Or with custom settings:
 """
 
 import os
-import shutil
 
 # Server socket
 bind = "0.0.0.0:5000"

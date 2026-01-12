@@ -3,11 +3,7 @@ import sys
 import flasgger
 import pblib
 import traceback
-import yaml
-import inspect
-import datetime
 import json
-import re
 import os
 from flask import Flask, request, jsonify
 from flask_restful import Api
@@ -1181,7 +1177,7 @@ def create_tag():
         data = request.get_json()
         tag_name = data["name"].lower()  # Force lowercase
         debug_log(4, "Creating tag: %s" % tag_name)
-    except (TypeError, KeyError) as e:
+    except (TypeError, KeyError):
         raise Exception("Missing or invalid 'name' field in request body")
 
     # Validate tag name (alphanumeric, hyphens, underscores only)
@@ -1495,7 +1491,7 @@ def set_priv(priv, uid):
             (uid, value, uid, value),
         )
         conn.commit()
-    except Exception as e:
+    except Exception:
         raise Exception(
             "Error modifying priv table for uid %s priv %s value %s. Is priv string valid?"
             % (uid, priv, value)
