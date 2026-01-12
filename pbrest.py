@@ -316,7 +316,7 @@ def _get_all_from_db():
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from puzzle_view")
         puzzle_view = cursor.fetchall()
-    except:
+    except Exception:
         raise Exception("Exception in querying puzzle_view")
 
     all_puzzles = {}
@@ -329,14 +329,14 @@ def _get_all_from_db():
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute("SELECT * from round_view")
         round_view = cursor.fetchall()
-    except:
+    except Exception:
         raise Exception("Exception in querying round_view")
 
     def is_int(val):
         try:
             int(val)
             return True
-        except:
+        except Exception:
             return False
 
     rounds = []
@@ -549,7 +549,7 @@ def check_priv(priv, uid):
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid,))
         rv = cursor.fetchone()
-    except:
+    except Exception:
         raise Exception("Exception querying database for privs)")
 
     debug_log(3, "in database user %s ACL is %s" % (uid, rv))
@@ -562,7 +562,7 @@ def check_priv(priv, uid):
 
     try:
         privanswer = rv[priv]
-    except:
+    except Exception:
         raise Exception(
             "Exception in reading priv %s from user %s ACL. No such priv?"
             % (
@@ -595,7 +595,7 @@ def get_one_puzzle(id):
         puzzle = cursor.fetchone()
     except IndexError:
         raise Exception("Puzzle %s not found in database" % id)
-    except:
+    except Exception:
         raise Exception("Exception in fetching puzzle %s from database" % id)
 
     debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
@@ -627,7 +627,7 @@ def get_puzzle_part(id, part):
             rv = cursor.fetchone()[part]
         except TypeError:
             raise Exception("Puzzle %s not found in database" % id)
-        except:
+        except Exception:
             raise Exception(
                 "Exception in fetching %s part for puzzle %s from database"
                 % (
@@ -649,7 +649,7 @@ def get_all_rounds():
         cursor = conn.cursor()
         cursor.execute("SELECT id, name from round")
         roundlist = cursor.fetchall()
-    except:
+    except Exception:
         raise Exception("Exception in fetching all rounds from database")
 
     debug_log(4, "listed all rounds")
@@ -688,7 +688,7 @@ def get_one_round(id):
             if pid:  # Skip empty strings
                 puzzles.append(get_one_puzzle(pid)["puzzle"])
         round["puzzles"] = puzzles
-    except:
+    except Exception:
         raise Exception("Exception in fetching round %s from database" % id)
 
     debug_log(4, "fetched round %s" % id)
@@ -713,7 +713,7 @@ def get_round_part(id, part):
         answer = answer[part]
     except TypeError:
         raise Exception("Round %s not found in database" % id)
-    except:
+    except Exception:
         raise Exception(
             "Exception in fetching %s part for round %s from database" % (part, id)
         )
@@ -734,7 +734,7 @@ def get_all_solvers():
         cursor = conn.cursor()
         cursor.execute("SELECT id, name from solver")
         solvers = cursor.fetchall()
-    except:
+    except Exception:
         raise Exception("Exception in fetching all solvers from database")
 
     debug_log(4, "listed all solvers")
@@ -755,7 +755,7 @@ def get_one_solver(id):
             raise Exception("Solver %s not found in database" % id)
     except IndexError:
         raise Exception("Solver %s not found in database" % id)
-    except:
+    except Exception:
         raise Exception("Exception in fetching solver %s from database" % id)
 
     solver["lastact"] = get_last_activity_for_solver(id)
@@ -1285,7 +1285,7 @@ def create_puzzle():
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
         existing_puzzle = cursor.fetchone()
-    except:
+    except Exception:
         raise Exception(
             "Exception checking database for duplicate puzzle before insert"
         )
@@ -1308,7 +1308,7 @@ def create_puzzle():
     try:
         chat_id = chat_channel[0]
         chat_link = chat_channel[1]
-    except:
+    except Exception:
         raise Exception("Error in creating chat channel for puzzle")
 
     debug_log(4, "chat channel for puzzle %s is made" % name)
@@ -1357,7 +1357,7 @@ def create_puzzle():
             "MySQL integrity failure. Does another puzzle with the same name %s exist?"
             % name
         )
-    except:
+    except Exception:
         raise Exception("Exception in insertion of puzzle %s into database" % name)
 
     # We need to figure out what the ID is that the puzzle got assigned
@@ -1378,7 +1378,7 @@ def create_puzzle():
             (myid, 100),
         )
         conn.commit()
-    except:
+    except Exception:
         raise Exception("Exception checking database for puzzle after insert")
 
     # Announce new puzzle in chat
@@ -1427,7 +1427,7 @@ def create_round():
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM round WHERE name = %s LIMIT 1", (roundname,))
         existing_round = cursor.fetchone()
-    except:
+    except Exception:
         raise Exception("Exception checking database for duplicate round before insert")
 
     if existing_round:
@@ -1598,7 +1598,7 @@ def create_solver():
             "MySQL integrity failure. Does another solver with the same name %s exist?"
             % name
         )
-    except:
+    except Exception:
         raise Exception("Exception in insertion of solver %s into database" % name)
 
     debug_log(3, "solver %s added to database!" % name)
@@ -1696,7 +1696,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     (id, 100),
                 )
                 conn.commit()
-            except:
+            except Exception:
                 debug_log(
                     1,
                     "Exception in logging puzzle solve in activity table for puzzle %s"
@@ -1728,7 +1728,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 (id, 100),
             )
             conn.commit()
-        except:
+        except Exception:
             debug_log(
                 1, "Exception in logging comment in activity table for puzzle %s" % id
             )
@@ -2313,7 +2313,7 @@ def delete_puzzle(puzzlename):
         cursor = conn.cursor()
         cursor.execute("DELETE from puzzle where id = %s", (puzzid,))
         conn.commit()
-    except:
+    except Exception:
         raise Exception(
             "Puzzle deletion attempt for id %s name %s failed in database operation."
             % puzzid,
@@ -2359,7 +2359,7 @@ def get_puzzle_id_by_name(name):
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
         rv = cursor.fetchone()["id"]
         debug_log(4, "rv = %s" % rv)
-    except:
+    except Exception:
         debug_log(2, "Puzzle name %s not found in database." % name)
         return 0
     return rv
@@ -2477,7 +2477,7 @@ def set_new_activity_for_puzzle(id, actstruct):
         puzzle_id = id
         source = actstruct["source"]
         type = actstruct["type"]
-    except:
+    except Exception:
         debug_log(
             0,
             "Failure parsing activity dict. Needs solver_id, source, type. dict passed in is: %s"
@@ -2542,7 +2542,7 @@ def check_round_completion(round_id):
             debug_log(
                 3, "Round %s marked as solved - all meta puzzles completed" % round_id
             )
-    except:
+    except Exception:
         debug_log(1, "Error checking round completion status for round %s" % round_id)
 
 
