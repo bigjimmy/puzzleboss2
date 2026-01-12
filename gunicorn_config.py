@@ -16,13 +16,13 @@ bind = "0.0.0.0:5000"
 workers = 4
 
 # Prometheus multiprocess directory
-prometheus_multiproc_dir = os.environ.get('prometheus_multiproc_dir')
+prometheus_multiproc_dir = os.environ.get("prometheus_multiproc_dir")
 if not prometheus_multiproc_dir:
-    if os.path.exists('/dev/shm'):
-        prometheus_multiproc_dir = '/dev/shm/puzzleboss_prometheus'
+    if os.path.exists("/dev/shm"):
+        prometheus_multiproc_dir = "/dev/shm/puzzleboss_prometheus"
     else:
-        prometheus_multiproc_dir = '/tmp/puzzleboss_prometheus'
-    os.environ['prometheus_multiproc_dir'] = prometheus_multiproc_dir
+        prometheus_multiproc_dir = "/tmp/puzzleboss_prometheus"
+    os.environ["prometheus_multiproc_dir"] = prometheus_multiproc_dir
 
 
 def on_starting(server):
@@ -50,5 +50,5 @@ def child_exit(server, worker):
     Clean up the worker's prometheus metric files.
     """
     from prometheus_client import multiprocess
-    multiprocess.mark_process_dead(worker.pid)
 
+    multiprocess.mark_process_dead(worker.pid)

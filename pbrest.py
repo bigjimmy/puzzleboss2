@@ -22,14 +22,14 @@ from werkzeug.exceptions import HTTPException
 
 # Prometheus multiprocess setup - must be done BEFORE importing prometheus
 # This allows metrics to be aggregated across Gunicorn workers
-PROMETHEUS_MULTIPROC_DIR = os.environ.get('prometheus_multiproc_dir')
+PROMETHEUS_MULTIPROC_DIR = os.environ.get("prometheus_multiproc_dir")
 if not PROMETHEUS_MULTIPROC_DIR:
     # Use /dev/shm (RAM-backed) if available, otherwise /tmp
-    if os.path.exists('/dev/shm'):
-        PROMETHEUS_MULTIPROC_DIR = '/dev/shm/puzzleboss_prometheus'
+    if os.path.exists("/dev/shm"):
+        PROMETHEUS_MULTIPROC_DIR = "/dev/shm/puzzleboss_prometheus"
     else:
-        PROMETHEUS_MULTIPROC_DIR = '/tmp/puzzleboss_prometheus'
-    os.environ['prometheus_multiproc_dir'] = PROMETHEUS_MULTIPROC_DIR
+        PROMETHEUS_MULTIPROC_DIR = "/tmp/puzzleboss_prometheus"
+    os.environ["prometheus_multiproc_dir"] = PROMETHEUS_MULTIPROC_DIR
 
 # Create the directory if it doesn't exist
 if not os.path.exists(PROMETHEUS_MULTIPROC_DIR):
@@ -43,14 +43,21 @@ if not os.path.exists(PROMETHEUS_MULTIPROC_DIR):
 PROMETHEUS_AVAILABLE = False
 try:
     from prometheus_flask_exporter import PrometheusMetrics
+
     PROMETHEUS_AVAILABLE = True
-    debug_log(3, f"prometheus_flask_exporter available (multiproc_dir: {PROMETHEUS_MULTIPROC_DIR})")
+    debug_log(
+        3,
+        f"prometheus_flask_exporter available (multiproc_dir: {PROMETHEUS_MULTIPROC_DIR})",
+    )
 except ImportError:
-    debug_log(3, "prometheus_flask_exporter not installed - /metrics endpoint unavailable")
+    debug_log(
+        3, "prometheus_flask_exporter not installed - /metrics endpoint unavailable"
+    )
 
 # Optional memcache support
 try:
     from pymemcache.client import base as memcache_client
+
     MEMCACHE_AVAILABLE = True
 except ImportError:
     MEMCACHE_AVAILABLE = False
@@ -62,9 +69,11 @@ from pbllmlib import GEMINI_AVAILABLE, process_query as llm_process_query
 # Wiki indexer for RAG (optional)
 import threading
 import fcntl
+
 WIKI_INDEXER_AVAILABLE = False
 try:
     from scripts.wiki_indexer import index_wiki, load_config as load_wiki_config
+
     WIKI_INDEXER_AVAILABLE = True
 except ImportError:
     debug_log(3, "wiki_indexer not available - wiki RAG disabled")
@@ -74,30 +83,32 @@ def _run_wiki_index_background():
     """Run wiki indexing in background thread at startup. Uses file lock to prevent multiple workers from indexing."""
     if not WIKI_INDEXER_AVAILABLE:
         return
-    
+
     try:
         wiki_config = load_wiki_config()
-        wiki_url = wiki_config.get('WIKI_URL', '')
-        chromadb_path = wiki_config.get('WIKI_CHROMADB_PATH', '/var/lib/puzzleboss/chromadb')
-        
+        wiki_url = wiki_config.get("WIKI_URL", "")
+        chromadb_path = wiki_config.get(
+            "WIKI_CHROMADB_PATH", "/var/lib/puzzleboss/chromadb"
+        )
+
         if not wiki_url:
             debug_log(3, "WIKI_URL not configured - skipping wiki index")
             return
-        
+
         # Use a lock file to ensure only one worker indexes at a time
-        lock_file_path = os.path.join(chromadb_path, '.wiki_index.lock')
-        
+        lock_file_path = os.path.join(chromadb_path, ".wiki_index.lock")
+
         # Ensure directory exists
         os.makedirs(chromadb_path, exist_ok=True)
-        
+
         try:
-            lock_file = open(lock_file_path, 'w')
+            lock_file = open(lock_file_path, "w")
             # Try to acquire exclusive lock (non-blocking)
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (IOError, OSError):
             debug_log(4, "Another worker is already indexing wiki - skipping")
             return
-        
+
         try:
             debug_log(3, "Starting background wiki full reindex (acquired lock)...")
             success = index_wiki(wiki_config, full_reindex=True)
@@ -109,7 +120,7 @@ def _run_wiki_index_background():
             # Release lock
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
             lock_file.close()
-            
+
     except Exception as e:
         debug_log(2, f"Background wiki index error: {e}")
 
@@ -137,12 +148,12 @@ if PROMETHEUS_AVAILABLE:
     try:
         debug_log(3, "Initializing PrometheusMetrics...")
         metrics = PrometheusMetrics(app, group_by_endpoint=True)
-        # group_by_endpoint=True uses route templates like /puzzles/<id> 
+        # group_by_endpoint=True uses route templates like /puzzles/<id>
         # instead of actual paths like /puzzles/1, /puzzles/2, etc.
         # This reduces metric cardinality significantly.
-        
+
         # Add app info label
-        metrics.info('puzzleboss_api', 'Puzzleboss REST API', version='1.0')
+        metrics.info("puzzleboss_api", "Puzzleboss REST API", version="1.0")
         debug_log(3, "PrometheusMetrics initialized successfully")
     except Exception as e:
         debug_log(0, f"Failed to initialize Prometheus metrics: {e}")
@@ -153,10 +164,12 @@ if PROMETHEUS_AVAILABLE:
 def periodic_config_refresh():
     maybe_refresh_config()
 
+
 # Memcache client (initialized later after config is available)
 mc = None
-MEMCACHE_CACHE_KEY = 'puzzleboss:all'
+MEMCACHE_CACHE_KEY = "puzzleboss:all"
 MEMCACHE_TTL = 60  # seconds
+
 
 def init_memcache(configstruct):
     """Initialize memcache client from config. Call after DB config is loaded."""
@@ -164,27 +177,28 @@ def init_memcache(configstruct):
     if not MEMCACHE_AVAILABLE:
         debug_log(3, "Memcache: pymemcache not installed")
         return
-    
+
     try:
-        enabled = configstruct.get('MEMCACHE_ENABLED', 'false').lower() == 'true'
-        host = configstruct.get('MEMCACHE_HOST', '')
-        port = int(configstruct.get('MEMCACHE_PORT', 11211))
-        
+        enabled = configstruct.get("MEMCACHE_ENABLED", "false").lower() == "true"
+        host = configstruct.get("MEMCACHE_HOST", "")
+        port = int(configstruct.get("MEMCACHE_PORT", 11211))
+
         if not enabled:
             debug_log(3, "Memcache: disabled in config")
             return
-        
+
         if not host:
             debug_log(3, "Memcache: no host configured")
             return
-        
+
         mc = memcache_client.Client((host, port), timeout=1, connect_timeout=1)
         # Test connection
-        mc.set('_test', 'ok', expire=1)
+        mc.set("_test", "ok", expire=1)
         debug_log(3, "Memcache: initialized successfully (%s:%d)" % (host, port))
     except Exception as e:
         debug_log(2, "Memcache: failed to initialize: %s" % str(e))
         mc = None
+
 
 def cache_get(key):
     """Safe cache get - returns None on error or if disabled"""
@@ -199,6 +213,7 @@ def cache_get(key):
         debug_log(3, "cache_get error: %s" % str(e))
         return None
 
+
 def cache_set(key, value, ttl=MEMCACHE_TTL):
     """Safe cache set - fails silently if disabled"""
     if mc is None:
@@ -208,6 +223,7 @@ def cache_set(key, value, ttl=MEMCACHE_TTL):
         debug_log(5, "cache_set: stored %s" % key)
     except Exception as e:
         debug_log(3, "cache_set error: %s" % str(e))
+
 
 def cache_delete(key):
     """Safe cache delete - fails silently if disabled"""
@@ -219,11 +235,13 @@ def cache_delete(key):
     except Exception as e:
         debug_log(3, "cache_delete error: %s" % str(e))
 
+
 def invalidate_all_cache():
     """Invalidate the /all cache. Call when puzzle/round data changes."""
     ensure_memcache_initialized()
     cache_delete(MEMCACHE_CACHE_KEY)
-    increment_cache_stat('cache_invalidations_total')
+    increment_cache_stat("cache_invalidations_total")
+
 
 def increment_cache_stat(stat_name):
     """Increment a cache statistic counter in botstats table."""
@@ -234,14 +252,16 @@ def increment_cache_stat(stat_name):
         cursor.execute(
             """INSERT INTO botstats (`key`, `val`) VALUES (%s, '1') 
                ON DUPLICATE KEY UPDATE `val` = CAST(`val` AS UNSIGNED) + 1""",
-            (stat_name,)
+            (stat_name,),
         )
         conn.commit()
     except Exception as e:
         debug_log(3, "increment_cache_stat error for %s: %s" % (stat_name, str(e)))
 
+
 # Flag to track if memcache has been initialized
 _memcache_initialized = False
+
 
 def ensure_memcache_initialized():
     """Initialize memcache from DB config on first use."""
@@ -249,38 +269,42 @@ def ensure_memcache_initialized():
     if _memcache_initialized:
         return
     _memcache_initialized = True
-    
+
     try:
         # Query config from database
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SELECT `key`, `val` FROM config WHERE `key` LIKE 'MEMCACHE_%'")
         rows = cursor.fetchall()
-        mc_config = {row['key']: row['val'] for row in rows}
+        mc_config = {row["key"]: row["val"] for row in rows}
         init_memcache(mc_config)
     except Exception as e:
         debug_log(2, "Failed to load memcache config from database: %s" % str(e))
+
 
 @app.errorhandler(Exception)
 def handle_error(e):
     code = 500
     if isinstance(e, HTTPException):
         code = e.code
-    
+
     error_details = {
         "error": str(e),
         "error_type": e.__class__.__name__,
-        "traceback": traceback.format_exc()
+        "traceback": traceback.format_exc(),
     }
-    
+
     # Log level based on error type:
     # - 4xx client errors (404, 400, etc): SEV3 (info) - not our fault
     # - 5xx server errors: SEV0 (emergency) - something broke
     if code >= 500:
         debug_log(0, f"Server error occurred: {error_details}")
     elif code >= 400:
-        debug_log(3, f"Client error: {code} {e.__class__.__name__} - {request.method} {request.path}")
-    
+        debug_log(
+            3,
+            f"Client error: {code} {e.__class__.__name__} - {request.method} {request.path}",
+        )
+
     return error_details, code
 
 
@@ -337,30 +361,30 @@ def _get_all_from_db():
 def _get_all_with_cache():
     """Get all rounds/puzzles, using cache if available."""
     debug_log(4, "start")
-    
+
     # Ensure memcache is initialized (lazy init on first request)
     ensure_memcache_initialized()
-    
+
     # Try cache first if memcache is enabled
     if mc is not None:
         cached = cache_get(MEMCACHE_CACHE_KEY)
         if cached:
             debug_log(4, "cache hit")
-            increment_cache_stat('cache_hits_total')
+            increment_cache_stat("cache_hits_total")
             return json.loads(cached)
         debug_log(4, "cache miss")
-        increment_cache_stat('cache_misses_total')
-    
+        increment_cache_stat("cache_misses_total")
+
     # Fall back to database
     data = _get_all_from_db()
-    
+
     # Store in cache for next time (if enabled)
     if mc is not None:
         try:
             cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
         except Exception as e:
             debug_log(3, "failed to cache: %s" % str(e))
-    
+
     return data
 
 
@@ -384,10 +408,10 @@ def get_hunt_info():
     """Get static hunt info: config, statuses, and tags - for reducing HTTP round-trips"""
     debug_log(5, "start")
     result = {"status": "ok"}
-    
+
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # Config
     try:
         cursor.execute("SELECT * FROM config")
@@ -396,20 +420,20 @@ def get_hunt_info():
     except Exception as e:
         debug_log(2, "Could not fetch config: %s" % e)
         result["config"] = {}
-    
+
     # Statuses
     try:
         cursor.execute("SHOW COLUMNS FROM puzzle WHERE Field = 'status'")
         row = cursor.fetchone()
-        if row and row.get('Type', '').startswith("enum("):
-            type_str = row['Type']
+        if row and row.get("Type", "").startswith("enum("):
+            type_str = row["Type"]
             result["statuses"] = [v.strip("'") for v in type_str[5:-1].split("','")]
         else:
             result["statuses"] = []
     except Exception as e:
         debug_log(2, "Could not fetch statuses: %s" % e)
         result["statuses"] = []
-    
+
     # Tags
     try:
         cursor.execute("SELECT id, name FROM tag ORDER BY name")
@@ -417,7 +441,7 @@ def get_hunt_info():
     except Exception as e:
         debug_log(2, "Could not fetch tags: %s" % e)
         result["tags"] = []
-    
+
     return result
 
 
@@ -445,17 +469,17 @@ def get_puzzles_by_tag_id(tag_id):
     debug_log(4, "start with tag_id: %s" % tag_id)
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # Use MEMBER OF() to leverage the multi-valued JSON index
     # Return full puzzle data from puzzle_view to avoid N+1 queries on client
     cursor.execute(
         """SELECT pv.* FROM puzzle_view pv
            JOIN puzzle p ON p.id = pv.id
            WHERE %s MEMBER OF(p.tags)""",
-        (tag_id,)
+        (tag_id,),
     )
     puzzlist = cursor.fetchall()
-    
+
     debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
     return puzzlist
 
@@ -478,13 +502,16 @@ def get_tag_id_by_name(tag_name):
 def search_puzzles():
     """Search puzzles by tag name or tag ID"""
     debug_log(4, "start")
-    
-    tag_name = request.args.get('tag')
-    tag_id = request.args.get('tag_id')
-    
+
+    tag_name = request.args.get("tag")
+    tag_id = request.args.get("tag_id")
+
     if not tag_name and not tag_id:
-        return {"status": "error", "error": "Must provide 'tag' or 'tag_id' parameter"}, 400
-    
+        return {
+            "status": "error",
+            "error": "Must provide 'tag' or 'tag_id' parameter",
+        }, 400
+
     try:
         # If tag name provided, look up the tag_id first
         if tag_name:
@@ -497,7 +524,7 @@ def search_puzzles():
                 tag_id = int(tag_id)
             except (ValueError, TypeError):
                 return {"status": "error", "error": "tag_id must be an integer"}, 400
-            
+
             # Verify the tag exists
             conn = mysql.connection
             cursor = conn.cursor()
@@ -505,13 +532,13 @@ def search_puzzles():
             if not cursor.fetchone():
                 debug_log(4, "tag_id %s not found" % tag_id)
                 return {"status": "ok", "puzzles": []}
-        
+
         puzzlist = get_puzzles_by_tag_id(tag_id)
         return {
             "status": "ok",
             "puzzles": puzzlist,
         }
-        
+
     except Exception as e:
         debug_log(1, "Error searching puzzles: %s" % str(e))
         raise Exception("Exception searching puzzles: %s" % str(e))
@@ -519,12 +546,12 @@ def search_puzzles():
 
 @app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
 @swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
-def check_priv(priv,uid):
+def check_priv(priv, uid):
     debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid, )) 
+        cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid,))
         rv = cursor.fetchone()
     except:
         raise Exception("Exception querying database for privs)")
@@ -541,12 +568,12 @@ def check_priv(priv,uid):
         privanswer = rv[priv]
     except:
         raise Exception(
-                "Exception in reading priv %s from user %s ACL. No such priv?"
-                % (
-                    priv,
-                    uid,
-                  )
-                )
+            "Exception in reading priv %s from user %s ACL. No such priv?"
+            % (
+                priv,
+                uid,
+            )
+        )
 
     if privanswer == "YES":
         return {
@@ -557,7 +584,8 @@ def check_priv(priv,uid):
         return {
             "status": "ok",
             "allowed": False,
-        }   
+        }
+
 
 @app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
 @swag_from("swag/getpuzzleid.yaml", endpoint="puzzle_id", methods=["GET"])
@@ -575,7 +603,7 @@ def get_one_puzzle(id):
         raise Exception("Exception in fetching puzzle %s from database" % id)
 
     debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
-    
+
     # Include lastact to reduce HTTP round-trips for clients
     return {
         "status": "ok",
@@ -642,25 +670,28 @@ def get_one_round(id):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT r.id, r.name, r.round_uri, r.drive_uri, r.drive_id, r.status, r.comments,
                    GROUP_CONCAT(p.id) as puzzles
             FROM round r
             LEFT JOIN puzzle p ON p.round_id = r.id
             WHERE r.id = %s
             GROUP BY r.id
-        """, (id,))
+        """,
+            (id,),
+        )
         round = cursor.fetchone()
         if not round:
             raise Exception("Round %s not found in database" % id)
-            
+
         # Convert puzzles string to list of puzzle objects
-        puzzle_ids = round['puzzles'].split(',') if round['puzzles'] else []
+        puzzle_ids = round["puzzles"].split(",") if round["puzzles"] else []
         puzzles = []
         for pid in puzzle_ids:
             if pid:  # Skip empty strings
-                puzzles.append(get_one_puzzle(pid)['puzzle'])
-        round['puzzles'] = puzzles
+                puzzles.append(get_one_puzzle(pid)["puzzle"])
+        round["puzzles"] = puzzles
     except:
         raise Exception("Exception in fetching round %s from database" % id)
 
@@ -754,7 +785,9 @@ def get_solver_by_name(name):
         if solver is None:
             return {"status": "error", "error": "Solver '%s' not found" % name}, 404
     except Exception as e:
-        raise Exception("Exception in fetching solver '%s' from database: %s" % (name, e))
+        raise Exception(
+            "Exception in fetching solver '%s' from database: %s" % (name, e)
+        )
 
     debug_log(4, "fetched solver by name: %s" % name)
     return {
@@ -773,13 +806,13 @@ def _solver_exists(identifier):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-        
+
         # Check by id if integer, by name if string
         if isinstance(identifier, int):
             cursor.execute("SELECT id FROM solver WHERE id = %s", (identifier,))
         else:
             cursor.execute("SELECT id FROM solver WHERE name = %s", (identifier,))
-        
+
         solver = cursor.fetchone()
         return solver is not None
     except Exception as e:
@@ -787,7 +820,7 @@ def _solver_exists(identifier):
         return False
 
 
-def _update_single_solver_part(id, part, value, source='puzzleboss'):
+def _update_single_solver_part(id, part, value, source="puzzleboss"):
     """
     Internal helper to update a single solver part.
     Returns the updated value.
@@ -827,17 +860,20 @@ def _update_single_solver_part(id, part, value, source='puzzleboss'):
             # Find the puzzle the solver is currently assigned to
             conn = mysql.connection
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id FROM puzzle 
                 WHERE JSON_CONTAINS(current_solvers, 
                     JSON_OBJECT('solver_id', %s), 
                     '$.solvers'
                 )
-            """, (id,))
+            """,
+                (id,),
+            )
             current_puzzle = cursor.fetchone()
             if current_puzzle:
                 # Unassign the solver from their current puzzle
-                unassign_solver_from_puzzle(current_puzzle['id'], id)
+                unassign_solver_from_puzzle(current_puzzle["id"], id)
 
         # Now log it in the activity table
         try:
@@ -898,11 +934,11 @@ def update_solver_multi(id):
         raise Exception("Error looking up solver %s" % id)
 
     # Get source for activity logging if provided
-    source = data.pop('source', 'puzzleboss') if 'source' in data else 'puzzleboss'
+    source = data.pop("source", "puzzleboss") if "source" in data else "puzzleboss"
 
     updated_parts = {}
     needs_cache_invalidation = False
-    
+
     for part, value in data.items():
         updated_value = _update_single_solver_part(id, part, value, source)
         updated_parts[part] = updated_value
@@ -937,7 +973,7 @@ def update_solver_part(id, part):
         raise Exception("Error looking up solver %s" % id)
 
     # Get source for activity logging if provided
-    source = data.get('source', 'puzzleboss')
+    source = data.get("source", "puzzleboss")
 
     updated_value = _update_single_solver_part(id, part, value, source)
 
@@ -966,6 +1002,7 @@ def get_config():
 
 # POST/WRITE Operations
 
+
 @app.route("/config", endpoint="putconfig", methods=["POST"])
 # @swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
 def put_config():
@@ -974,13 +1011,18 @@ def put_config():
         data = request.get_json()
         mykey = data["cfgkey"]
         myval = data["cfgval"]
-        debug_log(3, "Config change attempt.  struct: %s key %s val %s" % (str(data), mykey, myval))
+        debug_log(
+            3,
+            "Config change attempt.  struct: %s key %s val %s"
+            % (str(data), mykey, myval),
+        )
     except Exception as e:
         raise Exception("Exception Interpreting input data for config change: %s" % e)
     conn = mysql.connection
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s", (mykey, myval, mykey, myval)
+        "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s",
+        (mykey, myval, mykey, myval),
     )
     conn.commit()
 
@@ -1002,7 +1044,9 @@ def get_botstats():
         for row in rows:
             botstats[row["key"]] = {
                 "val": row["val"],
-                "updated": row["updated"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["updated"] else None
+                "updated": row["updated"].strftime("%Y-%m-%dT%H:%M:%SZ")
+                if row["updated"]
+                else None,
             }
     except Exception as e:
         raise Exception("Exception fetching botstats from database: %s" % e)
@@ -1022,12 +1066,12 @@ def put_botstat(key):
         debug_log(4, "Botstat update: key=%s val=%s" % (key, myval))
     except Exception as e:
         raise Exception("Exception interpreting input data for botstat update: %s" % e)
-    
+
     conn = mysql.connection
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO botstats (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
-        (key, myval, myval)
+        (key, myval, myval),
     )
     conn.commit()
 
@@ -1036,6 +1080,7 @@ def put_botstat(key):
 
 
 # Tag endpoints
+
 
 @app.route("/statuses", endpoint="getstatuses", methods=["GET"])
 @swag_from("swag/getstatuses.yaml", endpoint="getstatuses", methods=["GET"])
@@ -1046,23 +1091,25 @@ def get_statuses():
         conn = mysql.connection
         cursor = conn.cursor()
         # Get enum values from the puzzle table schema
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COLUMN_TYPE 
             FROM INFORMATION_SCHEMA.COLUMNS 
             WHERE TABLE_SCHEMA = DATABASE() 
             AND TABLE_NAME = 'puzzle' 
             AND COLUMN_NAME = 'status'
-        """)
+        """
+        )
         row = cursor.fetchone()
         if not row:
             raise Exception("Could not find status column in puzzle table")
-        
+
         # Parse enum('val1','val2',...) format
-        enum_str = row['COLUMN_TYPE']
+        enum_str = row["COLUMN_TYPE"]
         # Remove "enum(" prefix and ")" suffix, then split by ","
         values_str = enum_str[5:-1]  # Remove "enum(" and ")"
         statuses = [v.strip("'") for v in values_str.split("','")]
-        
+
     except Exception as e:
         raise Exception("Exception fetching statuses from database: %s" % e)
 
@@ -1082,11 +1129,15 @@ def get_tags():
         rows = cursor.fetchall()
         tags = []
         for row in rows:
-            tags.append({
-                "id": row["id"],
-                "name": row["name"],
-                "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None
-            })
+            tags.append(
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ")
+                    if row["created_at"]
+                    else None,
+                }
+            )
     except Exception as e:
         raise Exception("Exception fetching tags from database: %s" % e)
 
@@ -1110,7 +1161,9 @@ def get_tag(tag):
         tag_data = {
             "id": row["id"],
             "name": row["name"],
-            "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None
+            "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ")
+            if row["created_at"]
+            else None,
         }
     except Exception as e:
         raise Exception("Exception fetching tag %s from database: %s" % (tag, e))
@@ -1132,8 +1185,11 @@ def create_tag():
         raise Exception("Missing or invalid 'name' field in request body")
 
     # Validate tag name (alphanumeric, hyphens, underscores only)
-    if not tag_name or not all(c.isalnum() or c in '-_' for c in tag_name):
-        return {"status": "error", "error": "Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores"}, 400
+    if not tag_name or not all(c.isalnum() or c in "-_" for c in tag_name):
+        return {
+            "status": "error",
+            "error": "Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores",
+        }, 400
 
     try:
         conn = mysql.connection
@@ -1157,45 +1213,52 @@ def delete_tag(tag):
     """Delete a tag and remove it from all puzzles"""
     debug_log(4, "start with tag: %s" % tag)
     tag_name = tag.lower()  # Normalize to lowercase
-    
+
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        
+
         # First, find the tag id
         cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
         tag_row = cursor.fetchone()
         if not tag_row:
             debug_log(3, "Tag '%s' not found for deletion" % tag_name)
             return {"status": "error", "error": "Tag '%s' not found" % tag_name}, 404
-        
+
         tag_id = tag_row["id"]
-        
+
         # Find all puzzles that have this tag and remove it from them
         cursor.execute("SELECT id, tags FROM puzzle WHERE tags IS NOT NULL")
         puzzles = cursor.fetchall()
-        
+
         puzzles_updated = 0
         for puzzle in puzzles:
-            if puzzle['tags']:
-                current_tags = json.loads(puzzle['tags'])
+            if puzzle["tags"]:
+                current_tags = json.loads(puzzle["tags"])
                 if tag_id in current_tags:
                     current_tags.remove(tag_id)
                     new_tags = json.dumps(current_tags) if current_tags else None
-                    cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (new_tags, puzzle['id']))
+                    cursor.execute(
+                        "UPDATE puzzle SET tags = %s WHERE id = %s",
+                        (new_tags, puzzle["id"]),
+                    )
                     puzzles_updated += 1
-        
+
         # Now delete the tag from the tags table
         cursor.execute("DELETE FROM tag WHERE id = %s", (tag_id,))
         conn.commit()
-        
-        debug_log(3, "Deleted tag '%s' (id: %d), removed from %d puzzle(s)" % (tag_name, tag_id, puzzles_updated))
+
+        debug_log(
+            3,
+            "Deleted tag '%s' (id: %d), removed from %d puzzle(s)"
+            % (tag_name, tag_id, puzzles_updated),
+        )
         return {
             "status": "ok",
             "message": "Tag '%s' deleted" % tag_name,
-            "puzzles_updated": puzzles_updated
+            "puzzles_updated": puzzles_updated,
         }
-        
+
     except Exception as e:
         debug_log(1, "Error deleting tag '%s': %s" % (tag_name, str(e)))
         raise Exception("Error deleting tag '%s': %s" % (tag_name, str(e)))
@@ -1206,10 +1269,12 @@ def delete_tag(tag):
 def create_puzzle():
     try:
         puzzle_data = request.get_json()
-        debug_log(5, f"Incoming puzzle creation payload: {json.dumps(puzzle_data, indent=2)}")
+        debug_log(
+            5, f"Incoming puzzle creation payload: {json.dumps(puzzle_data, indent=2)}"
+        )
         if not puzzle_data or "puzzle" not in puzzle_data:
             return jsonify({"error": "Invalid JSON POST structure"}), 400
-            
+
         puzzle = puzzle_data["puzzle"]
         name = puzzle.get("name").replace(" ", "")  # Strip spaces from name
         round_id = puzzle.get("round_id")
@@ -1269,10 +1334,10 @@ def create_puzzle():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        
+
         # Store the full puzzle name in UTF-8 as the chat channel name
         # The Discord bot will handle creating a proper channel
-        
+
         cursor.execute(
             """
             INSERT INTO puzzle
@@ -1285,7 +1350,7 @@ def create_puzzle():
                 round_id,
                 chat_id,
                 chat_link,
-                name, # Store the full name with emojis intact
+                name,  # Store the full name with emojis intact
                 drive_id,
                 drive_uri,
                 ismeta,
@@ -1307,7 +1372,7 @@ def create_puzzle():
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
         puzzle = cursor.fetchone()
         myid = str(puzzle["id"])
-        
+
         # Add activity entry for puzzle creation
         cursor.execute(
             """
@@ -1404,16 +1469,19 @@ def create_round():
 
     return {"status": "ok", "round": {"name": roundname}}
 
+
 @app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
 @swag_from("swag/putrbacprivuid.yaml", endpoint="post_rbac_priv_uid", methods=["POST"])
-def set_priv(priv,uid):
+def set_priv(priv, uid):
     debug_log(4, "start. priv: %s, uid %s" % (priv, uid))
     try:
         data = request.get_json()
         debug_log(4, "post data: %s" % (data))
         value = data["allowed"]
-        if ( value != "YES" and value != "NO"):
-            raise Exception("Improper privset allowed syntax. e.g. {'allowed':'YES'} or {'allowed':'NO'}")
+        if value != "YES" and value != "NO":
+            raise Exception(
+                "Improper privset allowed syntax. e.g. {'allowed':'YES'} or {'allowed':'NO'}"
+            )
     except Exception as e:
         raise Exception("Error interpreting privset JSON allowed field: %s" % (e))
     debug_log(3, "Attempting privset of uid %s:  %s = %s" % (uid, priv, value))
@@ -1422,10 +1490,16 @@ def set_priv(priv,uid):
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        cursor.execute(f"INSERT INTO privs (uid, {priv}) VALUES (%s, %s) ON DUPLICATE KEY UPDATE uid=%s, {priv}=%s", (uid, value, uid, value))
+        cursor.execute(
+            f"INSERT INTO privs (uid, {priv}) VALUES (%s, %s) ON DUPLICATE KEY UPDATE uid=%s, {priv}=%s",
+            (uid, value, uid, value),
+        )
         conn.commit()
     except Exception as e:
-        raise Exception("Error modifying priv table for uid %s priv %s value %s. Is priv string valid?" % (uid, priv, value))
+        raise Exception(
+            "Error modifying priv table for uid %s priv %s value %s. Is priv string valid?"
+            % (uid, priv, value)
+        )
 
     return {"status": "ok"}
 
@@ -1438,7 +1512,7 @@ def _update_single_round_part(id, part, value):
     """
     if value == "NULL":
         value = None
-    
+
     # Just try to update - MySQL will reject invalid columns
     try:
         conn = mysql.connection
@@ -1469,7 +1543,7 @@ def update_round_multi(id):
         raise Exception("Expected JSON object with round parts to update")
 
     updated_parts = {}
-    
+
     for part, value in data.items():
         updated_value = _update_single_round_part(id, part, value)
         updated_parts[part] = updated_value
@@ -1568,7 +1642,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
                 update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
-                
+
                 # Check if this is a meta puzzle and if all metas in the round are solved
                 if mypuzzle["puzzle"]["ismeta"]:
                     check_round_completion(mypuzzle["puzzle"]["round_id"])
@@ -1583,7 +1657,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
         update_puzzle_part_in_db(id, part, value)
-        
+
         # Check if this is a meta puzzle and if all metas in the round are solved
         if value:
             check_round_completion(mypuzzle["puzzle"]["round_id"])
@@ -1613,7 +1687,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             clear_puzzle_solvers(id)
             update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
             chat_announce_solved(mypuzzle["puzzle"]["name"])
-            
+
             # Add activity entry for puzzle being solved
             try:
                 conn = mysql.connection
@@ -1628,8 +1702,12 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 )
                 conn.commit()
             except:
-                debug_log(1, "Exception in logging puzzle solve in activity table for puzzle %s" % id)
-            
+                debug_log(
+                    1,
+                    "Exception in logging puzzle solve in activity table for puzzle %s"
+                    % id,
+                )
+
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
                 check_round_completion(mypuzzle["puzzle"]["round_id"])
@@ -1641,7 +1719,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             "**ATTENTION** new comment for puzzle %s: %s"
             % (mypuzzle["puzzle"]["name"], value),
         )
-        
+
         # Add activity entry for comment
         try:
             conn = mysql.connection
@@ -1656,7 +1734,9 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             )
             conn.commit()
         except:
-            debug_log(1, "Exception in logging comment in activity table for puzzle %s" % id)
+            debug_log(
+                1, "Exception in logging comment in activity table for puzzle %s" % id
+            )
 
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)
@@ -1670,22 +1750,24 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}} or {"tags": {"remove_id": 123}}
         conn = mysql.connection
         cursor = conn.cursor()
-        
+
         # Get current tags
         cursor.execute("SELECT tags FROM puzzle WHERE id = %s", (id,))
         row = cursor.fetchone()
-        current_tags = json.loads(row['tags']) if row['tags'] else []
-        
+        current_tags = json.loads(row["tags"]) if row["tags"] else []
+
         tag_changed = False  # Track if we actually made a change
-        
+
         if "add" in value:
             # Add by tag name (auto-create if doesn't exist)
             tag_name = value["add"].lower()  # Force lowercase
-            
+
             # Validate tag name
-            if not tag_name or not all(c.isalnum() or c in '-_' for c in tag_name):
-                raise Exception("Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores")
-            
+            if not tag_name or not all(c.isalnum() or c in "-_" for c in tag_name):
+                raise Exception(
+                    "Tag name must be non-empty and contain only alphanumeric characters, hyphens, or underscores"
+                )
+
             cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
             tag_row = cursor.fetchone()
             if not tag_row:
@@ -1696,38 +1778,44 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 debug_log(3, "Auto-created tag %s (id: %d)" % (tag_name, tag_id))
             else:
                 tag_id = tag_row["id"]
-            
+
             if tag_id not in current_tags:
                 current_tags.append(tag_id)
-                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                cursor.execute(
+                    "UPDATE puzzle SET tags = %s WHERE id = %s",
+                    (json.dumps(current_tags), id),
+                )
                 conn.commit()
                 debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
                 tag_changed = True
-                increment_cache_stat('tags_assigned_total')
+                increment_cache_stat("tags_assigned_total")
             else:
                 debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
-        
+
         elif "add_id" in value:
             # Add by tag ID - validate it's an integer first
             try:
                 tag_id = int(value["add_id"])
             except (ValueError, TypeError):
                 raise Exception("add_id must be an integer")
-            
+
             cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
             tag_row = cursor.fetchone()
             if not tag_row:
                 raise Exception("Tag id %s not found" % tag_id)
             if tag_id not in current_tags:
                 current_tags.append(tag_id)
-                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                cursor.execute(
+                    "UPDATE puzzle SET tags = %s WHERE id = %s",
+                    (json.dumps(current_tags), id),
+                )
                 conn.commit()
                 debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
                 tag_changed = True
-                increment_cache_stat('tags_assigned_total')
+                increment_cache_stat("tags_assigned_total")
             else:
                 debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
-        
+
         elif "remove" in value:
             # Remove by tag name
             tag_name = value["remove"].lower()  # Force lowercase for lookup
@@ -1738,36 +1826,44 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             tag_id = tag_row["id"]
             if tag_id in current_tags:
                 current_tags.remove(tag_id)
-                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                cursor.execute(
+                    "UPDATE puzzle SET tags = %s WHERE id = %s",
+                    (json.dumps(current_tags), id),
+                )
                 conn.commit()
                 debug_log(3, "Removed tag %s from puzzle %s" % (tag_name, id))
                 tag_changed = True
             else:
                 debug_log(4, "Tag %s not on puzzle %s" % (tag_name, id))
-        
+
         elif "remove_id" in value:
             # Remove by tag ID - validate it's an integer first
             try:
                 tag_id = int(value["remove_id"])
             except (ValueError, TypeError):
                 raise Exception("remove_id must be an integer")
-            
+
             cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
             tag_row = cursor.fetchone()
             if not tag_row:
                 raise Exception("Tag id %s not found" % tag_id)
             if tag_id in current_tags:
                 current_tags.remove(tag_id)
-                cursor.execute("UPDATE puzzle SET tags = %s WHERE id = %s", (json.dumps(current_tags), id))
+                cursor.execute(
+                    "UPDATE puzzle SET tags = %s WHERE id = %s",
+                    (json.dumps(current_tags), id),
+                )
                 conn.commit()
                 debug_log(3, "Removed tag id %s from puzzle %s" % (tag_id, id))
                 tag_changed = True
             else:
                 debug_log(4, "Tag id %s not on puzzle %s" % (tag_id, id))
-        
+
         else:
-            raise Exception("Invalid tags operation. Use {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}")
-        
+            raise Exception(
+                "Invalid tags operation. Use {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}"
+            )
+
         # Log tag change to activity table using system solver_id (100)
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
@@ -1814,11 +1910,11 @@ def update_puzzle_multi(id):
         raise Exception("Expected JSON object with puzzle parts to update")
 
     # Reject sensitive operations that should use single-part endpoint for safety
-    if 'answer' in data:
+    if "answer" in data:
         raise Exception(
             "Cannot update 'answer' via multi-part endpoint. Use POST /puzzles/<id>/answer instead."
         )
-    if 'status' in data and data['status'] == 'Solved':
+    if "status" in data and data["status"] == "Solved":
         raise Exception(
             "Cannot set status to 'Solved' via multi-part endpoint. Use POST /puzzles/<id>/status instead."
         )
@@ -1830,12 +1926,12 @@ def update_puzzle_multi(id):
         raise Exception("Error looking up puzzle %s" % id)
 
     updated_parts = {}
-    
+
     for part, value in data.items():
         # Strip spaces if this is a name update
         if part == "name":
             value = value.replace(" ", "")
-        
+
         updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
         updated_parts[part] = updated_value
 
@@ -1903,16 +1999,34 @@ def new_account():
                 userfound = True
                 debug_log(3, "Password reset attempt detected for user %s" % username)
             else:
-                debug_log(2, "Account creation rejected: username %s already exists" % username)
-                return {"status": "error", "error": "Username %s already exists. Pick another, or add reset flag." % username}, 400
+                debug_log(
+                    2,
+                    "Account creation rejected: username %s already exists" % username,
+                )
+                return {
+                    "status": "error",
+                    "error": "Username %s already exists. Pick another, or add reset flag."
+                    % username,
+                }, 400
 
     if reset == "reset":
         if not userfound:
             debug_log(2, "Password reset rejected: username %s not found" % username)
-            return {"status": "error", "error": "Username %s not found in system to reset." % username}, 400
+            return {
+                "status": "error",
+                "error": "Username %s not found in system to reset." % username,
+            }, 400
         if verify_email_for_user(email, username) != 1:
-            debug_log(2, "Password reset rejected: username %s does not match email %s" % (username, email))
-            return {"status": "error", "error": "Username %s does not match email %s in the system. Email must match the email used to initially sign up for the account. If you cannot determine the email or no longer have access to it, please contact puzzleboss/puzztech for help." % (username, email)}, 400
+            debug_log(
+                2,
+                "Password reset rejected: username %s does not match email %s"
+                % (username, email),
+            )
+            return {
+                "status": "error",
+                "error": "Username %s does not match email %s in the system. Email must match the email used to initially sign up for the account. If you cannot determine the email or no longer have access to it, please contact puzzleboss/puzztech for help."
+                % (username, email),
+            }, 400
 
     # Generate the code
     code = token_hex(4)
@@ -1953,17 +2067,17 @@ def new_account():
 def finish_account(code):
     """
     Account creation endpoint with optional step parameter for progress tracking.
-    
+
     Steps:
       1 - Validate code and return operation type (new/update)
       2 - Create/update Google account
       3 - Create/update LDAP entry
       4 - Add to solver DB (new accounts only, skipped for updates)
       5 - Cleanup (delete temporary newuser entry)
-    
+
     If no step parameter, runs all steps at once (backward compatible).
     """
-    step = request.args.get('step', None)
+    step = request.args.get("step", None)
     debug_log(4, "start. code %s, step %s" % (code, step))
 
     # Always validate code and get user info first
@@ -1997,108 +2111,170 @@ def finish_account(code):
     )
 
     firstname, lastname = fullname.split(maxsplit=1)
-    
+
     # For steps 2-5, accept operation from client (determined in step 1)
     # This prevents re-checking Google after step 2 already created the account
-    operation_param = request.args.get('operation', None)
-    
-    if operation_param in ('new', 'update'):
+    operation_param = request.args.get("operation", None)
+
+    if operation_param in ("new", "update"):
         # Use client-provided operation (from step 1)
         operation = operation_param
-        debug_log(4, "User %s: using client-provided operation '%s'" % (username, operation))
+        debug_log(
+            4, "User %s: using client-provided operation '%s'" % (username, operation)
+        )
     else:
         # Step 1 or backward-compatible mode: determine operation from Google
         operation = "update" if verify_email_for_user(email, username) == 1 else "new"
-        debug_log(4, "User %s: operation type is '%s' (new=create account, update=password reset)" % (username, operation))
-    
+        debug_log(
+            4,
+            "User %s: operation type is '%s' (new=create account, update=password reset)"
+            % (username, operation),
+        )
+
     # If no step specified, run all steps (backward compatible)
     if step is None:
-        debug_log(4, "User %s: Running all steps at once (no step parameter)" % username)
+        debug_log(
+            4, "User %s: Running all steps at once (no step parameter)" % username
+        )
         retcode = add_or_update_user(username, firstname, lastname, email, password)
         if retcode == "OK":
             conn = mysql.connection
             cursor = conn.cursor()
             cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
             conn.commit()
-            debug_log(4, "User %s: All steps complete, temporary newuser entry deleted" % username)
+            debug_log(
+                4,
+                "User %s: All steps complete, temporary newuser entry deleted"
+                % username,
+            )
             return {"status": "ok"}
         raise Exception(retcode)
-    
+
     # Step 1: Just validate and return operation type
     if step == "1":
-        debug_log(4, "User %s: Step 1 - Validation complete. Operation: %s" % (username, operation))
-        return {
-            "status": "ok",
-            "step": 1,
-            "operation": operation,
-            "username": username
-        }
-    
+        debug_log(
+            4,
+            "User %s: Step 1 - Validation complete. Operation: %s"
+            % (username, operation),
+        )
+        return {"status": "ok", "step": 1, "operation": operation, "username": username}
+
     # Step 2: Google account
     if step == "2":
         if operation == "new":
-            debug_log(4, "User %s: Step 2 - Creating new Google Workspace account" % username)
+            debug_log(
+                4, "User %s: Step 2 - Creating new Google Workspace account" % username
+            )
             result = add_user_to_google(username, firstname, lastname, password)
             if result != "OK":
                 raise Exception("Failed to create Google account: %s" % result)
-            debug_log(4, "User %s: Step 2 - Google Workspace account created successfully" % username)
+            debug_log(
+                4,
+                "User %s: Step 2 - Google Workspace account created successfully"
+                % username,
+            )
             return {"status": "ok", "step": 2, "message": "Google account created"}
         else:
-            debug_log(4, "User %s: Step 2 - Updating Google Workspace password" % username)
+            debug_log(
+                4, "User %s: Step 2 - Updating Google Workspace password" % username
+            )
             result = change_google_user_password(username, password)
             if result != "OK":
                 raise Exception("Failed to update Google password: %s" % result)
-            debug_log(4, "User %s: Step 2 - Google Workspace password updated successfully" % username)
+            debug_log(
+                4,
+                "User %s: Step 2 - Google Workspace password updated successfully"
+                % username,
+            )
             return {"status": "ok", "step": 2, "message": "Google password updated"}
-    
+
     # Step 3: LDAP
     if step == "3":
         if operation == "new":
-            debug_log(4, "User %s: Step 3 - Creating new LDAP directory entry" % username)
+            debug_log(
+                4, "User %s: Step 3 - Creating new LDAP directory entry" % username
+            )
         else:
-            debug_log(4, "User %s: Step 3 - Updating password in LDAP directory" % username)
-        retcode = create_or_update_ldap_user(username, firstname, lastname, email, password, operation)
+            debug_log(
+                4, "User %s: Step 3 - Updating password in LDAP directory" % username
+            )
+        retcode = create_or_update_ldap_user(
+            username, firstname, lastname, email, password, operation
+        )
         if retcode != "OK":
             raise Exception("Failed to update LDAP: %s" % retcode)
         if operation == "new":
-            debug_log(4, "User %s: Step 3 - LDAP directory entry created successfully" % username)
+            debug_log(
+                4,
+                "User %s: Step 3 - LDAP directory entry created successfully"
+                % username,
+            )
             return {"status": "ok", "step": 3, "message": "LDAP account created"}
         else:
-            debug_log(4, "User %s: Step 3 - LDAP password updated successfully" % username)
+            debug_log(
+                4, "User %s: Step 3 - LDAP password updated successfully" % username
+            )
             return {"status": "ok", "step": 3, "message": "LDAP password updated"}
-    
+
     # Step 4: Solver DB (new accounts only)
     # The solver DB tracks puzzle assignments and solver activity during the hunt
     # Check if solver already exists in DB (don't rely on LDAP check since step 3 just created the LDAP entry)
     if step == "4":
-        debug_log(4, "User %s: Step 4 - Checking if solver already exists in Puzzleboss database" % username)
+        debug_log(
+            4,
+            "User %s: Step 4 - Checking if solver already exists in Puzzleboss database"
+            % username,
+        )
         solver_exists = _solver_exists(username)
-        
+
         if solver_exists:
-            debug_log(4, "User %s: Step 4 - Solver already exists in database, skipping" % username)
-            return {"status": "ok", "step": 4, "message": "Skipped (solver already exists)", "skipped": True}
+            debug_log(
+                4,
+                "User %s: Step 4 - Solver already exists in database, skipping"
+                % username,
+            )
+            return {
+                "status": "ok",
+                "step": 4,
+                "message": "Skipped (solver already exists)",
+                "skipped": True,
+            }
         else:
-            debug_log(4, "User %s: Step 4 - Adding to Puzzleboss solver database (for puzzle assignments)" % username)
+            debug_log(
+                4,
+                "User %s: Step 4 - Adding to Puzzleboss solver database (for puzzle assignments)"
+                % username,
+            )
             postbody = {"fullname": "%s %s" % (firstname, lastname), "name": username}
             solveraddresponse = requests.post(
                 "%s/solvers" % config["API"]["APIURI"], json=postbody
             )
             if not solveraddresponse.ok:
                 raise Exception("Failed to add to solver database")
-            debug_log(4, "User %s: Step 4 - Added to solver database successfully" % username)
+            debug_log(
+                4, "User %s: Step 4 - Added to solver database successfully" % username
+            )
             return {"status": "ok", "step": 4, "message": "Added to solver database"}
-    
+
     # Step 5: Cleanup
     # Delete the temporary newuser entry (contains verification code and password)
     if step == "5":
-        debug_log(4, "User %s: Step 5 - Deleting temporary newuser entry from database" % username)
+        debug_log(
+            4,
+            "User %s: Step 5 - Deleting temporary newuser entry from database"
+            % username,
+        )
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
-        debug_log(4, "User %s: Step 5 - Cleanup complete, account registration finished" % username)
+        debug_log(
+            4,
+            "User %s: Step 5 - Cleanup complete, account registration finished"
+            % username,
+        )
         return {"status": "ok", "step": 5, "message": "Cleanup complete"}
-    
+
     raise Exception("Invalid step: %s" % step)
 
 
@@ -2117,6 +2293,7 @@ def delete_account(username):
 
     return {"status": "ok"}
 
+
 @app.route("/deletepuzzle/<puzzlename>", endpoint="delete_puzzle", methods=["DELETE"])
 @swag_from("swag/deletepuzzle.yaml", endpoint="delete_puzzle", methods=["DELETE"])
 def delete_puzzle(puzzlename):
@@ -2128,7 +2305,11 @@ def delete_puzzle(puzzlename):
     sheetid = get_puzzle_part(puzzid, "drive_id")["puzzle"]["drive_id"]
 
     if delete_puzzle_sheet(sheetid) != 0:
-        debug_log(2, "Puzzle id %s deletion request but sheet deletion failed! continuing. this may cause a mess!" % puzzid)
+        debug_log(
+            2,
+            "Puzzle id %s deletion request but sheet deletion failed! continuing. this may cause a mess!"
+            % puzzid,
+        )
 
     clear_puzzle_solvers(puzzid)
 
@@ -2138,15 +2319,19 @@ def delete_puzzle(puzzlename):
         cursor.execute("DELETE from puzzle where id = %s", (puzzid,))
         conn.commit()
     except:
-        raise Exception("Puzzle deletion attempt for id %s name %s failed in database operation." % puzzid, puzzlename)
+        raise Exception(
+            "Puzzle deletion attempt for id %s name %s failed in database operation."
+            % puzzid,
+            puzzlename,
+        )
 
     debug_log(2, "puzzle id %s named %s deleted from system!" % (puzzid, puzzlename))
-    
+
     # Invalidate /allcached since puzzle was deleted
     invalidate_all_cache()
-    
+
     return {"status": "ok"}
-    
+
 
 ############### END REST calls section
 
@@ -2169,6 +2354,7 @@ def unassign_solver_by_name(name):
 
     return 0
 
+
 def get_puzzle_id_by_name(name):
     debug_log(4, "start, called with (name): %s" % name)
 
@@ -2176,7 +2362,7 @@ def get_puzzle_id_by_name(name):
         conn = mysql.connection
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
-        rv = cursor.fetchone()['id']
+        rv = cursor.fetchone()["id"]
         debug_log(4, "rv = %s" % rv)
     except:
         debug_log(2, "Puzzle name %s not found in database." % name)
@@ -2207,8 +2393,8 @@ def clear_puzzle_solvers(id):
 def update_puzzle_part_in_db(id, part, value):
     conn = mysql.connection
     cursor = conn.cursor()
-    
-    if part == 'solvers':
+
+    if part == "solvers":
         # Handle solver assignments
         if value:  # Assign solver
             assign_solver_to_puzzle(id, value)
@@ -2338,6 +2524,7 @@ def delete_pb_solver(username):
     conn.commit()
     return 0
 
+
 def check_round_completion(round_id):
     """Check if all meta puzzles in a round are solved"""
     try:
@@ -2349,111 +2536,147 @@ def check_round_completion(round_id):
             FROM puzzle 
             WHERE round_id = %s AND ismeta = 1
             """,
-            (round_id,)
+            (round_id,),
         )
         result = cursor.fetchone()
         if result["total"] > 0 and result["total"] == result["solved"]:
             # All meta puzzles are solved, mark the round as solved
             cursor.execute(
-                "UPDATE round SET status = 'Solved' WHERE id = %s",
-                (round_id,)
+                "UPDATE round SET status = 'Solved' WHERE id = %s", (round_id,)
             )
             conn.commit()
-            debug_log(3, "Round %s marked as solved - all meta puzzles completed" % round_id)
+            debug_log(
+                3, "Round %s marked as solved - all meta puzzles completed" % round_id
+            )
     except:
         debug_log(1, "Error checking round completion status for round %s" % round_id)
 
+
 def assign_solver_to_puzzle(puzzle_id, solver_id):
-    debug_log(4, "Started with puzzle id %s" % puzzle_id) 
+    debug_log(4, "Started with puzzle id %s" % puzzle_id)
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # First, find and unassign from any other puzzle the solver is currently working on
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT id FROM puzzle 
         WHERE JSON_CONTAINS(current_solvers, 
             JSON_OBJECT('solver_id', %s), 
             '$.solvers'
         )
-    """, (solver_id,))
+    """,
+        (solver_id,),
+    )
     current_puzzle = cursor.fetchone()
-    if current_puzzle and current_puzzle['id'] != puzzle_id:
+    if current_puzzle and current_puzzle["id"] != puzzle_id:
         # Unassign from current puzzle if it's different from the new one
-        unassign_solver_from_puzzle(current_puzzle['id'], solver_id)
-    
+        unassign_solver_from_puzzle(current_puzzle["id"], solver_id)
+
     # Update current solvers for the new puzzle
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT current_solvers FROM puzzle WHERE id = %s
-    """, (puzzle_id,))
-    current_solvers_str = cursor.fetchone()['current_solvers'] or json.dumps({'solvers': []})
+    """,
+        (puzzle_id,),
+    )
+    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
+        {"solvers": []}
+    )
     current_solvers = json.loads(current_solvers_str)
-        
+
     # Add new solver if not already present
-    if not any(s['solver_id'] == solver_id for s in current_solvers['solvers']):
-        current_solvers['solvers'].append({'solver_id': solver_id})
-        cursor.execute("""
+    if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
+        current_solvers["solvers"].append({"solver_id": solver_id})
+        cursor.execute(
+            """
             UPDATE puzzle 
             SET current_solvers = %s 
             WHERE id = %s
-        """, (json.dumps(current_solvers), puzzle_id))
-    
+        """,
+            (json.dumps(current_solvers), puzzle_id),
+        )
+
     # Update history
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT solver_history FROM puzzle WHERE id = %s
-    """, (puzzle_id,))
-    history_str = cursor.fetchone()['solver_history'] or json.dumps({'solvers': []})
+    """,
+        (puzzle_id,),
+    )
+    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
     history = json.loads(history_str)
-        
+
     # Add to history if not already present
-    if not any(s['solver_id'] == solver_id for s in history['solvers']):
-        history['solvers'].append({'solver_id': solver_id})
-        cursor.execute("""
+    if not any(s["solver_id"] == solver_id for s in history["solvers"]):
+        history["solvers"].append({"solver_id": solver_id})
+        cursor.execute(
+            """
             UPDATE puzzle 
             SET solver_history = %s 
             WHERE id = %s
-        """, (json.dumps(history), puzzle_id))
-    
+        """,
+            (json.dumps(history), puzzle_id),
+        )
+
     conn.commit()
+
 
 def unassign_solver_from_puzzle(puzzle_id, solver_id):
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # Update current solvers
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT current_solvers FROM puzzle WHERE id = %s
-    """, (puzzle_id,))
-    current_solvers_str = cursor.fetchone()['current_solvers'] or json.dumps({'solvers': []})
+    """,
+        (puzzle_id,),
+    )
+    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
+        {"solvers": []}
+    )
     current_solvers = json.loads(current_solvers_str)
-    
-    current_solvers['solvers'] = [
-        s for s in current_solvers['solvers'] 
-        if s['solver_id'] != solver_id
+
+    current_solvers["solvers"] = [
+        s for s in current_solvers["solvers"] if s["solver_id"] != solver_id
     ]
-    
-    cursor.execute("""
+
+    cursor.execute(
+        """
         UPDATE puzzle 
         SET current_solvers = %s 
         WHERE id = %s
-    """, (json.dumps(current_solvers), puzzle_id))
-    
+    """,
+        (json.dumps(current_solvers), puzzle_id),
+    )
+
     conn.commit()
+
 
 def clear_puzzle_solvers(puzzle_id):
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # Clear current solvers
-    cursor.execute("""
+    cursor.execute(
+        """
         UPDATE puzzle 
         SET current_solvers = '{"solvers": []}' 
         WHERE id = %s
-    """, (puzzle_id,))
-    
+    """,
+        (puzzle_id,),
+    )
+
     conn.commit()
 
-@app.route("/puzzles/<id>/history/add", endpoint="add_solver_to_history", methods=["POST"])
-@swag_from("swag/addsolvertohistory.yaml", endpoint="add_solver_to_history", methods=["POST"])
+
+@app.route(
+    "/puzzles/<id>/history/add", endpoint="add_solver_to_history", methods=["POST"]
+)
+@swag_from(
+    "swag/addsolvertohistory.yaml", endpoint="add_solver_to_history", methods=["POST"]
+)
 def add_solver_to_history(id):
     debug_log(4, "start. id: %s" % id)
     try:
@@ -2477,22 +2700,28 @@ def add_solver_to_history(id):
 
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # Get current history
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT solver_history FROM puzzle WHERE id = %s
-    """, (id,))
-    history_str = cursor.fetchone()['solver_history'] or json.dumps({'solvers': []})
+    """,
+        (id,),
+    )
+    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
     history = json.loads(history_str)
-    
+
     # Add solver to history if not already present
-    if not any(s['solver_id'] == solver_id for s in history['solvers']):
-        history['solvers'].append({'solver_id': solver_id})
-        cursor.execute("""
+    if not any(s["solver_id"] == solver_id for s in history["solvers"]):
+        history["solvers"].append({"solver_id": solver_id})
+        cursor.execute(
+            """
             UPDATE puzzle 
             SET solver_history = %s 
             WHERE id = %s
-        """, (json.dumps(history), id))
+        """,
+            (json.dumps(history), id),
+        )
         conn.commit()
         debug_log(3, "Added solver %s to history for puzzle %s" % (solver_id, id))
     else:
@@ -2500,8 +2729,17 @@ def add_solver_to_history(id):
 
     return {"status": "ok"}
 
-@app.route("/puzzles/<id>/history/remove", endpoint="remove_solver_from_history", methods=["POST"])
-@swag_from("swag/removesolverfromhistory.yaml", endpoint="remove_solver_from_history", methods=["POST"])
+
+@app.route(
+    "/puzzles/<id>/history/remove",
+    endpoint="remove_solver_from_history",
+    methods=["POST"],
+)
+@swag_from(
+    "swag/removesolverfromhistory.yaml",
+    endpoint="remove_solver_from_history",
+    methods=["POST"],
+)
 def remove_solver_from_history(id):
     debug_log(4, "start. id: %s" % id)
     try:
@@ -2525,25 +2763,28 @@ def remove_solver_from_history(id):
 
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # Get current history
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT solver_history FROM puzzle WHERE id = %s
-    """, (id,))
-    history_str = cursor.fetchone()['solver_history'] or json.dumps({'solvers': []})
+    """,
+        (id,),
+    )
+    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
     history = json.loads(history_str)
-    
+
     # Remove solver from history if present
-    history['solvers'] = [
-        s for s in history['solvers'] 
-        if s['solver_id'] != solver_id
-    ]
-    
-    cursor.execute("""
+    history["solvers"] = [s for s in history["solvers"] if s["solver_id"] != solver_id]
+
+    cursor.execute(
+        """
         UPDATE puzzle 
         SET solver_history = %s 
         WHERE id = %s
-    """, (json.dumps(history), id))
+    """,
+        (json.dumps(history), id),
+    )
     conn.commit()
     debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
 
@@ -2551,7 +2792,9 @@ def remove_solver_from_history(id):
 
 
 @app.route("/cache/invalidate", endpoint="cache_invalidate", methods=["POST"])
-@swag_from("swag/postcacheinvalidate.yaml", endpoint="cache_invalidate", methods=["POST"])
+@swag_from(
+    "swag/postcacheinvalidate.yaml", endpoint="cache_invalidate", methods=["POST"]
+)
 def force_cache_invalidate():
     """Force invalidation of all caches"""
     debug_log(3, "Cache invalidation requested")
@@ -2570,7 +2813,7 @@ def get_all_activities():
     try:
         conn = mysql.connection
         cursor = conn.cursor()
-        
+
         # Get activity counts
         cursor.execute(
             """
@@ -2580,7 +2823,7 @@ def get_all_activities():
             """
         )
         activities = cursor.fetchall()
-        
+
         # Get puzzle solve timing information
         cursor.execute(
             """
@@ -2593,7 +2836,7 @@ def get_all_activities():
             """
         )
         solve_timing = cursor.fetchone()
-        
+
         # Get open puzzles timing information
         cursor.execute(
             """
@@ -2606,7 +2849,7 @@ def get_all_activities():
             """
         )
         open_timing = cursor.fetchone()
-        
+
         # Get time since last solve
         cursor.execute(
             """
@@ -2618,25 +2861,29 @@ def get_all_activities():
             """
         )
         last_solve = cursor.fetchone()
-        
+
         cursor.close()
-        
+
         # Convert to dictionary format for easier access
-        activity_counts = {row['type']: row['count'] for row in activities}
-        
-        return jsonify({
-            "status": "ok", 
-            "activity": activity_counts,
-            "puzzle_solves_timer": {
-                "total_solves": solve_timing['total_solves'] or 0,
-                "total_solve_time_seconds": solve_timing['total_solve_time'] or 0
-            },
-            "open_puzzles_timer": {
-                "total_open": open_timing['total_open'] or 0,
-                "total_open_time_seconds": open_timing['total_open_time'] or 0
-            },
-            "seconds_since_last_solve": last_solve['seconds_since_last_solve'] if last_solve else None
-        })
+        activity_counts = {row["type"]: row["count"] for row in activities}
+
+        return jsonify(
+            {
+                "status": "ok",
+                "activity": activity_counts,
+                "puzzle_solves_timer": {
+                    "total_solves": solve_timing["total_solves"] or 0,
+                    "total_solve_time_seconds": solve_timing["total_solve_time"] or 0,
+                },
+                "open_puzzles_timer": {
+                    "total_open": open_timing["total_open"] or 0,
+                    "total_open_time_seconds": open_timing["total_open_time"] or 0,
+                },
+                "seconds_since_last_solve": last_solve["seconds_since_last_solve"]
+                if last_solve
+                else None,
+            }
+        )
     except Exception as e:
         debug_log(1, "Exception in getting activity counts: %s" % e)
         return jsonify({"status": "error", "error": str(e)}), 500
@@ -2645,6 +2892,7 @@ def get_all_activities():
 # ============================================================================
 # LLM Query Endpoint - Natural language queries about hunt status
 # ============================================================================
+
 
 @app.route("/v1/query", endpoint="llm_query", methods=["POST"])
 @swag_from("swag/postquery.yaml", endpoint="llm_query", methods=["POST"])
@@ -2655,35 +2903,64 @@ def llm_query():
     Intended for localhost use only (e.g., Discord bot on same server).
     """
     if not GEMINI_AVAILABLE:
-        return jsonify({"status": "error", "error": "Google Generative AI SDK not installed"}), 503
-    
+        return (
+            jsonify(
+                {"status": "error", "error": "Google Generative AI SDK not installed"}
+            ),
+            503,
+        )
+
     # Check for API key in database config
     api_key = configstruct.get("GEMINI_API_KEY", "")
     if not api_key:
-        return jsonify({"status": "error", "error": "GEMINI_API_KEY not configured in database"}), 503
-    
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "error": "GEMINI_API_KEY not configured in database",
+                }
+            ),
+            503,
+        )
+
     # Parse request
     data = request.get_json()
     if not data or "text" not in data:
-        return jsonify({"status": "error", "error": "Missing 'text' field in request"}), 400
-    
+        return (
+            jsonify({"status": "error", "error": "Missing 'text' field in request"}),
+            400,
+        )
+
     user_id = data.get("user_id", "unknown")
     query_text = data.get("text", "")
-    
+
     # Get system instruction from config (required for LLM to be enabled)
     system_instruction = configstruct.get("GEMINI_SYSTEM_INSTRUCTION", "")
     if not system_instruction:
-        return jsonify({"status": "error", "error": "GEMINI_SYSTEM_INSTRUCTION not configured in database"}), 503
-    
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "error": "GEMINI_SYSTEM_INSTRUCTION not configured in database",
+                }
+            ),
+            503,
+        )
+
     # Get model from config (required for LLM to be enabled)
     model = configstruct.get("GEMINI_MODEL", "")
     if not model:
-        return jsonify({"status": "error", "error": "GEMINI_MODEL not configured in database"}), 503
-    
+        return (
+            jsonify(
+                {"status": "error", "error": "GEMINI_MODEL not configured in database"}
+            ),
+            503,
+        )
+
     # Get database cursor for the library
     conn = mysql.connection
     cursor = conn.cursor()
-    
+
     # Process the query using the LLM library
     # Uses cached data when available, falls back to DB
     result = llm_process_query(
@@ -2700,12 +2977,12 @@ def llm_query():
         get_one_solver_fn=get_one_solver,
         get_tag_id_by_name_fn=get_tag_id_by_name,
         get_puzzles_by_tag_id_fn=get_puzzles_by_tag_id,
-        wiki_chromadb_path=configstruct.get("WIKI_CHROMADB_PATH", "")
+        wiki_chromadb_path=configstruct.get("WIKI_CHROMADB_PATH", ""),
     )
-    
+
     if result.get("status") == "error":
         return jsonify(result), 500
-    
+
     return jsonify(result)
 
 
