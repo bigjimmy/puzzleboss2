@@ -71,7 +71,7 @@ def run_command(cmd, error_msg):
     """Run a shell command and handle errors"""
     debug_log(f"Running command: {' '.join(cmd)}")
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
         print(f"Error: {error_msg}")

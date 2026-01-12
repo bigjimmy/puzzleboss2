@@ -2093,6 +2093,7 @@ class TestRunner:
                 self.logger.log_operation(
                     "No puzzles found, creating test round and puzzle"
                 )
+                timestamp = str(int(time.time()))
                 test_round = self.create_round(f"TagTestRound{timestamp}")
                 test_puzzle = self.create_puzzle(
                     f"TagTestPuzzle{timestamp}", str(test_round["id"])
@@ -2522,7 +2523,7 @@ class TestRunner:
         ]
 
         for name, test in tests:
-            result = self.run_test(name, test)
+            self.run_test(name, test)
 
         self.print_results()
 

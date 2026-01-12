@@ -414,7 +414,7 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
                 .list(fileId=myfileid, fields="*")
                 .execute(http=threadsafe_http)
             )
-            if type(retval) == str:
+            if isinstance(retval, str):
                 debug_log(
                     1,
                     "[%s] Revisions API returned string (error): %s"
@@ -550,7 +550,7 @@ def delete_puzzle_sheet(sheetid):
     body_value = {"trashed": True}
 
     try:
-        response = service.files().update(fileId=sheetid, body=body_value).execute()
+        service.files().update(fileId=sheetid, body=body_value).execute()
 
     except Exception as e:
         debug_log(1, "Delete failed for sheet %s. Error is %s." % (sheetid, e))
@@ -650,7 +650,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
             if not prefix and key == "sheetId":
                 continue
             label = prefix + "." + key if prefix else key
-            if type(properties[key]) == dict:
+            if isinstance(properties[key], dict):
                 fields.append(get_fields(properties[key], prefix=label))
             else:
                 fields.append(label)
@@ -1013,7 +1013,7 @@ def delete_google_user(username):
     userservice = build("admin", "directory_v1", credentials=admincreds)
     email = "%s@%s" % (username, configstruct["DOMAINNAME"])
 
-    changeresponse = userservice.users().delete(userKey=email).execute()
+    userservice.users().delete(userKey=email).execute()
     return "OK"
 
 

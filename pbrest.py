@@ -554,7 +554,7 @@ def check_priv(priv, uid):
 
     debug_log(3, "in database user %s ACL is %s" % (uid, rv))
 
-    if rv == None:
+    if rv is None:
         return {
             "status": "ok",
             "allowed": False,
@@ -728,7 +728,6 @@ def get_round_part(id, part):
 @app.route("/solvers", endpoint="solvers", methods=["GET"])
 @swag_from("swag/getsolvers.yaml", endpoint="solvers", methods=["GET"])
 def get_all_solvers():
-    result = {}
     debug_log(4, "start")
     try:
         conn = mysql.connection
@@ -1437,7 +1436,7 @@ def create_round():
     chat_status = chat_announce_round(roundname)
     debug_log(4, "return from announcing round in chat is - %s" % str(chat_status))
 
-    if chat_status == None:
+    if chat_status is None:
         raise Exception("Error in announcing new round in chat")
 
     debug_log(4, "Making call to create google drive folder for round")
@@ -1660,7 +1659,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
 
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
-        if (value != None) and (value != ""):
+        if (value is not None) and (value != ""):
             chat_say_something(
                 mypuzzle["puzzle"]["chat_channel_id"],
                 "**ATTENTION:** %s is being worked on at %s"
@@ -1670,7 +1669,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             debug_log(3, "puzzle xyzloc removed. skipping discord announcement")
 
     elif part == "answer":
-        if value != "" and value != None:
+        if value != "" and value is not None:
             # Mark puzzle as solved automatically when answer is filled in
             update_puzzle_part_in_db(id, "status", "Solved")
             value = value.upper()
@@ -2412,7 +2411,6 @@ def get_puzzles_from_list(list):
         return []
 
     puzlist = list.split(",")
-    conn = mysql.connection
     puzarray = []
     for mypuz in puzlist:
         debug_log(4, "fetching puzzle info for pid: %s" % mypuz)
