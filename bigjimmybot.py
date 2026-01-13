@@ -563,7 +563,6 @@ if __name__ == "__main__":
 
         # Increment and post loop iteration counter early (before SKIP_GOOGLE_API check)
         # This ensures the counter increments even when Google API is disabled
-        global loop_iterations_total
         loop_iterations_total += 1
         try:
             requests.post(
