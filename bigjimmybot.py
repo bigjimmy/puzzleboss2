@@ -561,6 +561,18 @@ if __name__ == "__main__":
         except Exception as e:
             debug_log(1, "Error refreshing config: %s" % e)
 
+        # Increment and post loop iteration counter early (before SKIP_GOOGLE_API check)
+        # This ensures the counter increments even when Google API is disabled
+        global loop_iterations_total
+        loop_iterations_total += 1
+        try:
+            requests.post(
+                "%s/botstats/loop_iterations_total" % config["API"]["APIURI"],
+                json={"val": str(loop_iterations_total)},
+            )
+        except Exception as e:
+            debug_log(2, "Error posting loop iteration counter: %s" % e)
+
         # If Google API is disabled, just sleep and loop
         if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
             debug_log(3, "SKIP_GOOGLE_API is true, sleeping 5 seconds")
@@ -649,10 +661,6 @@ if __name__ == "__main__":
 
         # Post timing stats to API for Prometheus metrics
         try:
-            # Increment loop iteration counter
-            global loop_iterations_total
-            loop_iterations_total += 1
-
             requests.post(
                 "%s/botstats/loop_time_seconds" % config["API"]["APIURI"],
                 json={"val": "%.2f" % loop_elapsed},
@@ -679,11 +687,6 @@ if __name__ == "__main__":
             requests.post(
                 "%s/botstats/quota_failures" % config["API"]["APIURI"],
                 json={"val": str(quota_failures)},
-            )
-            # Post loop iteration counter (monotonically increasing, resets on restart)
-            requests.post(
-                "%s/botstats/loop_iterations_total" % config["API"]["APIURI"],
-                json={"val": str(loop_iterations_total)},
             )
         except Exception as e:
             debug_log(1, "Error posting botstats: %s" % e)
