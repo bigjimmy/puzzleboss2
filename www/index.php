@@ -37,7 +37,7 @@
                 <button @click="applyShowFilter(true)">Show All Puzzles</button>
             </div>
             <div>
-                <p>Spoil all puzzles: <input type="checkbox" v-model="spoilAll" /> | Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/></p>
+                <p>Spoil all puzzles: <input type="checkbox" v-model="spoilAll" /> | Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/> | Show tags: <input type="checkbox" v-model="showTags" /> </p> 
             </div>
             </div>
 
@@ -58,6 +58,7 @@
                         :sortpuzzles="sortPuzzles"
                         :currpuzz="currPuzz"
                         :solvers="solvers"
+                        :showtags="showTags"
                         @toggle-body="toggleBody"
                         @please-fetch = "fetchData"
                     ></round>
@@ -78,6 +79,7 @@
                         :sortpuzzles="sortPuzzles"
                         :uid="uid"
                         :currpuzz="currPuzz"
+                        :showtags="showTags"
                         @toggle-body="toggleBody"
                     ></round>
                 </div>
@@ -168,6 +170,7 @@
                     Object.fromEntries(Consts.statuses.map((status) => [status, true]))
                 );
                 const showControls = ref(false);
+                const showTags = ref(true);
 
                 const spoilAll = ref(false);
                 const sortPuzzles = ref(true);
@@ -360,6 +363,9 @@
                     const sa = localStorage.getItem("spoilAll");
                     if (sa !== null && sa !== undefined) spoilAll.value = JSON.parse(sa);
 
+                    const st = localStorage.getItem("showTags");
+                    if (st !== null && st !== undefined) showTags.value = JSON.parse(st);
+
                     await fetchData(true);
                     setInterval(fetchData, 5000);
                 });
@@ -440,11 +446,15 @@
 
                 watch(spoilAll, (update) => {
                     persist("spoilAll", update);
-                })
+                });
+
+                watch(showTags, (update) => {
+                    persist("showTags", update);
+                });
 
                 return {
                     data,
-                    showBody, highlight, spoilAll, showControls,
+                    showBody, highlight, spoilAll, showControls, showTags,
                     puzzleFilter, puzzleFilterKeys, sortPuzzles,
                     toggleBody, toggleKey,
                     applyShow, applyShowFilter,
