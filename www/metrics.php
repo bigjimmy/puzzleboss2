@@ -214,7 +214,7 @@ try {
             foreach ($stats_to_log as $stat => $stat_info) {
                 $metrics[] = sprintf("#HELP puzzleboss_%s %s", $stat, $stat_info["description"]);
                 $metrics[] = sprintf("#TYPE puzzleboss_%s %s", $stat, $stat_info["type"]);
-                $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$stat]["val"] ?? "0");
+                $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$stat]->val ?? "0");
                 $metrics[] = "";
             }
         }
