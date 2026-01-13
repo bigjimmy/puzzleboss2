@@ -19,6 +19,9 @@ workQueue = queue.Queue(300)
 threadID = 1
 threads = []
 
+# Loop iteration counter for Prometheus monitoring (resets on bot restart)
+loop_iterations_total = 0
+
 
 class puzzThread(threading.Thread):
     def __init__(self, threadID, name, q):
@@ -646,6 +649,10 @@ if __name__ == "__main__":
 
         # Post timing stats to API for Prometheus metrics
         try:
+            # Increment loop iteration counter
+            global loop_iterations_total
+            loop_iterations_total += 1
+
             requests.post(
                 "%s/botstats/loop_time_seconds" % config["API"]["APIURI"],
                 json={"val": "%.2f" % loop_elapsed},
@@ -672,6 +679,11 @@ if __name__ == "__main__":
             requests.post(
                 "%s/botstats/quota_failures" % config["API"]["APIURI"],
                 json={"val": str(quota_failures)},
+            )
+            # Post loop iteration counter (monotonically increasing, resets on restart)
+            requests.post(
+                "%s/botstats/loop_iterations_total" % config["API"]["APIURI"],
+                json={"val": str(loop_iterations_total)},
             )
         except Exception as e:
             debug_log(1, "Error posting botstats: %s" % e)

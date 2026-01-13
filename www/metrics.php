@@ -144,7 +144,12 @@ try {
             $metrics[] = "# TYPE puzzleboss_bigjimmy_quota_failures_total counter";
             $metrics[] = "puzzleboss_bigjimmy_quota_failures_total " . ($botstats->quota_failures->val ?? 0);
             $metrics[] = "";
-            
+
+            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_iterations_total Total number of loop iterations completed (resets on bot restart)";
+            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_iterations_total counter";
+            $metrics[] = "puzzleboss_bigjimmy_loop_iterations_total " . ($botstats->loop_iterations_total->val ?? 0);
+            $metrics[] = "";
+
             // Cache metrics
             $metrics[] = "# HELP puzzleboss_cache_hits_total Total cache hits for /allcached endpoint";
             $metrics[] = "# TYPE puzzleboss_cache_hits_total counter";
