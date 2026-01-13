@@ -17,21 +17,26 @@ configstruct = {"LOGLEVEL": "4"}
 _last_config_refresh = None
 CONFIG_REFRESH_INTERVAL = 30  # seconds
 
+
 def maybe_refresh_config():
     """Refresh config if enough time has passed since last refresh.
     Call this periodically (e.g., on each request) to ensure config stays current.
     """
     global _last_config_refresh
     import time
-    
+
     now = time.time()
-    if _last_config_refresh is None or (now - _last_config_refresh) >= CONFIG_REFRESH_INTERVAL:
+    if (
+        _last_config_refresh is None
+        or (now - _last_config_refresh) >= CONFIG_REFRESH_INTERVAL
+    ):
         try:
             refresh_config()
             _last_config_refresh = now
         except Exception as e:
             # Don't crash on refresh failure, just log it
             print(f"[WARNING] Config refresh failed: {e}", flush=True)
+
 
 def debug_log(sev, message):
     # Levels:
@@ -51,13 +56,14 @@ def debug_log(sev, message):
         )
     return
 
+
 def refresh_config():
     """Reload configuration from both YAML file and database.
     Only updates and logs if there are actual changes.
     """
     global configstruct, config, _last_config_refresh
     import time
-    
+
     # Reload YAML config (rarely changes at runtime, so no comparison)
     try:
         with open("puzzleboss.yaml") as f:
@@ -68,18 +74,23 @@ def refresh_config():
 
     # Reload database config with change detection
     try:
-        db_connection = MySQLdb.connect(config["MYSQL"]["HOST"], config["MYSQL"]["USERNAME"], config["MYSQL"]["PASSWORD"], config["MYSQL"]["DATABASE"])
+        db_connection = MySQLdb.connect(
+            config["MYSQL"]["HOST"],
+            config["MYSQL"]["USERNAME"],
+            config["MYSQL"]["PASSWORD"],
+            config["MYSQL"]["DATABASE"],
+        )
         cursor = db_connection.cursor()
         cursor.execute("SELECT * FROM config")
         configdump = cursor.fetchall()
         db_connection.close()
-        
+
         new_config = dict(configdump)
         _last_config_refresh = time.time()  # Update timestamp
-        
+
         # Check if this is initial load (only default LOGLEVEL present)
         is_initial_load = len(configstruct) <= 1 and "LOGLEVEL" in configstruct
-        
+
         if is_initial_load:
             # Initial load - just set config, no comparison
             configstruct.clear()
@@ -88,7 +99,7 @@ def refresh_config():
         else:
             # Compare and detect changes
             changes_found = False
-            
+
             # Check for modified or new keys
             for key, value in new_config.items():
                 old_value = configstruct.get(key)
@@ -98,13 +109,13 @@ def refresh_config():
                     else:
                         debug_log(3, f"Config changed: {key}: {old_value} -> {value}")
                     changes_found = True
-            
+
             # Check for removed keys
             for key in configstruct:
                 if key not in new_config:
                     debug_log(3, f"Config removed: {key}")
                     changes_found = True
-            
+
             # Only update if there were changes
             if changes_found:
                 configstruct.clear()
@@ -112,23 +123,27 @@ def refresh_config():
                 debug_log(3, "Configuration updated with changes")
             else:
                 debug_log(5, "Configuration checked, no changes detected")
-        
+
     except Exception as e:
         debug_log(0, f"FATAL EXCEPTION reading database configuration: {e}")
         sys.exit(255)
 
+
 # Initial configuration load
 refresh_config()
 
+
 def sanitize_puzzle_name(mystring):
     import re
+
     if mystring is None:
         return ""
     # Keep alphanumeric, emoji, and common punctuation
     # Remove spaces and problematic URL/filename chars
-    sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?* ]', '', mystring)
+    sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?* ]', "", mystring)
     # Trim whitespace
     return sanitized.strip()
+
 
 def email_user_verification(email, code, fullname, username):
     debug_log(4, "start for email: %s" % email)

@@ -1,11 +1,8 @@
 import ldap
 import json
 import requests
-import pblib
-import pbgooglelib
 from pblib import *
 from pbgooglelib import *
-from ldap import modlist
 
 
 def verify_email_for_user(email, username):
@@ -164,11 +161,13 @@ def add_or_update_user(username, firstname, lastname, email, password):
     return "OK"
 
 
-def create_or_update_ldap_user(username, firstname, lastname, email, password, operation):
+def create_or_update_ldap_user(
+    username, firstname, lastname, email, password, operation
+):
     """
     Create or update LDAP user entry (without Google operations).
     Used by step-based account creation flow.
-    
+
     Args:
         operation: "new" for new account, "update" for password reset
     """

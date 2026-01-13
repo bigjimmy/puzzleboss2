@@ -55,48 +55,89 @@ def check_puzzle_from_queue(threadname, q):
             # HYBRID APPROACH: Check sheetenabled to determine which method to use
             sheetenabled = mypuzzle.get("sheetenabled", 0)
             use_developer_metadata = False
-            
+
             if sheetenabled == 1:
                 # Sheet has developer metadata enabled, use the new approach
-                debug_log(4, "[Thread: %s] Using developer metadata for %s (sheetenabled=1)" % (threadname, mypuzzle["name"]))
+                debug_log(
+                    4,
+                    "[Thread: %s] Using developer metadata for %s (sheetenabled=1)"
+                    % (threadname, mypuzzle["name"]),
+                )
                 use_developer_metadata = True
             else:
                 # Check if developer metadata has been populated yet
-                debug_log(4, "[Thread: %s] Checking for developer metadata on %s (sheetenabled=0)" % (threadname, mypuzzle["name"]))
-                if check_developer_metadata_exists(mypuzzle["drive_id"], mypuzzle["name"]):
+                debug_log(
+                    4,
+                    "[Thread: %s] Checking for developer metadata on %s (sheetenabled=0)"
+                    % (threadname, mypuzzle["name"]),
+                )
+                if check_developer_metadata_exists(
+                    mypuzzle["drive_id"], mypuzzle["name"]
+                ):
                     # Developer metadata found! Enable sheetenabled and skip this cycle
-                    debug_log(3, "[Thread: %s] Developer metadata found on %s, enabling sheetenabled" % (threadname, mypuzzle["name"]))
+                    debug_log(
+                        3,
+                        "[Thread: %s] Developer metadata found on %s, enabling sheetenabled"
+                        % (threadname, mypuzzle["name"]),
+                    )
                     try:
                         requests.post(
-                            "%s/puzzles/%s/sheetenabled" % (config["API"]["APIURI"], mypuzzle["id"]),
+                            "%s/puzzles/%s/sheetenabled"
+                            % (config["API"]["APIURI"], mypuzzle["id"]),
                             json={"sheetenabled": 1},
                         )
                     except Exception as e:
-                        debug_log(1, "[Thread: %s] Error enabling sheetenabled: %s" % (threadname, e))
+                        debug_log(
+                            1,
+                            "[Thread: %s] Error enabling sheetenabled: %s"
+                            % (threadname, e),
+                        )
                     # Skip to next puzzle - will be processed with developer metadata on next loop
                     continue
                 else:
                     # No developer metadata, use legacy approach
-                    debug_log(4, "[Thread: %s] No developer metadata on %s, using legacy Revisions API" % (threadname, mypuzzle["name"]))
+                    debug_log(
+                        4,
+                        "[Thread: %s] No developer metadata on %s, using legacy Revisions API"
+                        % (threadname, mypuzzle["name"]),
+                    )
                     use_developer_metadata = False
-            
+
             # Get sheet info using appropriate method
             if use_developer_metadata:
-                sheet_info = get_puzzle_sheet_info(mypuzzle["drive_id"], mypuzzle["name"])
+                sheet_info = get_puzzle_sheet_info(
+                    mypuzzle["drive_id"], mypuzzle["name"]
+                )
             else:
-                sheet_info = get_puzzle_sheet_info_legacy(mypuzzle["drive_id"], mypuzzle["name"])
-            
+                sheet_info = get_puzzle_sheet_info_legacy(
+                    mypuzzle["drive_id"], mypuzzle["name"]
+                )
+
             # Update sheet count only if changed
-            if sheet_info["sheetcount"] is not None and sheet_info["sheetcount"] != mypuzzle.get("sheetcount"):
-                debug_log(4, "[Thread: %s] Updating sheetcount for %s: %s -> %s" % (
-                    threadname, mypuzzle["name"], mypuzzle.get("sheetcount"), sheet_info["sheetcount"]))
+            if sheet_info["sheetcount"] is not None and sheet_info[
+                "sheetcount"
+            ] != mypuzzle.get("sheetcount"):
+                debug_log(
+                    4,
+                    "[Thread: %s] Updating sheetcount for %s: %s -> %s"
+                    % (
+                        threadname,
+                        mypuzzle["name"],
+                        mypuzzle.get("sheetcount"),
+                        sheet_info["sheetcount"],
+                    ),
+                )
                 try:
                     requests.post(
-                        "%s/puzzles/%s/sheetcount" % (config["API"]["APIURI"], mypuzzle["id"]),
+                        "%s/puzzles/%s/sheetcount"
+                        % (config["API"]["APIURI"], mypuzzle["id"]),
                         json={"sheetcount": sheet_info["sheetcount"]},
                     )
                 except Exception as e:
-                    debug_log(1, "[Thread: %s] Error updating sheetcount: %s" % (threadname, e))
+                    debug_log(
+                        1,
+                        "[Thread: %s] Error updating sheetcount: %s" % (threadname, e),
+                    )
 
             # Fetch last sheet activity for this puzzle to compare against editor timestamps
             myreq = "%s/puzzles/%s/lastsheetact" % (
@@ -106,20 +147,32 @@ def check_puzzle_from_queue(threadname, q):
             try:
                 responsestring = requests.get(myreq).text
             except Exception as e:
-              debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
-              time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
-              continue
+                debug_log(
+                    1,
+                    "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s"
+                    % e,
+                )
+                time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
+                continue
 
             try:
                 response_json = json.loads(responsestring)
                 if "error" in response_json:
-                    debug_log(2, "[Thread: %s] API error for puzzle %s: %s" % (threadname, mypuzzle["id"], response_json.get("error")))
+                    debug_log(
+                        2,
+                        "[Thread: %s] API error for puzzle %s: %s"
+                        % (threadname, mypuzzle["id"], response_json.get("error")),
+                    )
                     continue
                 mypuzzlelastsheetact = response_json["puzzle"]["lastsheetact"]
             except Exception as e:
-              debug_log(1, "Error interpreting puzzle info from puzzleboss. Response: %s, Error: %s" % (responsestring[:200], e))
-              time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
-              continue
+                debug_log(
+                    1,
+                    "Error interpreting puzzle info from puzzleboss. Response: %s, Error: %s"
+                    % (responsestring[:200], e),
+                )
+                time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
+                continue
 
             debug_log(
                 5,
@@ -132,26 +185,39 @@ def check_puzzle_from_queue(threadname, q):
                 cursolvers = mypuzzle.get("cursolvers")
                 if not cursolvers or not cursolvers.strip():
                     # No current solvers, check if any activity (sheet edits, comments, assignments, tags) is stale
-                    abandoned_timeout_minutes = int(configstruct.get("BIGJIMMY_ABANDONED_TIMEOUT_MINUTES", 10))
+                    abandoned_timeout_minutes = int(
+                        configstruct.get("BIGJIMMY_ABANDONED_TIMEOUT_MINUTES", 10)
+                    )
                     abandoned_timeout_seconds = abandoned_timeout_minutes * 60
-                    abandoned_status = configstruct.get("BIGJIMMY_ABANDONED_STATUS", "Needs eyes")
-                    
+                    abandoned_status = configstruct.get(
+                        "BIGJIMMY_ABANDONED_STATUS", "Needs eyes"
+                    )
+
                     # Fetch lastact (any activity type - superset of lastsheetact)
                     lastact = None
                     try:
                         lastact_response = requests.get(
-                            "%s/puzzles/%s/lastact" % (config["API"]["APIURI"], mypuzzle["id"])
+                            "%s/puzzles/%s/lastact"
+                            % (config["API"]["APIURI"], mypuzzle["id"])
                         )
                         lastact_data = json.loads(lastact_response.text)
                         lastact = lastact_data.get("lastact")
                     except Exception as e:
-                        debug_log(2, "[Thread: %s] Error fetching lastact for %s: %s" % (threadname, mypuzzle["name"], e))
-                    
+                        debug_log(
+                            2,
+                            "[Thread: %s] Error fetching lastact for %s: %s"
+                            % (threadname, mypuzzle["name"], e),
+                        )
+
                     is_abandoned = False
                     if not lastact or not lastact.get("time"):
                         # No activity recorded at all
                         is_abandoned = True
-                        debug_log(3, "[Thread: %s] Puzzle %s has no activity and no solvers" % (threadname, mypuzzle["name"]))
+                        debug_log(
+                            3,
+                            "[Thread: %s] Puzzle %s has no activity and no solvers"
+                            % (threadname, mypuzzle["name"]),
+                        )
                     else:
                         try:
                             lastact_time = datetime.datetime.strptime(
@@ -159,26 +225,44 @@ def check_puzzle_from_queue(threadname, q):
                             )
                             now = datetime.datetime.utcnow()
                             time_since_activity = (now - lastact_time).total_seconds()
-                            
+
                             if time_since_activity > abandoned_timeout_seconds:
                                 is_abandoned = True
                                 debug_log(
                                     3,
                                     "[Thread: %s] Puzzle %s inactive for %.1f min (threshold: %d), no solvers"
-                                    % (threadname, mypuzzle["name"], time_since_activity / 60, abandoned_timeout_minutes)
+                                    % (
+                                        threadname,
+                                        mypuzzle["name"],
+                                        time_since_activity / 60,
+                                        abandoned_timeout_minutes,
+                                    ),
                                 )
                         except Exception as e:
-                            debug_log(2, "[Thread: %s] Error parsing lastact time for %s: %s" % (threadname, mypuzzle["name"], e))
-                    
+                            debug_log(
+                                2,
+                                "[Thread: %s] Error parsing lastact time for %s: %s"
+                                % (threadname, mypuzzle["name"], e),
+                            )
+
                     if is_abandoned:
                         try:
                             requests.post(
-                                "%s/puzzles/%s/status" % (config["API"]["APIURI"], mypuzzle["id"]),
+                                "%s/puzzles/%s/status"
+                                % (config["API"]["APIURI"], mypuzzle["id"]),
                                 json={"status": abandoned_status},
                             )
-                            debug_log(3, "[Thread: %s] Set puzzle %s status to '%s'" % (threadname, mypuzzle["name"], abandoned_status))
+                            debug_log(
+                                3,
+                                "[Thread: %s] Set puzzle %s status to '%s'"
+                                % (threadname, mypuzzle["name"], abandoned_status),
+                            )
                         except Exception as e:
-                            debug_log(1, "[Thread: %s] Error updating status for %s: %s" % (threadname, mypuzzle["name"], e))
+                            debug_log(
+                                1,
+                                "[Thread: %s] Error updating status for %s: %s"
+                                % (threadname, mypuzzle["name"], e),
+                            )
 
             if use_developer_metadata:
                 # DEVELOPER METADATA APPROACH: Compare unix timestamps
@@ -196,7 +280,11 @@ def check_puzzle_from_queue(threadname, q):
 
                     # Skip bot's own activity silently
                     if solvername.lower() == "bigjimmy":
-                        debug_log(5, "[Thread: %s] Skipping bot's own activity on %s" % (threadname, mypuzzle["name"]))
+                        debug_log(
+                            5,
+                            "[Thread: %s] Skipping bot's own activity on %s"
+                            % (threadname, mypuzzle["name"]),
+                        )
                         continue
 
                     if edit_ts > lastsheetact_ts:
@@ -209,7 +297,9 @@ def check_puzzle_from_queue(threadname, q):
                                 mypuzzle["name"],
                                 solvername,
                                 datetime.datetime.fromtimestamp(edit_ts),
-                                datetime.datetime.fromtimestamp(lastsheetact_ts) if lastsheetact_ts else "never",
+                                datetime.datetime.fromtimestamp(lastsheetact_ts)
+                                if lastsheetact_ts
+                                else "never",
                             ),
                         )
 
@@ -226,8 +316,7 @@ def check_puzzle_from_queue(threadname, q):
                         # Fetch last activity (actually all info) for this solver PRIOR to this one
                         solverinfo = json.loads(
                             requests.get(
-                                "%s/solvers/%s"
-                                % (config["API"]["APIURI"], mysolverid)
+                                "%s/solvers/%s" % (config["API"]["APIURI"], mysolverid)
                             ).text
                         )["solver"]
 
@@ -265,8 +354,13 @@ def check_puzzle_from_queue(threadname, q):
                             debug_log(
                                 4,
                                 "[Thread: %s] Last solver activity for %s was at %s"
-                                % (threadname, solverinfo["name"], 
-                                   datetime.datetime.fromtimestamp(lastsolveract_ts) if lastsolveract_ts else "never"),
+                                % (
+                                    threadname,
+                                    solverinfo["name"],
+                                    datetime.datetime.fromtimestamp(lastsolveract_ts)
+                                    if lastsolveract_ts
+                                    else "never",
+                                ),
                             )
                             if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
                                 if edit_ts > lastsolveract_ts:
@@ -329,15 +423,17 @@ def check_puzzle_from_queue(threadname, q):
                             debug_log(
                                 2,
                                 "[Thread: %s] solver %s not found in solver db. Skipping."
-                                % (threadname, revision["lastModifyingUser"]["emailAddress"]),
+                                % (
+                                    threadname,
+                                    revision["lastModifyingUser"]["emailAddress"],
+                                ),
                             )
                             continue
 
                         # Fetch last activity (actually all info) for this solver
                         solverinfo = json.loads(
                             requests.get(
-                                "%s/solvers/%s"
-                                % (config["API"]["APIURI"], mysolverid)
+                                "%s/solvers/%s" % (config["API"]["APIURI"], mysolverid)
                             ).text
                         )["solver"]
 
@@ -374,8 +470,13 @@ def check_puzzle_from_queue(threadname, q):
                             debug_log(
                                 4,
                                 "[Thread: %s] Last solver activity for %s was at %s"
-                                % (threadname, solverinfo["name"], 
-                                   datetime.datetime.fromtimestamp(lastsolveract_ts) if lastsolveract_ts else "never"),
+                                % (
+                                    threadname,
+                                    solverinfo["name"],
+                                    datetime.datetime.fromtimestamp(lastsolveract_ts)
+                                    if lastsolveract_ts
+                                    else "never",
+                                ),
                             )
                             if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
                                 revision_ts = revisiontime.timestamp()
@@ -403,7 +504,7 @@ def check_puzzle_from_queue(threadname, q):
                                             assignmentresponse.text,
                                         ),
                                     )
-            
+
             # Log per-puzzle timing
             puzzle_elapsed = time.time() - puzzle_start_time
             debug_log(
@@ -419,9 +520,9 @@ def check_puzzle_from_queue(threadname, q):
 def solver_from_email(email):
     """Look up solver ID by email address (extracts username from email)."""
     debug_log(4, "start. called with %s" % email)
-    solverslist = json.loads(
-        requests.get("%s/solvers" % config["API"]["APIURI"]).text
-    )["solvers"]
+    solverslist = json.loads(requests.get("%s/solvers" % config["API"]["APIURI"]).text)[
+        "solvers"
+    ]
     for solver in solverslist:
         if solver["name"].lower() == email.split("@")[0].lower():
             debug_log(4, "Solver %s is id: %s" % (email, solver["id"]))
@@ -432,9 +533,9 @@ def solver_from_email(email):
 def solver_from_name(name):
     """Look up solver ID by solver name directly."""
     debug_log(4, "start. called with %s" % name)
-    solverslist = json.loads(
-        requests.get("%s/solvers" % config["API"]["APIURI"]).text
-    )["solvers"]
+    solverslist = json.loads(requests.get("%s/solvers" % config["API"]["APIURI"]).text)[
+        "solvers"
+    ]
     for solver in solverslist:
         if solver["name"].lower() == name.lower():
             debug_log(4, "Solver %s is id: %s" % (name, solver["id"]))
@@ -456,22 +557,25 @@ if __name__ == "__main__":
             debug_log(5, "Config reloaded from database")
         except Exception as e:
             debug_log(1, "Error refreshing config: %s" % e)
-        
+
         # If Google API is disabled, just sleep and loop
         if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
             debug_log(3, "SKIP_GOOGLE_API is true, sleeping 5 seconds")
             time.sleep(5)
             continue
-        
+
         # Start timing setup phase
         setup_start_time = time.time()
-        
+
         try:
             r = json.loads(requests.get("%s/all" % config["API"]["APIURI"]).text)
         except Exception as e:
-              debug_log(1, "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e)
-              time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
-              continue
+            debug_log(
+                1,
+                "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e,
+            )
+            time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
+            continue
 
         debug_log(5, "api return: %s" % r)
         rounds = r["rounds"]
@@ -531,10 +635,15 @@ if __name__ == "__main__":
         debug_log(
             3,
             "Full iteration completed: %d puzzles in %.2f sec (setup: %.2f sec, processing: %.2f sec, %.2f sec/puzzle avg)"
-            % (len(puzzles), loop_elapsed, setup_elapsed, processing_elapsed, 
-               processing_elapsed / len(puzzles) if puzzles else 0),
+            % (
+                len(puzzles),
+                loop_elapsed,
+                setup_elapsed,
+                processing_elapsed,
+                processing_elapsed / len(puzzles) if puzzles else 0,
+            ),
         )
-        
+
         # Post timing stats to API for Prometheus metrics
         try:
             requests.post(
@@ -566,5 +675,5 @@ if __name__ == "__main__":
             )
         except Exception as e:
             debug_log(1, "Error posting botstats: %s" % e)
-        
+
         exitFlag = 0
