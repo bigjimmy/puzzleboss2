@@ -169,6 +169,20 @@
             align-items: center;
         }
         
+        .solver-col {
+            max-width: 120px;
+            white-space: normal;
+            word-break: break-word;
+            font-size: 0.85em;
+        }
+        
+        .tags-col {
+            max-width: 150px;
+            white-space: normal;
+            word-break: break-word;
+            font-size: 0.85em;
+        }
+        
         .saving {
             opacity: 0.6;
             pointer-events: none;
@@ -288,8 +302,10 @@
                     <th>Name</th>
                     <th>Doc</th>
                     <th>Chat</th>
+                    <th>Sheet</th>
                     <th>Solvers (current)</th>
                     <th>Solvers (all time)</th>
+                    <th>Tags</th>
                     <th>Comment</th>
                     <th></th>
                 </tr>
@@ -306,8 +322,10 @@
                     <td><a :href="puzzle.puzzle_uri" target="_blank">{{ puzzle.name }}</a></td>
                     <td><a :href="puzzle.drive_uri" target="_blank">Doc</a></td>
                     <td><a :href="puzzle.chat_channel_link" target="_blank">Chat</a></td>
-                    <td>{{ puzzle.cursolvers }}</td>
-                    <td>{{ puzzle.solvers }}</td>
+                    <td>{{ puzzle.sheetcount || 0 }}</td>
+                    <td class="solver-col">{{ puzzle.cursolvers }}</td>
+                    <td class="solver-col">{{ puzzle.solvers }}</td>
+                    <td class="tags-col">{{ formatTags(puzzle.tags) }}</td>
                     <td class="inline-form">
                         <input type="text" 
                                v-model="commentEdits[puzzle.id]" 
@@ -322,7 +340,7 @@
             </table>
         </div>
 
-        <div class="puzzle-table">
+        <div class="puzzle-table" v-if="sheetDisabledPuzzles.length > 0">
             <div class="section-header collapsible-header" @click="showSheetDisabled = !showSheetDisabled">
                 <h2>
                     <span class="collapse-icon" :class="{ collapsed: !showSheetDisabled }">▼</span>
@@ -360,8 +378,10 @@
                     <th>Name</th>
                     <th>Doc</th>
                     <th>Chat</th>
+                    <th>Sheet</th>
                     <th>Solvers (current)</th>
                     <th>Solvers (all time)</th>
+                    <th>Tags</th>
                     <th>Location</th>
                     <th>Comment</th>
                     <th></th>
@@ -382,8 +402,10 @@
                     <td><a :href="puzzle.puzzle_uri" target="_blank">{{ puzzle.name }}</a></td>
                     <td><a :href="puzzle.drive_uri" target="_blank">Doc</a></td>
                     <td><a :href="puzzle.chat_channel_link" target="_blank">Chat</a></td>
-                    <td>{{ puzzle.cursolvers }}</td>
-                    <td>{{ puzzle.solvers }}</td>
+                    <td>{{ puzzle.sheetcount || 0 }}</td>
+                    <td class="solver-col">{{ puzzle.cursolvers }}</td>
+                    <td class="solver-col">{{ puzzle.solvers }}</td>
+                    <td class="tags-col">{{ formatTags(puzzle.tags) }}</td>
                     <td>{{ puzzle.xyzloc }}</td>
                     <td class="inline-form">
                         <input type="text" 
@@ -533,6 +555,12 @@
                     return ''
                 }
                 
+                function formatTags(tags) {
+                    // tags comes as a comma-separated string from puzzle_view
+                    if (!tags) return ''
+                    return tags
+                }
+                
                 async function fetchData() {
                     try {
                         const response = await fetch('./apicall.php?apicall=all', { cache: 'no-store' })
@@ -662,6 +690,7 @@
                     saving,
                     getRoundName,
                     getPuzzleRowClass,
+                    formatTags,
                     updateComment,
                     updateStatus
                 }
