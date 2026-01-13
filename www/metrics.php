@@ -127,31 +127,31 @@ try {
 
             $stats_to_log = array(
                 // BigJimmyBot stats
-                "loop_time_seconds" => array(
+                "bigjimmy_loop_time_seconds" => array(
                     "type" => "gauge",
                     "description" => "Total time in seconds for last full puzzle scan loop (setup + processing)",
                 ),
-                "loop_setup_seconds" => array(
+                "bigjimmy_loop_setup_seconds" => array(
                     "type" => "gauge",
                     "description" => "Time in seconds for loop setup (API fetch, thread creation)",
                 ),
-                "loop_processing_seconds" => array(
+                "bigjimmy_loop_processing_seconds" => array(
                     "type" => "gauge",
                     "description" => "Time in seconds for actual puzzle processing",
                 ),
-                "loop_puzzle_count" => array(
+                "bigjimmy_loop_puzzle_count" => array(
                     "type" => "gauge",
                     "description" => "Number of puzzles processed in last loop",
                 ),
-                "loop_avg_seconds_per_puzzle" => array(
+                "bigjimmy_avg_seconds_per_puzzle" => array(
                     "type" => "gauge",
                     "description" => "Average processing seconds per puzzle in last loop",
                 ),
-                "quota_failures" => array(
+                "bigjimmy_quota_failures" => array(
                     "type" => "counter",
                     "description" => "Total Google API quota failures (429 errors) since bot start",
                 ),
-                "loop_iterations_total" => array(
+                "bigjimmy_loop_iterations_total" => array(
                     "type" => "counter",
                     "description" => "Total number of loop iterations completed (resets on bot restart)",
                 ),
