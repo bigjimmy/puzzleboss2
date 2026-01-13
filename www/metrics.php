@@ -94,8 +94,16 @@ try {
     // Puzzle status metrics
     $metrics[] = "# HELP puzzleboss_puzzles_by_status_total Current number of puzzles in each status";
     $metrics[] = "# TYPE puzzleboss_puzzles_by_status_total gauge";
-    
-    $statuses = array('New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', '[hidden]');
+
+    // Fetch statuses dynamically from huntinfo endpoint
+    try {
+        $huntinfo_response = readapi('/huntinfo');
+        $statuses = $huntinfo_response->statuses ?? array();
+    } catch (Exception $e) {
+        // Fallback to hardcoded list if huntinfo fails
+        $statuses = array('New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', 'Under control', 'Waiting for HQ', 'Grind', '[hidden]');
+    }
+
     foreach ($statuses as $status) {
         $status_key = strtolower(str_replace(' ', '_', $status));
         $metrics[] = 'puzzleboss_puzzles_by_status_total{status="' . $status_key . '"} ' . ($puzzle_status[$status] ?? 0);
