@@ -421,7 +421,7 @@ export default {
             //
             if (showModal.value == false) {
                 puzzle.value.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
-                context.emit('highlight-me');
+                context.emit('highlight-me', 'saved');
             }
         }
 
@@ -445,8 +445,8 @@ export default {
     },
 
     template: `
-    <p class="puzzle-icon" ref="puzzle-tag" :title="description" @click.stop="toggleModal(false)">{{icon}}</p>
-    <dialog v-if='showModal' open>
+    <p class="puzzle-icon" ref="puzzle-tag" :title="description" @keydown.enter="toggleModal(false)" @click.stop="toggleModal(false)" tabindex="0">{{icon}}</p>
+    <dialog v-if='showModal' open @click.stop @keydown.esc="toggleModal(false)">
         <h4>Editing {{type}} for {{puzzle.name}}:</h4>
         <p v-if="warning.length !== 0">{{warning}}</p>
 
@@ -467,9 +467,11 @@ export default {
                 key="tag">
                 {{tag}}
                 <p
+                    tabindex="0"
                     class="puzzle-icon"
                     title="remove"
                     @click="updateTags(tag, false)"
+                    @keydown.enter="updateTags(tag, false)"
                 >🗑️</p>
             </li>
         </ul>
@@ -481,9 +483,11 @@ export default {
                 @complete-transaction="updateTags(nextTag, true)">
             </TagSelect>
             <span
+                tabindex="0"
                 class="puzzle-icon"
                 title="add"
                 @click="updateTags(nextTag, true)"
+                @keydown.enter="updateTags(nextTag, true)"
             >➕</span>
         </p>
 
