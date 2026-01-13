@@ -126,34 +126,41 @@ try {
             $botstats = (array)$botstats_response->botstats;
 
             $stats_to_log = array(
-                // BigJimmyBot stats
+                // BigJimmyBot stats (key is prometheus metric name, db_key is database field name)
                 "bigjimmy_loop_time_seconds" => array(
                     "type" => "gauge",
                     "description" => "Total time in seconds for last full puzzle scan loop (setup + processing)",
+                    "db_key" => "loop_time_seconds",
                 ),
                 "bigjimmy_loop_setup_seconds" => array(
                     "type" => "gauge",
                     "description" => "Time in seconds for loop setup (API fetch, thread creation)",
+                    "db_key" => "loop_setup_seconds",
                 ),
                 "bigjimmy_loop_processing_seconds" => array(
                     "type" => "gauge",
                     "description" => "Time in seconds for actual puzzle processing",
+                    "db_key" => "loop_processing_seconds",
                 ),
                 "bigjimmy_loop_puzzle_count" => array(
                     "type" => "gauge",
                     "description" => "Number of puzzles processed in last loop",
+                    "db_key" => "loop_puzzle_count",
                 ),
                 "bigjimmy_avg_seconds_per_puzzle" => array(
                     "type" => "gauge",
                     "description" => "Average processing seconds per puzzle in last loop",
+                    "db_key" => "loop_avg_seconds_per_puzzle",
                 ),
                 "bigjimmy_quota_failures" => array(
                     "type" => "counter",
                     "description" => "Total Google API quota failures (429 errors) since bot start",
+                    "db_key" => "quota_failures",
                 ),
                 "bigjimmy_loop_iterations_total" => array(
                     "type" => "counter",
                     "description" => "Total number of loop iterations completed (resets on bot restart)",
+                    "db_key" => "loop_iterations_total",
                 ),
                 // Cache metrics
                 "cache_hits_total" => array(
@@ -212,9 +219,11 @@ try {
             );
 
             foreach ($stats_to_log as $stat => $stat_info) {
+                // Use db_key if provided, otherwise use stat name as-is
+                $db_key = $stat_info["db_key"] ?? $stat;
                 $metrics[] = sprintf("#HELP puzzleboss_%s %s", $stat, $stat_info["description"]);
                 $metrics[] = sprintf("#TYPE puzzleboss_%s %s", $stat, $stat_info["type"]);
-                $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$stat]->val ?? "0");
+                $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$db_key]->val ?? "0");
                 $metrics[] = "";
             }
         }
