@@ -105,6 +105,9 @@ try {
     }
 
     foreach ($statuses as $status) {
+        if ($status === '[hidden]') {
+            continue;
+        }
         $status_key = strtolower(str_replace(' ', '_', $status));
         $metrics[] = 'puzzleboss_puzzles_by_status_total{status="' . $status_key . '"} ' . ($puzzle_status[$status] ?? 0);
     }
@@ -117,66 +120,66 @@ try {
     $metrics[] = 'puzzleboss_rounds_by_status_total{status="solved"} ' . $rounds_solved;
     $metrics[] = "";
     
-    // BigJimmyBot stats
     try {
         $botstats_response = readapi('/botstats');
         if (isset($botstats_response->botstats)) {
-            $botstats = $botstats_response->botstats;
-            
-            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_time_seconds Total time in seconds for last full puzzle scan loop (setup + processing)";
-            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_time_seconds gauge";
-            $metrics[] = "puzzleboss_bigjimmy_loop_time_seconds " . ($botstats->loop_time_seconds->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_setup_seconds Time in seconds for loop setup (API fetch, thread creation)";
-            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_setup_seconds gauge";
-            $metrics[] = "puzzleboss_bigjimmy_loop_setup_seconds " . ($botstats->loop_setup_seconds->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_processing_seconds Time in seconds for actual puzzle processing";
-            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_processing_seconds gauge";
-            $metrics[] = "puzzleboss_bigjimmy_loop_processing_seconds " . ($botstats->loop_processing_seconds->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_puzzle_count Number of puzzles processed in last loop";
-            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_puzzle_count gauge";
-            $metrics[] = "puzzleboss_bigjimmy_loop_puzzle_count " . ($botstats->loop_puzzle_count->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_bigjimmy_avg_seconds_per_puzzle Average processing seconds per puzzle in last loop";
-            $metrics[] = "# TYPE puzzleboss_bigjimmy_avg_seconds_per_puzzle gauge";
-            $metrics[] = "puzzleboss_bigjimmy_avg_seconds_per_puzzle " . ($botstats->loop_avg_seconds_per_puzzle->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_bigjimmy_quota_failures_total Total Google API quota failures (429 errors) since bot start";
-            $metrics[] = "# TYPE puzzleboss_bigjimmy_quota_failures_total counter";
-            $metrics[] = "puzzleboss_bigjimmy_quota_failures_total " . ($botstats->quota_failures->val ?? 0);
-            $metrics[] = "";
+            $botstats = (array)$botstats_response->botstats;
 
-            $metrics[] = "# HELP puzzleboss_bigjimmy_loop_iterations_total Total number of loop iterations completed (resets on bot restart)";
-            $metrics[] = "# TYPE puzzleboss_bigjimmy_loop_iterations_total counter";
-            $metrics[] = "puzzleboss_bigjimmy_loop_iterations_total " . ($botstats->loop_iterations_total->val ?? 0);
-            $metrics[] = "";
+            $stats_to_log = array(
+                // BigJimmyBot stats
+                "loop_time_seconds" => array(
+                    "type" => "gauge",
+                    "description" => "Total time in seconds for last full puzzle scan loop (setup + processing)",
+                ),
+                "loop_setup_seconds" => array(
+                    "type" => "gauge",
+                    "description" => "Time in seconds for loop setup (API fetch, thread creation)",
+                ),
+                "loop_processing_seconds" => array(
+                    "type" => "gauge",
+                    "description" => "Time in seconds for actual puzzle processing",
+                ),
+                "loop_puzzle_count" => array(
+                    "type" => "gauge",
+                    "description" => "Number of puzzles processed in last loop",
+                ),
+                "loop_avg_seconds_per_puzzle" => array(
+                    "type" => "gauge",
+                    "description" => "Average processing seconds per puzzle in last loop",
+                ),
+                "quota_failures" => array(
+                    "type" => "counter",
+                    "description" => "Total Google API quota failures (429 errors) since bot start",
+                ),
+                "loop_iterations_total" => array(
+                    "type" => "counter",
+                    "description" => "Total number of loop iterations completed (resets on bot restart)",
+                ),
+                // Cache metrics
+                "cache_hits_total" => array(
+                    "type" => "counter",
+                    "description" => "Total cache hits for /allcached endpoint",
+                ),
+                "cache_misses_total" => array(
+                    "type" => "counter",
+                    "description" => "Total cache misses for /allcached endpoint",
+                ),
+                "cache_invalidations_total" => array(
+                    "type" => "counter",
+                    "description" => "Total cache invalidations",
+                ),
+                "tags_assigned_total" => array(
+                    "type" => "counter",
+                    "description" => "Total tags assigned to puzzles",
+                ),
+            );
 
-            // Cache metrics
-            $metrics[] = "# HELP puzzleboss_cache_hits_total Total cache hits for /allcached endpoint";
-            $metrics[] = "# TYPE puzzleboss_cache_hits_total counter";
-            $metrics[] = "puzzleboss_cache_hits_total " . ($botstats->cache_hits_total->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_cache_misses_total Total cache misses for /allcached endpoint";
-            $metrics[] = "# TYPE puzzleboss_cache_misses_total counter";
-            $metrics[] = "puzzleboss_cache_misses_total " . ($botstats->cache_misses_total->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_cache_invalidations_total Total cache invalidations";
-            $metrics[] = "# TYPE puzzleboss_cache_invalidations_total counter";
-            $metrics[] = "puzzleboss_cache_invalidations_total " . ($botstats->cache_invalidations_total->val ?? 0);
-            $metrics[] = "";
-            
-            $metrics[] = "# HELP puzzleboss_tags_assigned_total Total tags assigned to puzzles";
-            $metrics[] = "# TYPE puzzleboss_tags_assigned_total counter";
-            $metrics[] = "puzzleboss_tags_assigned_total " . ($botstats->tags_assigned_total->val ?? 0);
+            foreach ($stats_to_log as $stat => $stat_info) {
+                $metrics[] = sprintf("#HELP puzzleboss_%s %s", $stat, $stat_info["description"]);
+                $metrics[] = sprintf("#TYPE puzzleboss_%s %s", $stat, $stat_info["type"]);
+                $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$stat]["val"] ?? "0");
+                $metrics[] = "";
+            }
         }
     } catch (Exception $e) {
         // Botstats not available yet, skip
