@@ -172,6 +172,43 @@ try {
                     "type" => "counter",
                     "description" => "Total tags assigned to puzzles",
                 ),
+                // Puzzcord metrics
+                "puzzcord_members_total" => array(
+                    "type" => "gauge",
+                    "description" => "Total number of Discord team members (with member role)",
+                ),
+                "puzzcord_members_online" => array(
+                    "type" => "gauge",
+                    "description" => "Number of Discord team members online (according to Discord)",
+                ),
+                "puzzcord_members_active_in_voice" => array(
+                    "type" => "gauge",
+                    "description" => "Number of team members currently active in voice on Discord",
+                ),
+                "puzzcord_members_active_in_text" => array(
+                    "type" => "gauge",
+                    "description" => "Number of team members active in text on Discord in the last 15 minutes",
+                ),
+                "puzzcord_members_active_in_sheets" => array(
+                    "type" => "gauge",
+                    "description" => "Number of team members active in Sheets in the last 15 minutes",
+                ),
+                "puzzcord_members_active_in_discord" => array(
+                    "type" => "gauge",
+                    "description" => "Number of team members currently active in voice OR active in text in the last 15 minutes",
+                ),
+                "puzzcord_members_active_anywhere" => array(
+                    "type" => "gauge",
+                    "description" => "Number of team members currently active in voice OR active in (text OR Sheets) in the last 15 minutes",
+                ),
+                "puzzcord_messages_per_minute" => array(
+                    "type" => "gauge",
+                    "description" => "Discord messages per minute",
+                ),
+                "puzzcord_tables_in_use" => array(
+                    "type" => "gauge",
+                    "description" => "Discord tables (voice channels) in use",
+                ),
             );
 
             foreach ($stats_to_log as $stat => $stat_info) {
