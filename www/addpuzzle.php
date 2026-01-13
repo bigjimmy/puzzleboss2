@@ -230,17 +230,6 @@ if ($offer_create_new_round) {
         />
       </td>
     </tr>
-    <tr>
-      <td><label for="ismeta">Meta Puzzle:</label></td>
-      <td>
-        <input
-          type="checkbox"
-          id="ismeta"
-          name="ismeta"
-          value="1"
-        />
-      </td>
-    </tr>
   </table>
   <input type="submit" name="submit" value="Add New Puzzle"/>
 </form>

@@ -2365,26 +2365,6 @@ def get_puzzle_id_by_name(name):
     return rv
 
 
-def clear_puzzle_solvers(id):
-    debug_log(4, "start, called with (id): %s" % id)
-
-    mypuzzle = get_one_puzzle(id)
-    if mypuzzle["puzzle"]["cursolvers"]:
-        mypuzzlesolvers = mypuzzle["puzzle"]["cursolvers"]
-        solverslist = mypuzzlesolvers.split(",")
-        debug_log(
-            4, "found these solvers to clear from puzzle %s: %s" % (id, solverslist)
-        )
-
-        for solver in solverslist:
-            unassign_solver_by_name(solver)
-
-    else:
-        debug_log(4, "no solvers found on puzzle %s" % id)
-
-    return 0
-
-
 def update_puzzle_part_in_db(id, part, value):
     conn = mysql.connection
     cursor = conn.cursor()

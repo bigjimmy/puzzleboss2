@@ -1102,6 +1102,133 @@ class TestRunner:
 
         result.set_success("Answer verification test completed successfully")
 
+    def test_solve_clears_location_and_solvers(self, result: TestResult):
+        """Test that solving a puzzle clears both location and current solvers."""
+        self.logger.log_operation("Starting solve clears location and solvers test")
+
+        try:
+            # Get all puzzles and solvers
+            puzzles = self.get_all_puzzles()
+            solvers = self.get_all_solvers()
+
+            if not puzzles:
+                result.fail("No puzzles found for testing")
+                return
+
+            if not solvers or len(solvers) < 2:
+                result.fail("Need at least 2 solvers for testing")
+                return
+
+            # Find an unsolved puzzle
+            unsolved_puzzle = None
+            for puzzle in puzzles:
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
+                if puzzle_details and puzzle_details.get("status") != "Solved":
+                    unsolved_puzzle = puzzle_details
+                    break
+
+            if not unsolved_puzzle:
+                result.fail("No unsolved puzzles available for testing")
+                return
+
+            puzzle_id = unsolved_puzzle["id"]
+            puzzle_name = unsolved_puzzle["name"]
+
+            self.logger.log_operation(
+                f"Testing with puzzle {puzzle_name} (id: {puzzle_id})"
+            )
+
+            # Set location on the puzzle
+            test_location = f"Test Location {random.randint(1000, 9999)}"
+            self.logger.log_operation(f"Setting location to '{test_location}'")
+            if not self.update_puzzle(puzzle_id, "xyzloc", test_location):
+                result.fail(f"Failed to set location on puzzle {puzzle_name}")
+                return
+
+            # Assign 2 solvers to the puzzle
+            selected_solvers = random.sample(solvers, 2)
+            self.logger.log_operation(
+                f"Assigning solvers {selected_solvers[0]['name']} and {selected_solvers[1]['name']}"
+            )
+
+            for solver in selected_solvers:
+                if not self.assign_solver_to_puzzle(solver["id"], puzzle_id):
+                    result.fail(
+                        f"Failed to assign solver {solver['name']} to puzzle {puzzle_name}"
+                    )
+                    return
+
+            # Verify location and solvers are set
+            puzzle_details = self.get_puzzle_details(puzzle_id)
+            if not puzzle_details:
+                result.fail(f"Failed to get puzzle details for {puzzle_name}")
+                return
+
+            if puzzle_details.get("xyzloc") != test_location:
+                result.fail(
+                    f"Location not set correctly. Expected '{test_location}', got '{puzzle_details.get('xyzloc')}'"
+                )
+                return
+
+            current_solvers = puzzle_details.get("cursolvers", "")
+            if not current_solvers:
+                result.fail("Solvers not assigned to puzzle")
+                return
+
+            self.logger.log_operation(
+                f"Before solve - location: '{puzzle_details.get('xyzloc')}', solvers: '{current_solvers}'"
+            )
+
+            # Solve the puzzle
+            test_answer = f"SOLVE TEST {random.randint(1000, 9999)}"
+            self.logger.log_operation(f"Solving puzzle with answer '{test_answer}'")
+            if not self.update_puzzle(puzzle_id, "answer", test_answer):
+                result.fail(f"Failed to set answer for puzzle {puzzle_name}")
+                return
+
+            # Verify puzzle is solved and location/solvers are cleared
+            puzzle_details = self.get_puzzle_details(puzzle_id)
+            if not puzzle_details:
+                result.fail(f"Failed to get puzzle details after solving")
+                return
+
+            # Check status is Solved
+            if puzzle_details.get("status") != "Solved":
+                result.fail(
+                    f"Status not changed to 'Solved'. Got '{puzzle_details.get('status')}'"
+                )
+                return
+
+            # Check location is cleared
+            location_after = puzzle_details.get("xyzloc", "")
+            if location_after:
+                result.fail(
+                    f"Location not cleared after solve. Expected empty, got '{location_after}'"
+                )
+                return
+
+            # Check solvers are cleared
+            solvers_after = puzzle_details.get("cursolvers", "")
+            if solvers_after:
+                result.fail(
+                    f"Solvers not cleared after solve. Expected empty, got '{solvers_after}'"
+                )
+                return
+
+            self.logger.log_operation(
+                "After solve - location and solvers successfully cleared"
+            )
+
+            result.set_success(
+                "Solve clears location and solvers test completed successfully"
+            )
+
+        except Exception as e:
+            result.fail(f"Error in solve clears location and solvers test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def test_solver_assignments(self, result: TestResult):
         """Test solver assignment functionality."""
         try:
@@ -1248,8 +1375,15 @@ class TestRunner:
             result.fail("No puzzles available for testing")
             return
 
+        # Filter out solved puzzles
+        unsolved_puzzles = [p for p in selected_puzzles if p.get("status") != "Solved"]
+
+        if not unsolved_puzzles:
+            result.fail("No unsolved puzzles available for testing")
+            return
+
         # For each selected puzzle, assign 2 random solvers and check activity
-        for puzzle in selected_puzzles:
+        for puzzle in unsolved_puzzles:
             self.logger.log_operation(f"Testing activity for puzzle {puzzle['name']}")
 
             # Select 2 random solvers
@@ -1480,18 +1614,21 @@ class TestRunner:
             solver1_current_puzzle = solver1_details.get("puzz")
             solver2_current_puzzle = solver2_details.get("puzz")
 
-            # Filter out puzzles that are currently assigned to either solver
+            # Filter out puzzles that are currently assigned to either solver or are solved
             available_puzzles = []
             for puzzle in puzzles:
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
                 if (
                     puzzle["name"] != solver1_current_puzzle
                     and puzzle["name"] != solver2_current_puzzle
+                    and puzzle_details
+                    and puzzle_details.get("status") != "Solved"
                 ):
                     available_puzzles.append(puzzle)
 
             if len(available_puzzles) < 2:
                 result.fail(
-                    "Not enough puzzles available that aren't already assigned to the selected solvers"
+                    "Not enough unsolved puzzles available that aren't already assigned to the selected solvers"
                 )
                 return
 
@@ -2367,10 +2504,407 @@ class TestRunner:
                 return
             self.logger.log_operation("Successfully tested /rounds endpoint")
 
+            # Test /huntinfo endpoint
+            self.logger.log_operation("Testing /huntinfo endpoint")
+            response = requests.get(f"{self.base_url}/huntinfo")
+            if not response.ok:
+                result.fail(f"Failed to get /huntinfo endpoint: {response.text}")
+                return
+            huntinfo_data = response.json()
+
+            # Validate response structure
+            if not isinstance(huntinfo_data, dict):
+                result.fail("Invalid response format from /huntinfo endpoint - not a dict")
+                return
+
+            if huntinfo_data.get("status") != "ok":
+                result.fail(f"Invalid status from /huntinfo endpoint: {huntinfo_data.get('status')}")
+                return
+
+            # Check for required keys
+            required_keys = ["config", "statuses", "tags"]
+            for key in required_keys:
+                if key not in huntinfo_data:
+                    result.fail(f"Missing '{key}' in /huntinfo response")
+                    return
+
+            # Validate config is a dict
+            if not isinstance(huntinfo_data["config"], dict):
+                result.fail("/huntinfo config should be a dict")
+                return
+
+            # Validate statuses is a list
+            if not isinstance(huntinfo_data["statuses"], list):
+                result.fail("/huntinfo statuses should be a list")
+                return
+
+            # Validate tags is a list
+            if not isinstance(huntinfo_data["tags"], list):
+                result.fail("/huntinfo tags should be a list")
+                return
+
+            self.logger.log_operation(
+                f"Successfully tested /huntinfo endpoint - "
+                f"config: {len(huntinfo_data['config'])} entries, "
+                f"statuses: {len(huntinfo_data['statuses'])} values, "
+                f"tags: {len(huntinfo_data['tags'])} tags"
+            )
+
+            # Test /statuses endpoint
+            self.logger.log_operation("Testing /statuses endpoint")
+            response = requests.get(f"{self.base_url}/statuses")
+            if not response.ok:
+                result.fail(f"Failed to get /statuses endpoint: {response.text}")
+                return
+            statuses_data = response.json()
+
+            if not isinstance(statuses_data, dict):
+                result.fail("Invalid response format from /statuses endpoint - not a dict")
+                return
+
+            if statuses_data.get("status") != "ok":
+                result.fail(f"Invalid status from /statuses endpoint: {statuses_data.get('status')}")
+                return
+
+            if "statuses" not in statuses_data:
+                result.fail("Missing 'statuses' key in /statuses response")
+                return
+
+            if not isinstance(statuses_data["statuses"], list):
+                result.fail("/statuses statuses should be a list")
+                return
+
+            # Verify "New" and "Solved" are in the list
+            statuses_list = statuses_data["statuses"]
+            if "New" not in statuses_list:
+                result.fail("'New' status not found in /statuses response")
+                return
+
+            if "Solved" not in statuses_list:
+                result.fail("'Solved' status not found in /statuses response")
+                return
+
+            self.logger.log_operation(
+                f"Successfully tested /statuses endpoint - found {len(statuses_list)} statuses including 'New' and 'Solved'"
+            )
+
+            # Test /config endpoint
+            self.logger.log_operation("Testing /config endpoint")
+            response = requests.get(f"{self.base_url}/config")
+            if not response.ok:
+                result.fail(f"Failed to get /config endpoint: {response.text}")
+                return
+            config_data = response.json()
+
+            if not isinstance(config_data, dict):
+                result.fail("Invalid response format from /config endpoint - not a dict")
+                return
+
+            if config_data.get("status") != "ok":
+                result.fail(f"Invalid status from /config endpoint: {config_data.get('status')}")
+                return
+
+            if "config" not in config_data:
+                result.fail("Missing 'config' key in /config response")
+                return
+
+            config = config_data["config"]
+            if not isinstance(config, dict):
+                result.fail("/config config should be a dict")
+                return
+
+            # Verify specific config keys exist
+            required_config_keys = ["DOMAINNAME", "LOGLEVEL", "BIN_URI"]
+            for key in required_config_keys:
+                if key not in config:
+                    result.fail(f"Missing '{key}' in /config response")
+                    return
+
+            self.logger.log_operation(
+                f"Successfully tested /config endpoint - DOMAINNAME={config.get('DOMAINNAME')}, "
+                f"LOGLEVEL={config.get('LOGLEVEL')}, BIN_URI={config.get('BIN_URI')}"
+            )
+
+            # Test /solvers/byname/<name> endpoint
+            self.logger.log_operation("Testing /solvers/byname/<name> endpoint")
+            # Get a solver to test with
+            solvers = self.get_all_solvers()
+            if not solvers:
+                result.fail("No solvers available to test /solvers/byname endpoint")
+                return
+
+            test_solver = solvers[0]
+            solver_name = test_solver["name"]
+
+            self.logger.log_operation(f"Testing with solver name: {solver_name}")
+            response = requests.get(f"{self.base_url}/solvers/byname/{solver_name}")
+            if not response.ok:
+                result.fail(f"Failed to get /solvers/byname/{solver_name}: {response.text}")
+                return
+
+            solver_data = response.json()
+            if not isinstance(solver_data, dict):
+                result.fail("Invalid response format from /solvers/byname endpoint - not a dict")
+                return
+
+            if solver_data.get("status") != "ok":
+                result.fail(f"Invalid status from /solvers/byname endpoint: {solver_data.get('status')}")
+                return
+
+            if "solver" not in solver_data:
+                result.fail("Missing 'solver' key in /solvers/byname response")
+                return
+
+            returned_solver = solver_data["solver"]
+            if returned_solver.get("name") != solver_name:
+                result.fail(
+                    f"Solver name mismatch. Expected: {solver_name}, Got: {returned_solver.get('name')}"
+                )
+                return
+
+            self.logger.log_operation(
+                f"Successfully tested /solvers/byname endpoint - found solver '{solver_name}' (id: {returned_solver.get('id')})"
+            )
+
             result.set_success("API endpoints test completed successfully")
 
         except Exception as e:
             result.fail(f"Error in API endpoints test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
+    def test_bot_statistics(self, result: TestResult):
+        """Test bot statistics update and retrieval."""
+        self.logger.log_operation("Starting bot statistics test")
+
+        try:
+            # Create a unique test key name
+            timestamp = str(int(time.time()))
+            test_key = f"test_botstat_{timestamp}"
+            test_value_1 = f"test_value_1_{random.randint(1000, 9999)}"
+            test_value_2 = f"test_value_2_{random.randint(1000, 9999)}"
+
+            self.logger.log_operation(
+                f"Testing with key: {test_key}, initial value: {test_value_1}"
+            )
+
+            # Update/create the bot statistic
+            self.logger.log_operation(f"Creating botstat via POST /botstats/{test_key}")
+            response = requests.post(
+                f"{self.base_url}/botstats/{test_key}",
+                json={"val": test_value_1}
+            )
+            if not response.ok:
+                result.fail(f"Failed to create botstat: {response.text}")
+                return
+
+            response_data = response.json()
+            if response_data.get("status") != "ok":
+                result.fail(f"Botstat creation did not return success: {response_data}")
+                return
+
+            self.logger.log_operation("Botstat created successfully")
+
+            # Fetch all botstats and verify our key exists with correct value
+            self.logger.log_operation("Fetching all botstats via GET /botstats")
+            response = requests.get(f"{self.base_url}/botstats")
+            if not response.ok:
+                result.fail(f"Failed to fetch botstats: {response.text}")
+                return
+
+            botstats_data = response.json()
+            if botstats_data.get("status") != "ok":
+                result.fail(f"Botstats fetch did not return success: {botstats_data}")
+                return
+
+            if "botstats" not in botstats_data:
+                result.fail("Missing 'botstats' key in response")
+                return
+
+            botstats = botstats_data["botstats"]
+            if not isinstance(botstats, dict):
+                result.fail("Botstats should be a dict")
+                return
+
+            # Verify our test key exists
+            if test_key not in botstats:
+                result.fail(f"Test key '{test_key}' not found in botstats")
+                return
+
+            # Verify the value is correct
+            botstat_entry = botstats[test_key]
+            if botstat_entry.get("val") != test_value_1:
+                result.fail(
+                    f"Botstat value mismatch. Expected: {test_value_1}, Got: {botstat_entry.get('val')}"
+                )
+                return
+
+            # Verify the timestamp field exists
+            if "updated" not in botstat_entry:
+                result.fail("Missing 'updated' timestamp in botstat entry")
+                return
+
+            self.logger.log_operation(
+                f"Botstat verified - key: {test_key}, val: {botstat_entry['val']}, "
+                f"updated: {botstat_entry['updated']}"
+            )
+
+            # Update the botstat to a new value
+            self.logger.log_operation(f"Updating botstat to new value: {test_value_2}")
+            response = requests.post(
+                f"{self.base_url}/botstats/{test_key}",
+                json={"val": test_value_2}
+            )
+            if not response.ok:
+                result.fail(f"Failed to update botstat: {response.text}")
+                return
+
+            response_data = response.json()
+            if response_data.get("status") != "ok":
+                result.fail(f"Botstat update did not return success: {response_data}")
+                return
+
+            self.logger.log_operation("Botstat updated successfully")
+
+            # Fetch again and verify the updated value
+            self.logger.log_operation("Fetching botstats again to verify update")
+            response = requests.get(f"{self.base_url}/botstats")
+            if not response.ok:
+                result.fail(f"Failed to fetch botstats after update: {response.text}")
+                return
+
+            botstats_data = response.json()
+            botstats = botstats_data["botstats"]
+
+            if test_key not in botstats:
+                result.fail(f"Test key '{test_key}' not found after update")
+                return
+
+            botstat_entry = botstats[test_key]
+            if botstat_entry.get("val") != test_value_2:
+                result.fail(
+                    f"Botstat value not updated. Expected: {test_value_2}, Got: {botstat_entry.get('val')}"
+                )
+                return
+
+            self.logger.log_operation(
+                f"Botstat update verified - new value: {botstat_entry['val']}"
+            )
+
+            result.set_success("Bot statistics test completed successfully")
+
+        except Exception as e:
+            result.fail(f"Error in bot statistics test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
+    def test_cache_invalidation(self, result: TestResult):
+        """Test /allcached endpoint caching and cache invalidation."""
+        self.logger.log_operation("Starting cache invalidation test")
+
+        try:
+            fetch_times = []
+
+            # Perform 5 fetches of /allcached endpoint
+            self.logger.log_operation("Performing 5 fetches of /allcached endpoint")
+            for i in range(5):
+                start_time = time.time()
+                response = requests.get(f"{self.base_url}/allcached")
+                end_time = time.time()
+
+                if not response.ok:
+                    result.fail(f"Failed to fetch /allcached on attempt {i+1}: {response.text}")
+                    return
+
+                fetch_time = (end_time - start_time) * 1000  # Convert to milliseconds
+                fetch_times.append(fetch_time)
+                self.logger.log_operation(
+                    f"Fetch {i+1}: {fetch_time:.2f}ms"
+                )
+
+                # Validate response structure
+                all_data = response.json()
+                if not isinstance(all_data, dict) or "rounds" not in all_data:
+                    result.fail(f"Invalid response format from /allcached on attempt {i+1}")
+                    return
+
+            # Get the 5th fetch time (should be fastest, fully cached)
+            fifth_fetch_time = fetch_times[4]
+            self.logger.log_operation(
+                f"Fifth fetch time (cached): {fifth_fetch_time:.2f}ms"
+            )
+
+            # Invalidate the cache
+            self.logger.log_operation("Invalidating cache via POST /cache/invalidate")
+            invalidate_response = requests.post(f"{self.base_url}/cache/invalidate")
+            if not invalidate_response.ok:
+                result.fail(f"Failed to invalidate cache: {invalidate_response.text}")
+                return
+
+            invalidate_data = invalidate_response.json()
+            if invalidate_data.get("status") != "ok":
+                result.fail(f"Cache invalidation did not return success: {invalidate_data}")
+                return
+
+            self.logger.log_operation("Cache invalidated successfully")
+
+            # Fetch again after cache invalidation (should be slower, cache miss)
+            self.logger.log_operation("Fetching /allcached after cache invalidation")
+            start_time = time.time()
+            response = requests.get(f"{self.base_url}/allcached")
+            end_time = time.time()
+
+            if not response.ok:
+                result.fail(f"Failed to fetch /allcached after invalidation: {response.text}")
+                return
+
+            post_invalidation_time = (end_time - start_time) * 1000  # Convert to milliseconds
+            self.logger.log_operation(
+                f"Post-invalidation fetch time (cache miss): {post_invalidation_time:.2f}ms"
+            )
+
+            # Validate response structure
+            all_data = response.json()
+            if not isinstance(all_data, dict) or "rounds" not in all_data:
+                result.fail("Invalid response format from /allcached after invalidation")
+                return
+
+            # Verify that post-invalidation fetch is slower than the 5th cached fetch
+            # Note: This test may not always pass if memcache is not enabled or if
+            # the dataset is very small. We'll log a warning instead of failing.
+            if post_invalidation_time > fifth_fetch_time:
+                self.logger.log_operation(
+                    f"✓ Cache working as expected: post-invalidation fetch ({post_invalidation_time:.2f}ms) "
+                    f"is slower than cached fetch ({fifth_fetch_time:.2f}ms)"
+                )
+            else:
+                self.logger.log_operation(
+                    f"Note: Post-invalidation fetch ({post_invalidation_time:.2f}ms) was not slower than "
+                    f"cached fetch ({fifth_fetch_time:.2f}ms). This may indicate memcache is not enabled "
+                    f"or dataset is very small."
+                )
+
+            # Perform one more fetch to verify cache is working again
+            self.logger.log_operation("Performing final fetch to verify cache repopulated")
+            start_time = time.time()
+            response = requests.get(f"{self.base_url}/allcached")
+            end_time = time.time()
+
+            if not response.ok:
+                result.fail(f"Failed to fetch /allcached on final attempt: {response.text}")
+                return
+
+            final_fetch_time = (end_time - start_time) * 1000
+            self.logger.log_operation(
+                f"Final fetch time (should be cached again): {final_fetch_time:.2f}ms"
+            )
+
+            result.set_success("Cache invalidation test completed successfully")
+
+        except Exception as e:
+            result.fail(f"Error in cache invalidation test: {str(e)}")
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
@@ -2513,13 +3047,16 @@ class TestRunner:
             ),
             ("Answer Verification", self.test_answer_verification),
             ("Solver Assignments", self.test_solver_assignments),
+            ("Solve Clears Location and Solvers", self.test_solve_clears_location_and_solvers),
             ("Solver Reassignment", self.test_solver_reassignment),
             ("Activity Tracking", self.test_activity_tracking),
             ("Solver History", self.test_solver_history),
             ("Sheetcount", self.test_sheetcount),
             ("Tagging", self.test_tagging),
-            ("Puzzle Deletion", self.test_puzzle_deletion),
             ("API Endpoints", self.test_api_endpoints),
+            ("Bot Statistics", self.test_bot_statistics),
+            ("Cache Invalidation", self.test_cache_invalidation),
+            ("Puzzle Deletion", self.test_puzzle_deletion),
         ]
 
         for name, test in tests:
