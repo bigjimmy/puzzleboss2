@@ -59,8 +59,10 @@
                         :currpuzz="currPuzz"
                         :solvers="solvers"
                         :showtags="showTags"
+                        :initialpuzz="initialPuzz"
                         @toggle-body="toggleBody"
                         @please-fetch = "fetchData"
+                        @route-shown="clearInitPuzz"
                     ></round>
                 </div>
                 <div id = "roundshidden" v-if = "roundsSortedHidden.length > 0">
@@ -79,8 +81,10 @@
                         :sortpuzzles="sortPuzzles"
                         :uid="uid"
                         :currpuzz="currPuzz"
+                        :initialpuzz="initialPuzz"
                         :showtags="showTags"
                         @toggle-body="toggleBody"
+                        @route-shown="clearInitPuzz"
                     ></round>
                 </div>
             </div>
@@ -160,9 +164,9 @@
                 // indicator (staleTimer, errorTimer, updateState).
                 //
 
-                const data = ref([])
-                const showBody = ref([])
-                const highlight = ref([])
+                const data = ref([]);
+                const showBody = ref([]);
+                const highlight = ref([]);
                 const puzzleFilterKeys = ref(
                     Consts.statuses.slice()
                 );
@@ -174,9 +178,9 @@
 
                 const spoilAll = ref(false);
                 const sortPuzzles = ref(true);
-                const roundStats = ref({})
-                const puzzleStats = ref({})
-                const time = ref("")
+                const roundStats = ref({});
+                const puzzleStats = ref({});
+                const time = ref("");
 
                 const staleTimer = ref(null);
                 const errorTimer = ref(null);
@@ -190,6 +194,8 @@
                 const solveSoundRef = useTemplateRef('solveSound');
 
                 const solvers = ref(null);
+
+                const initialPuzz = ref(null);
 
                 //
                 // Get authenticated username (with test mode support)
@@ -338,6 +344,12 @@
 
                 onMounted(async () => {
 
+                    const params = new URLSearchParams(document.location.search);
+                    const puzz = parseInt(params.get("puzzle"), 10);
+                    const what = params.get("what");
+
+                    if (!isNaN(puzz) && what) initialPuzz.value = { puzz, what };
+
                     //
                     // Load filters from local storage if present.
                     //
@@ -369,6 +381,11 @@
                     await fetchData(true);
                     setInterval(fetchData, 5000);
                 });
+
+                function clearInitPuzz() {
+                    // clear tags for reload
+                    window.history.pushState("", "", "/");
+                }
 
                 //
                 // This function is called from the Round component via the
@@ -456,14 +473,14 @@
                     data,
                     showBody, highlight, spoilAll, showControls, showTags,
                     puzzleFilter, puzzleFilterKeys, sortPuzzles,
-                    toggleBody, toggleKey,
+                    toggleBody, toggleKey, clearInitPuzz,
                     applyShow, applyShowFilter,
                     roundStats,
                     puzzleStats,
                     time, updateState,
                     fetchData,
                     useColumns, scrollSpeed,
-                    uid, username, currPuzz,
+                    uid, username, initialPuzz, currPuzz,
                     solvers,
                     tags, tagFilter
                 }
