@@ -1,5 +1,6 @@
+const statuses = ['WTF', 'Critical', 'Needs eyes', 'Being worked', 'Under control', 'New', 'Grind', 'Waiting for HQ', 'Solved', 'Unnecessary'];
 export default {
-    "statuses": ['WTF', 'Critical', 'Needs eyes', 'Being worked', 'Under control', 'New', 'Grind', 'Waiting for HQ', 'Solved', 'Unnecessary'],
+    statuses,
 
     //
     // Must be in the same order as statuses.
@@ -17,6 +18,32 @@ export default {
                (metas.filter(puzzle => puzzle.status !== 'Solved').length === 0);
         
     },
+
+    //
+    // List of available settings.
+    //
+
+    "settings": ["puzzleFilter", "useColumns", "scrollSpeed", "sortPuzzles", "showControls", "spoilAll", "showTags"],
+
+    //
+    // Default values of available settings.
+    //
+
+    "defaults": [
+        // puzzleFilter
+        Object.fromEntries(statuses.map((status) => [status, true])),
+        // useColumns
+        false,
+        // scrollSpeed
+        1,
+        // sortPuzzles
+        true,
+        // showControls
+        false,
+        // spoilAll
+        false,
+        // showTags
+        true],
 
     "api": ".",
 }
