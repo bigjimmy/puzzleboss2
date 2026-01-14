@@ -1,4 +1,5 @@
 import ldap
+import ldap.modlist
 import json
 import requests
 from pblib import *
