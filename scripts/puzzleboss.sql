@@ -117,6 +117,8 @@ LOCK TABLES `config` WRITE;
 INSERT INTO `config` VALUES
   ('ACCT_URI', 'https://yourdomain.org/account'),
   ('BIN_URI', 'https://yourdomain.org/pb'),
+  ('BIGJIMMY_ABANDONED_STATUS', 'Needs eyes'),
+  ('BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', '10'),
   ('BIGJIMMY_AUTOASSIGN', 'false'),
   ('BIGJIMMY_PUZZLEPAUSETIME', '1'),
   ('BIGJIMMY_QUOTAFAIL_DELAY', '5'),

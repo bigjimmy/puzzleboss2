@@ -1,8 +1,6 @@
 from pblib import *
 import socket
-import sys
 import json
-import re
 
 
 def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
@@ -14,7 +12,7 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
 
     topic = "\nPuzzle: %s \nRound: %s\n" % (puzname, roundname)
     topic += "Puzzle URL: %s \nSheet: %s\n" % (puzuri, puzdocuri)
-    
+
     # Pass the full puzzle name with emojis directly to Discord
     debug_log(4, "Creating Discord channel with name: %s" % puzname)
     retval = call_puzzcord("create_json %s %s" % (puzname, topic))

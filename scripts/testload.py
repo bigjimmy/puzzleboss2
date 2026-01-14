@@ -5,12 +5,14 @@ import requests
 import sys
 from typing import Optional
 
+
 def get_user_input(prompt: str, default: Optional[str] = None) -> str:
     """Get user input with an optional default value."""
     if default:
         response = input(f"{prompt} [{default}]: ").strip()
         return response if response else default
     return input(f"{prompt}: ").strip()
+
 
 def get_yes_no_input(prompt: str, default: str = "no") -> bool:
     """Get a yes/no response from the user."""
@@ -22,82 +24,84 @@ def get_yes_no_input(prompt: str, default: str = "no") -> bool:
             return False
         print("Please answer 'yes' or 'no'")
 
+
 def confirm_destructive_action(confirmation_word: str) -> bool:
     """Request user confirmation for destructive actions."""
-    user_input = input(f"\nTo confirm, please enter the word {confirmation_word}: ").strip()
+    user_input = input(
+        f"\nTo confirm, please enter the word {confirmation_word}: "
+    ).strip()
     return user_input == confirmation_word
+
 
 def create_test_solvers(base_url: str) -> bool:
     """Create test solver accounts."""
     print("\nCreating test solvers...")
-    
+
     # Create 25 test solvers
     for i in range(1, 26):
         response = requests.post(
-            f"{base_url}/solvers",
-            json={"name": f"benoc{i}", "fullname": "user test"}
+            f"{base_url}/solvers", json={"name": f"benoc{i}", "fullname": "user test"}
         )
         if not response.ok:
             print(f"Failed to create test solver benoc{i}: {response.text}")
             return False
-            
+
     # Create main test solver
     response = requests.post(
-        f"{base_url}/solvers",
-        json={"name": "benoc", "fullname": "Benjamin OConnor"}
+        f"{base_url}/solvers", json={"name": "benoc", "fullname": "Benjamin OConnor"}
     )
     if not response.ok:
         print(f"Failed to create main test solver: {response.text}")
         return False
-        
+
     return True
 
-def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round: int) -> bool:
+
+def create_rounds_and_puzzles(
+    base_url: str, num_rounds: int, puzzles_per_round: int
+) -> bool:
     """Create test rounds and puzzles."""
     print("\nCreating rounds...")
-    
+
     # Get existing rounds
     response = requests.get(f"{base_url}/rounds")
     if not response.ok:
         print(f"Failed to get existing rounds: {response.text}")
         return False
-        
-    existing_rounds = {round['name'] for round in response.json()['rounds']}
-    
+
+    existing_rounds = {round["name"] for round in response.json()["rounds"]}
+
     # Create rounds that don't exist
     for i in range(1, num_rounds + 1):
         round_name = f"Round{i}"
         if round_name in existing_rounds:
             print(f"Round {i} already exists, skipping...")
             continue
-            
+
         print(f"Creating Round {i}...", end="", flush=True)
-        response = requests.post(
-            f"{base_url}/rounds",
-            json={"name": round_name}
-        )
+        response = requests.post(f"{base_url}/rounds", json={"name": round_name})
         if not response.ok:
             print(f"\nFailed to create Round{i}: {response.text}")
             return False
         print(" Done")
-            
+
     print("\nCreating puzzles...")
-    
+
     # Get all rounds again to have their IDs
     response = requests.get(f"{base_url}/rounds")
     if not response.ok:
         print(f"Failed to get rounds: {response.text}")
         return False
-        
-    rounds = {round['name']: round['id'] for round in response.json()['rounds']}
-    
+
+    rounds = {round["name"]: round["id"] for round in response.json()["rounds"]}
+
     # Create puzzles for each round
     for r in range(1, num_rounds + 1):
         round_name = f"Round{r}"
         if round_name not in rounds:
             print(f"\nSkipping puzzles for Round {r} as it doesn't exist")
             continue
-            
+
         print(f"\nCreating puzzles for Round {r}:")
         for p in range(1, puzzles_per_round + 1):
             print(f"  Creating puzzle {p}/{puzzles_per_round}...", end="", flush=True)
@@ -107,16 +111,17 @@ def create_rounds_and_puzzles(base_url: str, num_rounds: int, puzzles_per_round:
                     "puzzle": {
                         "name": f"R{r}Puzz{p}",
                         "round_id": str(rounds[round_name]),
-                        "puzzle_uri": "http://www.google.com"
+                        "puzzle_uri": "http://www.google.com",
                     }
-                }
+                },
             )
             if not response.ok:
                 print(f"\nFailed to create puzzle R{r}Puzz{p}: {response.text}")
                 return False
             print(" Done")
-                
+
     return True
+
 
 def run_noninteractive(base_url: str, num_rounds: int, puzzles_per_round: int) -> bool:
     """Run test data loading non-interactively. Returns True on success."""
@@ -126,11 +131,11 @@ def run_noninteractive(base_url: str, num_rounds: int, puzzles_per_round: int) -
     print(f"Rounds: {num_rounds}")
     print(f"Puzzles per round: {puzzles_per_round}")
     print()
-    
+
     if not create_rounds_and_puzzles(base_url, num_rounds, puzzles_per_round):
         print("\nFailed to create rounds and puzzles.")
         return False
-    
+
     print("\nTest data creation completed successfully!")
     return True
 
@@ -138,65 +143,83 @@ def run_noninteractive(base_url: str, num_rounds: int, puzzles_per_round: int) -
 def run_interactive():
     """Run test data loading interactively with user prompts."""
     base_url = "http://localhost:5000"
-    
+
     print("PuzzleBoss Test Data Loader")
     print("==========================\n")
-    
+
     # Get configuration from user
     num_rounds = int(get_user_input("Enter number of rounds", "10"))
     puzzles_per_round = int(get_user_input("Enter number of puzzles per round", "15"))
     create_solvers = get_yes_no_input(
         "\nWARNING: Create test solvers? This will DELETE existing solvers! Only do this if you know what you're doing",
-        "no"
+        "no",
     )
-    
+
     # Additional confirmation for test solvers
     if create_solvers and not confirm_destructive_action("DESTROYSOLVERS"):
         print("\nTest solver creation cancelled.")
         create_solvers = False
-    
+
     # Confirm settings
     print("\nSettings:")
     print(f"Number of rounds: {num_rounds}")
     print(f"Puzzles per round: {puzzles_per_round}")
     print(f"Create test solvers: {'Yes' if create_solvers else 'No'}")
-    
+
     if not get_yes_no_input("\nProceed with these settings?", "no"):
         print("\nAborted.")
         return
-        
+
     # Create test solvers if requested
     if create_solvers:
         if not create_test_solvers(base_url):
             print("\nFailed to create test solvers. Aborting.")
             return
-            
+
     # Create rounds and puzzles
     if not create_rounds_and_puzzles(base_url, num_rounds, puzzles_per_round):
         print("\nFailed to create rounds and puzzles. Aborting.")
         return
-        
+
     print("\nTest data creation completed successfully!")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='PuzzleBoss Test Data Loader')
-    parser.add_argument('--rounds', '-r', type=int, default=10,
-                        help='Number of rounds to create (default: 10)')
-    parser.add_argument('--puzzles', '-p', type=int, default=15,
-                        help='Number of puzzles per round (default: 15)')
-    parser.add_argument('--api-base', '-a', default='http://localhost:5000',
-                        help='API base URL (default: http://localhost:5000)')
-    parser.add_argument('--no-interactive', '-y', action='store_true',
-                        help='Run non-interactively with provided/default settings')
-    
+    parser = argparse.ArgumentParser(description="PuzzleBoss Test Data Loader")
+    parser.add_argument(
+        "--rounds",
+        "-r",
+        type=int,
+        default=10,
+        help="Number of rounds to create (default: 10)",
+    )
+    parser.add_argument(
+        "--puzzles",
+        "-p",
+        type=int,
+        default=15,
+        help="Number of puzzles per round (default: 15)",
+    )
+    parser.add_argument(
+        "--api-base",
+        "-a",
+        default="http://localhost:5000",
+        help="API base URL (default: http://localhost:5000)",
+    )
+    parser.add_argument(
+        "--no-interactive",
+        "-y",
+        action="store_true",
+        help="Run non-interactively with provided/default settings",
+    )
+
     args = parser.parse_args()
-    
+
     if args.no_interactive:
         success = run_noninteractive(
             base_url=args.api_base,
             num_rounds=args.rounds,
-            puzzles_per_round=args.puzzles
+            puzzles_per_round=args.puzzles,
         )
         sys.exit(0 if success else 1)
     else:
@@ -204,4 +227,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()
