@@ -33,8 +33,9 @@
     cursor: pointer;
 }
 
-#status > p{
-    margin: 0;
+#status > p, #links > p{
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
 }
 
 /*

@@ -14,9 +14,11 @@
                     {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open. Page status: </p>
                 <div :class = updateState></div>
             </div>
-            <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp;
-               tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect>
-            </p>
+            <div id="links">
+                <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp;
+                tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect>
+                </p>
+            </div>
 
             <settings v-if="settings" :s="settings" @settings-updated="updateSetting"></settings>
 
