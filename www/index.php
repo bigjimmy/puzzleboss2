@@ -160,7 +160,7 @@
                 // indicator (staleTimer, errorTimer, updateState).
                 //
 
-                const data = ref([])
+                const data = ref({rounds: []})
                 const showBody = ref([])
                 const highlight = ref([])
                 const puzzleFilterKeys = ref(
