@@ -14,7 +14,7 @@ import Consts from './consts.js';
 //
 // puzzle:
 // - "note": updates a puzzle's comments
-// - "work state": updates location and your currently solving state
+// - "workstate": updates location and your currently solving state
 // - "status": updates puzzle status (including answer, meta)
 // - "tags" (WIP): updates puzzle tags
 //
@@ -35,17 +35,18 @@ export default {
         
         // whether the puzzle is a meta (status)
         ismeta: Number,
-        // list of statuses, or "puzzle filter keys" (status)
-        pfk: Object,
         // list of solvers,
-        solvers: Object
+        solvers: Object,
+
+        // the initially opened dialog
+        initialpuzz: Object
     },
     computed: {
         //
         // Computes the icon to be displayed.
         //
         icon() {
-            if (this.type === 'work state') {
+            if (this.type === 'workstate') {
                 if (this.puzzle.cursolvers !== null && this.puzzle.cursolvers.length !== 0) return '👥';
                 if (this.puzzle.xyzloc !== null && this.puzzle.xyzloc.length !== 0) return '📍'
                 return '👻';
@@ -99,6 +100,12 @@ export default {
             }
 
             return desc;
+        },
+        //
+        // Return the puzzle keys.
+        //
+        pfk() {
+            return Consts.statuses;
         }
     },
     //
@@ -112,7 +119,10 @@ export default {
     // closed the modal, and should highlight the whole puzzle div to indicate
     // to the user which puzzle they were just editing.
     //
-    emits: ['please-fetch', 'highlight-me'],
+    // route-shown is propagated to index.html and indicates that the route
+    // initially specified when the page loaded was shown.
+    //
+    emits: ['please-fetch', 'highlight-me', 'route-shown'],
     setup(props, context) {
 
         //
@@ -212,7 +222,7 @@ export default {
                 //
                 if ((props.type === 'note') || (props.type === 'comments')) {
                     stateStrA.value = props.puzzle.comments;
-                } else if (props.type === 'work state') {
+                } else if (props.type === 'workstate') {
                     stateStrA.value = props.puzzle.xyzloc;
 
                     const url = `${Consts.api}/apicall.php?&apicall=solver&apiparam1=${props.uid}`
@@ -285,7 +295,7 @@ export default {
                     what = 'comments';
                 }
 
-                if (props.type === 'work state') what = 'xyzloc';
+                if (props.type === 'workstate') what = 'xyzloc';
                 if (props.type === 'status') what = 'status';
                 if (props.type === 'tags') what = 'tags';
 
@@ -305,8 +315,7 @@ export default {
                         warning.value = "ANSWER IS BLANK!!!"
 
                     } else if (answer.value !== props.puzzle.answer && answer.value !== null) {
-                        what = 'answer';
-                        payload[what] = answer.value;
+                        payload['answer'] = answer.value;
                         emitFetch = true;
                     }
 
@@ -443,6 +452,16 @@ export default {
             showStatus, currentlyWorking, claimCurrentPuzzle
         };
     },
+    mounted() {
+        if ((this.initialpuzz) &&
+            (this.puzzle.id === this.initialpuzz.puzz) &&
+            (this.type === this.initialpuzz.what) &&
+            (!this.showModal.value)) {
+
+            this.toggleModal(false);
+            this.$emit("route-shown");
+        }
+    },
 
     template: `
     <p class="puzzle-icon" ref="puzzle-tag" :title="description" @keydown.enter="toggleModal(false)" @click.stop="toggleModal(false)" tabindex="0">{{icon}}</p>
@@ -451,10 +470,10 @@ export default {
         <p v-if="warning.length !== 0">{{warning}}</p>
 
         <!-- work state -->
-        <p v-if="puzzle.solvers !== null && type === 'work state'">All solvers: {{puzzle.solvers}}.</p>
+        <p v-if="puzzle.solvers !== null && type === 'workstate'">All solvers: {{puzzle.solvers}}.</p>
                 <p v-if="currentlyWorking && showStatus">You are currently working on this puzzle.</p>
         <p v-if="(!currentlyWorking) && showStatus">You are not marked as currently working on this puzzle. Would you like to be? <button @click="claimCurrentPuzzle">Yes</button></p>
-        <p v-if="type === 'work state'">Location: <input ref="modal-input" v-model="stateStrA"></input></p>
+        <p v-if="type === 'workstate'">Location: <input ref="modal-input" v-model="stateStrA"></input></p>
 
         <!-- note/comments -->
         <p v-if="type === 'note' || type === 'comments'"><textarea ref="modal-input" v-model="stateStrA" cols="40" rows="4"></textarea></p>
