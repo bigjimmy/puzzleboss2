@@ -208,6 +208,10 @@ try {
                     "type" => "gauge",
                     "description" => "Number of team members currently active in voice OR active in (text OR Sheets) in the last 15 minutes",
                 ),
+                "puzzcord_members_active_in_person" => array(
+                    "type" => "gauge",
+                    "description" => "Number of in-person team members currently active in voice OR active in (text OR Sheets) in the last 15 minutes",
+                ),
                 "puzzcord_messages_per_minute" => array(
                     "type" => "gauge",
                     "description" => "Discord messages per minute",
