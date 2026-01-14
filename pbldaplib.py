@@ -41,12 +41,14 @@ def delete_user(username):
     try:
         ldapconn.delete_s(userdn)
         debug_log(3, "user %s deleted from LDAP" % username)
+    except ldap.NO_SUCH_OBJECT:
+        # User doesn't exist in LDAP - that's OK, they're already gone
+        debug_log(3, "user %s not found in LDAP (already deleted)" % username)
     except Exception as e:
         errmsg = "LDAP:" + str(e)
         debug_log(
             2,
-            "Exception deleting user %s from LDAP (already gone?): %s"
-            % (username, errmsg),
+            "Error deleting user %s from LDAP: %s" % (username, errmsg),
         )
 
     # delete from google
@@ -55,12 +57,16 @@ def delete_user(username):
         delete_google_user(username)
         debug_log(3, "user %s deleted from google domain" % username)
     except Exception as e:
-        errmsg = errmsg + " GOOGLE:" + str(e)
-        debug_log(
-            2,
-            "Exception deleting user %s from google (already gone?): %s"
-            % (username, errmsg),
-        )
+        # Check if this is a "not found" error (user already deleted)
+        error_str = str(e)
+        if "404" in error_str or "notFound" in error_str or "does not exist" in error_str:
+            debug_log(3, "user %s not found in Google (already deleted)" % username)
+        else:
+            errmsg = errmsg + (" " if errmsg else "") + "GOOGLE:" + error_str
+            debug_log(
+                2,
+                "Error deleting user %s from Google: %s" % (username, error_str),
+            )
 
     if errmsg == "":
         return "OK"
