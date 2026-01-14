@@ -35,8 +35,6 @@ export default {
         
         // whether the puzzle is a meta (status)
         ismeta: Number,
-        // list of statuses, or "puzzle filter keys" (status)
-        pfk: Object,
         // list of solvers,
         solvers: Object,
 
@@ -102,6 +100,12 @@ export default {
             }
 
             return desc;
+        },
+        //
+        // Return the puzzle keys.
+        //
+        pfk() {
+            return Consts.statuses;
         }
     },
     //
@@ -311,8 +315,7 @@ export default {
                         warning.value = "ANSWER IS BLANK!!!"
 
                     } else if (answer.value !== props.puzzle.answer && answer.value !== null) {
-                        what = 'answer';
-                        payload[what] = answer.value;
+                        payload['answer'] = answer.value;
                         emitFetch = true;
                     }
 

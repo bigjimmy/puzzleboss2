@@ -15,53 +15,27 @@
                 <div :class = updateState></div>
             </div>
             <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp;
-               tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect> &nbsp; &nbsp; &nbsp;
-               <button @click="showControls = !showControls">{{showControls ? 'Hide ' : 'Show '}}all controls</button>
+               tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect>
             </p>
 
-            <div v-if="showControls" id= "controls"> 
-            <div>
-                <button @click="applyShow(false)">Hide All Rounds</button>
-                <button @click="applyShow(true)">Show All Rounds</button>
-            </div>
-            <div>
-                Show puzzles:
-                <div
-                    v-for="key in puzzleFilterKeys"
-                    class="filter"
-                    @click="toggleKey(key)"
-                    >
-                    {{key}} <input type="checkbox" v-model="puzzleFilter[key]"/>
-                </div>
-                <button @click="applyShowFilter(false)">Hide All Puzzles</button>
-                <button @click="applyShowFilter(true)">Show All Puzzles</button>
-            </div>
-            <div>
-                <p>Spoil all puzzles: <input type="checkbox" v-model="spoilAll" /> | Sort puzzles by status: <input type="checkbox" v-model="sortPuzzles"/> | Show tags: <input type="checkbox" v-model="showTags" /> </p> 
-            </div>
-            </div>
+            <settings v-if="settings" :s="settings" @settings-updated="updateSetting"></settings>
 
             <div id = "allrounds" :class = "{'usecolumns': useColumns}">
                 <div id = "rounds" :class = "{'usecolumns': useColumns}">
                     <round
                         v-for="round in roundsSorted"
                         :round="round"
-                        :spoil="spoilAll"
+                        :settings="settings"
                         :showbody="showBody[round.id]"
                         :highlighted="highlight[round.id]"
                         :tagfilter="tagFilter"
-                        :puzzlefilter="puzzleFilter"
-                        :pfk="puzzleFilterKeys"
                         :key="round.id"
-                        :scrollspeed="scrollSpeed"
                         :uid="uid"
-                        :sortpuzzles="sortPuzzles"
                         :currpuzz="currPuzz"
                         :solvers="solvers"
-                        :showtags="showTags"
                         :initialpuzz="initialPuzz"
                         @toggle-body="toggleBody"
-                        @please-fetch = "fetchData"
+                        @please-fetch="fetchData"
                         @route-shown="clearInitPuzz"
                     ></round>
                 </div>
@@ -70,29 +44,22 @@
                     <round
                         v-for="round in roundsSortedHidden"
                         :round="round"
-                        :spoil="spoilAll"
+                        :settings="settings"
                         :showbody="showBody[round.id]"
                         :highlighted="highlight[round.id]"
                         :tagfilter="tagFilter"
-                        :puzzlefilter="puzzleFilter"
                         :key="round.id"
-                        :pfk="puzzleFilterKeys"
-                        :scrollspeed="scrollSpeed"
-                        :sortpuzzles="sortPuzzles"
                         :uid="uid"
                         :currpuzz="currPuzz"
                         :initialpuzz="initialPuzz"
-                        :showtags="showTags"
                         @toggle-body="toggleBody"
+                        @please-fetch="fetchData"
                         @route-shown="clearInitPuzz"
                     ></round>
                 </div>
             </div>
 
             <div>
-                <h4>Advanced Settings</h4>
-                <p>Use columns display (fixed-height, scroll-to-right) <input type="checkbox" v-model="useColumns"></input></p>
-                <p>Scroll speed (default 1) <input type="number" v-model="scrollSpeed" min="1"></input></p>
                 <solvesound ref="solveSound"></solvesound>
             </div>
 
@@ -112,12 +79,14 @@
         import solvesound from './solve-sound.js';
         import Consts from './consts.js';
         import tagselect from './tag-select.js';
+        import Settings from './settings.js';
 
         createApp({
             components: {
                 Round,
                 solvesound,
                 tagselect,
+                Settings,
             },
             computed: {
                 
@@ -137,7 +106,7 @@
                     if(this.data.rounds === undefined) return []
 
                     return [...this.data.rounds].filter((round) => !this.showBody[round.id]);
-                }
+                },
             },
             setup() {
 
@@ -165,19 +134,10 @@
                 //
 
                 const data = ref([]);
+                const settings = ref(null);
                 const showBody = ref([]);
                 const highlight = ref([]);
-                const puzzleFilterKeys = ref(
-                    Consts.statuses.slice()
-                );
-                const puzzleFilter = ref(
-                    Object.fromEntries(Consts.statuses.map((status) => [status, true]))
-                );
-                const showControls = ref(false);
-                const showTags = ref(true);
 
-                const spoilAll = ref(false);
-                const sortPuzzles = ref(true);
                 const roundStats = ref({});
                 const puzzleStats = ref({});
                 const time = ref("");
@@ -185,17 +145,11 @@
                 const staleTimer = ref(null);
                 const errorTimer = ref(null);
                 const updateState = ref("circle stale");
-
-                const useColumns = ref(true);
-                const scrollSpeed = ref(1);
                 
                 const currPuzz = ref("0");
+                const initialPuzz = ref(null);
 
                 const solveSoundRef = useTemplateRef('solveSound');
-
-                const solvers = ref(null);
-
-                const initialPuzz = ref(null);
 
                 //
                 // Get authenticated username (with test mode support)
@@ -206,6 +160,7 @@
                 echo "const username = ref(\"" . $auth_solver->name . "\");";
                 ?>
                 const uid = ref(<?php echo $auth_solver->id; ?>);
+                const solvers = ref(null);
 
                 const tags = ref([]);
                 const tagFilter = ref("");
@@ -344,6 +299,14 @@
 
                 onMounted(async () => {
 
+                    //
+                    // Load modal to pop from route if available.
+                    //
+                    // N.B. This occurs before we fetch data, meaning that it
+                    //      is okay to reference this prop in the mounted()
+                    //      call of the children, because puzzles have not yet
+                    //      mounted.
+                    //
                     const params = new URLSearchParams(document.location.search);
                     const puzz = parseInt(params.get("puzzle"), 10);
                     const what = params.get("what");
@@ -353,30 +316,25 @@
                     //
                     // Load filters from local storage if present.
                     //
+                    let s = localStorage.getItem("settings");
+                    if (s != null && s !== undefined) {
+                        s = JSON.parse(s);
+                    } else {
+                        s = {};
+                    }
 
-                    const pf = localStorage.getItem("puzzleFilter");
-                    if (pf !== null && pf !== undefined) puzzleFilter.value = JSON.parse(pf);
+                    //
+                    // Add defaults if new settings have been introduced.
+                    //
+                    Consts.settings.forEach((setting, index) => {
+                        if(s[setting] === null || s[setting] === undefined)
+                            s[setting] = structuredClone(Consts.defaults[index]);
+                    });
+
+                    settings.value = s;
 
                     const sb = localStorage.getItem("showBody");
                     if (sb !== null && sb !== undefined) showBody.value = JSON.parse(sb);
-
-                    const uc = localStorage.getItem("useColumns");
-                    if (uc !== null && uc !== undefined) useColumns.value = JSON.parse(uc);
-
-                    const ss = localStorage.getItem("scrollSpeed");
-                    if (ss !== null && ss !== undefined) scrollSpeed.value = JSON.parse(ss);
-
-                    const sp = localStorage.getItem("sortPuzzles");
-                    if (sp !== null && sp !== undefined) sortPuzzles.value = JSON.parse(sp);
-
-                    const sc = localStorage.getItem("showControls");
-                    if (sc !== null && sc !== undefined) showControls.value = JSON.parse(sc);
-
-                    const sa = localStorage.getItem("spoilAll");
-                    if (sa !== null && sa !== undefined) spoilAll.value = JSON.parse(sa);
-
-                    const st = localStorage.getItem("showTags");
-                    if (st !== null && st !== undefined) showTags.value = JSON.parse(st);
 
                     await fetchData(true);
                     setInterval(fetchData, 5000);
@@ -401,29 +359,11 @@
                 }
 
                 //
-                // This function toggles the filters for a given key (i.e., 
-                // a status of puzzles).
-                //
-                function toggleKey(k) {
-                    puzzleFilter.value[k] = !puzzleFilter.value[k];
-                }
-                
-                //
                 // This function implements hide/show all functionality for
                 // rounds by filling the showBody array as appropriate.
                 //
                 function applyShow(which) {
                     showBody.value = Array(showBody.value.length).fill(which);
-                }
-
-                //
-                // This function implements hide/show all functionality for
-                // puzzles by filling the puzzleFilter object as appropriate.
-                //
-                function applyShowFilter(which) {
-                    Object.keys(puzzleFilter.value).forEach((key) => {
-                        puzzleFilter.value[key] = which;
-                    });
                 }
 
                 //
@@ -434,6 +374,15 @@
                 }
 
                 //
+                // This function updates settings and persists the
+                // update to localStorage.
+                //
+                function updateSetting(s, value) {
+                    settings.value[s] = value;
+                    persist("settings", settings.value);
+                }
+
+                //
                 // Persist the filters across page reloads.
                 //
 
@@ -441,48 +390,15 @@
                     persist("showBody", update);
                 });
 
-                watch(puzzleFilter, (update) => {
-                    persist("puzzleFilter", update);
-                }, {'deep': true});
-
-                watch(useColumns, (update) => {
-                    persist("useColumns", update);
-                });
-
-                watch(scrollSpeed, (update) => {
-                    persist("scrollSpeed", update);
-                });
-
-                watch(sortPuzzles, (update) => {
-                    persist("sortPuzzles", update);
-                });
-
-                watch(showControls, (update) => {
-                    persist("showControls", update);
-                });
-
-                watch(spoilAll, (update) => {
-                    persist("spoilAll", update);
-                });
-
-                watch(showTags, (update) => {
-                    persist("showTags", update);
-                });
-
                 return {
                     data,
-                    showBody, highlight, spoilAll, showControls, showTags,
-                    puzzleFilter, puzzleFilterKeys, sortPuzzles,
-                    toggleBody, toggleKey, clearInitPuzz,
-                    applyShow, applyShowFilter,
-                    roundStats,
-                    puzzleStats,
-                    time, updateState,
-                    fetchData,
-                    useColumns, scrollSpeed,
-                    uid, username, initialPuzz, currPuzz,
-                    solvers,
-                    tags, tagFilter
+                    showBody, highlight, toggleBody,
+                    roundStats, puzzleStats,
+                    fetchData, time, updateState,
+                    uid, username, tags, solvers,
+                    currPuzz, initialPuzz, clearInitPuzz,
+                    tags, tagFilter,
+                    settings, updateSetting
                 }
             },
         }).mount('#main');

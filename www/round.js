@@ -1,22 +1,17 @@
-import { ref, watch, watchEffect } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
+import { ref, watchEffect } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
 import AddGeneric from './add-generic.js'
 import Consts from './consts.js'
 
 export default {
     props: {
       round: Object,
+      settings: Object,
       showbody: Boolean,
       tagfilter: String,
-      puzzlefilter: Object,
       highlighted: Boolean,
-      pfk: Object,
-      scrollspeed: Number,
-      sortpuzzles: Boolean,
       currpuzz: String,
       uid: Number,
       solvers: Object,
-      spoil: Boolean,
-      showtags: Boolean,
       initialpuzz: Object,
     },
     emits: ['toggle-body', 'please-fetch', 'route-shown'],
@@ -27,10 +22,10 @@ export default {
         // current filters. 
         //
         filteredPuzzles() {
-            const fp = this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status])
+            const fp = this.round.puzzles.filter(puzzle => this.settings.puzzleFilter[puzzle.status])
                                          .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter)));
 
-            if(!this.sortpuzzles) return fp;
+            if(!this.settings.sortPuzzles) return fp;
 
             function pri(puzzle) {
                 if (puzzle.ismeta) return -1;
@@ -49,7 +44,7 @@ export default {
         //
         hiddenCount() {
             return this.round.puzzles.length - 
-                this.round.puzzles.filter(puzzle => this.puzzlefilter[puzzle.status])
+                this.round.puzzles.filter(puzzle => this.settings.puzzleFilter[puzzle.status])
                                   .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter))).length;
         },
 
@@ -115,12 +110,12 @@ export default {
             if (delay != 0) {
                 scrolling.value = setTimeout(() => {
                     scrolling.value = setInterval(() => {
-                        ct.scrollLeft += props.scrollspeed;
+                        ct.scrollLeft += props.settings.scrollSpeed;
                     }, 10);
                 }, delay);
             } else {
                 scrolling.value = setInterval(() => {
-                    ct.scrollLeft += props.scrollspeed;
+                    ct.scrollLeft += props.settings.scrollSpeed;
                 }, 10);
             }
         }
@@ -174,21 +169,21 @@ export default {
             <h3 @mouseover="scroll($event, 0)" @mouseout="stopscroll">{{round.name}}</h3>
 
             <!-- spoiled layout -->
-            <p v-if="spoil">({{solved}} solved / {{open}} open)</p>
-            <div class="round-header-icons" v-if="spoil">
+            <p v-if="settings.spoilAll">({{solved}} solved / {{open}} open)</p>
+            <div class="round-header-icons" v-if="settings.spoilAll">
                 <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
                 <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
             </div>
 
             <!-- unspoiled layout -->
-            <div class="round-header-column" v-if="!spoil">
+            <div class="round-header-column" v-if="!settings.spoilAll">
                 <p>({{solved}} solved / {{open}} open)</p>
                 <div class="round-header-icons">
                     <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
                     <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
                 </div>
             </div>
-            <button v-if="showbody && !spoil" @click.stop="toggleSpoil">{{ spoilRound ? 'Hide' : 'Show' }} Spoilers</button>
+            <button v-if="showbody && !settings.spoilAll" @click.stop="toggleSpoil">{{ spoilRound ? 'Hide' : 'Show' }} Spoilers</button>
         </div>
         <div :class = "{'round-body': true, hiding: !showbody}">
             <div
@@ -196,7 +191,7 @@ export default {
                 :key='puzzle.id'
                 :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] ? ' ' + highlightedPuzzle[puzzle.id] : '')">
                 <div class="puzzle-icons">
-                    <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' :pfk='pfk' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers"></AddGeneric>
+                    <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers"></AddGeneric>
                     <AddGeneric type="workstate" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                     <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                     <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">📊</a></p>
@@ -212,7 +207,7 @@ export default {
 
                     <em>{{ puzzle.name === currpuzz ?
                                'CURRENT PUZZLE'.padStart(16) : 
-                                ( showtags ? 
+                                ( settings.showTags ? 
                                      (puzzle.tags ? puzzle.tags.padStart(16) : '' )
                                      : '') }}</em>
                 </p>
