@@ -305,9 +305,8 @@ export default {
 
                 //
                 // Solved status updates have special handling - we verify the
-                // answer is not blank, and then we update the *answer property
-                // only*. The database handles updating the status to Solved
-                // for us.
+                // answer is not blank, and then POST to the /answer endpoint
+                // which automatically marks the puzzle as Solved.
                 //
                 if (props.type === 'status' && stateStrA.value === 'Solved') {
                     if (answer.value === '') {
@@ -315,8 +314,18 @@ export default {
                         warning.value = "ANSWER IS BLANK!!!"
 
                     } else if (answer.value !== props.puzzle.answer && answer.value !== null) {
-                        payload['answer'] = answer.value;
-                        emitFetch = true;
+                        const answerUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=answer`;
+                        try {
+                            await fetch(answerUrl, {
+                                method: 'POST',
+                                body: JSON.stringify({ 'answer': answer.value }),
+                            });
+                            context.emit('please-fetch');
+                        } catch (e) {
+                            warning.value = "failed to POST; check devtools";
+                            console.log(e);
+                            showModal.value = true;
+                        }
                     }
 
                 //
