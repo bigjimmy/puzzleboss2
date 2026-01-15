@@ -16,7 +16,7 @@ import Consts from './consts.js';
 // - "note": updates a puzzle's comments
 // - "workstate": updates location and your currently solving state
 // - "status": updates puzzle status (including answer, meta)
-// - "tags" (WIP): updates puzzle tags
+// - "tags": updates puzzle tags
 //
 
 export default {
@@ -296,7 +296,7 @@ export default {
                 }
 
                 if (props.type === 'workstate') what = 'xyzloc';
-                if (props.type === 'status') what = 'status';
+                if (props.type === 'status') what = (stateStrA.value === 'Solved') ? 'answer' : 'status';
                 if (props.type === 'tags') what = 'tags';
 
                 const url = (props.type === 'comments') ?
@@ -314,18 +314,8 @@ export default {
                         warning.value = "ANSWER IS BLANK!!!"
 
                     } else if (answer.value !== props.puzzle.answer && answer.value !== null) {
-                        const answerUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=answer`;
-                        try {
-                            await fetch(answerUrl, {
-                                method: 'POST',
-                                body: JSON.stringify({ 'answer': answer.value }),
-                            });
-                            context.emit('please-fetch');
-                        } catch (e) {
-                            warning.value = "failed to POST; check devtools";
-                            console.log(e);
-                            showModal.value = true;
-                        }
+                        payload[what] = answer.value;
+                        emitFetch = true;
                     }
 
                 //

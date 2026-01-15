@@ -213,7 +213,7 @@ export default {
                 </p>
                 <p 
                     v-if = "puzzle.answer !== null"
-                    :class = "{'answer': true, 'spoil': spoil || spoilRound, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
+                    :class = "{'answer': true, 'spoil': settings.spoilAll || spoilRound, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
                     {{ puzzle.answer.padStart(16) }}
                 </p>
             </div>
