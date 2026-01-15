@@ -344,7 +344,7 @@
 
                 function clearInitPuzz() {
                     // clear tags for reload
-                    window.history.pushState("", "", "/");
+                    window.history.pushState("", "", ".");
                 }
 
                 //
