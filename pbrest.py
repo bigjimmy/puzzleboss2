@@ -1645,9 +1645,49 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             # These statuses trigger an attention announcement
             update_puzzle_part_in_db(id, part, value)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
+
+            # Add activity entry for status change
+            try:
+                conn = mysql.connection
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO activity
+                    (puzzle_id, solver_id, source, type)
+                    VALUES (%s, %s, 'puzzleboss', 'interact')
+                    """,
+                    (id, 100),
+                )
+                conn.commit()
+            except Exception:
+                debug_log(
+                    1,
+                    "Exception in logging status change in activity table for puzzle %s"
+                    % id,
+                )
         else:
             # All other valid statuses (Being worked, Unnecessary, Under control, Waiting for HQ, Grind, etc.)
             update_puzzle_part_in_db(id, part, value)
+
+            # Add activity entry for status change
+            try:
+                conn = mysql.connection
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO activity
+                    (puzzle_id, solver_id, source, type)
+                    VALUES (%s, %s, 'puzzleboss', 'interact')
+                    """,
+                    (id, 100),
+                )
+                conn.commit()
+            except Exception:
+                debug_log(
+                    1,
+                    "Exception in logging status change in activity table for puzzle %s"
+                    % id,
+                )
 
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
@@ -1659,6 +1699,27 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
 
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
+
+        # Add activity entry for location change
+        try:
+            conn = mysql.connection
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'puzzleboss', 'interact')
+                """,
+                (id, 100),
+            )
+            conn.commit()
+        except Exception:
+            debug_log(
+                1,
+                "Exception in logging xyzloc change in activity table for puzzle %s"
+                % id,
+            )
+
         if (value is not None) and (value != ""):
             chat_say_something(
                 mypuzzle["puzzle"]["chat_channel_id"],
