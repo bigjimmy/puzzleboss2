@@ -239,7 +239,7 @@ if (isset($puzzleobj->lastact->time)) {
   $actTypeDisplay = [
     'revise' => '📝 Sheet edit',
     'comment' => '📋 Puzzle info change',
-    'interact' => '👋 Assignment',
+    'interact' => '🔄 Puzzleboss change',
     'solve' => '✅ Solve',
     'create' => '🆕 Created',
     'open' => '📂 Opened',
