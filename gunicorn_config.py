@@ -10,6 +10,15 @@ Or with custom settings:
 
 import os
 
+# Import prometheus_client at module level to avoid signal handler reentrancy issues
+# If not available, child_exit will gracefully handle it
+try:
+    from prometheus_client import multiprocess
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    multiprocess = None
+
 # Server socket
 bind = "0.0.0.0:5000"
 workers = 4
@@ -48,6 +57,9 @@ def child_exit(server, worker):
     """Called when a worker exits.
     Clean up the worker's prometheus metric files.
     """
-    from prometheus_client import multiprocess
-
-    multiprocess.mark_process_dead(worker.pid)
+    if PROMETHEUS_AVAILABLE and multiprocess:
+        try:
+            multiprocess.mark_process_dead(worker.pid)
+        except Exception as e:
+            # Don't let prometheus cleanup failures crash gunicorn
+            print(f"Warning: Failed to mark prometheus process {worker.pid} as dead: {e}")
