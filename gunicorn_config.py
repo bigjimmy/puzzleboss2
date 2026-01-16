@@ -10,7 +10,17 @@ Or with custom settings:
 
 import os
 
+# Prometheus multiprocess directory - MUST be set BEFORE importing prometheus_client
+prometheus_multiproc_dir = os.environ.get("prometheus_multiproc_dir")
+if not prometheus_multiproc_dir:
+    if os.path.exists("/dev/shm"):
+        prometheus_multiproc_dir = "/dev/shm/puzzleboss_prometheus"
+    else:
+        prometheus_multiproc_dir = "/tmp/puzzleboss_prometheus"
+    os.environ["prometheus_multiproc_dir"] = prometheus_multiproc_dir
+
 # Import prometheus_client at module level to avoid signal handler reentrancy issues
+# Must be imported AFTER prometheus_multiproc_dir is set
 # If not available, child_exit will gracefully handle it
 try:
     from prometheus_client import multiprocess
@@ -22,15 +32,6 @@ except ImportError:
 # Server socket
 bind = "0.0.0.0:5000"
 workers = 4
-
-# Prometheus multiprocess directory
-prometheus_multiproc_dir = os.environ.get("prometheus_multiproc_dir")
-if not prometheus_multiproc_dir:
-    if os.path.exists("/dev/shm"):
-        prometheus_multiproc_dir = "/dev/shm/puzzleboss_prometheus"
-    else:
-        prometheus_multiproc_dir = "/tmp/puzzleboss_prometheus"
-    os.environ["prometheus_multiproc_dir"] = prometheus_multiproc_dir
 
 
 def on_starting(server):
