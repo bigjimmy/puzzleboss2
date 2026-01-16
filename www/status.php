@@ -182,7 +182,28 @@
             word-break: break-word;
             font-size: 0.85em;
         }
-        
+
+        .comment-col {
+            max-width: 300px;
+            white-space: normal;
+            word-break: break-word;
+            font-size: 0.85em;
+            vertical-align: top;
+        }
+
+        .comment-col input[type="text"] {
+            width: 200px;
+            min-width: 150px;
+        }
+
+        .comment-display {
+            margin-bottom: 4px;
+            color: #b8b8b8;
+            font-style: italic;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
         .saving {
             opacity: 0.6;
             pointer-events: none;
@@ -326,14 +347,17 @@
                     <td class="solver-col">{{ puzzle.cursolvers }}</td>
                     <td class="solver-col">{{ puzzle.solvers }}</td>
                     <td class="tags-col">{{ formatTags(puzzle.tags) }}</td>
-                    <td class="inline-form">
-                        <input type="text" 
-                               v-model="commentEdits[puzzle.id]" 
-                               :placeholder="puzzle.comments || ''"
-                               @keyup.enter="updateComment(puzzle.id)">
-                        <button @click="updateComment(puzzle.id)" :disabled="saving[puzzle.id]">
-                            {{ saving[puzzle.id] ? '...' : 'Save' }}
-                        </button>
+                    <td class="comment-col">
+                        <div v-if="puzzle.comments" class="comment-display">{{ puzzle.comments }}</div>
+                        <div class="inline-form">
+                            <input type="text"
+                                   v-model="commentEdits[puzzle.id]"
+                                   placeholder="Update comment..."
+                                   @keyup.enter="updateComment(puzzle.id)">
+                            <button @click="updateComment(puzzle.id)" :disabled="saving[puzzle.id]">
+                                {{ saving[puzzle.id] ? '...' : 'Save' }}
+                            </button>
+                        </div>
                     </td>
                     <td></td>
                 </tr>
@@ -407,14 +431,17 @@
                     <td class="solver-col">{{ puzzle.solvers }}</td>
                     <td class="tags-col">{{ formatTags(puzzle.tags) }}</td>
                     <td>{{ puzzle.xyzloc }}</td>
-                    <td class="inline-form">
-                        <input type="text" 
-                               v-model="commentEdits[puzzle.id]" 
-                               :placeholder="puzzle.comments || ''"
-                               @keyup.enter="updateComment(puzzle.id)">
-                        <button @click="updateComment(puzzle.id)" :disabled="saving[puzzle.id]">
-                            {{ saving[puzzle.id] ? '...' : 'Save' }}
-                        </button>
+                    <td class="comment-col">
+                        <div v-if="puzzle.comments" class="comment-display">{{ puzzle.comments }}</div>
+                        <div class="inline-form">
+                            <input type="text"
+                                   v-model="commentEdits[puzzle.id]"
+                                   placeholder="Update comment..."
+                                   @keyup.enter="updateComment(puzzle.id)">
+                            <button @click="updateComment(puzzle.id)" :disabled="saving[puzzle.id]">
+                                {{ saving[puzzle.id] ? '...' : 'Save' }}
+                            </button>
+                        </div>
                     </td>
                     <td></td>
                 </tr>
