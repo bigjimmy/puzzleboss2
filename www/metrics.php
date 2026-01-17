@@ -63,7 +63,12 @@ try {
     $metrics[] = "# TYPE puzzleboss_assignments_made_total counter";
     $metrics[] = "puzzleboss_assignments_made_total " . ($activity_counts->interact ?? 0);
     $metrics[] = "";
-    
+
+    $metrics[] = "# HELP puzzleboss_sheet_revisions_total Total number of sheet revisions detected";
+    $metrics[] = "# TYPE puzzleboss_sheet_revisions_total counter";
+    $metrics[] = "puzzleboss_sheet_revisions_total " . ($activity_counts->revise ?? 0);
+    $metrics[] = "";
+
     // Puzzle solve timing metrics
     $metrics[] = "# HELP puzzleboss_puzzles_solved_total Total number of unique puzzles solved";
     $metrics[] = "# TYPE puzzleboss_puzzles_solved_total counter";
