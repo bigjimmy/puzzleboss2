@@ -183,90 +183,6 @@ def check_puzzle_from_queue(threadname, q):
                 % (mypuzzle["id"], str(mypuzzlelastsheetact)),
             )
 
-            # Check for abandoned puzzles: "Being worked" with no solvers and no recent activity
-            if mypuzzle.get("status") == "Being worked":
-                cursolvers = mypuzzle.get("cursolvers")
-                if not cursolvers or not cursolvers.strip():
-                    # No current solvers, check if any activity (sheet edits, comments, assignments, tags) is stale
-                    abandoned_timeout_minutes = int(
-                        configstruct.get("BIGJIMMY_ABANDONED_TIMEOUT_MINUTES", 10)
-                    )
-                    abandoned_timeout_seconds = abandoned_timeout_minutes * 60
-                    abandoned_status = configstruct.get(
-                        "BIGJIMMY_ABANDONED_STATUS", "Needs eyes"
-                    )
-
-                    # Fetch lastact (any activity type - superset of lastsheetact)
-                    lastact = None
-                    try:
-                        lastact_response = requests.get(
-                            "%s/puzzles/%s/lastact"
-                            % (config["API"]["APIURI"], mypuzzle["id"])
-                        )
-                        lastact_data = json.loads(lastact_response.text)
-                        lastact = lastact_data.get("lastact")
-                    except Exception as e:
-                        debug_log(
-                            2,
-                            "[Thread: %s] Error fetching lastact for %s: %s"
-                            % (threadname, mypuzzle["name"], e),
-                        )
-
-                    is_abandoned = False
-                    if not lastact or not lastact.get("time"):
-                        # No activity recorded at all
-                        is_abandoned = True
-                        debug_log(
-                            3,
-                            "[Thread: %s] Puzzle %s has no activity and no solvers"
-                            % (threadname, mypuzzle["name"]),
-                        )
-                    else:
-                        try:
-                            lastact_time = datetime.datetime.strptime(
-                                lastact["time"], "%a, %d %b %Y %H:%M:%S %Z"
-                            )
-                            now = datetime.datetime.utcnow()
-                            time_since_activity = (now - lastact_time).total_seconds()
-
-                            if time_since_activity > abandoned_timeout_seconds:
-                                is_abandoned = True
-                                debug_log(
-                                    3,
-                                    "[Thread: %s] Puzzle %s inactive for %.1f min (threshold: %d), no solvers"
-                                    % (
-                                        threadname,
-                                        mypuzzle["name"],
-                                        time_since_activity / 60,
-                                        abandoned_timeout_minutes,
-                                    ),
-                                )
-                        except Exception as e:
-                            debug_log(
-                                2,
-                                "[Thread: %s] Error parsing lastact time for %s: %s"
-                                % (threadname, mypuzzle["name"], e),
-                            )
-
-                    if is_abandoned:
-                        try:
-                            requests.post(
-                                "%s/puzzles/%s/status"
-                                % (config["API"]["APIURI"], mypuzzle["id"]),
-                                json={"status": abandoned_status},
-                            )
-                            debug_log(
-                                3,
-                                "[Thread: %s] Set puzzle %s status to '%s'"
-                                % (threadname, mypuzzle["name"], abandoned_status),
-                            )
-                        except Exception as e:
-                            debug_log(
-                                1,
-                                "[Thread: %s] Error updating status for %s: %s"
-                                % (threadname, mypuzzle["name"], e),
-                            )
-
             if use_developer_metadata:
                 # DEVELOPER METADATA APPROACH: Compare unix timestamps
                 lastsheetact_ts = 0
@@ -507,6 +423,92 @@ def check_puzzle_from_queue(threadname, q):
                                             assignmentresponse.text,
                                         ),
                                     )
+
+            # Check for abandoned puzzles: "Being worked" with no solvers and no recent activity
+            # This check happens AFTER sheet activity detection to ensure new activity is recorded first
+            if mypuzzle.get("status") == "Being worked":
+                cursolvers = mypuzzle.get("cursolvers")
+                if not cursolvers or not cursolvers.strip():
+                    # No current solvers, check if any activity (sheet edits, comments, assignments, tags) is stale
+                    abandoned_timeout_minutes = int(
+                        configstruct.get("BIGJIMMY_ABANDONED_TIMEOUT_MINUTES", 10)
+                    )
+                    abandoned_timeout_seconds = abandoned_timeout_minutes * 60
+                    abandoned_status = configstruct.get(
+                        "BIGJIMMY_ABANDONED_STATUS", "Needs eyes"
+                    )
+
+                    # Fetch lastact (any activity type - superset of lastsheetact)
+                    lastact = None
+                    try:
+                        lastact_response = requests.get(
+                            "%s/puzzles/%s/lastact"
+                            % (config["API"]["APIURI"], mypuzzle["id"])
+                        )
+                        lastact_data = json.loads(lastact_response.text)
+                        lastact = lastact_data.get("lastact")
+                    except Exception as e:
+                        debug_log(
+                            2,
+                            "[Thread: %s] Error fetching lastact for %s: %s"
+                            % (threadname, mypuzzle["name"], e),
+                        )
+
+                    is_abandoned = False
+                    if not lastact or not lastact.get("time"):
+                        # No activity recorded at all - this shouldn't happen after we just checked
+                        # for sheet activity above, but if it does, don't mark as abandoned yet.
+                        # Wait for the next cycle to check again.
+                        debug_log(
+                            4,
+                            "[Thread: %s] Puzzle %s has no activity yet, will check again next cycle"
+                            % (threadname, mypuzzle["name"]),
+                        )
+                    else:
+                        try:
+                            lastact_time = datetime.datetime.strptime(
+                                lastact["time"], "%a, %d %b %Y %H:%M:%S %Z"
+                            )
+                            now = datetime.datetime.utcnow()
+                            time_since_activity = (now - lastact_time).total_seconds()
+
+                            if time_since_activity > abandoned_timeout_seconds:
+                                is_abandoned = True
+                                debug_log(
+                                    3,
+                                    "[Thread: %s] Puzzle %s inactive for %.1f min (threshold: %d), no solvers"
+                                    % (
+                                        threadname,
+                                        mypuzzle["name"],
+                                        time_since_activity / 60,
+                                        abandoned_timeout_minutes,
+                                    ),
+                                )
+                        except Exception as e:
+                            debug_log(
+                                2,
+                                "[Thread: %s] Error parsing lastact time for %s: %s"
+                                % (threadname, mypuzzle["name"], e),
+                            )
+
+                    if is_abandoned:
+                        try:
+                            requests.post(
+                                "%s/puzzles/%s/status"
+                                % (config["API"]["APIURI"], mypuzzle["id"]),
+                                json={"status": abandoned_status},
+                            )
+                            debug_log(
+                                3,
+                                "[Thread: %s] Set puzzle %s status to '%s'"
+                                % (threadname, mypuzzle["name"], abandoned_status),
+                            )
+                        except Exception as e:
+                            debug_log(
+                                1,
+                                "[Thread: %s] Error updating status for %s: %s"
+                                % (threadname, mypuzzle["name"], e),
+                            )
 
             # Log per-puzzle timing
             puzzle_elapsed = time.time() - puzzle_start_time
