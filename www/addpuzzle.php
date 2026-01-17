@@ -157,15 +157,24 @@ HTML;
   echo '</div><br><hr>';
 }
 
+// Extract puzzle name from URL parameters
+// Priority: puzzid parameter > URL extraction
 $puzzurl = isset($_GET['puzzurl']) ? $_GET['puzzurl'] : '';
-$puzzurl_parts = explode('/', $puzzurl);
-$puzzname = str_replace('-', '', ucwords(end($puzzurl_parts), '-'));
-$puzzname = sanitize_string($puzzname);
+$puzzname = isset($_GET['puzzid']) ? sanitize_string($_GET['puzzid']) : '';
+
+// If no puzzid provided, extract name from puzzurl
 if ($puzzname == '') {
-  $puzzname = isset($_GET['puzzid']) ? sanitize_string($_GET['puzzid']) : '';
-}
-if (str_contains($puzzurl, '-head/') && isset($_GET['puzzid'])) {
-  $puzzname = sanitize_string($_GET['puzzid']).$puzzname;
+  // Split URL by / and take the last segment (e.g., "save-the-queen" from URL path)
+  $puzzurl_parts = explode('/', $puzzurl);
+  // Convert kebab-case to PascalCase: "save-the-queen" -> "SaveTheQueen"
+  $puzzname = str_replace('-', '', ucwords(end($puzzurl_parts), '-'));
+  $puzzname = sanitize_string($puzzname);
+
+  // Special case: if URL contains "-head/" and puzzid is provided, prepend it
+  // (e.g., for meta puzzles in hunt structures)
+  if (str_contains($puzzurl, '-head/') && isset($_GET['puzzid'])) {
+    $puzzname = sanitize_string($_GET['puzzid']).$puzzname;
+  }
 }
 $round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
