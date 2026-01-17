@@ -38,6 +38,10 @@
   input[type="submit"] {
     font-family: inherit;
   }
+  input[type="submit"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
   .error {
     background-color: lightpink;
     padding: 10px;
@@ -47,6 +51,23 @@
     padding: 10px;
   }
   </style>
+  <script>
+  let formSubmitted = false;
+  function handleSubmit(event) {
+    if (formSubmitted) {
+      event.preventDefault();
+      return false;
+    }
+    formSubmitted = true;
+    const submitButton = event.target.querySelector('input[type="submit"]');
+    // Disable button after a brief delay to ensure form submission starts
+    setTimeout(function() {
+      submitButton.disabled = true;
+      submitButton.value = 'Submitting...';
+    }, 100);
+    return true;
+  }
+  </script>
 </head>
 <body>
 <main>
@@ -183,7 +204,7 @@ $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
 ?>
 
 <h1>Add a puzzle!</h1>
-<form action="addpuzzle.php" method="post">
+<form action="addpuzzle.php" method="post" onsubmit="return handleSubmit(event)">
   <table>
     <tr>
       <td><label for="name">Name:</label></td>
