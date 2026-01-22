@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4.7
     container_name: puzzleboss-mysql
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
@@ -13,7 +13,9 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - mysql_certs:/var/lib/mysql-certs
       - ./scripts/puzzleboss.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./scripts/setup-mysql-ssl.sh:/docker-entrypoint-initdb.d/02-setup-ssl.sh
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
@@ -21,6 +23,36 @@ services:
       retries: 5
     networks:
       - puzzleboss
+
+  # Helper service to copy SSL certificates from MySQL to shared volume
+  # Runs once at startup, then exits
+  ssl-setup:
+    image: mysql:8.4.7
+    container_name: puzzleboss-ssl-setup
+    command: >
+      bash -c "
+      echo 'Waiting for MySQL SSL certificates...';
+      sleep 5;
+      if [ -f /mysql-data/ca.pem ]; then
+        cp /mysql-data/ca.pem /certs/ca.pem;
+        cp /mysql-data/client-cert.pem /certs/client-cert.pem;
+        cp /mysql-data/client-key.pem /certs/client-key.pem;
+        chmod 644 /certs/*.pem;
+        echo 'SSL certificates copied successfully!';
+        ls -la /certs/;
+      else
+        echo 'WARNING: SSL certificates not found';
+      fi
+      "
+    volumes:
+      - mysql_data:/mysql-data:ro
+      - mysql_certs:/certs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - puzzleboss
+    restart: "no"
 
   app:
     build:
@@ -44,6 +76,8 @@ services:
       - ./gunicorn_config.py:/app/gunicorn_config.py
       - ./scripts:/app/scripts
       - ./swag:/app/swag
+      # MySQL SSL certificates
+      - mysql_certs:/var/lib/mysql-certs:ro
       # Optional: Mount custom config (uncomment to use your own puzzleboss.yaml)
       # - ./puzzleboss.yaml:/app/puzzleboss.yaml
     environment:
@@ -52,12 +86,16 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      ssl-setup:
+        condition: service_completed_successfully
     networks:
       - puzzleboss
     restart: unless-stopped
 
 volumes:
   mysql_data:
+    driver: local
+  mysql_certs:
     driver: local
 
 networks:

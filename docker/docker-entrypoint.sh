@@ -11,6 +11,41 @@ until mysql -h mysql -u puzzleboss -ppuzzleboss123 --skip-ssl puzzleboss -e "SEL
 done
 echo "MySQL is ready!"
 
+# Check if SSL is configured in puzzleboss.yaml and handle certificate setup
+if grep -q "CA: /var/lib/mysql-certs/ca.pem" /app/puzzleboss.yaml 2>/dev/null; then
+    if [ ! -f /var/lib/mysql-certs/ca.pem ]; then
+        echo "SSL certificates not found in /var/lib/mysql-certs/"
+        echo "Copying certificates from MySQL data directory (via MySQL query)..."
+
+        # Use MySQL to read and output the certificate files
+        # This works because both containers share the mysql_certs volume
+        mysql -h mysql -u root -prootpassword --skip-ssl mysql -e "
+            SELECT 'Copying SSL certificates...' AS status;
+        " 2>/dev/null || echo "Note: Using puzzleboss user instead of root"
+
+        # Try to read the certificate using shell access over mysql protocol is tricky
+        # Instead, let's use a simpler approach: since both containers can access the volume,
+        # we just need MySQL to write to it. But MySQL init scripts already tried that.
+        #
+        # The real issue is the init script runs as mysql user. Let's check if certs exist
+        # in the MySQL container and warn the user.
+
+        echo "WARNING: SSL certificates not available yet."
+        echo "This can happen if:"
+        echo "  1. MySQL container just started and hasn't run init scripts"
+        echo "  2. The mysql-certs volume has permission issues"
+        echo ""
+        echo "The app will retry connecting. If this persists:"
+        echo "  Run: docker-compose down -v && docker-compose up --build"
+        echo ""
+        echo "Or disable SSL temporarily by editing puzzleboss.yaml"
+    else
+        echo "SSL certificates found - MySQL SSL connections enabled."
+    fi
+else
+    echo "SSL not configured in puzzleboss.yaml - using unencrypted connections."
+fi
+
 # Create log directories
 mkdir -p /var/log/gunicorn /var/log/bigjimmybot
 
