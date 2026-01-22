@@ -18,6 +18,12 @@ MYSQL:
                              # For native: Change to "127.0.0.1" or your MySQL host
     PORT: 3306
     DATABASE: puzzleboss
+    # SSL Configuration (optional - comment out to disable SSL)
+    # For Docker: Uses auto-generated MySQL certs from /var/lib/mysql-certs
+    # For RDS: Download CA bundle from AWS (see CLAUDE.md)
+    SSL:
+        CA: /var/lib/mysql-certs/ca.pem  # For Docker
+        # CA: /etc/ssl/certs/rds-ca-bundle.pem  # For RDS (uncomment and download cert)
 
 API:
     APIURI: http://localhost:5000

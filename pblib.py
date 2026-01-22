@@ -74,12 +74,24 @@ def refresh_config():
 
     # Reload database config with change detection
     try:
-        db_connection = MySQLdb.connect(
-            config["MYSQL"]["HOST"],
-            config["MYSQL"]["USERNAME"],
-            config["MYSQL"]["PASSWORD"],
-            config["MYSQL"]["DATABASE"],
-        )
+        # Build connection parameters
+        connect_params = {
+            "host": config["MYSQL"]["HOST"],
+            "user": config["MYSQL"]["USERNAME"],
+            "passwd": config["MYSQL"]["PASSWORD"],
+            "db": config["MYSQL"]["DATABASE"],
+        }
+
+        # Add SSL configuration if present
+        if "SSL" in config["MYSQL"] and "CA" in config["MYSQL"]["SSL"]:
+            ssl_config = {"ca": config["MYSQL"]["SSL"]["CA"]}
+            if "CERT" in config["MYSQL"]["SSL"]:
+                ssl_config["cert"] = config["MYSQL"]["SSL"]["CERT"]
+            if "KEY" in config["MYSQL"]["SSL"]:
+                ssl_config["key"] = config["MYSQL"]["SSL"]["KEY"]
+            connect_params["ssl"] = ssl_config
+
+        db_connection = MySQLdb.connect(**connect_params)
         cursor = db_connection.cursor()
         cursor.execute("SELECT * FROM config")
         configdump = cursor.fetchall()

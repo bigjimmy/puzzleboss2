@@ -63,13 +63,24 @@ def load_config():
         yaml_config = yaml.safe_load(f)
 
     # Connect to database to get config values
-    conn = MySQLdb.connect(
-        host=yaml_config["MYSQL"]["HOST"],
-        user=yaml_config["MYSQL"]["USERNAME"],
-        passwd=yaml_config["MYSQL"]["PASSWORD"],
-        db=yaml_config["MYSQL"]["DATABASE"],
-        charset="utf8mb4",
-    )
+    connect_params = {
+        "host": yaml_config["MYSQL"]["HOST"],
+        "user": yaml_config["MYSQL"]["USERNAME"],
+        "passwd": yaml_config["MYSQL"]["PASSWORD"],
+        "db": yaml_config["MYSQL"]["DATABASE"],
+        "charset": "utf8mb4",
+    }
+
+    # Add SSL configuration if present
+    if "SSL" in yaml_config["MYSQL"] and "CA" in yaml_config["MYSQL"]["SSL"]:
+        ssl_config = {"ca": yaml_config["MYSQL"]["SSL"]["CA"]}
+        if "CERT" in yaml_config["MYSQL"]["SSL"]:
+            ssl_config["cert"] = yaml_config["MYSQL"]["SSL"]["CERT"]
+        if "KEY" in yaml_config["MYSQL"]["SSL"]:
+            ssl_config["key"] = yaml_config["MYSQL"]["SSL"]["KEY"]
+        connect_params["ssl"] = ssl_config
+
+    conn = MySQLdb.connect(**connect_params)
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT `key`, `val` FROM config")
     db_config = {row["key"]: row["val"] for row in cursor.fetchall()}
