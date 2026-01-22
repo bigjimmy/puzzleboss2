@@ -136,14 +136,10 @@ app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 app.config["MYSQL_CHARSET"] = "utf8mb4"
 
 # SSL configuration (optional)
-if "SSL" in config["MYSQL"] and "CA" in config["MYSQL"]["SSL"]:
-    ssl_config = {"ca": config["MYSQL"]["SSL"]["CA"]}
-    if "CERT" in config["MYSQL"]["SSL"]:
-        ssl_config["cert"] = config["MYSQL"]["SSL"]["CERT"]
-    if "KEY" in config["MYSQL"]["SSL"]:
-        ssl_config["key"] = config["MYSQL"]["SSL"]["KEY"]
+ssl_config = get_mysql_ssl_config(config)
+if ssl_config:
     app.config["MYSQL_CUSTOM_OPTIONS"] = {"ssl": ssl_config}
-    debug_log(3, f"MySQL SSL enabled with CA: {config['MYSQL']['SSL']['CA']}")
+    debug_log(3, f"MySQL SSL enabled with CA: {ssl_config['ca']}")
 
 mysql = MySQL(app)
 api = Api(app)

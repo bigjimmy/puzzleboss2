@@ -25,6 +25,10 @@ import MySQLdb
 from html import unescape
 import urllib3
 
+# Add parent directory to path to import pblib
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from pblib import get_mysql_ssl_config
+
 # Suppress SSL warnings for localhost wiki access
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -72,12 +76,8 @@ def load_config():
     }
 
     # Add SSL configuration if present
-    if "SSL" in yaml_config["MYSQL"] and "CA" in yaml_config["MYSQL"]["SSL"]:
-        ssl_config = {"ca": yaml_config["MYSQL"]["SSL"]["CA"]}
-        if "CERT" in yaml_config["MYSQL"]["SSL"]:
-            ssl_config["cert"] = yaml_config["MYSQL"]["SSL"]["CERT"]
-        if "KEY" in yaml_config["MYSQL"]["SSL"]:
-            ssl_config["key"] = yaml_config["MYSQL"]["SSL"]["KEY"]
+    ssl_config = get_mysql_ssl_config(yaml_config)
+    if ssl_config:
         connect_params["ssl"] = ssl_config
 
     conn = MySQLdb.connect(**connect_params)
