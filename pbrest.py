@@ -134,6 +134,13 @@ app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
 app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 app.config["MYSQL_CHARSET"] = "utf8mb4"
+
+# SSL configuration (optional)
+ssl_config = get_mysql_ssl_config(config)
+if ssl_config:
+    app.config["MYSQL_CUSTOM_OPTIONS"] = {"ssl": ssl_config}
+    debug_log(3, f"MySQL SSL enabled with CA: {ssl_config['ca']}")
+
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)

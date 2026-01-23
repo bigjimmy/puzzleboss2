@@ -18,6 +18,26 @@ _last_config_refresh = None
 CONFIG_REFRESH_INTERVAL = 30  # seconds
 
 
+def get_mysql_ssl_config(config):
+    """Extract SSL configuration from config dict for MySQL connections.
+
+    Returns a dict suitable for MySQLdb ssl parameter, or None if SSL not configured.
+    Supports optional client certificates for mutual TLS.
+    """
+    if "SSL" not in config.get("MYSQL", {}) or "CA" not in config["MYSQL"]["SSL"]:
+        return None
+
+    ssl_config = {"ca": config["MYSQL"]["SSL"]["CA"]}
+
+    # Optional: Client certificate for mutual TLS (rarely needed)
+    if "CERT" in config["MYSQL"]["SSL"]:
+        ssl_config["cert"] = config["MYSQL"]["SSL"]["CERT"]
+    if "KEY" in config["MYSQL"]["SSL"]:
+        ssl_config["key"] = config["MYSQL"]["SSL"]["KEY"]
+
+    return ssl_config
+
+
 def maybe_refresh_config():
     """Refresh config if enough time has passed since last refresh.
     Call this periodically (e.g., on each request) to ensure config stays current.
@@ -74,12 +94,20 @@ def refresh_config():
 
     # Reload database config with change detection
     try:
-        db_connection = MySQLdb.connect(
-            config["MYSQL"]["HOST"],
-            config["MYSQL"]["USERNAME"],
-            config["MYSQL"]["PASSWORD"],
-            config["MYSQL"]["DATABASE"],
-        )
+        # Build connection parameters
+        connect_params = {
+            "host": config["MYSQL"]["HOST"],
+            "user": config["MYSQL"]["USERNAME"],
+            "passwd": config["MYSQL"]["PASSWORD"],
+            "db": config["MYSQL"]["DATABASE"],
+        }
+
+        # Add SSL configuration if present
+        ssl_config = get_mysql_ssl_config(config)
+        if ssl_config:
+            connect_params["ssl"] = ssl_config
+
+        db_connection = MySQLdb.connect(**connect_params)
         cursor = db_connection.cursor()
         cursor.execute("SELECT * FROM config")
         configdump = cursor.fetchall()

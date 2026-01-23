@@ -162,6 +162,52 @@ class TestRunner:
         self.logger.log_operation(f"Found {len(solvers)} solvers")
         return solvers
 
+    def create_solver(self, name: str, fullname: str) -> Dict:
+        """Create a new solver."""
+        try:
+            response = requests.post(
+                f"{BASE_URL}/solvers",
+                json={"name": name, "fullname": fullname}
+            )
+            if not response.ok:
+                raise Exception(f"Failed to create solver: {response.text}")
+            return response.json()["solver"]
+        except Exception as e:
+            self.logger.log_error(f"Error creating solver {name}: {str(e)}")
+            raise
+
+    def ensure_min_solvers(self, min_count: int = 10):
+        """Ensure there are at least min_count solvers in the database for testing."""
+        solvers = self.get_all_solvers()
+        current_count = len(solvers)
+
+        if current_count >= min_count:
+            self.logger.log_operation(
+                f"Sufficient solvers available ({current_count} >= {min_count})"
+            )
+            return
+
+        needed = min_count - current_count
+        self.logger.log_operation(
+            f"Creating {needed} test solvers to reach minimum of {min_count}"
+        )
+
+        for i in range(needed):
+            solver_num = current_count + i + 1
+            name = f"testsolver{solver_num}"
+            fullname = f"Test Solver {solver_num}"
+            try:
+                self.create_solver(name, fullname)
+                self.logger.log_operation(f"Created solver: {name}")
+            except Exception as e:
+                self.logger.log_error(f"Failed to create solver {name}: {str(e)}")
+
+        # Verify we now have enough solvers
+        solvers = self.get_all_solvers()
+        self.logger.log_operation(
+            f"Now have {len(solvers)} solvers available for testing"
+        )
+
     def get_all_puzzles(self) -> List[Dict]:
         self.logger.log_operation("Fetching all puzzles")
         response = requests.get(f"{BASE_URL}/puzzles")
@@ -3032,6 +3078,9 @@ class TestRunner:
             sys.exit(1)
 
         self.logger.log_operation("System is empty, proceeding with tests")
+
+        # Ensure we have enough test solvers for all tests
+        self.ensure_min_solvers(min_count=10)
 
         tests = [
             ("Solver Listing", self.test_solver_listing),

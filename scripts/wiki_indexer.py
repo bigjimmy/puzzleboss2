@@ -25,6 +25,10 @@ import MySQLdb
 from html import unescape
 import urllib3
 
+# Add parent directory to path to import pblib
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from pblib import get_mysql_ssl_config
+
 # Suppress SSL warnings for localhost wiki access
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -63,13 +67,20 @@ def load_config():
         yaml_config = yaml.safe_load(f)
 
     # Connect to database to get config values
-    conn = MySQLdb.connect(
-        host=yaml_config["MYSQL"]["HOST"],
-        user=yaml_config["MYSQL"]["USERNAME"],
-        passwd=yaml_config["MYSQL"]["PASSWORD"],
-        db=yaml_config["MYSQL"]["DATABASE"],
-        charset="utf8mb4",
-    )
+    connect_params = {
+        "host": yaml_config["MYSQL"]["HOST"],
+        "user": yaml_config["MYSQL"]["USERNAME"],
+        "passwd": yaml_config["MYSQL"]["PASSWORD"],
+        "db": yaml_config["MYSQL"]["DATABASE"],
+        "charset": "utf8mb4",
+    }
+
+    # Add SSL configuration if present
+    ssl_config = get_mysql_ssl_config(yaml_config)
+    if ssl_config:
+        connect_params["ssl"] = ssl_config
+
+    conn = MySQLdb.connect(**connect_params)
     cursor = conn.cursor(MySQLdb.cursors.DictCursor)
     cursor.execute("SELECT `key`, `val` FROM config")
     db_config = {row["key"]: row["val"] for row in cursor.fetchall()}
