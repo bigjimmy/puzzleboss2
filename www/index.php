@@ -182,6 +182,16 @@
                     // never reads stale data for too long.
                     //
 
+                    // Merge any new statuses that loaded asynchronously from huntinfo
+                    if (settings.value.puzzleFilter) {
+                        const defaultFilter = Consts.defaults[0];
+                        for (const status in defaultFilter) {
+                            if (!(status in settings.value.puzzleFilter)) {
+                                settings.value.puzzleFilter[status] = defaultFilter[status];
+                            }
+                        }
+                    }
+
                     const url = `${Consts.api}/apicall.php?apicall=all`
                     let success = false;
                     let temp = {'rounds': []};
@@ -332,6 +342,16 @@
                         if(s[setting] === null || s[setting] === undefined)
                             s[setting] = structuredClone(Consts.defaults[index]);
                     });
+
+                    // Merge in any new statuses to puzzleFilter (for dynamically loaded statuses)
+                    if (s.puzzleFilter) {
+                        const defaultFilter = Consts.defaults[0]; // puzzleFilter is first in defaults
+                        for (const status in defaultFilter) {
+                            if (!(status in s.puzzleFilter)) {
+                                s.puzzleFilter[status] = defaultFilter[status];
+                            }
+                        }
+                    }
 
                     settings.value = s;
 

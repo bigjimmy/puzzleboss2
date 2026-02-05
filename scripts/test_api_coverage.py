@@ -923,7 +923,22 @@ class TestRunner:
 
         # Test 4: Non-Solved status values ARE allowed
         self.logger.log_operation("Test 4: Verify other status values are allowed")
-        allowed_statuses = ["Needs eyes", "Critical", "Being worked"]
+
+        # Fetch statuses dynamically from huntinfo
+        try:
+            huntinfo_response = requests.get(f"{self.base_url}/huntinfo")
+            if huntinfo_response.ok:
+                huntinfo_data = huntinfo_response.json()
+                # Extract status names from rich objects, excluding Solved and [hidden]
+                all_statuses = [s["name"] for s in huntinfo_data.get("statuses", [])]
+                allowed_statuses = [s for s in all_statuses if s not in ["Solved", "[hidden]"]][:4]  # Test first 4
+            else:
+                # Fallback if huntinfo fails
+                allowed_statuses = ["Needs eyes", "Critical", "Being worked", "Abandoned"]
+        except Exception as e:
+            self.logger.log_warning(f"Could not fetch statuses from /huntinfo, using fallback: {e}")
+            allowed_statuses = ["Needs eyes", "Critical", "Being worked", "Abandoned"]
+
         for test_status in allowed_statuses:
             try:
                 response = requests.post(

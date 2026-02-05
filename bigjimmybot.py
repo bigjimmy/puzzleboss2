@@ -435,7 +435,7 @@ def check_puzzle_from_queue(threadname, q):
                     )
                     abandoned_timeout_seconds = abandoned_timeout_minutes * 60
                     abandoned_status = configstruct.get(
-                        "BIGJIMMY_ABANDONED_STATUS", "Needs eyes"
+                        "BIGJIMMY_ABANDONED_STATUS", "Abandoned"
                     )
 
                     # Fetch lastact (any activity type - superset of lastsheetact)

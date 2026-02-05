@@ -103,10 +103,11 @@ try {
     // Fetch statuses dynamically from huntinfo endpoint
     try {
         $huntinfo_response = readapi('/huntinfo');
-        $statuses = $huntinfo_response->statuses ?? array();
+        // Extract just the names from the rich status objects
+        $statuses = array_map(function($s) { return $s->name; }, $huntinfo_response->statuses ?? array());
     } catch (Exception $e) {
         // Fallback to hardcoded list if huntinfo fails
-        $statuses = array('New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', 'Under control', 'Waiting for HQ', 'Grind', '[hidden]');
+        $statuses = array('New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', 'Under control', 'Waiting for HQ', 'Grind', 'Abandoned', '[hidden]');
     }
 
     foreach ($statuses as $status) {

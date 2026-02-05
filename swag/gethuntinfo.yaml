@@ -19,10 +19,39 @@ responses:
             type: string
         statuses:
           type: array
-          description: All valid puzzle status values from the enum
+          description: All valid puzzle status values with display metadata, sorted by display order
           items:
-            type: string
-          example: ["New", "Being worked", "Needs eyes", "Solved"]
+            type: object
+            properties:
+              name:
+                type: string
+                description: Status name (matches database ENUM value)
+              emoji:
+                type: string
+                description: Emoji representation for UI display
+              text:
+                type: string
+                description: Short text code for compact displays
+              order:
+                type: integer
+                description: Display order (lower = more urgent/important)
+          example:
+            - name: "WTF"
+              emoji: "☢️"
+              text: "?"
+              order: 0
+            - name: "Critical"
+              emoji: "⚠️"
+              text: "!"
+              order: 1
+            - name: "New"
+              emoji: "🆕"
+              text: "N"
+              order: 5
+            - name: "Solved"
+              emoji: "✅"
+              text: "*"
+              order: 9
         tags:
           type: array
           description: All tags defined in the system

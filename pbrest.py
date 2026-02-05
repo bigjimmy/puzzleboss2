@@ -424,15 +424,49 @@ def get_hunt_info():
         debug_log(2, "Could not fetch config: %s" % e)
         result["config"] = {}
 
-    # Statuses
+    # Statuses - return rich objects with metadata
     try:
+        # Get status names from DB ENUM
         cursor.execute("SHOW COLUMNS FROM puzzle WHERE Field = 'status'")
         row = cursor.fetchone()
+        status_names = []
         if row and row.get("Type", "").startswith("enum("):
             type_str = row["Type"]
-            result["statuses"] = [v.strip("'") for v in type_str[5:-1].split("','")]
-        else:
-            result["statuses"] = []
+            status_names = [v.strip("'") for v in type_str[5:-1].split("','")]
+
+        # Parse metadata from config
+        import json
+        status_metadata = {}
+        try:
+            metadata_json = configstruct.get("STATUS_METADATA", "[]")
+            metadata_list = json.loads(metadata_json)
+            status_metadata = {item["name"]: item for item in metadata_list}
+        except Exception as e:
+            debug_log(2, "Could not parse STATUS_METADATA: %s" % e)
+
+        # Build rich status objects
+        status_list = []
+        for status_name in status_names:
+            if status_name in status_metadata:
+                meta = status_metadata[status_name]
+                status_list.append({
+                    "name": status_name,
+                    "emoji": meta.get("emoji", "❓"),
+                    "text": meta.get("text", status_name[0]),
+                    "order": meta.get("order", 50)
+                })
+            else:
+                # Fallback for statuses without metadata
+                status_list.append({
+                    "name": status_name,
+                    "emoji": "❓",
+                    "text": status_name[0] if status_name else "?",
+                    "order": 50
+                })
+
+        # Sort by display order
+        status_list.sort(key=lambda x: x["order"])
+        result["statuses"] = status_list
     except Exception as e:
         debug_log(2, "Could not fetch statuses: %s" % e)
         result["statuses"] = []
