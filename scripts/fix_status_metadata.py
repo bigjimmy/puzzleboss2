@@ -89,4 +89,4 @@ cursor.close()
 conn.close()
 
 print("\n🔄 Now restart your Flask API service:")
-print("   sudo systemctl restart puzzleboss-api")
+print("   sudo systemctl restart puzzleboss2")
