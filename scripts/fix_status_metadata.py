@@ -40,10 +40,32 @@ conn = MySQLdb.connect(
     user=db_config['USERNAME'],
     passwd=db_config['PASSWORD'],
     db=db_config['DATABASE'],
-    charset='utf8mb4'
+    charset='utf8mb4',
+    use_unicode=True
 )
 
 cursor = conn.cursor()
+
+# Ensure connection is using utf8mb4
+cursor.execute("SET NAMES utf8mb4")
+cursor.execute("SET CHARACTER SET utf8mb4")
+cursor.execute("SET character_set_connection=utf8mb4")
+
+# Check and fix table encoding if needed
+print("Checking config table encoding...")
+cursor.execute("""
+    SELECT CHARACTER_SET_NAME, COLLATION_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'config' AND COLUMN_NAME = 'val'
+""", (db_config['DATABASE'],))
+charset_info = cursor.fetchone()
+if charset_info:
+    print(f"  Current: {charset_info[0]} / {charset_info[1]}")
+    if charset_info[0] != 'utf8mb4':
+        print("  Converting table to utf8mb4...")
+        cursor.execute("ALTER TABLE config CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+        conn.commit()
+        print("  ✅ Table converted")
 
 print(f"Updating STATUS_METADATA with {len(status_metadata)} statuses...")
 cursor.execute(
