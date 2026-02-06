@@ -67,6 +67,22 @@ def check_backup_permissions(backups_dir: Path) -> bool:
         return False
 
 
+def is_mysql_client():
+    """Detect if mysqldump is MySQL (not MariaDB) client"""
+    try:
+        result = subprocess.run(
+            ["mysqldump", "--version"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        # MySQL client will have "MySQL" in version, MariaDB will have "MariaDB"
+        return "MariaDB" not in result.stdout
+    except Exception:
+        # If we can't detect, assume MySQL for backward compatibility
+        return True
+
+
 def run_command(cmd, error_msg):
     """Run a shell command and handle errors"""
     debug_log(f"Running command: {' '.join(cmd)}")
@@ -91,13 +107,20 @@ def dump_table(config, table_name, output_file):
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
         "--no-tablespaces",
-        "--set-gtid-purged=OFF",
+        "--skip-ssl",  # Skip SSL verification for backup operations
+    ]
+
+    # Only add --set-gtid-purged for MySQL client (not MariaDB)
+    if is_mysql_client():
+        cmd.append("--set-gtid-purged=OFF")
+
+    cmd.extend([
         "--add-drop-table",
         config["MYSQL"]["DATABASE"],
         table_name,
         "-r",
         str(output_file),
-    ]
+    ])
 
     return run_command(cmd, f"Failed to dump table {table_name}")
 
@@ -114,15 +137,77 @@ def dump_full_database(config, output_file):
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
         "--no-tablespaces",
-        "--set-gtid-purged=OFF",
+        "--skip-ssl",  # Skip SSL verification for backup operations
+    ]
+
+    # Only add --set-gtid-purged for MySQL client (not MariaDB)
+    if is_mysql_client():
+        cmd.append("--set-gtid-purged=OFF")
+
+    cmd.extend([
         "--add-drop-database",
         "--databases",
         config["MYSQL"]["DATABASE"],
         "-r",
         str(output_file),
-    ]
+    ])
 
     return run_command(cmd, "Failed to dump full database")
+
+
+def drop_all_views(config):
+    """Drop all views in the database to avoid DEFINER issues"""
+    debug_log("Dropping all views to avoid DEFINER privilege issues")
+
+    cmd = [
+        "mysql",
+        "-h",
+        config["MYSQL"]["HOST"],
+        "-u",
+        config["MYSQL"]["USERNAME"],
+        f"-p{config['MYSQL']['PASSWORD']}",
+        "--skip-ssl",
+        config["MYSQL"]["DATABASE"],
+        "-N",  # No column names
+        "-B",  # Batch mode
+        "-e",
+        "SELECT TABLE_NAME FROM information_schema.VIEWS WHERE TABLE_SCHEMA = DATABASE();"
+    ]
+
+    try:
+        # Get list of views
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        views = result.stdout.strip().split('\n')
+        views = [v.strip() for v in views if v.strip()]
+
+        if not views:
+            debug_log("No views to drop")
+            return True
+
+        debug_log(f"Found {len(views)} views to drop")
+
+        # Drop each view
+        for view in views:
+            drop_cmd = [
+                "mysql",
+                "-h",
+                config["MYSQL"]["HOST"],
+                "-u",
+                config["MYSQL"]["USERNAME"],
+                f"-p{config['MYSQL']['PASSWORD']}",
+                "--skip-ssl",
+                config["MYSQL"]["DATABASE"],
+                "-e",
+                f"DROP VIEW IF EXISTS `{view}`;"
+            ]
+            subprocess.run(drop_cmd, capture_output=True, text=True, check=True)
+            debug_log(f"Dropped view: {view}")
+
+        return True
+    except Exception as e:
+        debug_log(f"Warning: Could not drop views: {e}")
+        # Don't fail if we can't drop views - the schema load might still work
+        return True
 
 
 def load_sql_file(config, sql_file):
@@ -136,21 +221,31 @@ def load_sql_file(config, sql_file):
         "-u",
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
+        "--skip-ssl",  # Skip SSL verification for restore operations
         config["MYSQL"]["DATABASE"],
     ]
 
     try:
+        # Read the SQL file and strip DEFINER clauses for RDS compatibility
         with open(sql_file, "r") as f:
-            process = subprocess.Popen(
-                cmd, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-            )
-            stdout, stderr = process.communicate()
+            sql_content = f.read()
 
-            if process.returncode != 0:
-                print(f"Error loading SQL file {sql_file}")
-                print(f"Error output: {stderr}")
-                return False
-            return True
+        # Remove DEFINER clauses (common in views/stored procedures)
+        # This is necessary for AWS RDS which doesn't grant SYSTEM_USER privilege
+        import re
+        sql_content = re.sub(r'DEFINER\s*=\s*`[^`]+`@`[^`]+`\s*', '', sql_content, flags=re.IGNORECASE)
+
+        # Execute the modified SQL
+        process = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        stdout, stderr = process.communicate(input=sql_content)
+
+        if process.returncode != 0:
+            print(f"Error loading SQL file {sql_file}")
+            print(f"Error output: {stderr}")
+            return False
+        return True
     except Exception as e:
         print(f"Error loading SQL file {sql_file}: {e}")
         return False
@@ -207,13 +302,36 @@ def main():
             print(f"Failed to backup {table} table. Aborting.")
             sys.exit(1)
 
-    # Drop and recreate database using schema
+    # Drop and recreate the entire database to avoid DEFINER privilege issues
+    debug_log(f"Dropping and recreating database {config['MYSQL']['DATABASE']}")
+
+    drop_create_cmd = [
+        "mysql",
+        "-h",
+        config["MYSQL"]["HOST"],
+        "-u",
+        config["MYSQL"]["USERNAME"],
+        f"-p{config['MYSQL']['PASSWORD']}",
+        "--skip-ssl",
+        "-e",
+        f"DROP DATABASE IF EXISTS {config['MYSQL']['DATABASE']}; CREATE DATABASE {config['MYSQL']['DATABASE']};"
+    ]
+
+    try:
+        subprocess.run(drop_create_cmd, capture_output=True, text=True, check=True)
+        debug_log("Database dropped and recreated successfully")
+    except subprocess.CalledProcessError as e:
+        print(f"Error dropping and recreating database: {e.stderr}")
+        print("Failed to reset database. Aborting.")
+        sys.exit(1)
+
+    # Load schema into fresh database
     schema_file = SCRIPTS_DIR / "puzzleboss.sql"
     if not schema_file.exists():
         print("Cannot find puzzleboss.sql schema file. Aborting.")
         sys.exit(1)
 
-    # Drop and recreate all tables using schema
+    # Load all tables using schema (DEFINER clauses will be stripped automatically)
     if not load_sql_file(config, schema_file):
         print("Failed to load schema. Aborting.")
         sys.exit(1)
