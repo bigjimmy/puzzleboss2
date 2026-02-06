@@ -54,6 +54,31 @@ CREATE TABLE `newuser` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `temp_puzzle_creation`
+-- Temporary storage for puzzle creation requests during step-by-step processing
+--
+
+DROP TABLE IF EXISTS `temp_puzzle_creation`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `temp_puzzle_creation` (
+  `code` varchar(16) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `round_id` int(11) NOT NULL,
+  `puzzle_uri` text NOT NULL,
+  `ismeta` tinyint(1) NOT NULL DEFAULT '0',
+  `is_speculative` tinyint(1) NOT NULL DEFAULT '0',
+  `chat_channel_id` varchar(255) DEFAULT NULL,
+  `chat_channel_link` text DEFAULT NULL,
+  `drive_id` varchar(255) DEFAULT NULL,
+  `drive_uri` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`code`),
+  KEY `fk_temp_puzzle_round` (`round_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `clientindex`
 --
 

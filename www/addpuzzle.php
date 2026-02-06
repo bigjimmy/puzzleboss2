@@ -1,3 +1,6 @@
+<?php
+require('puzzlebosslib.php');
+?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -50,6 +53,36 @@
     background-color: lightgreen;
     padding: 10px;
   }
+  #progress-container {
+    margin: 20px 0;
+    font-family: monospace;
+  }
+  .step {
+    padding: 8px 0;
+    opacity: 0.5;
+  }
+  .step.active {
+    opacity: 1;
+    font-weight: bold;
+  }
+  .step.complete {
+    opacity: 1;
+    color: green;
+  }
+  .step.skipped {
+    opacity: 0.7;
+    color: #666;
+    font-style: italic;
+  }
+  .step.error {
+    opacity: 1;
+    color: red;
+  }
+  .step .status {
+    display: inline-block;
+    width: 30px;
+    text-align: center;
+  }
   </style>
   <script>
   let formSubmitted = false;
@@ -68,17 +101,148 @@
     return true;
   }
 
-  function togglePuzzleMode() {
-    const mode = document.querySelector('input[name="puzzle_mode"]:checked').value;
-    const promotePuzzleFields = document.getElementById('promote-puzzle-fields');
+  function updatePuzzleMode() {
+    const promotePuzzleSelect = document.getElementById('promote_puzzle_id');
     const speculativeCheckbox = document.getElementById('speculative-checkbox-row');
+    const submitButton = document.querySelector('input[type="submit"]');
+    const nameField = document.getElementById('name');
+    const nameOptionalHint = document.getElementById('name-optional-hint');
+    const puzzleModeInput = document.getElementById('puzzle_mode_value');
+    const roundSelect = document.getElementById('round_id');
+    const currentPuzzleInfo = document.getElementById('current-puzzle-info');
 
-    if (mode === 'new') {
-      promotePuzzleFields.style.display = 'none';
-      if (speculativeCheckbox) speculativeCheckbox.style.display = '';
-    } else {
-      promotePuzzleFields.style.display = '';
+    // Check if a speculative puzzle is selected
+    const isPromoting = promotePuzzleSelect && promotePuzzleSelect.value !== '';
+
+    if (isPromoting) {
+      // Promotion mode
       if (speculativeCheckbox) speculativeCheckbox.style.display = 'none';
+      if (submitButton) submitButton.value = 'Promote Puzzle';
+      if (nameField) nameField.required = false;
+      if (nameOptionalHint) nameOptionalHint.style.display = 'inline';
+      if (puzzleModeInput) puzzleModeInput.value = 'promote';
+
+      // Show current puzzle info
+      const selectedOption = promotePuzzleSelect.options[promotePuzzleSelect.selectedIndex];
+      if (currentPuzzleInfo && selectedOption) {
+        document.getElementById('current-puzzle-name').textContent = selectedOption.dataset.puzzleName || '';
+        document.getElementById('current-puzzle-round').textContent = selectedOption.dataset.puzzleRound || '';
+        document.getElementById('current-puzzle-uri').textContent = selectedOption.dataset.puzzleUri || '(none)';
+        currentPuzzleInfo.style.display = 'block';
+      }
+
+      // Add "Keep current round" option if it doesn't exist
+      if (roundSelect && !roundSelect.querySelector('option[value=""]')) {
+        const keepCurrentOption = document.createElement('option');
+        keepCurrentOption.value = '';
+        keepCurrentOption.textContent = '-- Keep current round --';
+        roundSelect.insertBefore(keepCurrentOption, roundSelect.firstChild);
+      }
+      // Only default to "Keep current round" if no round was pre-selected from URL params
+      // If URL params specified a round, keep that selection
+      const hasPreselection = roundSelect && roundSelect.dataset.hasPreselection === '1';
+      if (roundSelect && !hasPreselection) {
+        roundSelect.value = '';
+      }
+    } else {
+      // New puzzle mode
+      if (speculativeCheckbox) speculativeCheckbox.style.display = '';
+      if (submitButton) submitButton.value = 'Add New Puzzle';
+      if (nameField) nameField.required = true;
+      if (nameOptionalHint) nameOptionalHint.style.display = 'none';
+      if (puzzleModeInput) puzzleModeInput.value = 'new';
+
+      // Hide current puzzle info
+      if (currentPuzzleInfo) currentPuzzleInfo.style.display = 'none';
+
+      // Remove "Keep current round" option if it exists
+      if (roundSelect) {
+        const keepCurrentOption = roundSelect.querySelector('option[value=""]');
+        if (keepCurrentOption) keepCurrentOption.remove();
+      }
+    }
+  }
+
+  // Step-by-step puzzle creation functions
+  const steps = [
+    { id: 'step1', num: 1, label: 'Validate puzzle data' },
+    { id: 'step2', num: 2, label: 'Create Discord channel' },
+    { id: 'step3', num: 3, label: 'Create Google Sheet' },
+    { id: 'step4', num: 4, label: 'Insert puzzle into database' },
+    { id: 'step5', num: 5, label: 'Finalize puzzle' }
+  ];
+
+  function setStepStatus(stepId, status, label) {
+    const el = document.getElementById(stepId);
+    if (!el) return;
+    el.className = 'step ' + status;
+    if (status === 'active') {
+      el.querySelector('.status').textContent = '🔄';
+    } else if (status === 'complete') {
+      el.querySelector('.status').textContent = '✅';
+    } else if (status === 'skipped') {
+      el.querySelector('.status').textContent = '⏭️';
+    } else if (status === 'error') {
+      el.querySelector('.status').textContent = '❌';
+    }
+    if (label) {
+      el.querySelector('.label').textContent = label;
+    }
+  }
+
+  async function runStep(code, stepNum) {
+    const step = steps[stepNum - 1];
+    setStepStatus(step.id, 'active');
+
+    try {
+      const url = 'apicall.php?apicall=createpuzzle&apiparam1=' + encodeURIComponent(code) + '&step=' + stepNum;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      if (data.status !== 'ok') {
+        throw new Error(data.message || 'Unknown error');
+      }
+
+      // Mark complete or skipped
+      if (data.skipped) {
+        setStepStatus(step.id, 'skipped', data.message || step.label + ' (skipped)');
+      } else {
+        setStepStatus(step.id, 'complete', data.message || step.label + ' complete');
+      }
+
+      return data;
+    } catch (err) {
+      setStepStatus(step.id, 'error', err.message);
+      throw err;
+    }
+  }
+
+  async function runAllSteps(code, puzzleName) {
+    let puzzleId = null;
+
+    for (let i = 1; i <= 5; i++) {
+      try {
+        const result = await runStep(code, i);
+        // Step 4 returns the puzzle ID
+        if (i === 4 && result.puzzle_id) {
+          puzzleId = result.puzzle_id;
+        }
+      } catch (err) {
+        document.getElementById('error-container').style.display = 'block';
+        document.getElementById('error-message').textContent = err.message;
+        return;
+      }
+    }
+
+    // All done - show success
+    document.getElementById('success-container').style.display = 'block';
+    if (puzzleId) {
+      document.getElementById('success-puzzle-link').href = 'editpuzzle.php?pid=' + puzzleId;
+      document.getElementById('success-puzzle-link').textContent = puzzleId;
+      document.getElementById('success-puzzle-name').textContent = puzzleName;
     }
   }
   </script>
@@ -86,8 +250,6 @@
 <body>
 <main>
 <?php
-
-require('puzzlebosslib.php');
 
 $round_id = null;
 if (isset($_POST['submit'])) {
@@ -106,6 +268,7 @@ if (isset($_POST['submit'])) {
     $name = isset($_POST['name']) ? $_POST['name'] : '';
     $round_id = isset($_POST['round_id']) ? $_POST['round_id'] : null;
     $puzzle_uri = isset($_POST['puzzle_uri']) ? $_POST['puzzle_uri'] : '';
+    $is_meta = isset($_POST['is_meta']) && $_POST['is_meta'] == '1';
 
     echo '<h2>Promoting Speculative Puzzle</h2>';
     echo "<p>Validating puzzle ID $promote_puzzle_id...</p>";
@@ -218,6 +381,20 @@ if (isset($_POST['submit'])) {
       }
     }
 
+    // Update ismeta if checkbox was checked
+    if ($is_meta) {
+      try {
+        $meta_data = array('ismeta' => true);
+        $meta_resp = postapi("/puzzles/{$promote_puzzle_id}/ismeta", $meta_data);
+        assert_api_success($meta_resp);
+        echo '<div class="success">✓ Puzzle marked as meta</div>';
+      } catch (Exception $e) {
+        // Non-critical
+        echo '<div class="error">Warning: Could not mark as meta: '.$e->getMessage().'</div>';
+        $promotion_failed = true;
+      }
+    }
+
     echo '<br><div class="'.($promotion_failed ? 'error' : 'success').'">';
     if ($promotion_failed) {
       echo '<strong>Puzzle partially promoted.</strong> ';
@@ -304,53 +481,77 @@ HTML;
   </table>
 HTML;
 
-  $defer_to = null;
-  if (isset($_POST['defer'])) {
-    $defer_to = $_POST['defer_to'];
-  }
-  $apiurl = "/puzzles";
+  $is_meta = isset($_POST['is_meta']) && $_POST['is_meta'] == '1';
+  $is_speculative = isset($_POST['is_speculative']) && $_POST['is_speculative'] == '1';
+
+  // Always use step-by-step creation with progress UI
+  echo '<h2>Creating puzzle...</h2>';
+
   $data = array(
     'puzzle' => array(
       'name' => $name,
       'round_id' => $round_id,
       'puzzle_uri' => $puzzle_uri,
-      'ismeta' => (isset($_POST['is_meta']) && $_POST['is_meta'] == '1') ? 1 : 0,
-      // 'defer_to' => $defer_to,
+      'ismeta' => $is_meta ? 1 : 0,
+      'is_speculative' => $is_speculative ? 1 : 0,
     )
   );
 
-  echo "Submitting API request to add puzzle. May take a few seconds.<br>";
   try {
-    $responseobj = postapi($apiurl, $data);
+    $responseobj = postapi("/puzzles/stepwise", $data);
+    assert_api_success($responseobj);
+    $code = $responseobj->code;
+
+    echo <<<HTML
+<div id="progress-container">
+  <div class="step" id="step1">
+    <span class="status">⏳</span>
+    <span class="label">Validating puzzle data...</span>
+  </div>
+  <div class="step" id="step2">
+    <span class="status">⏳</span>
+    <span class="label">Creating Discord channel...</span>
+  </div>
+  <div class="step" id="step3">
+    <span class="status">⏳</span>
+    <span class="label">Creating Google Sheet...</span>
+  </div>
+  <div class="step" id="step4">
+    <span class="status">⏳</span>
+    <span class="label">Inserting puzzle into database...</span>
+  </div>
+  <div class="step" id="step5">
+    <span class="status">⏳</span>
+    <span class="label">Finalizing puzzle...</span>
+  </div>
+</div>
+<div id="error-container" class="error" style="display: none;">
+  <strong>ERROR:</strong>
+  <span id="error-message"></span>
+  <br><br>
+  <a href="addpuzzle.php">Try again</a> or
+  <a href="index.php">Return to Puzzleboss Home</a>
+</div>
+<div id="success-container" style="display: none;">
+  <h2>✅ Puzzle creation successful!</h2>
+  <p>
+    Puzzle <strong id="success-puzzle-name"></strong> created with ID
+    <a href="#" id="success-puzzle-link"></a>.
+  </p>
+  <p>
+    <a href="addpuzzle.php">Add another puzzle</a> |
+    <a href="index.php">Return to Puzzleboss Home</a>
+  </p>
+</div>
+<script>
+  // Start the step-by-step process
+  runAllSteps('$code', '$name');
+</script>
+HTML;
   } catch (Exception $e) {
     exit_with_api_error($e);
-    throw $e;
   }
-  assert_api_success($responseobj);
-
-  echo '<br><div class="success">';
-  echo 'OK.  Puzzle created with ID of ';
-  $pid = $responseobj->puzzle->id;
-  echo '<a href="editpuzzle.php?pid='.$pid.'">'.$pid.'</a>';
-  if (isset($_POST['is_meta']) && $_POST['is_meta'] == '1') {
-    echo ' (marked as meta)';
-  }
-  echo '</div><br>';
-
-  // If speculative checkbox was checked, update status to Speculative
-  if (isset($_POST['is_speculative']) && $_POST['is_speculative'] == '1') {
-    echo 'Setting puzzle status to Speculative...<br>';
-    try {
-      $status_data = array('status' => 'Speculative');
-      $status_resp = postapi("/puzzles/{$pid}/status", $status_data);
-      assert_api_success($status_resp);
-      echo '<div class="success">Puzzle marked as speculative.</div>';
-    } catch (Exception $e) {
-      echo '<div class="error">Warning: Could not set speculative status: '.$e->getMessage().'</div>';
-    }
-  }
-
-  echo '<hr>';
+  exit(0);
 }
 
 // Extract puzzle name from URL parameters
@@ -401,35 +602,38 @@ try {
 <h1>Add a puzzle!</h1>
 <form action="addpuzzle.php" method="post" onsubmit="return handleSubmit(event)">
 
-  <fieldset style="margin-bottom: 20px;">
-    <legend><strong>Puzzle Type</strong></legend>
-    <label>
-      <input type="radio" name="puzzle_mode" value="new" checked onchange="togglePuzzleMode()" />
-      Create new puzzle
-    </label>
-    <br>
-<?php if (count($speculative_puzzles) > 0): ?>
-    <label>
-      <input type="radio" name="puzzle_mode" value="promote" onchange="togglePuzzleMode()" />
-      Promote existing speculative puzzle
-    </label>
-<?php endif; ?>
-  </fieldset>
+  <!-- Hidden field to track puzzle mode (new vs promote) -->
+  <input type="hidden" id="puzzle_mode_value" name="puzzle_mode" value="new" />
 
-  <div id="promote-puzzle-fields" style="display:none;">
-    <p><strong>Select speculative puzzle to promote:</strong></p>
-    <select name="promote_puzzle_id" id="promote_puzzle_id" style="width: 100%; max-width: 600px;">
-      <option value="">-- Select a speculative puzzle --</option>
+<?php if (count($speculative_puzzles) > 0): ?>
+  <div id="promote-puzzle-fields">
+    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+      <p style="margin: 0 0 10px 0;"><strong>🔮 Promote a speculative puzzle (optional):</strong></p>
+      <select name="promote_puzzle_id" id="promote_puzzle_id" style="width: 100%; max-width: 600px; padding: 8px; font-size: 14px;" onchange="updatePuzzleMode()">
+        <option value="">-- Or create a new puzzle --</option>
 <?php foreach ($speculative_puzzles as $sp): ?>
-      <option value="<?= htmlentities($sp->id) ?>">
-        <?= htmlentities($sp->name) ?> (<?= htmlentities($sp->round_name) ?>)
-      </option>
+        <option value="<?= htmlentities($sp->id) ?>"
+                data-puzzle-name="<?= htmlentities($sp->name) ?>"
+                data-puzzle-round="<?= htmlentities($sp->round_name) ?>"
+                data-puzzle-uri="<?= htmlentities($sp->puzzle_uri ?? '') ?>">
+          <?= htmlentities($sp->name) ?> (Round: <?= htmlentities($sp->round_name) ?>)
+        </option>
 <?php endforeach; ?>
-    </select>
-    <p style="font-size: 90%; font-style: italic;">
-      Promoting will update the selected puzzle's name, URL, round (if changed), and status to "New" while preserving its sheet, chat, and solver history.
-    </p>
+      </select>
+      <div id="current-puzzle-info" style="display: none; margin-top: 15px; padding: 10px; background-color: #fff; border-radius: 3px; border: 1px solid #ddd;">
+        <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 90%;">Current puzzle values:</p>
+        <p style="margin: 5px 0; font-size: 85%; font-family: monospace;">
+          <strong>Name:</strong> <span id="current-puzzle-name"></span><br>
+          <strong>Round:</strong> <span id="current-puzzle-round"></span><br>
+          <strong>URI:</strong> <span id="current-puzzle-uri"></span>
+        </p>
+      </div>
+      <p style="font-size: 90%; font-style: italic; margin: 10px 0 0 0; color: #666;">
+        Fill in the name, round, and URI fields below to update the puzzle. Leave blank to keep current values.
+      </p>
+    </div>
   </div>
+<?php endif; ?>
 
   <table>
     <tr>
@@ -443,22 +647,31 @@ try {
           value="<?= $puzzname ?>"
           size="40"
         />
+        <span id="name-optional-hint" style="display: none; font-size: 85%; font-style: italic; color: #666;">
+          (optional when promoting)
+        </span>
       </td>
     </tr>
     <tr>
       <td><label for="round_id">Round:</label></td>
       <td>
-        <select id="round_id" name="round_id"/>
 <?php
+// Calculate if any round will be pre-selected from URL params
 $selected_any = false;
 foreach ($rounds as $round) {
-  $selected = ($round->name === $round_name || $round->id === $round_id) ? 'selected' : '';
-  if ($selected) {
+  if ($round->name === $round_name || $round->id === $round_id) {
     $selected_any = true;
+    break;
   }
-  echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
 }
 $offer_create_new_round = !$selected_any && $round_name && $round_name !== 'undefined';
+?>
+        <select id="round_id" name="round_id" data-has-preselection="<?= ($selected_any || $offer_create_new_round) ? '1' : '0' ?>">
+<?php
+foreach ($rounds as $round) {
+  $selected = ($round->name === $round_name || $round->id === $round_id) ? 'selected' : '';
+  echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
+}
 if ($offer_create_new_round) {
   echo "<option value=\"$round_name\" selected>[NEW ROUND] $round_name</option>";
 }

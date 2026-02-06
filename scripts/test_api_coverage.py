@@ -347,10 +347,13 @@ class TestRunner:
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
             raise
 
-    def create_puzzle(self, name: str, round_id: str) -> Dict:
+    def create_puzzle(self, name: str, round_id: str, use_stepwise: bool = False) -> Dict:
         """Create a new puzzle with detailed error handling"""
+        if use_stepwise:
+            return self.create_puzzle_stepwise(name, round_id)
+
         try:
-            self.logger.log_operation(f"Creating puzzle: {name} in round {round_id}")
+            self.logger.log_operation(f"Creating puzzle (one-shot): {name} in round {round_id}")
 
             # Convert round_id to integer for the API
             round_id_int = int(round_id)
@@ -442,6 +445,120 @@ class TestRunner:
 
         except requests.RequestException as e:
             self.logger.log_error(f"Request exception creating puzzle {name}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+            raise Exception(f"Request exception: {str(e)}")
+
+    def create_puzzle_stepwise(self, name: str, round_id: str, is_meta: bool = False, is_speculative: bool = False) -> Dict:
+        """Create a new puzzle using the stepwise API with detailed error handling"""
+        try:
+            self.logger.log_operation(f"Creating puzzle (stepwise): {name} in round {round_id}")
+
+            # Convert round_id to integer for the API
+            round_id_int = int(round_id)
+
+            # Step 0: Initiate stepwise creation
+            request_data = {
+                "puzzle": {
+                    "name": name,
+                    "round_id": round_id_int,
+                    "puzzle_uri": "http://example.com/puzzle",
+                    "ismeta": is_meta,
+                    "is_speculative": is_speculative,
+                }
+            }
+
+            # Initiate stepwise creation
+            self.logger.log_operation(f"  Step 0: Initiating stepwise creation")
+            response = requests.post(f"{self.base_url}/puzzles/stepwise", json=request_data)
+
+            if not response.ok:
+                self.logger.log_error(
+                    f"HTTP error initiating stepwise creation for {name}: {response.status_code}"
+                )
+                self.logger.log_error(f"Response text: {response.text}")
+                raise Exception(
+                    f"HTTP error initiating stepwise creation: {response.status_code} - {response.text}"
+                )
+
+            try:
+                init_data = response.json()
+            except json.JSONDecodeError as e:
+                self.logger.log_error(f"Failed to parse JSON response for stepwise init")
+                self.logger.log_error(f"Response text: {response.text}")
+                raise Exception(f"JSON decode error: {str(e)}")
+
+            if "status" not in init_data or init_data["status"] != "ok":
+                self.logger.log_error(f"Unexpected response format from stepwise init")
+                self.logger.log_error(f"Full response: {init_data}")
+                raise Exception(f"Unexpected response format: {init_data}")
+
+            if "code" not in init_data:
+                self.logger.log_error(f"No code returned from stepwise init")
+                self.logger.log_error(f"Full response: {init_data}")
+                raise Exception(f"No code returned from stepwise init")
+
+            code = init_data["code"]
+            self.logger.log_operation(f"  Step 0: Got code {code}")
+
+            # Execute steps 1-5
+            puzzle_id = None
+            for step_num in range(1, 6):
+                self.logger.log_operation(f"  Step {step_num}: Executing...")
+
+                step_response = requests.get(f"{self.base_url}/createpuzzle/{code}?step={step_num}")
+
+                if not step_response.ok:
+                    self.logger.log_error(
+                        f"HTTP error on step {step_num}: {step_response.status_code}"
+                    )
+                    self.logger.log_error(f"Response text: {step_response.text}")
+                    raise Exception(
+                        f"HTTP error on step {step_num}: {step_response.status_code} - {step_response.text}"
+                    )
+
+                try:
+                    step_data = step_response.json()
+                except json.JSONDecodeError as e:
+                    self.logger.log_error(f"Failed to parse JSON response for step {step_num}")
+                    self.logger.log_error(f"Response text: {step_response.text}")
+                    raise Exception(f"JSON decode error on step {step_num}: {str(e)}")
+
+                if "status" not in step_data or step_data["status"] != "ok":
+                    self.logger.log_error(f"Unexpected response format from step {step_num}")
+                    self.logger.log_error(f"Full response: {step_data}")
+                    raise Exception(f"Unexpected response format from step {step_num}: {step_data}")
+
+                # Check if step was skipped
+                if step_data.get("skipped"):
+                    self.logger.log_operation(f"  Step {step_num}: Skipped ({step_data.get('message', 'No message')})")
+                else:
+                    self.logger.log_operation(f"  Step {step_num}: Complete ({step_data.get('message', 'No message')})")
+
+                # Step 4 returns the puzzle ID
+                if step_num == 4 and "puzzle_id" in step_data:
+                    puzzle_id = step_data["puzzle_id"]
+                    self.logger.log_operation(f"  Step {step_num}: Puzzle created with ID {puzzle_id}")
+
+            if not puzzle_id:
+                self.logger.log_error("No puzzle ID returned from stepwise creation")
+                raise Exception("No puzzle ID returned from stepwise creation")
+
+            # Get full puzzle details
+            puzzle_details = self.get_puzzle_details(puzzle_id)
+            if not puzzle_details:
+                self.logger.log_error(f"Failed to get details for puzzle ID {puzzle_id}")
+                raise Exception(f"Failed to get details for puzzle ID {puzzle_id}")
+
+            expected_name = name.replace(" ", "")
+            self.logger.log_operation(
+                f"Created puzzle (stepwise) {expected_name} with id {puzzle_id}"
+            )
+            return puzzle_details
+
+        except requests.RequestException as e:
+            self.logger.log_error(f"Request exception creating puzzle stepwise {name}")
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
@@ -571,8 +688,8 @@ class TestRunner:
         return response.json().get("rounds", [])
 
     def test_puzzle_creation(self, result: TestResult):
-        """Test puzzle creation functionality."""
-        self.logger.log_operation("Starting puzzle creation test")
+        """Test one-shot puzzle creation functionality (legacy mode)."""
+        self.logger.log_operation("Starting one-shot puzzle creation test")
 
         try:
             # Create 3 test rounds
@@ -600,8 +717,8 @@ class TestRunner:
                         base_name, include_emoji=(puzzle_idx % 2 == 0)
                     )
 
-                    # Create the puzzle
-                    puzzle_data = self.create_puzzle(puzzle_name, str(round_data["id"]))
+                    # Create the puzzle using one-shot mode (use_stepwise=False is default)
+                    puzzle_data = self.create_puzzle(puzzle_name, str(round_data["id"]), use_stepwise=False)
                     if not puzzle_data:
                         result.fail(f"Failed to create puzzle {puzzle_name}")
                         return
@@ -622,10 +739,91 @@ class TestRunner:
                         result.fail(f"Puzzle {puzzle['name']} created in wrong round")
                         return
 
-            result.set_success("Puzzle creation test completed successfully")
+            result.set_success("One-shot puzzle creation test completed successfully")
 
         except Exception as e:
-            result.fail(f"Error in puzzle creation test: {str(e)}")
+            result.fail(f"Error in one-shot puzzle creation test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
+    def test_puzzle_creation_stepwise(self, result: TestResult):
+        """Test step-by-step puzzle creation functionality."""
+        self.logger.log_operation("Starting stepwise puzzle creation test")
+
+        try:
+            # Create 2 test rounds for stepwise testing
+            rounds = []
+            for i in range(2):
+                round_name = f"Stepwise Round {int(time.time()) + i}"
+                round_data = self.create_round(round_name)
+                if not round_data:
+                    result.fail(f"Failed to create test round {i+1}")
+                    return
+                rounds.append(round_data)
+
+            # Create 3 puzzles in each round using stepwise mode
+            for round_idx, round_data in enumerate(rounds):
+                self.logger.log_operation(
+                    f"Creating stepwise puzzles for round {round_data['name']}"
+                )
+                puzzles = []
+                for puzzle_idx in range(3):
+                    # Create puzzle name with spaces and emojis
+                    base_name = (
+                        f"Stepwise Puzzle R{round_idx+1}P{puzzle_idx+1} {int(time.time())}"
+                    )
+                    puzzle_name = self.get_emoji_string(
+                        base_name, include_emoji=(puzzle_idx % 2 == 0)
+                    )
+
+                    # Test different combinations: regular, meta, speculative
+                    is_meta = (puzzle_idx == 1)
+                    is_speculative = (puzzle_idx == 2)
+
+                    # Create the puzzle using stepwise mode
+                    puzzle_data = self.create_puzzle_stepwise(
+                        puzzle_name,
+                        str(round_data["id"]),
+                        is_meta=is_meta,
+                        is_speculative=is_speculative
+                    )
+                    if not puzzle_data:
+                        result.fail(f"Failed to create stepwise puzzle {puzzle_name}")
+                        return
+
+                    # Verify the name was stripped of spaces but emojis preserved
+                    expected_name = puzzle_name.replace(" ", "")
+                    if puzzle_data["name"] != expected_name:
+                        result.fail(
+                            f"Stepwise puzzle name not properly processed. Expected: {expected_name}, Got: {puzzle_data['name']}"
+                        )
+                        return
+
+                    # Verify meta flag
+                    if is_meta and not puzzle_data.get("ismeta"):
+                        result.fail(f"Puzzle {puzzle_name} should be marked as meta")
+                        return
+
+                    # Verify speculative status
+                    if is_speculative and puzzle_data.get("status") != "Speculative":
+                        result.fail(
+                            f"Puzzle {puzzle_name} should have Speculative status, got {puzzle_data.get('status')}"
+                        )
+                        return
+
+                    puzzles.append(puzzle_data)
+
+                # Verify all puzzles were created in the correct round
+                for puzzle in puzzles:
+                    if str(puzzle["round_id"]) != str(round_data["id"]):
+                        result.fail(f"Stepwise puzzle {puzzle['name']} created in wrong round")
+                        return
+
+            result.set_success("Stepwise puzzle creation test completed successfully")
+
+        except Exception as e:
+            result.fail(f"Error in stepwise puzzle creation test: {str(e)}")
             self.logger.log_error(f"Exception type: {type(e).__name__}")
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
@@ -3458,7 +3656,8 @@ class TestRunner:
 
         tests = [
             ("Solver Listing", self.test_solver_listing),
-            ("Puzzle Creation", self.test_puzzle_creation),
+            ("Puzzle Creation (One-Shot)", self.test_puzzle_creation),
+            ("Puzzle Creation (Stepwise)", self.test_puzzle_creation_stepwise),
             ("Puzzle Modification", self.test_puzzle_modification),
             ("Puzzle Round Change", self.test_puzzle_round_change),
             ("Puzzle Multi-Part Update", self.test_multi_part_update),

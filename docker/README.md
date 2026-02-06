@@ -160,6 +160,53 @@ To reload Python after code changes:
 docker-compose restart app
 ```
 
+## UI Testing with Playwright
+
+The Docker image includes Playwright for headless browser testing. This is useful for:
+- Debugging frontend issues without manual browser testing
+- Integration tests that verify both API and UI behavior
+- Automated testing in CI/CD pipelines
+
+### Running UI Tests
+
+```bash
+# Run the example UI tests
+docker exec puzzleboss-app python3 scripts/test_ui_playwright.py
+```
+
+### Writing Custom Tests
+
+Example test script:
+```python
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto('http://localhost?assumedid=testuser')
+
+    # Enable console logging
+    page.on("console", lambda msg: print(f"Browser: {msg.text()}"))
+
+    # Interact with the page
+    page.click('button:has-text("Show advanced controls")')
+    page.wait_for_selector('text=Show puzzles:')
+
+    # Take screenshot on errors
+    page.screenshot(path='/tmp/test_error.png')
+
+    browser.close()
+```
+
+### Available Tests
+
+See `scripts/test_ui_playwright.py` for examples:
+- Basic page load test
+- Advanced controls rendering
+- Puzzle creation flow
+
+**Note**: Playwright is installed with Chromium only to minimize image size. For Firefox/WebKit support, modify the Dockerfile to install additional browsers.
+
 ## Stopping and Cleaning Up
 
 ```bash

@@ -1,0 +1,101 @@
+tags:
+  - Puzzles
+description: Initiate Step-by-Step Puzzle Creation
+summary: |
+  Validates puzzle data and returns a code for step-by-step creation.
+
+  This endpoint validates the puzzle data and stores it temporarily,
+  then returns a unique code. Use this code with the /createpuzzle/{code}
+  endpoint to execute the creation steps sequentially.
+
+  Steps executed by /createpuzzle/{code}:
+  - step=1: Validate puzzle data and round
+  - step=2: Create Discord channel
+  - step=3: Create Google Sheet
+  - step=4: Insert puzzle into database
+  - step=5: Finalize (set status, announce, cleanup)
+consumes:
+    - application/json
+parameters:
+    - name: body
+      in: body
+      required: true
+      schema:
+        id: newpuzzlestepwise
+        required:
+            - puzzle
+        properties:
+            puzzle:
+                type: object
+                required:
+                    - name
+                    - round_id
+                    - puzzle_uri
+                properties:
+                    name:
+                        type: string
+                        description: name of the puzzle
+                        example: "Example Puzzle"
+                    round_id:
+                        type: integer
+                        description: ID number of round the puzzle is in
+                        example: 1
+                    puzzle_uri:
+                        type: string
+                        description: URI for puzzle
+                        example: "https://puzzlehunt.example.com/puzzles/example"
+                    ismeta:
+                        type: boolean
+                        description: Whether this is a meta puzzle
+                        example: false
+                    is_speculative:
+                        type: boolean
+                        description: Whether this is a speculative puzzle (placeholder)
+                        example: false
+responses:
+    200:
+        description: Validation successful, code returned
+        schema:
+            type: object
+            id: puzzlestepwisereturn
+            properties:
+                status:
+                    type: string
+                    enum: [ok]
+                    example: ok
+                code:
+                    type: string
+                    description: Unique code for use with /createpuzzle/{code}
+                    example: "AbC123XyZ456"
+                name:
+                    type: string
+                    description: Name of the puzzle being created
+                    example: "Example Puzzle"
+                message:
+                    type: string
+                    description: Instructions for next step
+                    example: "Puzzle creation request validated. Use /createpuzzle/<code> with step parameter."
+    400:
+        description: Invalid request (missing fields, duplicate name, etc.)
+        schema:
+            type: object
+            properties:
+                error:
+                    type: string
+                    example: "Missing required fields: name, round_id, puzzle_uri"
+    404:
+        description: Round not found
+        schema:
+            type: object
+            properties:
+                error:
+                    type: string
+                    example: "Round ID 999 not found"
+    500:
+        description: Server error
+        schema:
+            type: object
+            properties:
+                error:
+                    type: string
+                    example: "Database error"
