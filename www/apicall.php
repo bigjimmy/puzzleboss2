@@ -85,6 +85,9 @@ else {
     case "round":
       echo json_encode(readapi('/rounds/' . $apiparam1));
       break;
+    case "rounds":
+      echo json_encode(readapi('/rounds'));
+      break;
     case "search":
       // Build query string from tag or tag_id params
       $searchParams = [];

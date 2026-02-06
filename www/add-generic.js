@@ -14,9 +14,11 @@ import Consts from './consts.js';
 //
 // puzzle:
 // - "note": updates a puzzle's comments
+// - "note-tags": combined note and tags editor (replaces separate note and tags buttons)
 // - "workstate": updates location and your currently solving state
 // - "status": updates puzzle status (including answer, meta)
 // - "tags": updates puzzle tags
+// - "puzzle-settings": updates puzzle metadata (name, round)
 //
 
 export default {
@@ -57,11 +59,20 @@ export default {
                 return (idx === -1) ? '🤡' : Consts.emoji[idx];
             }
             if ((this.type === 'note') || (this.type === 'comments')) {
-                return ((this.puzzle.comments === null) || (this.puzzle.comments.length === 0)) ? 
+                return ((this.puzzle.comments === null) || (this.puzzle.comments.length === 0)) ?
                         '➕' : '📝'
+            }
+            if (this.type === 'note-tags') {
+                const hasNote = (this.puzzle.comments !== null) && (this.puzzle.comments.length !== 0);
+                const hasTags = (this.puzzle.tags !== null) && (this.puzzle.tags.length !== 0);
+                if (hasNote || hasTags) return '📝';  // Memo (pen and paper) when content exists
+                return '✏️';  // Pencil when empty
             }
             if (this.type === 'tags') {
                 return '🏷️';
+            }
+            if (this.type === 'puzzle-settings') {
+                return '⚙️';
             }
             return '🤡!';
         },
@@ -70,8 +81,17 @@ export default {
         //
         description() {
             if ((this.type === 'note') || (this.type === 'comments')) {
-                return ((this.puzzle.comments == null) || (this.puzzle.comments.length == 0)) ? 
+                return ((this.puzzle.comments == null) || (this.puzzle.comments.length == 0)) ?
                     'add note' : this.puzzle.comments;
+            }
+
+            if (this.type === 'note-tags') {
+                const hasNote = (this.puzzle.comments !== null) && (this.puzzle.comments.length !== 0);
+                const hasTags = (this.puzzle.tags !== null) && (this.puzzle.tags.length !== 0);
+                let parts = [];
+                if (hasNote) parts.push(this.puzzle.comments);
+                if (hasTags) parts.push(`[${this.puzzle.tags}]`);
+                return parts.length > 0 ? parts.join(' ') : 'add note or tags';
             }
 
             if (this.type === 'status') {
@@ -84,6 +104,10 @@ export default {
 
             if (this.type === 'tags') {
                 return ((this.puzzle.tags) && this.puzzle.tags.length > 0) ? this.puzzle.tags : 'no tags!';
+            }
+
+            if (this.type === 'puzzle-settings') {
+                return 'puzzle settings (name, round)';
             }
 
             var desc = "This puzzle is being worked on";
@@ -153,10 +177,16 @@ export default {
         // stateStrA is shared by all types. It represents comments for
         // "note/comments", location (xyzloc) for "work state", and status for
         // "status". It shadows the true value of the puzzle state until the
-        // user commits the change with the save button. 
+        // user commits the change with the save button.
         //
         const stateStrA = ref("");
-        
+
+        //
+        // currentTags is used by "tags" and "note-tags" types to track the
+        // array of tags being edited.
+        //
+        const currentTags = ref([]);
+
         //
         // Shadow variables from add-status.js: the current answer and whether
         // the current puzzle is the meta.
@@ -174,6 +204,13 @@ export default {
         // Contains the next tag to be added to the list, if any.
         //
         const nextTag = ref("");
+
+        //
+        // Puzzle settings variables: round ID
+        // (stateStrA will be used for puzzle name)
+        //
+        const puzzleRoundId = ref(null);
+        const allRounds = ref([]);
 
         // Force answers to be all uppercase.
         watch(answer, () => {
@@ -222,6 +259,11 @@ export default {
                 //
                 if ((props.type === 'note') || (props.type === 'comments')) {
                     stateStrA.value = props.puzzle.comments;
+                } else if (props.type === 'note-tags') {
+                    // Initialize both comment and tags state
+                    stateStrA.value = props.puzzle.comments;
+                    currentTags.value = props.puzzle.tags ? props.puzzle.tags.split(",") : [];
+                    nextTag.value = "";
                 } else if (props.type === 'workstate') {
                     stateStrA.value = props.puzzle.xyzloc;
 
@@ -266,6 +308,21 @@ export default {
                     }
                 } else if (props.type === 'tags') {
                     stateStrA.value = props.puzzle.tags ? props.puzzle.tags.split(",") : [];
+                } else if (props.type === 'puzzle-settings') {
+                    // Initialize puzzle settings
+                    stateStrA.value = props.puzzle.name;
+                    puzzleRoundId.value = parseInt(props.puzzle.round_id, 10);
+
+                    // Fetch all rounds for dropdown
+                    try {
+                        const roundsUrl = `${Consts.api}/apicall.php?apicall=rounds`;
+                        const roundsData = await(await fetch(roundsUrl)).json();
+                        allRounds.value = roundsData.rounds;
+                        console.log("Loaded rounds:", allRounds.value);
+                    } catch (e) {
+                        console.log("Failed to fetch rounds:", e);
+                        allRounds.value = [];
+                    }
                 }
 
                 //
@@ -348,6 +405,109 @@ export default {
                         console.log(e);
                         showModal.value = true;
                     }
+
+                //
+                // Note-tags has combined handling for both comments and tags!
+                //
+
+                } else if (props.type === 'note-tags') {
+                    let noteChanged = false;
+
+                    // Handle comment update
+                    if (stateStrA.value !== props.puzzle.comments) {
+                        const commentUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=comments`;
+                        try {
+                            await fetch(commentUrl, {
+                                method: 'POST',
+                                body: JSON.stringify({ comments: stateStrA.value }),
+                            });
+                            noteChanged = true;
+                        } catch (e) {
+                            warning.value = "failed to POST comments; check devtools";
+                            console.log(e);
+                            showModal.value = true;
+                            return;
+                        }
+                    }
+
+                    // Handle tags update
+                    const oldTags = props.puzzle.tags ? props.puzzle.tags.split(",") : [];
+                    const addTags = currentTags.value.filter(tag => !oldTags.includes(tag));
+                    const removeTags = oldTags.filter(tag => !currentTags.value.includes(tag));
+
+                    if (addTags.length > 0 || removeTags.length > 0) {
+                        const tagsUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=tags`;
+                        try {
+                            await Promise.all(addTags.map(async (tag) => {
+                                await fetch(tagsUrl, {
+                                    method: 'POST',
+                                    body: JSON.stringify({ tags: {add: tag} }),
+                                });
+                            }));
+                            await Promise.all(removeTags.map(async (tag) => {
+                                await fetch(tagsUrl, {
+                                    method: 'POST',
+                                    body: JSON.stringify({ tags: {remove: tag} }),
+                                });
+                            }));
+                            noteChanged = true;
+                        } catch (e) {
+                            warning.value = "failed to POST tags; check devtools";
+                            console.log(e);
+                            showModal.value = true;
+                            return;
+                        }
+                    }
+
+                    if (noteChanged) {
+                        context.emit('please-fetch');
+                    }
+
+                //
+                // Puzzle settings has combined handling for name, URL, and round!
+                //
+
+                } else if (props.type === 'puzzle-settings') {
+                    let settingsChanged = false;
+
+                    // Handle name update
+                    if (stateStrA.value !== props.puzzle.name) {
+                        const nameUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=name`;
+                        try {
+                            await fetch(nameUrl, {
+                                method: 'POST',
+                                body: JSON.stringify({ name: stateStrA.value }),
+                            });
+                            settingsChanged = true;
+                        } catch (e) {
+                            warning.value = "failed to POST name; check devtools";
+                            console.log(e);
+                            showModal.value = true;
+                            return;
+                        }
+                    }
+
+                    // Handle round change
+                    if (puzzleRoundId.value !== parseInt(props.puzzle.round_id, 10)) {
+                        const roundUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=round_id`;
+                        try {
+                            await fetch(roundUrl, {
+                                method: 'POST',
+                                body: JSON.stringify({ round_id: parseInt(puzzleRoundId.value, 10) }),
+                            });
+                            settingsChanged = true;
+                        } catch (e) {
+                            warning.value = "failed to POST round_id; check devtools";
+                            console.log(e);
+                            showModal.value = true;
+                            return;
+                        }
+                    }
+
+                    if (settingsChanged) {
+                        context.emit('please-fetch');
+                    }
+
                 } else if (stateStrA.value !== props.puzzle[what]) {
                     payload[what] = stateStrA.value;
                     emitFetch = true;
@@ -436,36 +596,45 @@ export default {
         function updateTags(tag, add) {
             if (tag === "") return;
 
-            stateStrA.value = stateStrA.value.filter(stateTag => stateTag !== tag);
+            // Use currentTags for note-tags type, stateStrA for tags type
+            const tagsArray = (props.type === 'note-tags') ? currentTags : stateStrA;
+
+            tagsArray.value = tagsArray.value.filter(stateTag => stateTag !== tag);
             if (add) {
-                stateStrA.value.push(tag);
+                tagsArray.value.push(tag);
                 nextTag.value = "";
             }
         }
 
         return {
             showModal, toggleModal, warning,
-            stateStrA,
+            stateStrA, currentTags,
             answer, isMetaLoc, lastActInfo, lastActTime,
             nextTag, updateTags,
-            showStatus, currentlyWorking, claimCurrentPuzzle
+            showStatus, currentlyWorking, claimCurrentPuzzle,
+            puzzleRoundId, allRounds
         };
     },
     mounted() {
         if ((this.initialpuzz) &&
             (this.puzzle.id === this.initialpuzz.puzz) &&
-            (this.type === this.initialpuzz.what) &&
             (!this.showModal.value)) {
 
-            this.toggleModal(false);
-            this.$emit("route-shown");
+            // Support backwards compatibility: "note" or "tags" params open "note-tags" modal
+            const matchesType = (this.type === this.initialpuzz.what) ||
+                               (this.type === 'note-tags' && (this.initialpuzz.what === 'note' || this.initialpuzz.what === 'tags'));
+
+            if (matchesType) {
+                this.toggleModal(false);
+                this.$emit("route-shown");
+            }
         }
     },
 
     template: `
     <p class="puzzle-icon" ref="puzzle-tag" :title="description" @keydown.enter="toggleModal(false)" @click.stop="toggleModal(false)" tabindex="0">{{icon}}</p>
     <dialog v-if='showModal' open @click.stop @keydown.esc="toggleModal(false)">
-        <h4>Editing {{type}} for {{puzzle.name}}:</h4>
+        <h4>Editing {{type === 'note-tags' ? 'notes & tags' : type}} for {{puzzle.name}}:</h4>
         <p v-if="warning.length !== 0">{{warning}}</p>
 
         <!-- work state -->
@@ -508,6 +677,64 @@ export default {
                 @keydown.enter="updateTags(nextTag, true)"
             >➕</span>
         </p>
+
+        <!-- note-tags (combined) -->
+        <div v-if="type === 'note-tags'">
+            <h5>Note / Comments:</h5>
+            <p><textarea ref="modal-input" v-model="stateStrA" cols="40" rows="4" placeholder="Add notes or comments about this puzzle..."></textarea></p>
+
+            <h5>Tags:</h5>
+            <p v-if="currentTags.length === 0"><em>No tags assigned</em></p>
+            <ul v-if="currentTags.length > 0">
+                <li
+                    v-for="tag in currentTags"
+                    key="tag">
+                    {{tag}}
+                    <p
+                        tabindex="0"
+                        class="puzzle-icon"
+                        title="remove"
+                        @click="updateTags(tag, false)"
+                        @keydown.enter="updateTags(tag, false)"
+                    >🗑️</p>
+                </li>
+            </ul>
+            <p>
+                Add tag:
+                <TagSelect
+                    v-model:current="nextTag"
+                    @complete-transaction="updateTags(nextTag, true)">
+                </TagSelect>
+                <span
+                    tabindex="0"
+                    class="puzzle-icon"
+                    title="add"
+                    @click="updateTags(nextTag, true)"
+                    @keydown.enter="updateTags(nextTag, true)"
+                >➕</span>
+            </p>
+        </div>
+
+        <!-- puzzle-settings -->
+        <div v-if="type === 'puzzle-settings'">
+            <p style="color: red; font-weight: bold; border: 2px solid red; padding: 10px; background-color: #ffe0e0;">
+                ⚠️ WARNING: Be careful. Only make changes here after consulting with puzzleboss.
+            </p>
+            <p>
+                <label for="puzzle-name">Puzzle Name:</label><br>
+                <input ref="modal-input" id="puzzle-name" type="text" v-model="stateStrA" size="50">
+            </p>
+            <p>
+                <label for="puzzle-round">Round:</label><br>
+                <select id="puzzle-round" v-model.number="puzzleRoundId">
+                    <option disabled value="">-- select round --</option>
+                    <option v-for="round in allRounds" :key="round.id" :value="round.id">
+                        {{round.name}}
+                    </option>
+                </select>
+                <span v-if="allRounds.length === 0"> (loading rounds...)</span>
+            </p>
+        </div>
 
         <!-- status -->
         <p v-if="type === 'status'">

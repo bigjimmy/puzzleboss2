@@ -304,6 +304,43 @@ if ($userobj->puzz != $puzname) {
 
 echo '<br><table border=2><tr><th>Part</th><th>New Value</th><th></th></tr>';
 
+// Change puzzle name
+echo '<tr>';
+echo '<td>Puzzle Name</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
+echo '<input type="hidden" name="partupdate" value="yes">';
+echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+echo '<input type="hidden" name="uid" value="' . $userid . '">';
+echo '<input type="hidden" name="part" value="name">';
+echo '<input type="text" required minlength="1" name="value" value="' . htmlentities($puzname) . '" size="50"></td>';
+echo '<td><input type="submit" name="submit" value="submit"></td>';
+echo '</form></td></tr>';
+
+// Change round
+try {
+  $roundsobj = readapi('/rounds');
+  $allrounds = $roundsobj->rounds;
+} catch (Exception $e) {
+  $allrounds = array();
+}
+
+echo '<tr>';
+echo '<td>Round</td><td><form action="editpuzzle.php?pid=' . $puzzid . '" method="post">';
+echo '<input type="hidden" name="partupdate" value="yes">';
+echo '<input type="hidden" name="pid" value="' . $puzzid . '">';
+echo '<input type="hidden" name="uid" value="' . $userid . '">';
+echo '<input type="hidden" name="part" value="round_id">';
+echo '<select id="round_id" name="value" required>';
+echo '<option disabled selected value>-- select new round --</option>';
+
+foreach ($allrounds as $round) {
+  $selected = ($round->id == $puzzleobj->puzzle->round_id) ? ' selected' : '';
+  echo '<option value="' . $round->id . '"' . $selected . '>' . htmlentities($round->name) . '</option>';
+}
+
+echo '</select></td>';
+echo '<td><input type="submit" name="submit" value="submit"></td>';
+echo '</form></td></tr>';
+
 // Enter answer
 $answer = $puzzleobj->puzzle->answer;
 if (isset($_GET['answer'])) {
@@ -356,7 +393,8 @@ echo '<input type="hidden" name="uid" value="' . $userid . '">';
 echo '<input type="hidden" name="part" value="status">';
 echo '<select id="value" name="value"/>';
 echo '<option disabled selected value>-- select --</option>';
-foreach ($allstatuses as $statusval) {
+foreach ($allstatuses as $statusobj) {
+  $statusval = $statusobj->name;
   if (!in_array($statusval, $excluded_statuses)) {
     echo '<option value="' . htmlentities($statusval) . '">' . htmlentities($statusval) . '</option>';
   }
