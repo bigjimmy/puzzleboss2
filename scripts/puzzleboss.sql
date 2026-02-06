@@ -305,9 +305,10 @@ DROP FUNCTION IF EXISTS get_all_solvers;
 DROP FUNCTION IF EXISTS get_current_puzzle;
 DROP FUNCTION IF EXISTS get_all_puzzles;
 
-CREATE FUNCTION get_current_solvers(puzzle_id INT) 
+CREATE FUNCTION get_current_solvers(puzzle_id INT)
 RETURNS TEXT
 DETERMINISTIC
+SQL SECURITY INVOKER
 BEGIN
     DECLARE result TEXT;
     SELECT GROUP_CONCAT(solver.name) INTO result
@@ -323,9 +324,10 @@ BEGIN
     RETURN IFNULL(result, '');
 END //
 
-CREATE FUNCTION get_all_solvers(puzzle_id INT) 
+CREATE FUNCTION get_all_solvers(puzzle_id INT)
 RETURNS TEXT
 DETERMINISTIC
+SQL SECURITY INVOKER
 BEGIN
     DECLARE result TEXT;
     SELECT GROUP_CONCAT(DISTINCT solver.name) INTO result
@@ -341,9 +343,10 @@ BEGIN
     RETURN IFNULL(result, '');
 END //
 
-CREATE FUNCTION get_current_puzzle(solver_id INT) 
+CREATE FUNCTION get_current_puzzle(solver_id INT)
 RETURNS TEXT CHARACTER SET utf8mb4
 DETERMINISTIC
+SQL SECURITY INVOKER
 BEGIN
     DECLARE result TEXT CHARACTER SET utf8mb4;
     SELECT p.name INTO result
@@ -353,9 +356,10 @@ BEGIN
     RETURN IFNULL(result, '');
 END //
 
-CREATE FUNCTION get_all_puzzles(solver_id INT) 
+CREATE FUNCTION get_all_puzzles(solver_id INT)
 RETURNS TEXT CHARACTER SET utf8mb4
 DETERMINISTIC
+SQL SECURITY INVOKER
 BEGIN
     DECLARE result TEXT CHARACTER SET utf8mb4;
     SELECT GROUP_CONCAT(DISTINCT p.name) INTO result
