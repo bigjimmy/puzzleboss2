@@ -1682,7 +1682,7 @@ def finish_puzzle_creation(code):
 
     # Step 2: Create Discord channel
     elif step == 2:
-        if configstruct.get("SKIP_PUZZCORD"):
+        if configstruct.get("SKIP_PUZZCORD") == "true":
             debug_log(3, f"Step 2: Skipping Discord channel creation (SKIP_PUZZCORD enabled)")
             return {
                 "status": "ok",
@@ -1730,7 +1730,7 @@ def finish_puzzle_creation(code):
 
     # Step 3: Create Google Sheet
     elif step == 3:
-        if configstruct.get("SKIP_GOOGLE_API"):
+        if configstruct.get("SKIP_GOOGLE_API") == "true":
             debug_log(3, f"Step 3: Skipping Google Sheet creation (SKIP_GOOGLE_API enabled)")
             return {
                 "status": "ok",
