@@ -53,6 +53,11 @@ def chat_announce_solved(puzzlename):
     return call_puzzcord("%s %s" % ("_solve", puzzlename))
 
 
+def chat_announce_move(puzzlename):
+    debug_log(4, "start, called with (puzzlename): %s" % puzzlename)
+    return call_puzzcord("%s %s" % ("_move", puzzlename))
+
+
 def call_puzzcord(command):
     debug_log(4, "start, called with (command): %s" % command)
     if configstruct["SKIP_PUZZCORD"] == "true":
