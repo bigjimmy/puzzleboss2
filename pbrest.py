@@ -171,7 +171,7 @@ def periodic_config_refresh():
 # Memcache client (initialized later after config is available)
 mc = None
 MEMCACHE_CACHE_KEY = "puzzleboss:all"
-MEMCACHE_TTL = 60  # seconds
+MEMCACHE_TTL = 15  # seconds - reduced for fresher lastact timestamps
 
 
 def init_memcache(configstruct):
@@ -1010,6 +1010,10 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
                     """,
                     (puzzle_id_for_log, id, source),
                 )
+                cursor.execute(
+                    "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                    (puzzle_id_for_log,),
+                )
                 conn.commit()
             except TypeError:
                 raise Exception(
@@ -1505,6 +1509,10 @@ def create_puzzle():
             """,
             (myid, 100),
         )
+        cursor.execute(
+            "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+            (myid,),
+        )
         conn.commit()
     except Exception:
         raise Exception("Exception checking database for puzzle after insert")
@@ -1786,6 +1794,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     """,
                     (id, 100),
                 )
+                cursor.execute(
+                    "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                    (id,),
+                )
                 conn.commit()
             except Exception:
                 debug_log(
@@ -1808,6 +1820,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     VALUES (%s, %s, 'puzzleboss', 'interact')
                     """,
                     (id, 100),
+                )
+                cursor.execute(
+                    "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                    (id,),
                 )
                 conn.commit()
             except Exception:
@@ -1839,6 +1855,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 VALUES (%s, %s, 'puzzleboss', 'interact')
                 """,
                 (id, 100),
+            )
+            cursor.execute(
+                "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                (id,),
             )
             conn.commit()
         except Exception:
@@ -1884,6 +1904,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     """,
                     (id, 100),
                 )
+                cursor.execute(
+                    "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                    (id,),
+                )
                 conn.commit()
             except Exception:
                 debug_log(
@@ -1916,6 +1940,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 """,
                 (id, 100),
             )
+            cursor.execute(
+                "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                (id,),
+            )
             conn.commit()
         except Exception:
             debug_log(
@@ -1946,6 +1974,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 VALUES (%s, %s, 'puzzleboss', 'interact')
                 """,
                 (id, 100),
+            )
+            cursor.execute(
+                "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                (id,),
             )
             conn.commit()
         except Exception:
@@ -2108,6 +2140,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     VALUES (%s, %s, 'puzzleboss', 'comment')
                     """,
                     (id, 100),
+                )
+                cursor.execute(
+                    "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+                    (id,),
                 )
                 conn.commit()
                 debug_log(4, "Logged tag change activity for puzzle %s" % id)
@@ -2645,10 +2681,14 @@ def get_last_activity_for_puzzle(id):
         cursor = conn.cursor()
         cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
         cursor.execute(
-            """SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1""",
+            """SELECT lastact from puzzle where id = %s""",
             (id,),
         )
-        return cursor.fetchone()
+        result = cursor.fetchone()
+        if result and result["lastact"]:
+            # Return in same format as old activity query for compatibility
+            return {"time": result["lastact"]}
+        return None
     except IndexError:
         debug_log(4, "No Activity for Puzzle %s found in database yet" % id)
         return None
@@ -2713,6 +2753,10 @@ def set_new_activity_for_puzzle(id, actstruct):
             VALUES (%s, %s, %s, %s)
             """,
             (puzzle_id, solver_id, source, type),
+        )
+        cursor.execute(
+            "UPDATE puzzle SET lastact = NOW() WHERE id = %s",
+            (puzzle_id,),
         )
         conn.commit()
     except TypeError:

@@ -81,6 +81,52 @@ responses:
                     sheetcount:
                       type: integer
                       description: Number of sheets/tabs in the puzzle's Google spreadsheet
+                    sheetenabled:
+                      type: integer
+                      description: Whether DeveloperMetadata tracking is enabled for the sheet (0 or 1)
+                    status:
+                      type: string
+                      description: Puzzle status (New, Being worked, Solved, etc.)
+                    roundname:
+                      type: string
+                      description: Name of the round this puzzle belongs to
+                    round_id:
+                      type: integer
+                      description: ID of the round this puzzle belongs to
+                    comments:
+                      type: string
+                      description: Comments about the puzzle
+                    drive_uri:
+                      type: string
+                      description: Google Drive URI for the puzzle sheet
+                    drive_id:
+                      type: string
+                      description: Google Drive ID for the puzzle sheet
+                    chat_channel_name:
+                      type: string
+                      description: Discord channel name
+                    chat_channel_link:
+                      type: string
+                      description: Discord channel link
+                    ismeta:
+                      type: integer
+                      description: Whether this is a meta puzzle (0 or 1)
+                    solvers:
+                      type: string
+                      description: Comma-separated list of all solver names who worked on this puzzle
+                    cursolvers:
+                      type: string
+                      description: Comma-separated list of currently assigned solver names
+                    xyzloc:
+                      type: string
+                      description: Physical location of puzzle (if applicable)
+                    tags:
+                      type: string
+                      description: Comma-separated list of tag names
+                    lastact:
+                      type: string
+                      format: date-time
+                      description: Timestamp of most recent activity for this puzzle (ISO 8601 format)
   500:
     description: Error retrieving data
     schema:

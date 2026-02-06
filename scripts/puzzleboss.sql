@@ -205,10 +205,12 @@ CREATE TABLE `puzzle` (
   `sheetcount` int(11) DEFAULT NULL,
   `sheetenabled` tinyint(1) NOT NULL DEFAULT 0,
   `tags` JSON DEFAULT NULL,
+  `lastact` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name_UNIQUE` (`name`),
   KEY `fk_puzzles_rounds1_idx` (`round_id`),
-  KEY `idx_puzzle_tags` ((CAST(tags->'$[*]' AS UNSIGNED ARRAY)))
+  KEY `idx_puzzle_tags` ((CAST(tags->'$[*]' AS UNSIGNED ARRAY))),
+  KEY `idx_lastact` (`lastact`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -420,7 +422,8 @@ SELECT
             )
         ) AS jt
         JOIN tag t ON t.id = jt.tag_id
-    ) AS tags
+    ) AS tags,
+    p.lastact
 FROM puzzle p
 LEFT JOIN round r ON p.round_id = r.id;
 
