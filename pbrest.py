@@ -864,6 +864,8 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
     """
     # Special handling for puzzle assignment
     if part == "puzz":
+        current_puzzle = None  # Initialize to avoid NameError
+
         if value:
             # Assigning puzzle, so check if puzzle is real
             debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
@@ -880,12 +882,12 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
                     "Cannot assign solver to puzzle %s - puzzle is already solved"
                     % value
                 )
-            # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
-            if mypuzz["puzzle"]["status"] == "New":
+            # Since we're assigning, the puzzle should automatically transit out of "New" or "Abandoned" state
+            if mypuzz["puzzle"]["status"] in ["New", "Abandoned"]:
                 debug_log(
                     3,
-                    "Automatically marking puzzle id %s, name %s as being worked on."
-                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"]),
+                    "Automatically marking puzzle id %s, name %s (status: %s) as being worked on."
+                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"], mypuzz["puzzle"]["status"]),
                 )
                 update_puzzle_part_in_db(value, "status", "Being worked")
 
@@ -898,9 +900,9 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id FROM puzzle 
-                WHERE JSON_CONTAINS(current_solvers, 
-                    JSON_OBJECT('solver_id', %s), 
+                SELECT id FROM puzzle
+                WHERE JSON_CONTAINS(current_solvers,
+                    JSON_OBJECT('solver_id', %s),
                     '$.solvers'
                 )
             """,
@@ -912,23 +914,28 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
                 unassign_solver_from_puzzle(current_puzzle["id"], id)
 
         # Now log it in the activity table
-        try:
-            conn = mysql.connection
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, %s, 'interact')
-                """,
-                (value, id, source),
-            )
-            conn.commit()
-        except TypeError:
-            raise Exception(
-                "Exception in logging change to puzzle %s in activity table for solver %s in database"
-                % (value, id)
-            )
+        # For de-assignment (empty value), use the actual puzzle_id we found
+        # For assignment (non-empty value), use the provided puzzle_id
+        puzzle_id_for_log = current_puzzle["id"] if (not value and current_puzzle) else value
+
+        if puzzle_id_for_log:  # Only log if we have a valid puzzle_id
+            try:
+                conn = mysql.connection
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO activity
+                    (puzzle_id, solver_id, source, type)
+                    VALUES (%s, %s, %s, 'interact')
+                    """,
+                    (puzzle_id_for_log, id, source),
+                )
+                conn.commit()
+            except TypeError:
+                raise Exception(
+                    "Exception in logging change to puzzle %s in activity table for solver %s in database"
+                    % (puzzle_id_for_log, id)
+                )
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
         debug_log(3, "solver %s puzz updated to %s" % (id, value))
