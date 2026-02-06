@@ -872,6 +872,46 @@ def get_solver_by_name(name):
     }
 
 
+@app.route("/solvers/<id>/activity", endpoint="solver_activity", methods=["GET"])
+@swag_from("swag/getsolveractivity.yaml", endpoint="solver_activity", methods=["GET"])
+def get_solver_activity(id):
+    """Get all activity for a specific solver."""
+    debug_log(4, "start. id: %s" % id)
+
+    # Check if solver exists
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        cursor.execute("SELECT id FROM solver WHERE id = %s", (id,))
+        if not cursor.fetchone():
+            raise Exception("Solver %s not found" % id)
+    except Exception as e:
+        raise Exception("Solver %s not found in database" % id)
+
+    # Fetch all activity for this solver
+    try:
+        cursor.execute(
+            """
+            SELECT id, time, solver_id, puzzle_id, source, type, uri, source_version
+            FROM activity
+            WHERE solver_id = %s
+            ORDER BY time DESC
+            """,
+            (id,),
+        )
+        activities = cursor.fetchall()
+    except Exception as e:
+        raise Exception("Exception fetching activity for solver %s: %s" % (id, e))
+
+    debug_log(4, "fetched %d activity entries for solver %s" % (len(activities), id))
+    return {
+        "status": "ok",
+        "solver_id": int(id),
+        "activity": activities,
+    }
+
+
 def _solver_exists(identifier):
     """
     Internal check if solver exists. Returns True/False.

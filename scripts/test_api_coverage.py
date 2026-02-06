@@ -1741,6 +1741,122 @@ class TestRunner:
 
         result.set_success("Puzzle activity endpoint test completed successfully")
 
+    def test_solver_activity_endpoint(self, result: TestResult):
+        """Test /solvers/<id>/activity endpoint."""
+        self.logger.log_operation("Starting solver activity endpoint test")
+
+        # Get all solvers
+        solvers = self.get_all_solvers()
+        if not solvers:
+            result.fail("No solvers available for testing")
+            return
+
+        # Test with the first solver
+        test_solver = solvers[0]
+        solver_id = test_solver["id"]
+
+        self.logger.log_operation(f"Testing activity endpoint for solver {solver_id}")
+
+        # Fetch activity for the solver
+        response = requests.get(f"{self.base_url}/solvers/{solver_id}/activity")
+        if not response.ok:
+            result.fail(f"Failed to get activity for solver {solver_id}: {response.text}")
+            return
+
+        activity_data = response.json()
+
+        # Validate response structure
+        if not isinstance(activity_data, dict):
+            result.fail("Invalid response format - not a dict")
+            return
+
+        if activity_data.get("status") != "ok":
+            result.fail(f"Invalid status: {activity_data.get('status')}")
+            return
+
+        if "solver_id" not in activity_data:
+            result.fail("Missing 'solver_id' in response")
+            return
+
+        if "activity" not in activity_data:
+            result.fail("Missing 'activity' in response")
+            return
+
+        # Validate solver_id matches
+        if activity_data["solver_id"] != solver_id:
+            result.fail(f"Solver ID mismatch: expected {solver_id}, got {activity_data['solver_id']}")
+            return
+
+        # Validate activity is a list
+        if not isinstance(activity_data["activity"], list):
+            result.fail("Activity should be a list")
+            return
+
+        activities = activity_data["activity"]
+        self.logger.log_operation(f"Found {len(activities)} activity entries for solver")
+
+        # Validate activity entry structure if any activities exist
+        if len(activities) > 0:
+            required_fields = ["id", "time", "solver_id", "puzzle_id", "source", "type"]
+            for i, activity in enumerate(activities[:3]):  # Check first 3 entries
+                for field in required_fields:
+                    if field not in activity:
+                        result.fail(f"Activity entry {i} missing field '{field}'")
+                        return
+
+                # Validate solver_id matches
+                if activity["solver_id"] != solver_id:
+                    result.fail(f"Activity entry {i} has wrong solver_id: {activity['solver_id']}")
+                    return
+
+            # Validate activities are sorted by time (most recent first)
+            if len(activities) > 1:
+                times = [a["time"] for a in activities]
+                # Compare first and last - first should be >= last (reverse chronological)
+                if times[0] < times[-1]:
+                    result.fail("Activities not sorted correctly (should be most recent first)")
+                    return
+
+            self.logger.log_operation("Activity entries validated successfully")
+        else:
+            self.logger.log_operation("No activity entries found for solver (this is okay)")
+
+        # Test generating activity by assigning solver to a puzzle
+        puzzles = self.get_all_puzzles()
+        if puzzles:
+            test_puzzle = puzzles[0]
+            puzzle_id = test_puzzle["id"]
+
+            self.logger.log_operation(f"Assigning solver {solver_id} to puzzle {puzzle_id} to generate activity")
+
+            # Assign solver to puzzle
+            if self.assign_solver_to_puzzle(solver_id, puzzle_id):
+                # Fetch activity again to verify it increased
+                response = requests.get(f"{self.base_url}/solvers/{solver_id}/activity")
+                if response.ok:
+                    updated_activity = response.json()["activity"]
+                    if len(updated_activity) > len(activities):
+                        self.logger.log_operation(
+                            f"Activity count increased from {len(activities)} to {len(updated_activity)}"
+                        )
+                    else:
+                        self.logger.log_operation(
+                            f"Activity count stayed at {len(activities)}"
+                        )
+            else:
+                self.logger.log_operation("Note: Failed to assign solver to puzzle")
+
+        # Test with non-existent solver
+        self.logger.log_operation("Testing with non-existent solver")
+        response = requests.get(f"{self.base_url}/solvers/999999/activity")
+        if response.ok:
+            result.fail("Should return error for non-existent solver")
+            return
+
+        self.logger.log_operation("Correctly returned error for non-existent solver")
+
+        result.set_success("Solver activity endpoint test completed successfully")
+
     def test_solver_history(self, result: TestResult):
         """Test adding and removing solvers from puzzle history."""
         try:
@@ -3359,6 +3475,7 @@ class TestRunner:
             ("Solver Reassignment", self.test_solver_reassignment),
             ("Activity Tracking", self.test_activity_tracking),
             ("Puzzle Activity Endpoint", self.test_puzzle_activity_endpoint),
+            ("Solver Activity Endpoint", self.test_solver_activity_endpoint),
             ("Solver History", self.test_solver_history),
             ("Sheetcount", self.test_sheetcount),
             ("Tagging", self.test_tagging),
