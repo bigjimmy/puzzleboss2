@@ -106,6 +106,15 @@ else {
     case "tag":
       echo json_encode(readapi('/tags/' . $apiparam1));
       break;
+    case "createpuzzle":
+      // Handle stepwise puzzle creation: /createpuzzle/<code>?step=N
+      $queryParams = [];
+      if (isset($_GET['step']) && !empty($_GET['step'])) {
+        $queryParams[] = 'step=' . urlencode($_GET['step']);
+      }
+      $queryString = count($queryParams) > 0 ? '?' . implode('&', $queryParams) : '';
+      echo json_encode(readapi('/createpuzzle/' . $apiparam1 . $queryString));
+      break;
     default:
       http_response_code(500);
       die('Error: improper apicall specified.');

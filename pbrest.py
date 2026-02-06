@@ -1390,6 +1390,7 @@ def delete_tag(tag):
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
 @swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
 def create_puzzle():
+    debug_log(4, "start")
     try:
         puzzle_data = request.get_json()
         debug_log(
@@ -1421,7 +1422,6 @@ def create_puzzle():
     if existing_puzzle:
         raise Exception("Duplicate puzzle name %s detected" % name)
 
-    # Get round drive link and name
     round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
     round_name = get_round_part(round_id, "name")["round"]["name"]
     round_drive_id = round_drive_uri.split("/")[-1]
@@ -1531,6 +1531,369 @@ def create_puzzle():
             "drive_uri": drive_uri,
         },
     }
+
+
+@app.route("/puzzles/stepwise", endpoint="post_puzzles_stepwise", methods=["POST"])
+@swag_from("swag/postpuzzlestepwise.yaml", endpoint="post_puzzles_stepwise", methods=["POST"])
+def create_puzzle_stepwise():
+    """
+    Initiates step-by-step puzzle creation process.
+    Validates puzzle data and returns a code for use with /createpuzzle/<code>.
+    """
+    debug_log(4, "start stepwise puzzle creation")
+    try:
+        puzzle_data = request.get_json()
+        debug_log(
+            5, f"Incoming stepwise puzzle creation payload: {json.dumps(puzzle_data, indent=2)}"
+        )
+        if not puzzle_data or "puzzle" not in puzzle_data:
+            return jsonify({"error": "Invalid JSON POST structure"}), 400
+
+        puzzle = puzzle_data["puzzle"]
+        name = puzzle.get("name", "").replace(" ", "")  # Strip spaces from name
+        round_id = puzzle.get("round_id")
+        puzzle_uri = puzzle.get("puzzle_uri", "")
+        ismeta = puzzle.get("ismeta", False)
+        is_speculative = puzzle.get("is_speculative", False)
+        debug_log(5, "stepwise request data is - %s" % str(puzzle))
+    except TypeError:
+        return jsonify({"error": "Invalid JSON POST structure or empty POST"}), 400
+
+    # Validate required fields
+    if not name or not round_id or not puzzle_uri:
+        return jsonify({"error": "Missing required fields: name, round_id, puzzle_uri"}), 400
+
+    # Check for duplicate
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
+        existing_puzzle = cursor.fetchone()
+    except Exception as e:
+        return jsonify({"error": f"Database error checking for duplicate: {e}"}), 500
+
+    if existing_puzzle:
+        return jsonify({"error": f"Duplicate puzzle name {name} detected"}), 400
+
+    # Validate round exists
+    try:
+        round_info = get_round_part(round_id, "name")
+        if not round_info or "round" not in round_info:
+            return jsonify({"error": f"Round ID {round_id} not found"}), 404
+    except Exception:
+        return jsonify({"error": f"Round ID {round_id} not found"}), 404
+
+    # Generate unique code and store request
+    import secrets
+    code = secrets.token_urlsafe(12)
+
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO temp_puzzle_creation
+            (code, name, round_id, puzzle_uri, ismeta, is_speculative)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (code, name, round_id, puzzle_uri, ismeta, is_speculative),
+        )
+        conn.commit()
+    except Exception as e:
+        debug_log(1, f"Failed to store puzzle creation request: {e}")
+        return jsonify({"error": f"Failed to store puzzle creation request: {e}"}), 500
+
+    debug_log(3, f"Stepwise puzzle creation request stored with code {code}")
+
+    return {
+        "status": "ok",
+        "code": code,
+        "name": name,
+        "message": "Puzzle creation request validated. Use /createpuzzle/<code>?step=N to proceed."
+    }
+
+
+@app.route("/createpuzzle/<code>", endpoint="get_createpuzzle", methods=["GET"])
+@swag_from("swag/getcreatepuzzle.yaml", endpoint="get_createpuzzle", methods=["GET"])
+def finish_puzzle_creation(code):
+    """
+    Step-by-step puzzle creation endpoint.
+
+    Steps:
+    1. Validate puzzle data (retrieve from temp storage)
+    2. Create Discord channel (or skip if SKIP_PUZZCORD)
+    3. Create Google Sheet (or skip if SKIP_GOOGLE_API)
+    4. Insert puzzle into database
+    5. Finalize: set metadata, announce, cleanup temp storage
+    """
+    debug_log(4, f"finish_puzzle_creation called with code {code}")
+
+    step = request.args.get("step")
+    if not step:
+        return jsonify({"error": "Missing step parameter"}), 400
+
+    try:
+        step = int(step)
+    except ValueError:
+        return jsonify({"error": "Step parameter must be an integer"}), 400
+
+    # Retrieve puzzle creation request from temp storage
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM temp_puzzle_creation WHERE code = %s",
+            (code,)
+        )
+        req = cursor.fetchone()
+    except Exception as e:
+        debug_log(1, f"Error retrieving puzzle creation request: {e}")
+        return jsonify({"error": f"Database error: {e}"}), 500
+
+    if not req:
+        return jsonify({"error": f"Invalid or expired code: {code}"}), 404
+
+    name = req["name"]
+    round_id = req["round_id"]
+    puzzle_uri = req["puzzle_uri"]
+    ismeta = req["ismeta"]
+    is_speculative = req["is_speculative"]
+
+    debug_log(4, f"Processing step {step} for puzzle {name}")
+
+    # Step 1: Validate puzzle data and get round info
+    if step == 1:
+        try:
+            round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
+            round_name = get_round_part(round_id, "name")["round"]["name"]
+            round_drive_id = round_drive_uri.split("/")[-1]
+
+            debug_log(3, f"Step 1: Validated puzzle {name} for round {round_name}")
+
+            return {
+                "status": "ok",
+                "step": 1,
+                "message": f"Validated puzzle data for {name}",
+                "round_name": round_name
+            }
+        except Exception as e:
+            debug_log(1, f"Step 1 error: {e}")
+            return jsonify({"error": f"Validation failed: {e}"}), 500
+
+    # Step 2: Create Discord channel
+    elif step == 2:
+        if configstruct.get("SKIP_PUZZCORD"):
+            debug_log(3, f"Step 2: Skipping Discord channel creation (SKIP_PUZZCORD enabled)")
+            return {
+                "status": "ok",
+                "step": 2,
+                "skipped": True,
+                "message": "Discord integration disabled"
+            }
+
+        try:
+            round_name = get_round_part(round_id, "name")["round"]["name"]
+            # Use doc redirect hack since no doc yet
+            drive_uri = "%s/doc.php?pname=%s" % (configstruct["BIN_URI"], name)
+            chat_channel = chat_create_channel_for_puzzle(
+                name, round_name, puzzle_uri, drive_uri
+            )
+            debug_log(4, f"Step 2: Created chat channel: {chat_channel}")
+
+            chat_id = chat_channel[0]
+            chat_link = chat_channel[1]
+
+            # Store channel info in temp table
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE temp_puzzle_creation
+                SET chat_channel_id = %s, chat_channel_link = %s
+                WHERE code = %s
+                """,
+                (chat_id, chat_link, code)
+            )
+            conn.commit()
+
+            debug_log(3, f"Step 2: Created Discord channel for {name}")
+
+            return {
+                "status": "ok",
+                "step": 2,
+                "message": f"Created Discord channel for {name}",
+                "chat_channel_id": chat_id,
+                "chat_link": chat_link
+            }
+        except Exception as e:
+            debug_log(1, f"Step 2 error: {e}")
+            return jsonify({"error": f"Failed to create Discord channel: {e}"}), 500
+
+    # Step 3: Create Google Sheet
+    elif step == 3:
+        if configstruct.get("SKIP_GOOGLE_API"):
+            debug_log(3, f"Step 3: Skipping Google Sheet creation (SKIP_GOOGLE_API enabled)")
+            return {
+                "status": "ok",
+                "step": 3,
+                "skipped": True,
+                "message": "Google API integration disabled"
+            }
+
+        try:
+            round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
+            round_name = get_round_part(round_id, "name")["round"]["name"]
+            round_drive_id = round_drive_uri.split("/")[-1]
+
+            chat_link = req.get("chat_channel_link", "")
+
+            drive_id = create_puzzle_sheet(
+                round_drive_id,
+                {
+                    "name": name,
+                    "roundname": round_name,
+                    "puzzle_uri": puzzle_uri,
+                    "chat_uri": chat_link,
+                },
+            )
+            drive_uri = "https://docs.google.com/spreadsheets/d/%s/edit#gid=1" % drive_id
+
+            # Store sheet info in temp table
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE temp_puzzle_creation
+                SET drive_id = %s, drive_uri = %s
+                WHERE code = %s
+                """,
+                (drive_id, drive_uri, code)
+            )
+            conn.commit()
+
+            debug_log(3, f"Step 3: Created Google Sheet for {name}")
+
+            return {
+                "status": "ok",
+                "step": 3,
+                "message": f"Created Google Sheet for {name}",
+                "drive_id": drive_id,
+                "drive_uri": drive_uri
+            }
+        except Exception as e:
+            debug_log(1, f"Step 3 error: {e}")
+            return jsonify({"error": f"Failed to create Google Sheet: {e}"}), 500
+
+    # Step 4: Insert puzzle into database
+    elif step == 4:
+        try:
+            chat_id = req.get("chat_channel_id", "")
+            chat_link = req.get("chat_channel_link", "")
+            drive_id = req.get("drive_id", "")
+            drive_uri = req.get("drive_uri", "")
+
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO puzzle
+                (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    name,
+                    puzzle_uri,
+                    round_id,
+                    chat_id,
+                    chat_link,
+                    name,  # Store the full name with emojis intact
+                    drive_id,
+                    drive_uri,
+                    ismeta,
+                ),
+            )
+            conn.commit()
+
+            # Get the assigned puzzle ID
+            cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
+            puzzle = cursor.fetchone()
+            myid = str(puzzle["id"])
+
+            # Add activity entry for puzzle creation
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'puzzleboss', 'create')
+                """,
+                (myid, 100),
+            )
+            conn.commit()
+
+            debug_log(3, f"Step 4: Inserted puzzle {name} into database with ID {myid}")
+
+            return {
+                "status": "ok",
+                "step": 4,
+                "message": f"Inserted puzzle {name} into database",
+                "puzzle_id": myid
+            }
+        except MySQLdb._exceptions.IntegrityError as e:
+            debug_log(1, f"Step 4 integrity error: {e}")
+            return jsonify({"error": f"Duplicate puzzle name {name} detected"}), 400
+        except Exception as e:
+            debug_log(1, f"Step 4 error: {e}")
+            return jsonify({"error": f"Failed to insert puzzle into database: {e}"}), 500
+
+    # Step 5: Finalize - set status, announce, cleanup
+    elif step == 5:
+        try:
+            # Get puzzle ID
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
+            puzzle = cursor.fetchone()
+            if not puzzle:
+                return jsonify({"error": f"Puzzle {name} not found in database"}), 404
+
+            myid = str(puzzle["id"])
+
+            # Set speculative status if needed
+            if is_speculative:
+                cursor.execute(
+                    "UPDATE puzzle SET status = 'Speculative' WHERE id = %s",
+                    (myid,)
+                )
+                conn.commit()
+                debug_log(3, f"Set puzzle {name} status to Speculative")
+
+            # Announce new puzzle in chat
+            chat_announce_new(name)
+
+            # Invalidate /allcached since new puzzle was created
+            invalidate_all_cache()
+
+            # Clean up temp storage
+            cursor.execute(
+                "DELETE FROM temp_puzzle_creation WHERE code = %s",
+                (code,)
+            )
+            conn.commit()
+
+            debug_log(
+                3,
+                f"Step 5: Finalized puzzle {name} (ID {myid}) - announced and cleaned up"
+            )
+
+            return {
+                "status": "ok",
+                "step": 5,
+                "message": f"Puzzle {name} creation complete!",
+                "puzzle_id": myid,
+                "is_speculative": is_speculative
+            }
+        except Exception as e:
+            debug_log(1, f"Step 5 error: {e}")
+            return jsonify({"error": f"Failed to finalize puzzle: {e}"}), 500
+
+    else:
+        return jsonify({"error": f"Invalid step: {step}. Must be 1-5"}), 400
 
 
 @app.route("/rounds", endpoint="post_rounds", methods=["POST"])

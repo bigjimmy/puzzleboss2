@@ -1,18 +1,19 @@
-// Status data - minimal fallback until huntinfo loads
-let statusData = [
-    {name: 'New', emoji: '🆕', text: 'N', order: 5},
-    {name: 'Solved', emoji: '✅', text: '*', order: 9}
-];
+// Status data - must be loaded from huntinfo, no fallback
+let statusData = [];
 
-// Fetch huntinfo on module load
+// Fetch huntinfo on module load - REQUIRED for app to function
 fetch('./apicall.php?apicall=huntinfo')
     .then(r => r.json())
     .then(data => {
         if (data.statuses && Array.isArray(data.statuses)) {
             statusData = data.statuses;
+        } else {
+            console.error('huntinfo did not return valid statuses array');
         }
     })
-    .catch(e => console.warn('Failed to load huntinfo for status metadata:', e));
+    .catch(e => {
+        console.error('FATAL: Failed to load huntinfo for status metadata:', e);
+    });
 
 export default {
     // Status names in display order

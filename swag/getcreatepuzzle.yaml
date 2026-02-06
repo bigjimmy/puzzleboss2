@@ -1,0 +1,104 @@
+tags:
+  - Puzzles
+summary: Execute puzzle creation step
+description: |
+  Executes individual steps of the puzzle creation process.
+
+  This endpoint works with codes obtained from POST /puzzles/stepwise.
+  Each step should be called sequentially (step=1, then step=2, etc.).
+
+  Steps:
+  - step=1: Validate puzzle data and retrieve round information
+  - step=2: Create Discord channel (skipped if SKIP_PUZZCORD enabled)
+  - step=3: Create Google Sheet (skipped if SKIP_GOOGLE_API enabled)
+  - step=4: Insert puzzle into database and add activity entry
+  - step=5: Finalize - set speculative status if needed, announce puzzle, cleanup temp storage
+
+  After step 5, the temp_puzzle_creation entry is deleted.
+parameters:
+  - name: code
+    in: path
+    type: string
+    required: true
+    description: Unique code from POST /puzzles/stepwise
+    example: "AbC123XyZ456"
+  - name: step
+    in: query
+    type: integer
+    required: true
+    description: Step number (1-5) to execute
+    enum: [1, 2, 3, 4, 5]
+    example: 1
+responses:
+  200:
+    description: Step completed successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        step:
+          type: integer
+          description: Step number completed
+          example: 1
+        message:
+          type: string
+          description: Human-readable status message
+          example: "Validated puzzle data for ExamplePuzzle"
+        skipped:
+          type: boolean
+          description: True if step was skipped (e.g., Discord disabled)
+          example: false
+        round_name:
+          type: string
+          description: Name of the round (step 1 only)
+          example: "Round 1"
+        chat_channel_id:
+          type: string
+          description: Discord channel ID (step 2 only)
+          example: "C1234567890"
+        chat_link:
+          type: string
+          description: Discord channel URL (step 2 only)
+          example: "https://discord.com/channels/..."
+        drive_id:
+          type: string
+          description: Google Sheets file ID (step 3 only)
+          example: "abc123xyz456"
+        drive_uri:
+          type: string
+          description: Google Sheets URL (step 3 only)
+          example: "https://docs.google.com/spreadsheets/d/abc123xyz456/edit#gid=1"
+        puzzle_id:
+          type: string
+          description: Database ID of created puzzle (steps 4-5 only)
+          example: "42"
+        is_speculative:
+          type: boolean
+          description: Whether puzzle was marked as speculative (step 5 only)
+          example: false
+  400:
+    description: Invalid request (bad step number, etc.)
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid step: 6. Must be 1-5"
+  404:
+    description: Code not found or expired
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Invalid or expired code: xyz"
+  500:
+    description: Error during step execution
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Failed to create Discord channel: Connection error"

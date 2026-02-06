@@ -7,8 +7,8 @@ export default {
     },
     computed: {
         puzzleFilterKeys() {
-            // Use passed statuses prop if available, otherwise fall back to Consts
-            return this.statuses && this.statuses.length > 0 ? this.statuses : Consts.statuses;
+            // Use passed statuses prop - component won't render until statuses are loaded
+            return this.statuses;
         }
     },
     emits: ['settings-updated'],
@@ -29,8 +29,8 @@ export default {
         // puzzles by filling the puzzleFilter object as appropriate.
         //
         function applyShowFilter(which) {
-            const statusList = props.statuses && props.statuses.length > 0 ? props.statuses : Consts.statuses;
-            const pf = Object.fromEntries(statusList.map((status) => [status, which]));
+            // Use passed statuses prop - component won't render until statuses are loaded
+            const pf = Object.fromEntries(props.statuses.map((status) => [status, which]));
             context.emit('settings-updated', 'puzzleFilter', pf);
         }
 
