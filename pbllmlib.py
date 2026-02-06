@@ -267,7 +267,7 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
     try:
         # Create embedding for query using Gemini
         client = genai.Client(api_key=api_key)
-        result = client.models.embed_content(model="text-embedding-004", contents=query)
+        result = client.models.embed_content(model="models/gemini-embedding-001", contents=query)
         query_embedding = result.embeddings[0].values
 
         # Search ChromaDB - fetch more than needed for re-ranking

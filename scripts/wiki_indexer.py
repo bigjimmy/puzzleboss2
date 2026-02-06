@@ -263,7 +263,7 @@ def create_embeddings(chunks, api_key):
             text = f"{chunk['title']}: {chunk['content']}"
 
             result = client.models.embed_content(
-                model="text-embedding-004", contents=text
+                model="models/gemini-embedding-001", contents=text
             )
 
             embeddings.append(result.embeddings[0].values)
