@@ -20,7 +20,7 @@
                 </p>
             </div>
 
-            <settings v-if="settings" :s="settings" :statuses="statuses" @settings-updated="updateSetting"></settings>
+            <settings v-if="settings && statuses && statuses.length > 0" :s="settings" :statuses="statuses" @settings-updated="updateSetting"></settings>
 
             <div id = "allrounds" :class = "{'usecolumns': useColumns}">
                 <div id = "rounds" :class = "{'usecolumns': useColumns}">
@@ -183,15 +183,7 @@
                     // never reads stale data for too long.
                     //
 
-                    // Merge any new statuses that loaded asynchronously from huntinfo
-                    if (settings.value.puzzleFilter) {
-                        const defaultFilter = Consts.defaults[0];
-                        for (const status in defaultFilter) {
-                            if (!(status in settings.value.puzzleFilter)) {
-                                settings.value.puzzleFilter[status] = defaultFilter[status];
-                            }
-                        }
-                    }
+                    // Statuses will be merged after huntinfo loads in firstUpdate
 
                     const url = `${Consts.api}/apicall.php?apicall=all`
                     let success = false;
@@ -220,8 +212,29 @@
                             //
                             const huntinfo_url = `${Consts.api}/apicall.php?&apicall=huntinfo`;
                             const huntinfoData = await (await fetch(huntinfo_url)).json();
+                            console.log('DEBUG: huntinfo response:', huntinfoData);
                             if (huntinfoData.statuses && Array.isArray(huntinfoData.statuses)) {
                                 statuses.value = huntinfoData.statuses.map(s => s.name);
+                                console.log('DEBUG: statuses set to:', statuses.value);
+
+                                // Now that statuses are loaded, populate puzzleFilter
+                                if (settings.value) {
+                                    console.log('DEBUG: settings exists, populating puzzleFilter');
+                                    if (!settings.value.puzzleFilter) {
+                                        settings.value.puzzleFilter = {};
+                                    }
+                                    // Add all statuses to filter (visible except [hidden])
+                                    statuses.value.forEach(status => {
+                                        if (!(status in settings.value.puzzleFilter)) {
+                                            settings.value.puzzleFilter[status] = (status !== '[hidden]');
+                                        }
+                                    });
+                                    console.log('DEBUG: puzzleFilter after population:', settings.value.puzzleFilter);
+                                } else {
+                                    console.error('DEBUG: settings.value is null/undefined when trying to populate puzzleFilter');
+                                }
+                            } else {
+                                console.error('DEBUG: huntinfo did not return valid statuses array');
                             }
                         }
 
@@ -347,28 +360,36 @@
 
                     //
                     // Add defaults if new settings have been introduced.
+                    // Skip puzzleFilter (index 0) - will be initialized after statuses load
                     //
                     Consts.settings.forEach((setting, index) => {
-                        if(s[setting] === null || s[setting] === undefined)
-                            s[setting] = structuredClone(Consts.defaults[index]);
-                    });
-
-                    // Merge in any new statuses to puzzleFilter (for dynamically loaded statuses)
-                    if (s.puzzleFilter) {
-                        const defaultFilter = Consts.defaults[0]; // puzzleFilter is first in defaults
-                        for (const status in defaultFilter) {
-                            if (!(status in s.puzzleFilter)) {
-                                s.puzzleFilter[status] = defaultFilter[status];
+                        if(s[setting] === null || s[setting] === undefined) {
+                            if (index === 0) {
+                                // puzzleFilter - initialize as empty object, will be populated after statuses load
+                                s[setting] = {};
+                            } else {
+                                s[setting] = structuredClone(Consts.defaults[index]);
                             }
                         }
-                    }
+                    });
+
+                    // Don't merge statuses here - will be done after huntinfo loads in firstUpdate
 
                     settings.value = s;
+                    console.log('DEBUG: settings initialized from localStorage:', settings.value);
 
                     const sb = localStorage.getItem("showBody");
                     if (sb !== null && sb !== undefined) showBody.value = JSON.parse(sb);
 
                     await fetchData(true);
+                    console.log('DEBUG: After fetchData(true):');
+                    console.log('  - settings exists:', !!settings.value);
+                    console.log('  - statuses exists:', !!statuses.value);
+                    console.log('  - statuses.length:', statuses.value ? statuses.value.length : 0);
+                    console.log('  - statuses array:', statuses.value);
+                    console.log('  - puzzleFilter exists:', !!settings.value?.puzzleFilter);
+                    console.log('  - puzzleFilter keys:', settings.value?.puzzleFilter ? Object.keys(settings.value.puzzleFilter) : []);
+                    console.log('  - Condition (settings && statuses && statuses.length > 0):', !!(settings.value && statuses.value && statuses.value.length > 0));
                     setInterval(fetchData, 5000);
                 });
 
@@ -422,6 +443,15 @@
                     persist("showBody", update);
                 });
 
+                watch(statuses, newVal => {
+                    console.log('DEBUG: statuses changed to:', newVal);
+                    console.log('DEBUG: After statuses change - condition check:', !!(settings.value && statuses.value && statuses.value.length > 0));
+                });
+
+                watch(settings, newVal => {
+                    console.log('DEBUG: settings changed, puzzleFilter keys:', newVal?.puzzleFilter ? Object.keys(newVal.puzzleFilter) : []);
+                }, { deep: true });
+
                 return {
                     data,
                     showBody, highlight, toggleBody,
@@ -430,7 +460,7 @@
                     uid, username, tags, solvers,
                     currPuzz, initialPuzz, clearInitPuzz,
                     tags, tagFilter,
-                    settings, updateSetting
+                    settings, statuses, updateSetting
                 }
             },
         }).mount('#main');

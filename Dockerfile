@@ -33,6 +33,9 @@ ENV PYTHONWARNINGS="ignore::DeprecationWarning"
 RUN pip install --no-cache-dir -r requirements.txt
 ENV PYTHONWARNINGS=""
 
+# Install Playwright browsers (Chromium only) with system dependencies
+RUN playwright install --with-deps chromium
+
 # Copy application code
 COPY . .
 
