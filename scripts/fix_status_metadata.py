@@ -20,13 +20,14 @@ status_metadata = [
     {"name": "Critical", "emoji": "⚠️", "text": "!", "order": 1},
     {"name": "Needs eyes", "emoji": "👀", "text": "E", "order": 2},
     {"name": "Being worked", "emoji": "🙇", "text": "W", "order": 3},
-    {"name": "Under control", "emoji": "🤝", "text": "U", "order": 4},
-    {"name": "New", "emoji": "🆕", "text": "N", "order": 5},
-    {"name": "Grind", "emoji": "⛏️", "text": "G", "order": 6},
-    {"name": "Waiting for HQ", "emoji": "⌛", "text": "H", "order": 7},
-    {"name": "Abandoned", "emoji": "🏳️", "text": "A", "order": 8},
-    {"name": "Solved", "emoji": "✅", "text": "*", "order": 9},
-    {"name": "Unnecessary", "emoji": "🙃", "text": "X", "order": 10},
+    {"name": "Speculative", "emoji": "🔮", "text": "S", "order": 4},
+    {"name": "Under control", "emoji": "🤝", "text": "U", "order": 5},
+    {"name": "New", "emoji": "🆕", "text": "N", "order": 6},
+    {"name": "Grind", "emoji": "⛏️", "text": "G", "order": 7},
+    {"name": "Waiting for HQ", "emoji": "⌛", "text": "H", "order": 8},
+    {"name": "Abandoned", "emoji": "🏳️", "text": "A", "order": 9},
+    {"name": "Solved", "emoji": "✅", "text": "*", "order": 10},
+    {"name": "Unnecessary", "emoji": "🙃", "text": "X", "order": 11},
     {"name": "[hidden]", "emoji": "👻", "text": "H", "order": 99}
 ]
 

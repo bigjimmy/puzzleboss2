@@ -60,7 +60,7 @@ parameters:
             description: Puzzle name (spaces will be removed)
           status:
             type: string
-            enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', 'Under control', 'Waiting for HQ', 'Grind', 'Abandoned']
+            enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', 'Under control', 'Waiting for HQ', 'Grind', 'Abandoned', 'Speculative']
             description: Status category of puzzle
           answer:
             type: string

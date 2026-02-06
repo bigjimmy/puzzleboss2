@@ -20,7 +20,7 @@
                 </p>
             </div>
 
-            <settings v-if="settings" :s="settings" @settings-updated="updateSetting"></settings>
+            <settings v-if="settings" :s="settings" :statuses="statuses" @settings-updated="updateSetting"></settings>
 
             <div id = "allrounds" :class = "{'usecolumns': useColumns}">
                 <div id = "rounds" :class = "{'usecolumns': useColumns}">
@@ -166,6 +166,7 @@
 
                 const tags = ref([]);
                 const tagFilter = ref("");
+                const statuses = ref([]);
 
                 //
                 // This function fetches data from an endpoint and updates the
@@ -213,6 +214,15 @@
                             const tags_url = `${Consts.api}/apicall.php?&apicall=tags`;
                             const tagsData = await (await fetch(tags_url)).json();
                             tags.value = tagsData.tags;
+
+                            //
+                            // Fetch statuses from huntinfo for the settings filter
+                            //
+                            const huntinfo_url = `${Consts.api}/apicall.php?&apicall=huntinfo`;
+                            const huntinfoData = await (await fetch(huntinfo_url)).json();
+                            if (huntinfoData.statuses && Array.isArray(huntinfoData.statuses)) {
+                                statuses.value = huntinfoData.statuses.map(s => s.name);
+                            }
                         }
 
                         const solver_url = `${Consts.api}/apicall.php?&apicall=solver&apiparam1=${uid.value}`

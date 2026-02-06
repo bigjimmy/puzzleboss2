@@ -1839,6 +1839,55 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         update_puzzle_part_in_db(id, part, value)
         # This obviously needs some sanity checking
 
+    elif part == "round_id":
+        # Validate that the round exists
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM round WHERE id = %s", (value,))
+        if not cursor.fetchone():
+            raise Exception("Round ID %s not found" % value)
+
+        # Update the puzzle's round
+        update_puzzle_part_in_db(id, part, value)
+
+        # Add activity entry for round change
+        try:
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'puzzleboss', 'interact')
+                """,
+                (id, 100),
+            )
+            conn.commit()
+        except Exception:
+            debug_log(
+                1,
+                "Exception in logging round change in activity table for puzzle %s" % id,
+            )
+
+    elif part == "name":
+        # Update puzzle name (strip spaces like in create_puzzle)
+        sanitized_name = value.replace(" ", "")
+        if not sanitized_name:
+            raise Exception("Puzzle name cannot be empty")
+
+        # Check for duplicate names
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM puzzle WHERE name = %s AND id != %s", (sanitized_name, id)
+        )
+        if cursor.fetchone():
+            raise Exception("Duplicate puzzle name %s detected" % sanitized_name)
+
+        update_puzzle_part_in_db(id, part, sanitized_name)
+
+    elif part == "puzzle_uri":
+        # Update puzzle URI
+        update_puzzle_part_in_db(id, part, value)
+
     elif part == "sheetcount":
         # Simple integer update for sheet count (set by bigjimmybot)
         update_puzzle_part_in_db(id, part, value)

@@ -426,6 +426,7 @@ def check_puzzle_from_queue(threadname, q):
 
             # Check for abandoned puzzles: "Being worked" with no solvers and no recent activity
             # This check happens AFTER sheet activity detection to ensure new activity is recorded first
+            # Note: Speculative puzzles are excluded (they have status "Speculative", not "Being worked")
             if mypuzzle.get("status") == "Being worked":
                 cursolvers = mypuzzle.get("cursolvers")
                 if not cursolvers or not cursolvers.strip():
