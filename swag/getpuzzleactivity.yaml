@@ -1,0 +1,82 @@
+tags:
+  - Puzzles
+  - Activity
+summary: Get all activity for a puzzle
+description: |
+  Returns all activity entries for a specific puzzle, ordered by time (most recent first).
+  Activity includes puzzle creation, solver interactions, sheet revisions, comments, and solves.
+parameters:
+  - name: id
+    in: path
+    type: integer
+    required: true
+    description: ID of puzzle to get activity for
+produces:
+  - application/json
+responses:
+  200:
+    description: Successful response with activity list
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        puzzle_id:
+          type: integer
+          description: ID of the puzzle
+        activity:
+          type: array
+          description: List of all activity entries for this puzzle
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Activity entry ID
+              time:
+                type: string
+                format: date-time
+                description: Timestamp of activity (ISO 8601 format)
+              solver_id:
+                type: integer
+                description: ID of solver who performed the activity
+              puzzle_id:
+                type: integer
+                description: ID of puzzle this activity is for
+              source:
+                type: string
+                enum: [google, puzzleboss, bigjimmybot, discord]
+                description: Source system that recorded this activity
+              type:
+                type: string
+                enum: [create, revise, comment, interact, solve]
+                description: Type of activity
+              uri:
+                type: string
+                description: URI related to the activity (if applicable)
+              source_version:
+                type: integer
+                description: Version of the source system
+  404:
+    description: Puzzle not found
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          example: Puzzle not found
+  500:
+    description: Server error
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Error message

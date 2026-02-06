@@ -681,6 +681,46 @@ def get_puzzle_part(id, part):
     return {"status": "ok", "puzzle": {"id": id, part: rv}}
 
 
+@app.route("/puzzles/<id>/activity", endpoint="puzzle_activity", methods=["GET"])
+@swag_from("swag/getpuzzleactivity.yaml", endpoint="puzzle_activity", methods=["GET"])
+def get_puzzle_activity(id):
+    """Get all activity for a specific puzzle."""
+    debug_log(4, "start. id: %s" % id)
+
+    # Check if puzzle exists
+    try:
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        cursor.execute("SELECT id FROM puzzle WHERE id = %s", (id,))
+        if not cursor.fetchone():
+            raise Exception("Puzzle %s not found" % id)
+    except Exception as e:
+        raise Exception("Puzzle %s not found in database" % id)
+
+    # Fetch all activity for this puzzle
+    try:
+        cursor.execute(
+            """
+            SELECT id, time, solver_id, puzzle_id, source, type, uri, source_version
+            FROM activity
+            WHERE puzzle_id = %s
+            ORDER BY time DESC
+            """,
+            (id,),
+        )
+        activities = cursor.fetchall()
+    except Exception as e:
+        raise Exception("Exception fetching activity for puzzle %s: %s" % (id, e))
+
+    debug_log(4, "fetched %d activity entries for puzzle %s" % (len(activities), id))
+    return {
+        "status": "ok",
+        "puzzle_id": int(id),
+        "activity": activities,
+    }
+
+
 @app.route("/rounds", endpoint="rounds", methods=["GET"])
 @swag_from("swag/getrounds.yaml", endpoint="rounds", methods=["GET"])
 def get_all_rounds():

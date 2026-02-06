@@ -1624,6 +1624,123 @@ class TestRunner:
 
         result.set_success("Activity tracking test completed successfully")
 
+    def test_puzzle_activity_endpoint(self, result: TestResult):
+        """Test /puzzles/<id>/activity endpoint."""
+        self.logger.log_operation("Starting puzzle activity endpoint test")
+
+        # Get all puzzles
+        puzzles = self.get_all_puzzles()
+        if not puzzles:
+            result.fail("No puzzles available for testing")
+            return
+
+        # Test with the first puzzle
+        test_puzzle = puzzles[0]
+        puzzle_id = test_puzzle["id"]
+
+        self.logger.log_operation(f"Testing activity endpoint for puzzle {puzzle_id}")
+
+        # Fetch activity for the puzzle
+        response = requests.get(f"{self.base_url}/puzzles/{puzzle_id}/activity")
+        if not response.ok:
+            result.fail(f"Failed to get activity for puzzle {puzzle_id}: {response.text}")
+            return
+
+        activity_data = response.json()
+
+        # Validate response structure
+        if not isinstance(activity_data, dict):
+            result.fail("Invalid response format - not a dict")
+            return
+
+        if activity_data.get("status") != "ok":
+            result.fail(f"Invalid status: {activity_data.get('status')}")
+            return
+
+        if "puzzle_id" not in activity_data:
+            result.fail("Missing 'puzzle_id' in response")
+            return
+
+        if "activity" not in activity_data:
+            result.fail("Missing 'activity' in response")
+            return
+
+        # Validate puzzle_id matches
+        if activity_data["puzzle_id"] != puzzle_id:
+            result.fail(f"Puzzle ID mismatch: expected {puzzle_id}, got {activity_data['puzzle_id']}")
+            return
+
+        # Validate activity is a list
+        if not isinstance(activity_data["activity"], list):
+            result.fail("Activity should be a list")
+            return
+
+        activities = activity_data["activity"]
+        self.logger.log_operation(f"Found {len(activities)} activity entries")
+
+        # Every puzzle should have at least a 'create' activity
+        if len(activities) < 1:
+            result.fail("Puzzle should have at least one activity entry (create)")
+            return
+
+        # Validate activity entry structure
+        required_fields = ["id", "time", "solver_id", "puzzle_id", "source", "type"]
+        for i, activity in enumerate(activities[:3]):  # Check first 3 entries
+            for field in required_fields:
+                if field not in activity:
+                    result.fail(f"Activity entry {i} missing field '{field}'")
+                    return
+
+            # Validate puzzle_id matches
+            if activity["puzzle_id"] != puzzle_id:
+                result.fail(f"Activity entry {i} has wrong puzzle_id: {activity['puzzle_id']}")
+                return
+
+        # Validate activities are sorted by time (most recent first)
+        if len(activities) > 1:
+            times = [a["time"] for a in activities]
+            # Compare first and last - first should be >= last (reverse chronological)
+            if times[0] < times[-1]:
+                result.fail("Activities not sorted correctly (should be most recent first)")
+                return
+
+        self.logger.log_operation("Activity entries validated successfully")
+
+        # Test generating activity by changing puzzle status
+        self.logger.log_operation("Changing puzzle status to generate additional activity")
+
+        # Change status to generate activity
+        response = requests.post(
+            f"{self.base_url}/puzzles/{puzzle_id}/status",
+            json={"status": "Critical"}
+        )
+        if not response.ok:
+            self.logger.log_operation(f"Note: Failed to change puzzle status: {response.text}")
+        else:
+            # Fetch activity again to verify it increased
+            response = requests.get(f"{self.base_url}/puzzles/{puzzle_id}/activity")
+            if response.ok:
+                updated_activity = response.json()["activity"]
+                if len(updated_activity) > len(activities):
+                    self.logger.log_operation(
+                        f"Activity count increased from {len(activities)} to {len(updated_activity)}"
+                    )
+                else:
+                    self.logger.log_operation(
+                        f"Activity count stayed at {len(activities)}"
+                    )
+
+        # Test with non-existent puzzle
+        self.logger.log_operation("Testing with non-existent puzzle")
+        response = requests.get(f"{self.base_url}/puzzles/999999/activity")
+        if response.ok:
+            result.fail("Should return error for non-existent puzzle")
+            return
+
+        self.logger.log_operation("Correctly returned error for non-existent puzzle")
+
+        result.set_success("Puzzle activity endpoint test completed successfully")
+
     def test_solver_history(self, result: TestResult):
         """Test adding and removing solvers from puzzle history."""
         try:
@@ -3241,6 +3358,7 @@ class TestRunner:
             ("Solve Clears Location and Solvers", self.test_solve_clears_location_and_solvers),
             ("Solver Reassignment", self.test_solver_reassignment),
             ("Activity Tracking", self.test_activity_tracking),
+            ("Puzzle Activity Endpoint", self.test_puzzle_activity_endpoint),
             ("Solver History", self.test_solver_history),
             ("Sheetcount", self.test_sheetcount),
             ("Tagging", self.test_tagging),
