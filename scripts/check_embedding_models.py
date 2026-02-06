@@ -7,8 +7,12 @@ Run this in production to diagnose the embedding model 404 errors.
 import sys
 import os
 
+# Change to parent directory (where puzzleboss.yaml is located)
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(parent_dir)
+
 # Add parent directory to path so we can import pblib
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, parent_dir)
 
 from pblib import refresh_config, configstruct
 
