@@ -28,7 +28,7 @@ parameters:
       description: |
         Part of puzzle to change. Valid values:
         - name: Puzzle name
-        - status: Puzzle status (New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary)
+        - status: Puzzle status (New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary, Under control, Waiting for HQ, Grind, Abandoned)
         - answer: Puzzle answer (automatically marks as Solved)
         - round_id: ID of round puzzle belongs to
         - comments: Free-form comments
@@ -60,7 +60,7 @@ parameters:
             description: Puzzle name (spaces will be removed)
           status:
             type: string
-            enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
+            enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', 'Under control', 'Waiting for HQ', 'Grind', 'Abandoned', 'Speculative']
             description: Status category of puzzle
           answer:
             type: string

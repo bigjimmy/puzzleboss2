@@ -47,7 +47,7 @@ responses:
                               description: Puzzle name
                           status:
                               type: string
-                              enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary']
+                              enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', 'Under control', 'Waiting for HQ', 'Grind', 'Abandoned', 'Speculative']
                               description: Status category of puzzle
                           answer:
                               type: string

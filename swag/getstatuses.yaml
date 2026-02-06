@@ -19,5 +19,5 @@ responses:
           type: array
           items:
             type: string
-          example: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', '[hidden]']
+          example: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'Unnecessary', 'WTF', 'Under control', 'Waiting for HQ', 'Grind', 'Abandoned', 'Speculative', '[hidden]']
 

@@ -70,6 +70,9 @@ else {
     case "all":
       echo json_encode(readapi('/all'));
       break;
+    case "huntinfo":
+      echo json_encode(readapi('/huntinfo'));
+      break;
     case "solver":
       echo json_encode(readapi('/solvers/' . $apiparam1));
       break;
@@ -105,8 +108,5 @@ else {
       die('Error: improper apicall specified.');
   }
 }
-
-http_response_code(200);
-exit(0);
 
 ?>

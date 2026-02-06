@@ -1,12 +1,41 @@
-const statuses = ['WTF', 'Critical', 'Needs eyes', 'Being worked', 'Under control', 'New', 'Grind', 'Waiting for HQ', 'Solved', 'Unnecessary'];
+// Status data - minimal fallback until huntinfo loads
+let statusData = [
+    {name: 'New', emoji: '🆕', text: 'N', order: 5},
+    {name: 'Solved', emoji: '✅', text: '*', order: 9}
+];
+
+// Fetch huntinfo on module load
+fetch('./apicall.php?apicall=huntinfo')
+    .then(r => r.json())
+    .then(data => {
+        if (data.statuses && Array.isArray(data.statuses)) {
+            statusData = data.statuses;
+        }
+    })
+    .catch(e => console.warn('Failed to load huntinfo for status metadata:', e));
+
 export default {
-    statuses,
+    // Status names in display order
+    get statuses() {
+        return statusData.map(s => s.name);
+    },
 
-    //
-    // Must be in the same order as statuses.
-    //
+    // Emoji array (parallel to statuses)
+    get emoji() {
+        return statusData.map(s => s.emoji);
+    },
 
-    "emoji": ['☢️', '⚠️', '👀', '🙇', '🤝', '🆕', '⛏️', '⌛', '✅', '🙃'],
+    // Get emoji for a specific status name
+    getEmoji(name) {
+        const s = statusData.find(x => x.name === name);
+        return s ? s.emoji : '❓';
+    },
+
+    // Get text code for a specific status name
+    getText(name) {
+        const s = statusData.find(x => x.name === name);
+        return s ? s.text : '?';
+    },
 
     //
     // We consider a round solved when all its metas have been solved.
@@ -16,7 +45,7 @@ export default {
         const metas = round.puzzles.filter(puzzle => puzzle.ismeta);
         return (metas.length > 0) &&
                (metas.filter(puzzle => puzzle.status !== 'Solved').length === 0);
-        
+
     },
 
     //
@@ -29,21 +58,24 @@ export default {
     // Default values of available settings.
     //
 
-    "defaults": [
-        // puzzleFilter
-        Object.fromEntries(statuses.map((status) => [status, true])),
-        // useColumns
-        false,
-        // scrollSpeed
-        1,
-        // sortPuzzles
-        true,
-        // showControls
-        false,
-        // spoilAll
-        false,
-        // showTags
-        true],
+    get defaults() {
+        return [
+            // puzzleFilter - all statuses visible except [hidden]
+            Object.fromEntries(this.statuses.map((status) => [status, status !== '[hidden]'])),
+            // useColumns
+            false,
+            // scrollSpeed
+            1,
+            // sortPuzzles
+            true,
+            // showControls
+            false,
+            // spoilAll
+            false,
+            // showTags
+            true
+        ];
+    },
 
     "api": ".",
 }

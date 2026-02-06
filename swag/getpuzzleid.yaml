@@ -14,7 +14,7 @@ definitions:
           example: "Example Puzzle"
       status:
           type: string
-          enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', '[hidden]']
+          enum: ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical', 'WTF', 'Unnecessary', 'Under control', 'Waiting for HQ', 'Grind', 'Abandoned', 'Speculative', '[hidden]']
           description: Status category of puzzle
           example: "Being worked"
       answer:

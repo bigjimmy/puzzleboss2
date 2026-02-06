@@ -585,13 +585,13 @@ class TestRunner:
                     return
                 rounds.append(round_data)
 
-            # Create 4 puzzles in each round
+            # Create 5 puzzles in each round (15 total to cover all 13 statuses + extras)
             for round_idx, round_data in enumerate(rounds):
                 self.logger.log_operation(
                     f"Creating puzzles for round {round_data['name']}"
                 )
                 puzzles = []
-                for puzzle_idx in range(4):
+                for puzzle_idx in range(5):
                     # Create puzzle name with spaces and emojis for even-numbered puzzles
                     base_name = (
                         f"Test Puzzle R{round_idx+1}P{puzzle_idx+1} {int(time.time())}"
@@ -633,6 +633,23 @@ class TestRunner:
     def test_puzzle_modification(self, result: TestResult):
         """Test puzzle modification functionality."""
         self.logger.log_operation("Starting puzzle modification test")
+
+        # Fetch statuses dynamically from huntinfo
+        try:
+            huntinfo_response = requests.get(f"{self.base_url}/huntinfo")
+            if huntinfo_response.ok:
+                huntinfo_data = huntinfo_response.json()
+                # Extract status names from rich objects, excluding Solved and [hidden]
+                all_statuses = [s["name"] for s in huntinfo_data.get("statuses", [])]
+                testable_statuses = [s for s in all_statuses if s not in ["Solved", "[hidden]"]]
+            else:
+                # Fallback if huntinfo fails
+                testable_statuses = ["New", "Being worked", "Needs eyes", "Critical", "WTF", "Under control", "Waiting for HQ", "Grind", "Abandoned", "Speculative", "Unnecessary"]
+        except Exception as e:
+            self.logger.log_warning(f"Could not fetch statuses from /huntinfo, using fallback: {e}")
+            testable_statuses = ["New", "Being worked", "Needs eyes", "Critical", "WTF", "Under control", "Waiting for HQ", "Grind", "Abandoned", "Speculative", "Unnecessary"]
+
+        self.logger.log_operation(f"Testing with {len(testable_statuses)} different statuses")
 
         # Get all puzzles
         puzzles = self.get_all_puzzles()
@@ -678,14 +695,14 @@ class TestRunner:
         )
         puzzles_for_answers_set = set(p["id"] for p in puzzles_for_answers)
 
-        # For each selected puzzle, test modifications
+        # For each selected puzzle, test modifications with different statuses
         for idx, puzzle in enumerate(selected_puzzles):
             self.logger.log_operation(
                 f"Testing modifications for puzzle {puzzle['name']}"
             )
 
-            # Test status update
-            new_status = "Being worked"
+            # Assign different status to each puzzle (cycle through available statuses)
+            new_status = testable_statuses[idx % len(testable_statuses)]
             self.logger.log_operation(f"Updating status to '{new_status}'")
             if not self.update_puzzle(puzzle["id"], "status", new_status):
                 result.fail(f"Failed to update status for puzzle {puzzle['name']}")
@@ -802,6 +819,115 @@ class TestRunner:
                 )
 
         result.set_success("Puzzle modification test completed successfully")
+
+    def test_puzzle_round_change(self, result: TestResult):
+        """Test changing a puzzle's round via round_id endpoint."""
+        self.logger.log_operation("Starting puzzle round change test")
+
+        try:
+            # Get all rounds
+            rounds = self.get_all_rounds()
+            if len(rounds) < 2:
+                result.fail("Need at least 2 rounds to test round change")
+                return
+
+            # Get all puzzles
+            puzzles = self.get_all_puzzles()
+            if not puzzles:
+                result.fail("No puzzles available for testing")
+                return
+
+            # Find a puzzle in the first round
+            round_1 = rounds[0]
+            round_2 = rounds[1]
+
+            test_puzzle = None
+            for puzzle in puzzles:
+                puzzle_details = self.get_puzzle_details(puzzle["id"])
+                if puzzle_details and str(puzzle_details.get("round_id")) == str(round_1["id"]):
+                    # Make sure it's not solved (we don't want to move solved puzzles)
+                    if puzzle_details.get("status") != "Solved":
+                        test_puzzle = puzzle_details
+                        break
+
+            if not test_puzzle:
+                result.fail(f"No unsolved puzzles found in round {round_1['name']}")
+                return
+
+            puzzle_id = test_puzzle["id"]
+            puzzle_name = test_puzzle["name"]
+            original_round_id = test_puzzle["round_id"]
+
+            self.logger.log_operation(
+                f"Moving puzzle '{puzzle_name}' from round '{round_1['name']}' (ID: {round_1['id']}) to round '{round_2['name']}' (ID: {round_2['id']})"
+            )
+
+            # Test 1: Change puzzle's round
+            try:
+                response = requests.post(
+                    f"{self.base_url}/puzzles/{puzzle_id}/round_id",
+                    json={"round_id": round_2["id"]},
+                )
+                if not response.ok:
+                    result.fail(f"Failed to change puzzle round: {response.text}")
+                    return
+
+                response_data = response.json()
+                if response_data.get("status") != "ok":
+                    result.fail(f"Round change returned error: {response_data}")
+                    return
+
+                self.logger.log_operation("Round change request successful")
+            except Exception as e:
+                result.fail(f"Exception changing puzzle round: {str(e)}")
+                return
+
+            # Verify the round was changed
+            updated_puzzle = self.get_puzzle_details(puzzle_id)
+            if not updated_puzzle:
+                result.fail("Failed to fetch puzzle after round change")
+                return
+
+            if str(updated_puzzle["round_id"]) != str(round_2["id"]):
+                result.fail(
+                    f"Round not updated. Expected round ID {round_2['id']}, got {updated_puzzle['round_id']}"
+                )
+                return
+
+            self.logger.log_operation(
+                f"✓ Puzzle successfully moved to round '{round_2['name']}'"
+            )
+
+            # Test 2: Verify activity was logged
+            try:
+                activity_response = requests.get(f"{self.base_url}/activity")
+                if activity_response.ok:
+                    self.logger.log_operation("Activity logging verified")
+            except Exception:
+                self.logger.log_warning("Could not verify activity logging")
+
+            # Test 3: Try to move to invalid round (should fail)
+            self.logger.log_operation("Testing invalid round_id rejection")
+            try:
+                response = requests.post(
+                    f"{self.base_url}/puzzles/{puzzle_id}/round_id",
+                    json={"round_id": 99999},
+                )
+                if response.ok:
+                    result.fail("Invalid round_id was accepted (should have been rejected)")
+                    return
+                self.logger.log_operation("✓ Invalid round_id correctly rejected")
+            except Exception as e:
+                result.fail(f"Exception testing invalid round_id: {str(e)}")
+                return
+
+            result.set_success("Puzzle round change test completed successfully")
+
+        except Exception as e:
+            result.fail(f"Error in puzzle round change test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
     def test_multi_part_update(self, result: TestResult):
         """Test multi-part puzzle update endpoint POST /puzzles/<id>."""
@@ -923,7 +1049,22 @@ class TestRunner:
 
         # Test 4: Non-Solved status values ARE allowed
         self.logger.log_operation("Test 4: Verify other status values are allowed")
-        allowed_statuses = ["Needs eyes", "Critical", "Being worked"]
+
+        # Fetch statuses dynamically from huntinfo
+        try:
+            huntinfo_response = requests.get(f"{self.base_url}/huntinfo")
+            if huntinfo_response.ok:
+                huntinfo_data = huntinfo_response.json()
+                # Extract status names from rich objects, excluding Solved and [hidden]
+                all_statuses = [s["name"] for s in huntinfo_data.get("statuses", [])]
+                allowed_statuses = [s for s in all_statuses if s not in ["Solved", "[hidden]"]][:4]  # Test first 4
+            else:
+                # Fallback if huntinfo fails
+                allowed_statuses = ["Needs eyes", "Critical", "Being worked", "Abandoned"]
+        except Exception as e:
+            self.logger.log_warning(f"Could not fetch statuses from /huntinfo, using fallback: {e}")
+            allowed_statuses = ["Needs eyes", "Critical", "Being worked", "Abandoned"]
+
         for test_status in allowed_statuses:
             try:
                 response = requests.post(
@@ -3086,6 +3227,7 @@ class TestRunner:
             ("Solver Listing", self.test_solver_listing),
             ("Puzzle Creation", self.test_puzzle_creation),
             ("Puzzle Modification", self.test_puzzle_modification),
+            ("Puzzle Round Change", self.test_puzzle_round_change),
             ("Puzzle Multi-Part Update", self.test_multi_part_update),
             ("Round Modification", self.test_round_modification),
             ("Round Multi-Part Update", self.test_round_multi_part_update),

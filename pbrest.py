@@ -424,15 +424,49 @@ def get_hunt_info():
         debug_log(2, "Could not fetch config: %s" % e)
         result["config"] = {}
 
-    # Statuses
+    # Statuses - return rich objects with metadata
     try:
+        # Get status names from DB ENUM
         cursor.execute("SHOW COLUMNS FROM puzzle WHERE Field = 'status'")
         row = cursor.fetchone()
+        status_names = []
         if row and row.get("Type", "").startswith("enum("):
             type_str = row["Type"]
-            result["statuses"] = [v.strip("'") for v in type_str[5:-1].split("','")]
-        else:
-            result["statuses"] = []
+            status_names = [v.strip("'") for v in type_str[5:-1].split("','")]
+
+        # Parse metadata from config
+        import json
+        status_metadata = {}
+        try:
+            metadata_json = configstruct.get("STATUS_METADATA", "[]")
+            metadata_list = json.loads(metadata_json)
+            status_metadata = {item["name"]: item for item in metadata_list}
+        except Exception as e:
+            debug_log(2, "Could not parse STATUS_METADATA: %s" % e)
+
+        # Build rich status objects
+        status_list = []
+        for status_name in status_names:
+            if status_name in status_metadata:
+                meta = status_metadata[status_name]
+                status_list.append({
+                    "name": status_name,
+                    "emoji": meta.get("emoji", "❓"),
+                    "text": meta.get("text", status_name[0]),
+                    "order": meta.get("order", 50)
+                })
+            else:
+                # Fallback for statuses without metadata
+                status_list.append({
+                    "name": status_name,
+                    "emoji": "❓",
+                    "text": status_name[0] if status_name else "?",
+                    "order": 50
+                })
+
+        # Sort by display order
+        status_list.sort(key=lambda x: x["order"])
+        result["statuses"] = status_list
     except Exception as e:
         debug_log(2, "Could not fetch statuses: %s" % e)
         result["statuses"] = []
@@ -830,6 +864,8 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
     """
     # Special handling for puzzle assignment
     if part == "puzz":
+        current_puzzle = None  # Initialize to avoid NameError
+
         if value:
             # Assigning puzzle, so check if puzzle is real
             debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
@@ -846,12 +882,12 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
                     "Cannot assign solver to puzzle %s - puzzle is already solved"
                     % value
                 )
-            # Since we're assigning, the puzzle should automatically transit out of "NEW" state if it's there
-            if mypuzz["puzzle"]["status"] == "New":
+            # Since we're assigning, the puzzle should automatically transit out of "New" or "Abandoned" state
+            if mypuzz["puzzle"]["status"] in ["New", "Abandoned"]:
                 debug_log(
                     3,
-                    "Automatically marking puzzle id %s, name %s as being worked on."
-                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"]),
+                    "Automatically marking puzzle id %s, name %s (status: %s) as being worked on."
+                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"], mypuzz["puzzle"]["status"]),
                 )
                 update_puzzle_part_in_db(value, "status", "Being worked")
 
@@ -864,9 +900,9 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id FROM puzzle 
-                WHERE JSON_CONTAINS(current_solvers, 
-                    JSON_OBJECT('solver_id', %s), 
+                SELECT id FROM puzzle
+                WHERE JSON_CONTAINS(current_solvers,
+                    JSON_OBJECT('solver_id', %s),
                     '$.solvers'
                 )
             """,
@@ -878,23 +914,28 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
                 unassign_solver_from_puzzle(current_puzzle["id"], id)
 
         # Now log it in the activity table
-        try:
-            conn = mysql.connection
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, %s, 'interact')
-                """,
-                (value, id, source),
-            )
-            conn.commit()
-        except TypeError:
-            raise Exception(
-                "Exception in logging change to puzzle %s in activity table for solver %s in database"
-                % (value, id)
-            )
+        # For de-assignment (empty value), use the actual puzzle_id we found
+        # For assignment (non-empty value), use the provided puzzle_id
+        puzzle_id_for_log = current_puzzle["id"] if (not value and current_puzzle) else value
+
+        if puzzle_id_for_log:  # Only log if we have a valid puzzle_id
+            try:
+                conn = mysql.connection
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO activity
+                    (puzzle_id, solver_id, source, type)
+                    VALUES (%s, %s, %s, 'interact')
+                    """,
+                    (puzzle_id_for_log, id, source),
+                )
+                conn.commit()
+            except TypeError:
+                raise Exception(
+                    "Exception in logging change to puzzle %s in activity table for solver %s in database"
+                    % (puzzle_id_for_log, id)
+                )
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
         debug_log(3, "solver %s puzz updated to %s" % (id, value))
@@ -1804,6 +1845,55 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)
         # This obviously needs some sanity checking
+
+    elif part == "round_id":
+        # Validate that the round exists
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM round WHERE id = %s", (value,))
+        if not cursor.fetchone():
+            raise Exception("Round ID %s not found" % value)
+
+        # Update the puzzle's round
+        update_puzzle_part_in_db(id, part, value)
+
+        # Add activity entry for round change
+        try:
+            cursor.execute(
+                """
+                INSERT INTO activity
+                (puzzle_id, solver_id, source, type)
+                VALUES (%s, %s, 'puzzleboss', 'interact')
+                """,
+                (id, 100),
+            )
+            conn.commit()
+        except Exception:
+            debug_log(
+                1,
+                "Exception in logging round change in activity table for puzzle %s" % id,
+            )
+
+    elif part == "name":
+        # Update puzzle name (strip spaces like in create_puzzle)
+        sanitized_name = value.replace(" ", "")
+        if not sanitized_name:
+            raise Exception("Puzzle name cannot be empty")
+
+        # Check for duplicate names
+        conn = mysql.connection
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM puzzle WHERE name = %s AND id != %s", (sanitized_name, id)
+        )
+        if cursor.fetchone():
+            raise Exception("Duplicate puzzle name %s detected" % sanitized_name)
+
+        update_puzzle_part_in_db(id, part, sanitized_name)
+
+    elif part == "puzzle_uri":
+        # Update puzzle URI
+        update_puzzle_part_in_db(id, part, value)
 
     elif part == "sheetcount":
         # Simple integer update for sheet count (set by bigjimmybot)

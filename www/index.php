@@ -20,7 +20,7 @@
                 </p>
             </div>
 
-            <settings v-if="settings" :s="settings" @settings-updated="updateSetting"></settings>
+            <settings v-if="settings" :s="settings" :statuses="statuses" @settings-updated="updateSetting"></settings>
 
             <div id = "allrounds" :class = "{'usecolumns': useColumns}">
                 <div id = "rounds" :class = "{'usecolumns': useColumns}">
@@ -166,6 +166,7 @@
 
                 const tags = ref([]);
                 const tagFilter = ref("");
+                const statuses = ref([]);
 
                 //
                 // This function fetches data from an endpoint and updates the
@@ -181,6 +182,16 @@
                     // minute without updates, we kill the page, so that a user
                     // never reads stale data for too long.
                     //
+
+                    // Merge any new statuses that loaded asynchronously from huntinfo
+                    if (settings.value.puzzleFilter) {
+                        const defaultFilter = Consts.defaults[0];
+                        for (const status in defaultFilter) {
+                            if (!(status in settings.value.puzzleFilter)) {
+                                settings.value.puzzleFilter[status] = defaultFilter[status];
+                            }
+                        }
+                    }
 
                     const url = `${Consts.api}/apicall.php?apicall=all`
                     let success = false;
@@ -203,6 +214,15 @@
                             const tags_url = `${Consts.api}/apicall.php?&apicall=tags`;
                             const tagsData = await (await fetch(tags_url)).json();
                             tags.value = tagsData.tags;
+
+                            //
+                            // Fetch statuses from huntinfo for the settings filter
+                            //
+                            const huntinfo_url = `${Consts.api}/apicall.php?&apicall=huntinfo`;
+                            const huntinfoData = await (await fetch(huntinfo_url)).json();
+                            if (huntinfoData.statuses && Array.isArray(huntinfoData.statuses)) {
+                                statuses.value = huntinfoData.statuses.map(s => s.name);
+                            }
                         }
 
                         const solver_url = `${Consts.api}/apicall.php?&apicall=solver&apiparam1=${uid.value}`
@@ -332,6 +352,16 @@
                         if(s[setting] === null || s[setting] === undefined)
                             s[setting] = structuredClone(Consts.defaults[index]);
                     });
+
+                    // Merge in any new statuses to puzzleFilter (for dynamically loaded statuses)
+                    if (s.puzzleFilter) {
+                        const defaultFilter = Consts.defaults[0]; // puzzleFilter is first in defaults
+                        for (const status in defaultFilter) {
+                            if (!(status in s.puzzleFilter)) {
+                                s.puzzleFilter[status] = defaultFilter[status];
+                            }
+                        }
+                    }
 
                     settings.value = s;
 

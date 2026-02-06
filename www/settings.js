@@ -2,11 +2,13 @@ import Consts from './consts.js'
 
 export default {
     props: {
-      s: Object
+      s: Object,
+      statuses: Array
     },
     computed: {
         puzzleFilterKeys() {
-            return Consts.statuses;
+            // Use passed statuses prop if available, otherwise fall back to Consts
+            return this.statuses && this.statuses.length > 0 ? this.statuses : Consts.statuses;
         }
     },
     emits: ['settings-updated'],
@@ -27,7 +29,8 @@ export default {
         // puzzles by filling the puzzleFilter object as appropriate.
         //
         function applyShowFilter(which) {
-            const pf = Object.fromEntries(Consts.statuses.map((status) => [status, which]));
+            const statusList = props.statuses && props.statuses.length > 0 ? props.statuses : Consts.statuses;
+            const pf = Object.fromEntries(statusList.map((status) => [status, which]));
             context.emit('settings-updated', 'puzzleFilter', pf);
         }
 

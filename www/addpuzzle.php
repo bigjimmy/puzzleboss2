@@ -67,6 +67,20 @@
     }, 100);
     return true;
   }
+
+  function togglePuzzleMode() {
+    const mode = document.querySelector('input[name="puzzle_mode"]:checked').value;
+    const promotePuzzleFields = document.getElementById('promote-puzzle-fields');
+    const speculativeCheckbox = document.getElementById('speculative-checkbox-row');
+
+    if (mode === 'new') {
+      promotePuzzleFields.style.display = 'none';
+      if (speculativeCheckbox) speculativeCheckbox.style.display = '';
+    } else {
+      promotePuzzleFields.style.display = '';
+      if (speculativeCheckbox) speculativeCheckbox.style.display = 'none';
+    }
+  }
   </script>
 </head>
 <body>
@@ -77,6 +91,148 @@ require('puzzlebosslib.php');
 
 $round_id = null;
 if (isset($_POST['submit'])) {
+  // Check if this is a promotion workflow
+  $puzzle_mode = isset($_POST['puzzle_mode']) ? $_POST['puzzle_mode'] : 'new';
+
+  if ($puzzle_mode === 'promote') {
+    // Handle promotion of existing speculative puzzle
+    $promote_puzzle_id = isset($_POST['promote_puzzle_id']) ? $_POST['promote_puzzle_id'] : '';
+
+    if (!is_numeric($promote_puzzle_id) || $promote_puzzle_id == '') {
+      exit_with_error_message('You must select a speculative puzzle to promote.');
+    }
+
+    // Get the form data for the update
+    $name = isset($_POST['name']) ? $_POST['name'] : '';
+    $round_id = isset($_POST['round_id']) ? $_POST['round_id'] : null;
+    $puzzle_uri = isset($_POST['puzzle_uri']) ? $_POST['puzzle_uri'] : '';
+
+    echo '<h2>Promoting Speculative Puzzle</h2>';
+    echo "<p>Validating puzzle ID $promote_puzzle_id...</p>";
+
+    // Step 1: Validate everything before making any changes
+    try {
+      // Validate puzzle exists and is actually Speculative
+      $puzzle_resp = readapi("/puzzles/{$promote_puzzle_id}");
+      if (!isset($puzzle_resp->puzzle)) {
+        throw new Exception("Puzzle ID $promote_puzzle_id not found");
+      }
+      if ($puzzle_resp->puzzle->status !== 'Speculative') {
+        throw new Exception("Puzzle is not in Speculative status (current: {$puzzle_resp->puzzle->status})");
+      }
+      echo '<div class="success">✓ Puzzle found and is Speculative</div>';
+
+      // Validate puzzle URI is provided
+      if (empty($puzzle_uri)) {
+        throw new Exception('You must provide a puzzle URI when promoting a speculative puzzle');
+      }
+      echo '<div class="success">✓ Puzzle URI provided</div>';
+
+      // Validate name if provided (check for duplicates)
+      if (!empty($name) && sanitize_string($name) != '') {
+        $sanitized_name = sanitize_string($name);
+        $all_puzzles = readapi("/puzzles");
+        foreach ($all_puzzles->puzzles as $p) {
+          if ($p->name === $sanitized_name && $p->id != $promote_puzzle_id) {
+            throw new Exception("Duplicate puzzle name detected: $sanitized_name");
+          }
+        }
+        echo '<div class="success">✓ Puzzle name is valid and unique</div>';
+      }
+
+      // Validate round exists if specified
+      if (is_numeric($round_id)) {
+        $round_resp = readapi("/rounds/{$round_id}");
+        if (!isset($round_resp->round)) {
+          throw new Exception("Round ID $round_id not found");
+        }
+        echo '<div class="success">✓ Round ID validated</div>';
+      }
+
+    } catch (Exception $e) {
+      exit_with_error_message('Validation failed: '.$e->getMessage());
+    }
+
+    // Step 2: Make changes (validation passed, now update)
+    echo '<p>All validations passed. Applying changes...</p>';
+    $promotion_failed = false;
+    $rollback_needed = false;
+
+    // Update status to New
+    try {
+      $status_data = array('status' => 'New');
+      $status_resp = postapi("/puzzles/{$promote_puzzle_id}/status", $status_data);
+      assert_api_success($status_resp);
+      echo '<div class="success">✓ Status changed to "New"</div>';
+      $rollback_needed = true; // We've made changes, rollback possible if later steps fail
+    } catch (Exception $e) {
+      exit_with_error_message('Failed to update status: '.$e->getMessage());
+    }
+
+    // Update puzzle URI
+    try {
+      $uri_data = array('puzzle_uri' => $puzzle_uri);
+      $uri_resp = postapi("/puzzles/{$promote_puzzle_id}/puzzle_uri", $uri_data);
+      assert_api_success($uri_resp);
+      echo '<div class="success">✓ Puzzle URI updated</div>';
+    } catch (Exception $e) {
+      // Critical failure - try to rollback
+      echo '<div class="error">CRITICAL: Failed to update puzzle URI: '.$e->getMessage().'</div>';
+      if ($rollback_needed) {
+        try {
+          postapi("/puzzles/{$promote_puzzle_id}/status", array('status' => 'Speculative'));
+          echo '<div class="error">⟲ Rolled back to Speculative status</div>';
+        } catch (Exception $rollback_e) {
+          echo '<div class="error">⚠ Rollback failed - puzzle may be in inconsistent state</div>';
+        }
+      }
+      exit_with_error_message('Promotion failed. Please check puzzle state and try again.');
+    }
+
+    // Update name if provided
+    if (!empty($name) && sanitize_string($name) != '') {
+      try {
+        $name_data = array('name' => $name);
+        $name_resp = postapi("/puzzles/{$promote_puzzle_id}/name", $name_data);
+        assert_api_success($name_resp);
+        echo '<div class="success">✓ Puzzle name updated</div>';
+      } catch (Exception $e) {
+        // Non-critical - puzzle is still usable with old name
+        echo '<div class="error">Warning: Could not update name: '.$e->getMessage().'</div>';
+        echo '<div class="error">Promotion partially successful - puzzle is now "New" status with updated URL but old name.</div>';
+        $promotion_failed = true;
+      }
+    }
+
+    // Update round if provided
+    if (is_numeric($round_id)) {
+      try {
+        $round_data = array('round_id' => $round_id);
+        $round_resp = postapi("/puzzles/{$promote_puzzle_id}/round_id", $round_data);
+        assert_api_success($round_resp);
+        echo '<div class="success">✓ Puzzle moved to new round</div>';
+      } catch (Exception $e) {
+        // Non-critical - puzzle is still in original round
+        echo '<div class="error">Warning: Could not move to new round: '.$e->getMessage().'</div>';
+        $promotion_failed = true;
+      }
+    }
+
+    echo '<br><div class="'.($promotion_failed ? 'error' : 'success').'">';
+    if ($promotion_failed) {
+      echo '<strong>Puzzle partially promoted.</strong> ';
+      echo 'Status and URL were updated, but some optional fields failed. ';
+    } else {
+      echo '<strong>Puzzle promoted successfully!</strong> ';
+    }
+    echo '<a href="editpuzzle.php?pid='.$promote_puzzle_id.'">View puzzle</a>';
+    echo '</div><br><hr>';
+    echo '<a href="addpuzzle.php">Add another puzzle</a><br>';
+    echo '<a href="index.php">Return to Puzzleboss Home</a>';
+    exit(0);
+  }
+
+  // Normal puzzle creation flow
   $name = $_POST['name'];
   if (sanitize_string($name) == '') {
     exit_with_error_message(
@@ -175,7 +331,22 @@ HTML;
   echo 'OK.  Puzzle created with ID of ';
   $pid = $responseobj->puzzle->id;
   echo '<a href="editpuzzle.php?pid='.$pid.'">'.$pid.'</a>';
-  echo '</div><br><hr>';
+  echo '</div><br>';
+
+  // If speculative checkbox was checked, update status to Speculative
+  if (isset($_POST['is_speculative']) && $_POST['is_speculative'] == '1') {
+    echo 'Setting puzzle status to Speculative...<br>';
+    try {
+      $status_data = array('status' => 'Speculative');
+      $status_resp = postapi("/puzzles/{$pid}/status", $status_data);
+      assert_api_success($status_resp);
+      echo '<div class="success">Puzzle marked as speculative.</div>';
+    } catch (Exception $e) {
+      echo '<div class="error">Warning: Could not set speculative status: '.$e->getMessage().'</div>';
+    }
+  }
+
+  echo '<hr>';
 }
 
 // Extract puzzle name from URL parameters
@@ -201,10 +372,61 @@ $round_name = isset($_GET['roundname']) ? $_GET['roundname'] : '';
 
 $rounds = readapi("/rounds")->rounds;
 $rounds = array_reverse($rounds); // Newer rounds first in the dropdown
+
+// Fetch speculative puzzles for promotion workflow
+$speculative_puzzles = array();
+try {
+  $all_puzzles_data = readapi("/all");
+  if (isset($all_puzzles_data->rounds)) {
+    foreach ($all_puzzles_data->rounds as $round) {
+      if (isset($round->puzzles)) {
+        foreach ($round->puzzles as $puzzle) {
+          if (isset($puzzle->status) && $puzzle->status === 'Speculative') {
+            $puzzle->round_name = $round->name;  // Add round name for display
+            $speculative_puzzles[] = $puzzle;
+          }
+        }
+      }
+    }
+  }
+} catch (Exception $e) {
+  // If fetching fails, just continue with empty list
+}
 ?>
 
 <h1>Add a puzzle!</h1>
 <form action="addpuzzle.php" method="post" onsubmit="return handleSubmit(event)">
+
+  <fieldset style="margin-bottom: 20px;">
+    <legend><strong>Puzzle Type</strong></legend>
+    <label>
+      <input type="radio" name="puzzle_mode" value="new" checked onchange="togglePuzzleMode()" />
+      Create new puzzle
+    </label>
+    <br>
+<?php if (count($speculative_puzzles) > 0): ?>
+    <label>
+      <input type="radio" name="puzzle_mode" value="promote" onchange="togglePuzzleMode()" />
+      Promote existing speculative puzzle
+    </label>
+<?php endif; ?>
+  </fieldset>
+
+  <div id="promote-puzzle-fields" style="display:none;">
+    <p><strong>Select speculative puzzle to promote:</strong></p>
+    <select name="promote_puzzle_id" id="promote_puzzle_id" style="width: 100%; max-width: 600px;">
+      <option value="">-- Select a speculative puzzle --</option>
+<?php foreach ($speculative_puzzles as $sp): ?>
+      <option value="<?= htmlentities($sp->id) ?>">
+        <?= htmlentities($sp->name) ?> (<?= htmlentities($sp->round_name) ?>)
+      </option>
+<?php endforeach; ?>
+    </select>
+    <p style="font-size: 90%; font-style: italic;">
+      Promoting will update the selected puzzle's name, URL, round (if changed), and status to "New" while preserving its sheet, chat, and solver history.
+    </p>
+  </div>
+
   <table>
     <tr>
       <td><label for="name">Name:</label></td>
@@ -260,7 +482,17 @@ if ($offer_create_new_round) {
         />
       </td>
     </tr>
+    <tr id="speculative-checkbox-row">
+      <td></td>
+      <td>
+        <label>
+          <input type="checkbox" id="is_speculative" name="is_speculative" value="1" />
+          Mark as speculative (placeholder for puzzle not yet released)
+        </label>
+      </td>
+    </tr>
   </table>
+
   <input type="submit" name="submit" value="Add New Puzzle"/>
 </form>
 </main>

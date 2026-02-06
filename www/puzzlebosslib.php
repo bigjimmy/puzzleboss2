@@ -205,23 +205,22 @@ function checkpriv($priv, $uid) {
 
 // Returns emoji or text representation for a puzzle status
 function get_status_display($status, $use_text = false) {
-  $status_map = [
-    'New' => ['emoji' => '🆕', 'text' => 'N'],
-    'Being worked' => ['emoji' => '🙇', 'text' => 'W'],
-    'Needs eyes' => ['emoji' => '👀', 'text' => 'E'],
-    'WTF' => ['emoji' => '☢️', 'text' => '?'],
-    'Critical' => ['emoji' => '⚠️', 'text' => '!'],
-    'Solved' => ['emoji' => '✅', 'text' => '*'],
-    'Unnecessary' => ['emoji' => '😶‍🌫️', 'text' => 'X'],
-    'Under control' => ['emoji' => '👍', 'text' => 'U'],
-    'Waiting for HQ' => ['emoji' => '⏳', 'text' => 'H'],
-    'Grind' => ['emoji' => '⚙️', 'text' => 'G'],
-  ];
-  
-  if (isset($status_map[$status])) {
-    return $use_text ? $status_map[$status]['text'] : $status_map[$status]['emoji'];
+  global $huntinfo;
+
+  // Try to find status in huntinfo (loaded at top of file)
+  if (isset($huntinfo->statuses) && is_array($huntinfo->statuses)) {
+    foreach ($huntinfo->statuses as $s) {
+      if (isset($s->name) && $s->name === $status) {
+        if ($use_text && isset($s->text)) {
+          return $s->text;
+        } elseif (!$use_text && isset($s->emoji)) {
+          return $s->emoji;
+        }
+      }
+    }
   }
-  // Unknown status - show first letter or question mark
+
+  // Fallback for unknown status
   return $use_text ? substr($status, 0, 1) : '❓';
 }
 
