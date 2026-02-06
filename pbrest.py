@@ -1937,6 +1937,11 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # Update the puzzle's round
         update_puzzle_part_in_db(id, part, value)
 
+        # Notify Discord to move the channel to the new round category
+        # Re-fetch puzzle to get current name (in case it was updated earlier in this request)
+        updated_puzzle = get_puzzle(id)
+        chat_announce_move(updated_puzzle["puzzle"]["name"])
+
         # Add activity entry for round change
         try:
             cursor.execute(

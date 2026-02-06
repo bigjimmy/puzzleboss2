@@ -314,6 +314,7 @@ HTML;
       'name' => $name,
       'round_id' => $round_id,
       'puzzle_uri' => $puzzle_uri,
+      'ismeta' => (isset($_POST['is_meta']) && $_POST['is_meta'] == '1') ? 1 : 0,
       // 'defer_to' => $defer_to,
     )
   );
@@ -331,6 +332,9 @@ HTML;
   echo 'OK.  Puzzle created with ID of ';
   $pid = $responseobj->puzzle->id;
   echo '<a href="editpuzzle.php?pid='.$pid.'">'.$pid.'</a>';
+  if (isset($_POST['is_meta']) && $_POST['is_meta'] == '1') {
+    echo ' (marked as meta)';
+  }
   echo '</div><br>';
 
   // If speculative checkbox was checked, update status to Speculative
@@ -488,6 +492,15 @@ if ($offer_create_new_round) {
         <label>
           <input type="checkbox" id="is_speculative" name="is_speculative" value="1" />
           Mark as speculative (placeholder for puzzle not yet released)
+        </label>
+      </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>
+        <label>
+          <input type="checkbox" id="is_meta" name="is_meta" value="1" />
+          This puzzle is a meta
         </label>
       </td>
     </tr>

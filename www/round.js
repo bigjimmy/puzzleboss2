@@ -196,26 +196,26 @@ export default {
                     <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                     <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">📊</a></p>
                     <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
-                    <AddGeneric type="note" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
-                    <AddGeneric type="tags" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
+                    <AddGeneric type="note-tags" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 </div>
-                <p 
+                <p
                     v-if = "puzzle.answer === null"
                     :class = "{'answer': true, 'spoil': true}"
                     @mouseover="scroll($event, 300)"
                     @mouseout="stopscroll" >
 
                     <em>{{ puzzle.name === currpuzz ?
-                               'CURRENT PUZZLE'.padStart(16) : 
-                                ( settings.showTags ? 
+                               'CURRENT PUZZLE'.padStart(16) :
+                                ( settings.showTags ?
                                      (puzzle.tags ? puzzle.tags.padStart(16) : '' )
                                      : '') }}</em>
                 </p>
-                <p 
+                <p
                     v-if = "puzzle.answer !== null"
                     :class = "{'answer': true, 'spoil': settings.spoilAll || spoilRound, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
                     {{ puzzle.answer.padStart(16) }}
                 </p>
+                <AddGeneric type="puzzle-settings" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
             </div>
             <div
                 v-if="hiddenCount > 0"
