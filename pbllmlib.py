@@ -6,6 +6,9 @@ It uses Google Gemini with function calling to interpret queries and
 fetch relevant data. Also includes RAG support for wiki content.
 """
 
+import threading
+import fcntl
+import os
 from pblib import debug_log
 
 # Optional Google Gemini support for LLM queries
@@ -36,6 +39,15 @@ except ImportError:
 # Global ChromaDB client (lazy initialized)
 _chroma_client = None
 _wiki_collection = None
+
+# Wiki indexer for RAG (optional)
+WIKI_INDEXER_AVAILABLE = False
+try:
+    from scripts.wiki_indexer import index_wiki, load_config as load_wiki_config
+
+    WIKI_INDEXER_AVAILABLE = True
+except ImportError:
+    debug_log(3, "wiki_indexer not available - wiki RAG disabled")
 
 
 def get_gemini_tools():
@@ -764,3 +776,55 @@ def process_query(
     except Exception as e:
         debug_log(1, f"LLM query error: {str(e)}")
         return {"status": "error", "error": str(e)}
+
+
+def _run_wiki_index_background():
+    """Run wiki indexing in background thread at startup. Uses file lock to prevent multiple workers from indexing."""
+    if not WIKI_INDEXER_AVAILABLE:
+        return
+
+    try:
+        wiki_config = load_wiki_config()
+        wiki_url = wiki_config.get("WIKI_URL", "")
+        chromadb_path = wiki_config.get(
+            "WIKI_CHROMADB_PATH", "/var/lib/puzzleboss/chromadb"
+        )
+
+        if not wiki_url:
+            debug_log(3, "WIKI_URL not configured - skipping wiki index")
+            return
+
+        # Use a lock file to ensure only one worker indexes at a time
+        lock_file_path = os.path.join(chromadb_path, ".wiki_index.lock")
+
+        # Ensure directory exists
+        os.makedirs(chromadb_path, exist_ok=True)
+
+        try:
+            lock_file = open(lock_file_path, "w")
+            # Try to acquire exclusive lock (non-blocking)
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except (IOError, OSError):
+            debug_log(4, "Another worker is already indexing wiki - skipping")
+            return
+
+        try:
+            debug_log(3, "Starting background wiki full reindex (acquired lock)...")
+            success = index_wiki(wiki_config, full_reindex=True)
+            if success:
+                debug_log(3, "Background wiki index completed successfully")
+            else:
+                debug_log(2, "Background wiki index failed")
+        finally:
+            # Release lock
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+            lock_file.close()
+
+    except Exception as e:
+        debug_log(2, f"Background wiki index error: {e}")
+
+
+# Start wiki indexing in background thread (non-blocking)
+if WIKI_INDEXER_AVAILABLE:
+    wiki_thread = threading.Thread(target=_run_wiki_index_background, daemon=True)
+    wiki_thread.start()

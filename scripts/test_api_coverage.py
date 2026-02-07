@@ -1401,6 +1401,51 @@ class TestRunner:
                 f"Round {test_round['name']} status after solving all meta puzzles: {round_status}"
             )
 
+            # Test unmarking: Add a new unsolved meta puzzle to a solved round
+            self.logger.log_operation(
+                "Testing round unmarking: Adding new unsolved meta to solved round"
+            )
+            meta_puzzle3 = self.create_puzzle(
+                f"Test Meta Puzzle 3 {timestamp}", test_round["id"]
+            )
+            if not meta_puzzle3:
+                result.fail("Failed to create third test meta puzzle")
+                return
+
+            # Mark it as meta
+            if not self.update_puzzle(meta_puzzle3["id"], "ismeta", True):
+                result.fail(f"Failed to set puzzle {meta_puzzle3['name']} as meta")
+                return
+
+            # Verify round is now NOT solved (since we have an unsolved meta)
+            if self.is_round_complete(test_round["id"]):
+                result.fail(
+                    "Round still marked complete after adding new unsolved meta puzzle"
+                )
+                return
+
+            self.logger.log_operation(
+                "Round correctly unmarked as solved after adding unsolved meta"
+            )
+
+            # Solve the third meta puzzle to re-complete the round
+            if not self.update_puzzle(meta_puzzle3["id"], "answer", "META ANSWER 3"):
+                result.fail(
+                    f"Failed to set answer for meta puzzle {meta_puzzle3['name']}"
+                )
+                return
+
+            # Verify round is solved again
+            if not self.is_round_complete(test_round["id"]):
+                result.fail(
+                    "Round not marked complete after solving all three meta puzzles"
+                )
+                return
+
+            self.logger.log_operation(
+                "Round correctly marked as solved again after solving third meta"
+            )
+
             result.set_success(
                 "Meta puzzles and round completion test completed successfully"
             )

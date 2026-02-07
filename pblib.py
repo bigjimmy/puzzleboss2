@@ -4,6 +4,7 @@ import inspect
 import datetime
 import smtplib
 import MySQLdb
+import json
 from email.message import EmailMessage
 
 # Global config variable for YAML config
@@ -226,3 +227,160 @@ This is an automated message from %s registration system.
         return errmsg
 
     return "OK"
+
+
+# Business logic functions for solver assignment and round completion
+
+def check_round_completion(round_id, conn):
+    """Check if all meta puzzles in a round are solved and update round status accordingly."""
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Solved' THEN 1 ELSE 0 END) as solved
+            FROM puzzle
+            WHERE round_id = %s AND ismeta = 1
+            """,
+            (round_id,),
+        )
+        result = cursor.fetchone()
+        if result["total"] > 0 and result["total"] == result["solved"]:
+            # All meta puzzles are solved, mark the round as solved
+            cursor.execute(
+                "UPDATE round SET status = 'Solved' WHERE id = %s", (round_id,)
+            )
+            conn.commit()
+            debug_log(
+                3, "Round %s marked as solved - all meta puzzles completed" % round_id
+            )
+        elif result["total"] > 0 and result["total"] != result["solved"]:
+            # Not all meta puzzles are solved, ensure round is not marked as solved
+            cursor.execute(
+                "UPDATE round SET status = 'New' WHERE id = %s AND status = 'Solved'", (round_id,)
+            )
+            if cursor.rowcount > 0:
+                conn.commit()
+                debug_log(
+                    3, "Round %s unmarked as solved - not all meta puzzles completed" % round_id
+                )
+    except Exception:
+        debug_log(1, "Error checking round completion status for round %s" % round_id)
+
+
+def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
+    """Assign a solver to a puzzle, unassigning from any other puzzle first."""
+    debug_log(4, "Started with puzzle id %s" % puzzle_id)
+    cursor = conn.cursor()
+
+    # First, find and unassign from any other puzzle the solver is currently working on
+    cursor.execute(
+        """
+        SELECT id FROM puzzle
+        WHERE JSON_CONTAINS(current_solvers,
+            JSON_OBJECT('solver_id', %s),
+            '$.solvers'
+        )
+    """,
+        (solver_id,),
+    )
+    current_puzzle = cursor.fetchone()
+    if current_puzzle and current_puzzle["id"] != puzzle_id:
+        # Unassign from current puzzle if it's different from the new one
+        unassign_solver_from_puzzle(current_puzzle["id"], solver_id, conn)
+
+    # Update current solvers for the new puzzle
+    cursor.execute(
+        """
+        SELECT current_solvers FROM puzzle WHERE id = %s
+    """,
+        (puzzle_id,),
+    )
+    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
+        {"solvers": []}
+    )
+    current_solvers = json.loads(current_solvers_str)
+
+    # Add new solver if not already present
+    if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
+        current_solvers["solvers"].append({"solver_id": solver_id})
+        cursor.execute(
+            """
+            UPDATE puzzle
+            SET current_solvers = %s
+            WHERE id = %s
+        """,
+            (json.dumps(current_solvers), puzzle_id),
+        )
+
+    # Update history
+    cursor.execute(
+        """
+        SELECT solver_history FROM puzzle WHERE id = %s
+    """,
+        (puzzle_id,),
+    )
+    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
+    history = json.loads(history_str)
+
+    # Add to history if not already present
+    if not any(s["solver_id"] == solver_id for s in history["solvers"]):
+        history["solvers"].append({"solver_id": solver_id})
+        cursor.execute(
+            """
+            UPDATE puzzle
+            SET solver_history = %s
+            WHERE id = %s
+        """,
+            (json.dumps(history), puzzle_id),
+        )
+
+    conn.commit()
+
+
+def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
+    """Unassign a solver from a puzzle's current solvers list."""
+    cursor = conn.cursor()
+
+    # Update current solvers
+    cursor.execute(
+        """
+        SELECT current_solvers FROM puzzle WHERE id = %s
+    """,
+        (puzzle_id,),
+    )
+    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
+        {"solvers": []}
+    )
+    current_solvers = json.loads(current_solvers_str)
+
+    current_solvers["solvers"] = [
+        s for s in current_solvers["solvers"] if s["solver_id"] != solver_id
+    ]
+
+    cursor.execute(
+        """
+        UPDATE puzzle
+        SET current_solvers = %s
+        WHERE id = %s
+    """,
+        (json.dumps(current_solvers), puzzle_id),
+    )
+
+    conn.commit()
+
+
+def clear_puzzle_solvers(puzzle_id, conn):
+    """Clear all solvers from a puzzle's current solvers list."""
+    cursor = conn.cursor()
+
+    # Clear current solvers
+    cursor.execute(
+        """
+        UPDATE puzzle
+        SET current_solvers = '{"solvers": []}'
+        WHERE id = %s
+    """,
+        (puzzle_id,),
+    )
+
+    conn.commit()

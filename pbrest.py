@@ -50,81 +50,22 @@ except ImportError:
         3, "prometheus_flask_exporter not installed - /metrics endpoint unavailable"
     )
 
-# Optional memcache support
-try:
-    from pymemcache.client import base as memcache_client
-
-    MEMCACHE_AVAILABLE = True
-except ImportError:
-    MEMCACHE_AVAILABLE = False
-    debug_log(3, "pymemcache not installed - caching disabled")
-
 # LLM query support (via pbllmlib)
 from pbllmlib import GEMINI_AVAILABLE, process_query as llm_process_query
 
-# Wiki indexer for RAG (optional)
-import threading
-import fcntl
-
-WIKI_INDEXER_AVAILABLE = False
-try:
-    from scripts.wiki_indexer import index_wiki, load_config as load_wiki_config
-
-    WIKI_INDEXER_AVAILABLE = True
-except ImportError:
-    debug_log(3, "wiki_indexer not available - wiki RAG disabled")
-
-
-def _run_wiki_index_background():
-    """Run wiki indexing in background thread at startup. Uses file lock to prevent multiple workers from indexing."""
-    if not WIKI_INDEXER_AVAILABLE:
-        return
-
-    try:
-        wiki_config = load_wiki_config()
-        wiki_url = wiki_config.get("WIKI_URL", "")
-        chromadb_path = wiki_config.get(
-            "WIKI_CHROMADB_PATH", "/var/lib/puzzleboss/chromadb"
-        )
-
-        if not wiki_url:
-            debug_log(3, "WIKI_URL not configured - skipping wiki index")
-            return
-
-        # Use a lock file to ensure only one worker indexes at a time
-        lock_file_path = os.path.join(chromadb_path, ".wiki_index.lock")
-
-        # Ensure directory exists
-        os.makedirs(chromadb_path, exist_ok=True)
-
-        try:
-            lock_file = open(lock_file_path, "w")
-            # Try to acquire exclusive lock (non-blocking)
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except (IOError, OSError):
-            debug_log(4, "Another worker is already indexing wiki - skipping")
-            return
-
-        try:
-            debug_log(3, "Starting background wiki full reindex (acquired lock)...")
-            success = index_wiki(wiki_config, full_reindex=True)
-            if success:
-                debug_log(3, "Background wiki index completed successfully")
-            else:
-                debug_log(2, "Background wiki index failed")
-        finally:
-            # Release lock
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            lock_file.close()
-
-    except Exception as e:
-        debug_log(2, f"Background wiki index error: {e}")
-
-
-# Start wiki indexing in background thread (non-blocking)
-if WIKI_INDEXER_AVAILABLE:
-    wiki_thread = threading.Thread(target=_run_wiki_index_background, daemon=True)
-    wiki_thread.start()
+# Cache support (via pbcachelib)
+from pbcachelib import (
+    init_memcache,
+    cache_get,
+    cache_set,
+    cache_delete,
+    invalidate_all_cache,
+    increment_cache_stat,
+    ensure_memcache_initialized,
+    MEMCACHE_CACHE_KEY,
+    MEMCACHE_TTL,
+)
+import pbcachelib
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False  # Allow trailing slashes on all routes
@@ -162,127 +103,20 @@ if PROMETHEUS_AVAILABLE:
         debug_log(0, f"Failed to initialize Prometheus metrics: {e}")
         PROMETHEUS_AVAILABLE = False
 
+# Helper to invalidate cache with optional stats tracking
+def invalidate_cache_with_stats():
+    """Invalidate cache and track stats (with error handling for stats)."""
+    invalidate_all_cache(mysql.connection)
+    try:
+        increment_cache_stat("cache_invalidations_total", mysql.connection)
+    except Exception as e:
+        debug_log(3, f"Failed to increment cache stats: {e}")
+
+
 # Periodic config refresh on each request (checks if 60s have passed)
 @app.before_request
 def periodic_config_refresh():
     maybe_refresh_config()
-
-
-# Memcache client (initialized later after config is available)
-mc = None
-MEMCACHE_CACHE_KEY = "puzzleboss:all"
-MEMCACHE_TTL = 60  # seconds
-
-
-def init_memcache(configstruct):
-    """Initialize memcache client from config. Call after DB config is loaded."""
-    global mc
-    if not MEMCACHE_AVAILABLE:
-        debug_log(3, "Memcache: pymemcache not installed")
-        return
-
-    try:
-        enabled = configstruct.get("MEMCACHE_ENABLED", "false").lower() == "true"
-        host = configstruct.get("MEMCACHE_HOST", "")
-        port = int(configstruct.get("MEMCACHE_PORT", 11211))
-
-        if not enabled:
-            debug_log(3, "Memcache: disabled in config")
-            return
-
-        if not host:
-            debug_log(3, "Memcache: no host configured")
-            return
-
-        mc = memcache_client.Client((host, port), timeout=1, connect_timeout=1)
-        # Test connection
-        mc.set("_test", "ok", expire=1)
-        debug_log(3, "Memcache: initialized successfully (%s:%d)" % (host, port))
-    except Exception as e:
-        debug_log(2, "Memcache: failed to initialize: %s" % str(e))
-        mc = None
-
-
-def cache_get(key):
-    """Safe cache get - returns None on error or if disabled"""
-    if mc is None:
-        return None
-    try:
-        value = mc.get(key)
-        if value:
-            debug_log(5, "cache_get: hit for %s" % key)
-        return value
-    except Exception as e:
-        debug_log(3, "cache_get error: %s" % str(e))
-        return None
-
-
-def cache_set(key, value, ttl=MEMCACHE_TTL):
-    """Safe cache set - fails silently if disabled"""
-    if mc is None:
-        return
-    try:
-        mc.set(key, value, expire=ttl)
-        debug_log(5, "cache_set: stored %s" % key)
-    except Exception as e:
-        debug_log(3, "cache_set error: %s" % str(e))
-
-
-def cache_delete(key):
-    """Safe cache delete - fails silently if disabled"""
-    if mc is None:
-        return
-    try:
-        mc.delete(key)
-        debug_log(5, "cache_delete: deleted %s" % key)
-    except Exception as e:
-        debug_log(3, "cache_delete error: %s" % str(e))
-
-
-def invalidate_all_cache():
-    """Invalidate the /all cache. Call when puzzle/round data changes."""
-    ensure_memcache_initialized()
-    cache_delete(MEMCACHE_CACHE_KEY)
-    increment_cache_stat("cache_invalidations_total")
-
-
-def increment_cache_stat(stat_name):
-    """Increment a cache statistic counter in botstats table."""
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        # Use INSERT ... ON DUPLICATE KEY to atomically increment
-        cursor.execute(
-            """INSERT INTO botstats (`key`, `val`) VALUES (%s, '1') 
-               ON DUPLICATE KEY UPDATE `val` = CAST(`val` AS UNSIGNED) + 1""",
-            (stat_name,),
-        )
-        conn.commit()
-    except Exception as e:
-        debug_log(3, "increment_cache_stat error for %s: %s" % (stat_name, str(e)))
-
-
-# Flag to track if memcache has been initialized
-_memcache_initialized = False
-
-
-def ensure_memcache_initialized():
-    """Initialize memcache from DB config on first use."""
-    global _memcache_initialized
-    if _memcache_initialized:
-        return
-    _memcache_initialized = True
-
-    try:
-        # Query config from database
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SELECT `key`, `val` FROM config WHERE `key` LIKE 'MEMCACHE_%'")
-        rows = cursor.fetchall()
-        mc_config = {row["key"]: row["val"] for row in rows}
-        init_memcache(mc_config)
-    except Exception as e:
-        debug_log(2, "Failed to load memcache config from database: %s" % str(e))
 
 
 @app.errorhandler(Exception)
@@ -366,23 +200,23 @@ def _get_all_with_cache():
     debug_log(4, "start")
 
     # Ensure memcache is initialized (lazy init on first request)
-    ensure_memcache_initialized()
+    ensure_memcache_initialized(mysql.connection)
 
     # Try cache first if memcache is enabled
-    if mc is not None:
+    if pbcachelib.mc is not None:
         cached = cache_get(MEMCACHE_CACHE_KEY)
         if cached:
             debug_log(4, "cache hit")
-            increment_cache_stat("cache_hits_total")
+            increment_cache_stat("cache_hits_total", mysql.connection)
             return json.loads(cached)
         debug_log(4, "cache miss")
-        increment_cache_stat("cache_misses_total")
+        increment_cache_stat("cache_misses_total", mysql.connection)
 
     # Fall back to database
     data = _get_all_from_db()
 
     # Store in cache for next time (if enabled)
-    if mc is not None:
+    if pbcachelib.mc is not None:
         try:
             cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
         except Exception as e:
@@ -972,7 +806,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
                 update_puzzle_part_in_db(value, "status", "Being worked")
 
             # Assign the solver to the puzzle using the new JSON-based system
-            assign_solver_to_puzzle(value, id)
+            assign_solver_to_puzzle(value, id, mysql.connection)
         else:
             # Puzz is empty, so this is a de-assignment
             # Find the puzzle the solver is currently assigned to
@@ -991,7 +825,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
             current_puzzle = cursor.fetchone()
             if current_puzzle:
                 # Unassign the solver from their current puzzle
-                unassign_solver_from_puzzle(current_puzzle["id"], id)
+                unassign_solver_from_puzzle(current_puzzle["id"], id, mysql.connection)
 
         # Now log it in the activity table
         # For de-assignment (empty value), use the actual puzzle_id we found
@@ -1070,7 +904,7 @@ def update_solver_multi(id):
 
     # Invalidate cache if puzzle assignment changed
     if needs_cache_invalidation:
-        invalidate_all_cache()
+        invalidate_cache_with_stats()
 
     return {"status": "ok", "solver": {"id": id, **updated_parts}}
 
@@ -1102,7 +936,7 @@ def update_solver_part(id, part):
 
     # Invalidate /allcached if solver assignment changed
     if part == "puzz":
-        invalidate_all_cache()
+        invalidate_cache_with_stats()
 
     return {"status": "ok", "solver": {"id": id, part: updated_value}}
 
@@ -1519,7 +1353,7 @@ def create_puzzle():
     )
 
     # Invalidate /allcached since new puzzle was created
-    invalidate_all_cache()
+    invalidate_cache_with_stats()
 
     return {
         "status": "ok",
@@ -1867,7 +1701,7 @@ def finish_puzzle_creation(code):
             chat_announce_new(name)
 
             # Invalidate /allcached since new puzzle was created
-            invalidate_all_cache()
+            invalidate_cache_with_stats()
 
             # Clean up temp storage
             cursor.execute(
@@ -1951,7 +1785,7 @@ def create_round():
     )
 
     # Invalidate /allcached since new round was created
-    invalidate_all_cache()
+    invalidate_cache_with_stats()
 
     return {"status": "ok", "round": {"name": roundname}}
 
@@ -2035,7 +1869,7 @@ def update_round_multi(id):
         updated_parts[part] = updated_value
 
     # Invalidate cache once after all updates
-    invalidate_all_cache()
+    invalidate_cache_with_stats()
 
     return {"status": "ok", "round": {"id": id, **updated_parts}}
 
@@ -2057,7 +1891,7 @@ def update_round_part(id, part):
     updated_value = _update_single_round_part(id, part, value)
 
     # Invalidate /allcached since round data changed
-    invalidate_all_cache()
+    invalidate_cache_with_stats()
 
     return {"status": "ok", "round": {"id": id, part: updated_value}}
 
@@ -2124,14 +1958,14 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     "Puzzle id %s name %s has been Solved!!!"
                     % (id, mypuzzle["puzzle"]["name"]),
                 )
-                clear_puzzle_solvers(id)
+                clear_puzzle_solvers(id, mysql.connection)
                 update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
                 update_puzzle_part_in_db(id, part, value)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
 
                 # Check if this is a meta puzzle and if all metas in the round are solved
                 if mypuzzle["puzzle"]["ismeta"]:
-                    check_round_completion(mypuzzle["puzzle"]["round_id"])
+                    check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
         elif value in ("Needs eyes", "Critical", "WTF"):
             # These statuses trigger an attention announcement
             update_puzzle_part_in_db(id, part, value)
@@ -2184,9 +2018,9 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # When setting a puzzle as meta, just update it directly
         update_puzzle_part_in_db(id, part, value)
 
-        # Check if this is a meta puzzle and if all metas in the round are solved
-        if value:
-            check_round_completion(mypuzzle["puzzle"]["round_id"])
+        # Check round completion whenever metaness changes
+        # This handles both marking rounds as solved AND unmarking them if a new unsolved meta is added
+        check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
 
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
@@ -2231,7 +2065,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 "Puzzle id %s name %s has been Solved!!!"
                 % (id, mypuzzle["puzzle"]["name"]),
             )
-            clear_puzzle_solvers(id)
+            clear_puzzle_solvers(id, mysql.connection)
             update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
             chat_announce_solved(mypuzzle["puzzle"]["name"])
 
@@ -2257,7 +2091,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
 
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
-                check_round_completion(mypuzzle["puzzle"]["round_id"])
+                check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
 
     elif part == "comments":
         update_puzzle_part_in_db(id, part, value)
@@ -2389,7 +2223,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 conn.commit()
                 debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
                 tag_changed = True
-                increment_cache_stat("tags_assigned_total")
+                increment_cache_stat("tags_assigned_total", mysql.connection)
             else:
                 debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
 
@@ -2413,7 +2247,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 conn.commit()
                 debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
                 tag_changed = True
-                increment_cache_stat("tags_assigned_total")
+                increment_cache_stat("tags_assigned_total", mysql.connection)
             else:
                 debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
 
@@ -2537,7 +2371,7 @@ def update_puzzle_multi(id):
         updated_parts[part] = updated_value
 
     # Invalidate cache once after all updates
-    invalidate_all_cache()
+    invalidate_cache_with_stats()
 
     return {"status": "ok", "puzzle": {"id": id, **updated_parts}}
 
@@ -2568,7 +2402,7 @@ def update_puzzle_part(id, part):
     updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
 
     # Invalidate cache
-    invalidate_all_cache()
+    invalidate_cache_with_stats()
 
     return {"status": "ok", "puzzle": {"id": id, part: updated_value}}
 
@@ -2912,7 +2746,7 @@ def delete_puzzle(puzzlename):
             % puzzid,
         )
 
-    clear_puzzle_solvers(puzzid)
+    clear_puzzle_solvers(puzzid, mysql.connection)
 
     try:
         conn = mysql.connection
@@ -2929,7 +2763,7 @@ def delete_puzzle(puzzlename):
     debug_log(2, "puzzle id %s named %s deleted from system!" % (puzzid, puzzlename))
 
     # Invalidate /allcached since puzzle was deleted
-    invalidate_all_cache()
+    invalidate_cache_with_stats()
 
     return {"status": "ok"}
 
@@ -2978,9 +2812,9 @@ def update_puzzle_part_in_db(id, part, value):
     if part == "solvers":
         # Handle solver assignments
         if value:  # Assign solver
-            assign_solver_to_puzzle(id, value)
+            assign_solver_to_puzzle(id, value, mysql.connection)
         else:  # Clear all solvers
-            clear_puzzle_solvers(id)
+            clear_puzzle_solvers(id, mysql.connection)
     else:
         # Handle other puzzle updates
         cursor.execute(f"UPDATE puzzle SET {part} = %s WHERE id = %s", (value, id))
@@ -3103,152 +2937,6 @@ def delete_pb_solver(username):
     cursor.execute("DELETE from solver where name = %s", (username,))
     conn.commit()
     return 0
-
-
-def check_round_completion(round_id):
-    """Check if all meta puzzles in a round are solved"""
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT COUNT(*) as total, SUM(CASE WHEN status = 'Solved' THEN 1 ELSE 0 END) as solved 
-            FROM puzzle 
-            WHERE round_id = %s AND ismeta = 1
-            """,
-            (round_id,),
-        )
-        result = cursor.fetchone()
-        if result["total"] > 0 and result["total"] == result["solved"]:
-            # All meta puzzles are solved, mark the round as solved
-            cursor.execute(
-                "UPDATE round SET status = 'Solved' WHERE id = %s", (round_id,)
-            )
-            conn.commit()
-            debug_log(
-                3, "Round %s marked as solved - all meta puzzles completed" % round_id
-            )
-    except Exception:
-        debug_log(1, "Error checking round completion status for round %s" % round_id)
-
-
-def assign_solver_to_puzzle(puzzle_id, solver_id):
-    debug_log(4, "Started with puzzle id %s" % puzzle_id)
-    conn = mysql.connection
-    cursor = conn.cursor()
-
-    # First, find and unassign from any other puzzle the solver is currently working on
-    cursor.execute(
-        """
-        SELECT id FROM puzzle 
-        WHERE JSON_CONTAINS(current_solvers, 
-            JSON_OBJECT('solver_id', %s), 
-            '$.solvers'
-        )
-    """,
-        (solver_id,),
-    )
-    current_puzzle = cursor.fetchone()
-    if current_puzzle and current_puzzle["id"] != puzzle_id:
-        # Unassign from current puzzle if it's different from the new one
-        unassign_solver_from_puzzle(current_puzzle["id"], solver_id)
-
-    # Update current solvers for the new puzzle
-    cursor.execute(
-        """
-        SELECT current_solvers FROM puzzle WHERE id = %s
-    """,
-        (puzzle_id,),
-    )
-    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
-        {"solvers": []}
-    )
-    current_solvers = json.loads(current_solvers_str)
-
-    # Add new solver if not already present
-    if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
-        current_solvers["solvers"].append({"solver_id": solver_id})
-        cursor.execute(
-            """
-            UPDATE puzzle 
-            SET current_solvers = %s 
-            WHERE id = %s
-        """,
-            (json.dumps(current_solvers), puzzle_id),
-        )
-
-    # Update history
-    cursor.execute(
-        """
-        SELECT solver_history FROM puzzle WHERE id = %s
-    """,
-        (puzzle_id,),
-    )
-    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
-    history = json.loads(history_str)
-
-    # Add to history if not already present
-    if not any(s["solver_id"] == solver_id for s in history["solvers"]):
-        history["solvers"].append({"solver_id": solver_id})
-        cursor.execute(
-            """
-            UPDATE puzzle 
-            SET solver_history = %s 
-            WHERE id = %s
-        """,
-            (json.dumps(history), puzzle_id),
-        )
-
-    conn.commit()
-
-
-def unassign_solver_from_puzzle(puzzle_id, solver_id):
-    conn = mysql.connection
-    cursor = conn.cursor()
-
-    # Update current solvers
-    cursor.execute(
-        """
-        SELECT current_solvers FROM puzzle WHERE id = %s
-    """,
-        (puzzle_id,),
-    )
-    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
-        {"solvers": []}
-    )
-    current_solvers = json.loads(current_solvers_str)
-
-    current_solvers["solvers"] = [
-        s for s in current_solvers["solvers"] if s["solver_id"] != solver_id
-    ]
-
-    cursor.execute(
-        """
-        UPDATE puzzle 
-        SET current_solvers = %s 
-        WHERE id = %s
-    """,
-        (json.dumps(current_solvers), puzzle_id),
-    )
-
-    conn.commit()
-
-
-def clear_puzzle_solvers(puzzle_id):
-    conn = mysql.connection
-    cursor = conn.cursor()
-
-    # Clear current solvers
-    cursor.execute(
-        """
-        UPDATE puzzle 
-        SET current_solvers = '{"solvers": []}' 
-        WHERE id = %s
-    """,
-        (puzzle_id,),
-    )
-
-    conn.commit()
 
 
 @app.route(
@@ -3379,7 +3067,7 @@ def force_cache_invalidate():
     """Force invalidation of all caches"""
     debug_log(3, "Cache invalidation requested")
     try:
-        invalidate_all_cache()
+        invalidate_cache_with_stats()
         return {"status": "ok", "message": "Cache invalidated successfully"}
     except Exception as e:
         debug_log(1, f"Error invalidating cache: {str(e)}")
