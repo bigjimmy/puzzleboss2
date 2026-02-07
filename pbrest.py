@@ -1012,6 +1012,55 @@ def get_botstats():
     return {"status": "ok", "botstats": botstats}
 
 
+@app.route("/botstats", endpoint="putbotstats", methods=["POST"])
+@swag_from("swag/putbotstats.yaml", endpoint="putbotstats", methods=["POST"])
+def put_botstats():
+    """Update multiple bot statistics in a single call"""
+    debug_log(4, "start batch botstats update")
+    try:
+        data = request.get_json()
+
+        # Support both array format and object/dict format
+        stats_to_update = []
+
+        if isinstance(data, list):
+            # Array format: [{"key": "k1", "val": "v1"}, {"key": "k2", "val": "v2"}]
+            for item in data:
+                if not isinstance(item, dict) or "key" not in item or "val" not in item:
+                    raise Exception("Each item in array must be an object with 'key' and 'val' properties")
+                stats_to_update.append((item["key"], item["val"]))
+        elif isinstance(data, dict):
+            # Object/dict format: {"k1": "v1", "k2": "v2"}
+            for key, val in data.items():
+                stats_to_update.append((key, val))
+        else:
+            raise Exception("Input must be either an array of objects or a dictionary")
+
+        if not stats_to_update:
+            raise Exception("No statistics provided for update")
+
+        debug_log(4, "Updating %d botstats" % len(stats_to_update))
+
+    except Exception as e:
+        raise Exception("Exception interpreting input data for batch botstat update: %s" % e)
+
+    conn = mysql.connection
+    cursor = conn.cursor()
+
+    # Update all stats in a single transaction
+    for key, val in stats_to_update:
+        cursor.execute(
+            "INSERT INTO botstats (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
+            (key, val, val),
+        )
+        debug_log(5, "Updated botstat: key=%s val=%s" % (key, val))
+
+    conn.commit()
+
+    debug_log(4, "Successfully updated %d botstats" % len(stats_to_update))
+    return {"status": "ok", "updated": len(stats_to_update)}
+
+
 @app.route("/botstats/<key>", endpoint="putbotstat", methods=["POST"])
 @swag_from("swag/putbotstat.yaml", endpoint="putbotstat", methods=["POST"])
 def put_botstat(key):

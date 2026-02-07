@@ -1,0 +1,54 @@
+tags:
+  - Bot Stats
+summary: Update multiple bot statistics
+description: |
+  Updates or inserts multiple bot statistics in a single call.
+  Accepts either an array of objects or a dictionary/object format.
+  Maintains backwards compatibility with the single-stat endpoint.
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      oneOf:
+        - type: array
+          description: Array of key-value pairs
+          items:
+            type: object
+            required:
+              - key
+              - val
+            properties:
+              key:
+                type: string
+                description: The statistic key to update
+              val:
+                type: string
+                description: The new value for the statistic
+          example:
+            - key: "puzzle_count"
+              val: "42"
+            - key: "solver_count"
+              val: "15"
+        - type: object
+          description: Dictionary/object of key-value pairs
+          additionalProperties:
+            type: string
+          example:
+            puzzle_count: "42"
+            solver_count: "15"
+responses:
+  200:
+    description: Statistics updated successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        updated:
+          type: integer
+          description: Number of statistics updated
+          example: 2
+  500:
+    description: Error updating statistics

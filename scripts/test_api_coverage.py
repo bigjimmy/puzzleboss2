@@ -3462,7 +3462,127 @@ class TestRunner:
                 f"Botstat update verified - new value: {botstat_entry['val']}"
             )
 
-            result.set_success("Bot statistics test completed successfully")
+            # Test batch update with array format
+            self.logger.log_operation("Testing batch update with array format")
+            batch_key_1 = f"test_batch_1_{timestamp}"
+            batch_key_2 = f"test_batch_2_{timestamp}"
+            batch_value_1 = f"batch_val_1_{random.randint(1000, 9999)}"
+            batch_value_2 = f"batch_val_2_{random.randint(1000, 9999)}"
+
+            batch_array = [
+                {"key": batch_key_1, "val": batch_value_1},
+                {"key": batch_key_2, "val": batch_value_2}
+            ]
+
+            response = requests.post(
+                f"{self.base_url}/botstats",
+                json=batch_array
+            )
+            if not response.ok:
+                result.fail(f"Failed to batch update botstats (array format): {response.text}")
+                return
+
+            response_data = response.json()
+            if response_data.get("status") != "ok":
+                result.fail(f"Batch update did not return success: {response_data}")
+                return
+
+            if response_data.get("updated") != 2:
+                result.fail(f"Expected 2 updates, got {response_data.get('updated')}")
+                return
+
+            self.logger.log_operation(f"Batch update (array) successful: {response_data.get('updated')} stats updated")
+
+            # Verify batch updates
+            response = requests.get(f"{self.base_url}/botstats")
+            if not response.ok:
+                result.fail(f"Failed to fetch botstats after batch update: {response.text}")
+                return
+
+            botstats_data = response.json()
+            botstats = botstats_data["botstats"]
+
+            if batch_key_1 not in botstats or botstats[batch_key_1].get("val") != batch_value_1:
+                result.fail(f"Batch key 1 not found or value incorrect")
+                return
+
+            if batch_key_2 not in botstats or botstats[batch_key_2].get("val") != batch_value_2:
+                result.fail(f"Batch key 2 not found or value incorrect")
+                return
+
+            self.logger.log_operation("Batch update (array) verified successfully")
+
+            # Test batch update with object/dict format
+            self.logger.log_operation("Testing batch update with object/dict format")
+            batch_key_3 = f"test_batch_3_{timestamp}"
+            batch_key_4 = f"test_batch_4_{timestamp}"
+            batch_value_3 = f"batch_val_3_{random.randint(1000, 9999)}"
+            batch_value_4 = f"batch_val_4_{random.randint(1000, 9999)}"
+
+            batch_dict = {
+                batch_key_3: batch_value_3,
+                batch_key_4: batch_value_4
+            }
+
+            response = requests.post(
+                f"{self.base_url}/botstats",
+                json=batch_dict
+            )
+            if not response.ok:
+                result.fail(f"Failed to batch update botstats (dict format): {response.text}")
+                return
+
+            response_data = response.json()
+            if response_data.get("status") != "ok":
+                result.fail(f"Batch update (dict) did not return success: {response_data}")
+                return
+
+            if response_data.get("updated") != 2:
+                result.fail(f"Expected 2 updates, got {response_data.get('updated')}")
+                return
+
+            self.logger.log_operation(f"Batch update (dict) successful: {response_data.get('updated')} stats updated")
+
+            # Verify batch updates with dict format
+            response = requests.get(f"{self.base_url}/botstats")
+            if not response.ok:
+                result.fail(f"Failed to fetch botstats after batch update (dict): {response.text}")
+                return
+
+            botstats_data = response.json()
+            botstats = botstats_data["botstats"]
+
+            if batch_key_3 not in botstats or botstats[batch_key_3].get("val") != batch_value_3:
+                result.fail(f"Batch key 3 not found or value incorrect")
+                return
+
+            if batch_key_4 not in botstats or botstats[batch_key_4].get("val") != batch_value_4:
+                result.fail(f"Batch key 4 not found or value incorrect")
+                return
+
+            self.logger.log_operation("Batch update (dict) verified successfully")
+
+            # Verify that single-stat endpoint still works (backwards compatibility)
+            self.logger.log_operation("Verifying backwards compatibility with single-stat endpoint")
+            single_test_key = f"test_compat_{timestamp}"
+            single_test_value = f"compat_val_{random.randint(1000, 9999)}"
+
+            response = requests.post(
+                f"{self.base_url}/botstats/{single_test_key}",
+                json={"val": single_test_value}
+            )
+            if not response.ok:
+                result.fail(f"Single-stat endpoint failed (backwards compatibility issue): {response.text}")
+                return
+
+            response_data = response.json()
+            if response_data.get("status") != "ok":
+                result.fail(f"Single-stat endpoint did not return success: {response_data}")
+                return
+
+            self.logger.log_operation("Backwards compatibility verified - single-stat endpoint still works")
+
+            result.set_success("Bot statistics test completed successfully (including batch updates)")
 
         except Exception as e:
             result.fail(f"Error in bot statistics test: {str(e)}")
