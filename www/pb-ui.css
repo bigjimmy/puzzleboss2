@@ -1,7 +1,59 @@
+body {
+    background: aliceblue;
+    margin: 0;
+    padding: 0;
+}
+
+[v-cloak] {
+    display: none;
+}
+
 #main {
     display: flex;
     flex-direction: column;
     font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #333;
+    padding: 20px;
+}
+
+.info-box {
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.info-box-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.info-box-header:hover {
+    opacity: 0.8;
+}
+
+.info-box-header h3 {
+    margin: 0;
+    color: inherit;
+    font-size: 1.1em;
+}
+
+.collapse-icon {
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+.collapse-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+.info-box-content {
+    margin-top: 10px;
 }
 
 #control-bar {
@@ -34,8 +86,24 @@
 }
 
 #status > p, #links > p{
-    margin-top: 0.5em;
+    margin-top: 0;
     margin-bottom: 0.5em;
+}
+
+#status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#main a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+#main a:hover {
+    text-decoration: underline;
+    color: #004080;
 }
 
 /*
@@ -83,8 +151,16 @@
 }
 
 #rounds.usecolumns {
-    flex-direction: column;
-    max-height: 1500px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    align-items: flex-start;
+}
+
+#rounds.usecolumns .round {
+    min-width: 400px;
+    max-width: 400px;
+    flex-shrink: 0;
 }
 
 .round {
@@ -96,7 +172,7 @@
 
 .round-header {
     display: flex;
-    gap: 4px;
+    gap: 10px;
     flex-direction: row;
     align-items: center;
     justify-content: space-around;
@@ -104,6 +180,8 @@
     box-shadow: 0 0 8px 0 rgba(0,0,0,0.5);
     background-color: rgba(0,0,0,0.1);
     transition: background-color 0.5s ease;
+    cursor: pointer;
+    user-select: none;
 }
 
 .round-header > * {
@@ -114,6 +192,8 @@
 .round-header > h3 {
     width: 120px;
     overflow: hidden;
+    font-size: 1.1em;
+    margin: 0;
 }
 
 .round-header.solved {
@@ -205,6 +285,7 @@ textarea {
     flex-direction: row;
     align-items: last baseline;
     margin: 0px;
+    gap: 8px;
 }
 
 .puzzle-icon {
@@ -216,8 +297,9 @@ textarea {
 }
 
 .puzzle-name {
-    width: 120px;
+    width: 150px;
     overflow: hidden;
+    white-space: nowrap;
 }
 
 .puzzle-icons > p, .puzzle > p, .puzzle-icon {
@@ -274,7 +356,7 @@ div.currpuzz {
 .answer {
     font-family: 'Courier New', Courier, monospace;
     white-space: pre;
-    width: 16.5ch;
+    width: 15ch;
     overflow: hidden;
 }
 
@@ -328,4 +410,467 @@ div.currpuzz {
     100% {
         box-shadow: 0 0 0 20px rgba(0, 0, 0, 0);
     }
+}
+
+/*
+ * Common form page styles
+ * Used by addpuzzle, editpuzzle, addround, editround, admin, etc.
+ */
+
+body.form-page {
+    background-color: aliceblue;
+    display: grid;
+    font-family: 'Lora', serif;
+    height: 100vh;
+    justify-items: center;
+    margin: 0;
+    width: 100vw;
+}
+
+body.form-page h1 {
+    line-height: 1em;
+}
+
+body.form-page h1 > span {
+    font-size: 50%;
+}
+
+body.form-page main {
+    margin-top: 50px;
+    max-width: 700px;
+}
+
+body.form-page table.registration {
+    text-align: right;
+}
+
+body.form-page table.registration tr > td:last-child {
+    text-align: left;
+    font-size: 80%;
+    font-style: italic;
+}
+
+body.form-page table.registration tr:last-child {
+    text-align: center;
+}
+
+body.form-page input[type="submit"] {
+    font-family: inherit;
+}
+
+body.form-page input[type="submit"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+body.form-page .error {
+    background-color: lightpink;
+    padding: 10px;
+}
+
+body.form-page .success {
+    background-color: lightgreen;
+    padding: 10px;
+}
+
+/*
+ * Status page styles
+ * Used by status.php
+ */
+
+body.status-page {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: aliceblue;
+    color: #333;
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+/* Headers use default black color to match index.php style */
+body.status-page h1,
+body.status-page h2,
+body.status-page h3 {
+    color: inherit;
+}
+
+.status-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.status-header h1 {
+    margin: 0;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 15px;
+}
+
+.stats-grid .info-box {
+    margin-bottom: 0;
+}
+
+/* Stats card h3 styling now handled by .info-box-header */
+
+.stats-card table td:first-child {
+    white-space: nowrap;
+    min-width: 150px;
+}
+
+body.status-page table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+}
+
+body.status-page th,
+body.status-page td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+    font-size: 0.9em;
+}
+
+body.status-page th:first-child,
+body.status-page td:first-child {
+    text-align: center;
+    width: 30px;
+    padding: 8px 4px;
+}
+
+body.status-page th {
+    background: #e6f2ff;
+    color: #0066cc;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+body.status-page th:hover {
+    background: #cce5ff;
+}
+
+body.status-page th.sortable {
+    position: relative;
+}
+
+body.status-page td {
+    position: relative;
+}
+
+.sort-icon {
+    font-size: 0.7em;
+    margin-left: 4px;
+    opacity: 0.7;
+}
+
+/* Fast custom tooltips */
+[data-tooltip] {
+    position: relative;
+}
+
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: #333;
+    color: #fff;
+    border-radius: 4px;
+    font-size: 0.75em;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
+    z-index: 1000;
+    margin-bottom: 5px;
+}
+
+[data-tooltip]:hover::after {
+    opacity: 1;
+}
+
+/* Tooltips for table headers appear below */
+th[data-tooltip]::after {
+    bottom: auto;
+    top: 100%;
+    margin-bottom: 0;
+    margin-top: 5px;
+}
+
+/* First column (gear icon) tooltips appear to the right */
+td:first-child [data-tooltip]::after {
+    left: 100%;
+    transform: translateY(-50%);
+    bottom: auto;
+    top: 50%;
+    margin-left: 5px;
+    margin-bottom: 0;
+}
+
+body.status-page tr:hover {
+    background: #f5f5f5;
+}
+
+/* Hidden column for column visibility toggle */
+.hidden-column {
+    display: none !important;
+}
+
+.puzzle-table {
+    margin-bottom: 30px;
+}
+
+.puzzle-table table {
+    font-size: 0.9em;
+}
+
+body.status-page a {
+    color: #0066cc;
+    text-decoration: none;
+}
+
+body.status-page a:hover {
+    text-decoration: underline;
+    color: #004080;
+}
+
+.meta-row {
+    background: #e0e0e0 !important;
+}
+
+.new-row {
+    background: #d4f4dd !important;
+}
+
+.critical-row {
+    background: #ffcccb !important;
+}
+
+body.status-page select,
+body.status-page input[type="text"] {
+    background: white;
+    border: 1px solid #ccc;
+    color: #333;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 0.8em;
+}
+
+body.status-page select {
+    max-width: 60px;
+    text-align: center;
+}
+
+body.status-page select:focus,
+body.status-page input[type="text"]:focus {
+    outline: none;
+    border-color: #0066cc;
+    box-shadow: 0 0 3px rgba(0, 102, 204, 0.3);
+}
+
+body.status-page button,
+body.status-page input[type="submit"] {
+    background: #0066cc;
+    border: none;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.75em;
+    transition: all 0.2s;
+    min-width: 45px;
+    white-space: nowrap;
+}
+
+body.status-page button:hover,
+body.status-page input[type="submit"]:hover {
+    background: #0052a3;
+}
+
+/* Section headers use same style as info-box-header */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 15px;
+}
+
+.section-header:hover {
+    opacity: 0.8;
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 1.1em;
+    flex: 1;
+}
+
+.badge {
+    background: #e6f2ff;
+    color: #0066cc;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    border: 1px solid #cce5ff;
+}
+
+body.status-page footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #ccc;
+    text-align: center;
+    color: #666;
+}
+
+.inline-form {
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.solver-col {
+    max-width: 100px;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.8em;
+}
+
+.tags-col {
+    max-width: 120px;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.8em;
+}
+
+.comment-col {
+    max-width: 250px;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.8em;
+    vertical-align: top;
+}
+
+.comment-col input[type="text"] {
+    width: 150px;
+    min-width: 120px;
+}
+
+.comment-display {
+    margin-bottom: 3px;
+    color: #666;
+    font-style: italic;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.85em;
+}
+
+.location-col {
+    max-width: 150px;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.8em;
+}
+
+.location-col input[type="text"] {
+    width: 100px;
+    min-width: 80px;
+}
+
+.location-display {
+    margin-bottom: 3px;
+    color: #666;
+    font-size: 0.85em;
+}
+
+.gear-icon {
+    font-size: 1.1em;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.gear-icon:hover {
+    opacity: 1;
+}
+
+.saving {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.flash {
+    animation: flash-green 0.5s ease-out;
+}
+
+@keyframes flash-green {
+    0% { background: rgba(0, 255, 100, 0.4); }
+    100% { background: transparent; }
+}
+
+.nav-links {
+    margin-bottom: 15px;
+}
+
+.info-box-content .nav-links {
+    margin-bottom: 0;
+}
+
+.nav-links a {
+    color: #0066cc;
+    text-decoration: none;
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    display: inline-block;
+    margin-right: 10px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+}
+
+.nav-links a:hover {
+    background: #cce5ff;
+    text-decoration: none;
+}
+
+.nav-links a.current {
+    background: #e0e0e0;
+    color: #999;
+    cursor: default;
+    pointer-events: none;
+}
+
+/* Column visibility styling now handled by .info-box-header */
+
+.column-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+}
+
+.column-checkboxes label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.column-checkboxes input[type="checkbox"] {
+    cursor: pointer;
 }

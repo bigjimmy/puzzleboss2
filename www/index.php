@@ -1,3 +1,6 @@
+<?php
+require_once('puzzlebosslib.php');
+?>
 <!DOCTYPE html>
 <html>
     <head>
@@ -8,19 +11,43 @@
     <body>
         <div id = "main">
 
-            <h2>Hello, {{username}}! It is currently {{time}} TIMEMIT.</h2>
-            <div id = "status">
-                <p>{{roundStats["solved"]}} rounds solved out of {{roundStats["count"]}} open.
-                    {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open. Page status: </p>
-                <div :class = updateState></div>
-            </div>
-            <div id="links">
-                <p>Go to: <a href="./pbtools.php" target="_blank">pbtools</a> <a href="./status.php" target="_blank">pboverview</a> <a href="../" target="_blank">wiki</a> <a href="./old.php">old-ui</a>  &nbsp; &nbsp; &nbsp;
-                tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect>
-                </p>
+            <div class="info-box">
+                <div class="info-box-header" @click="showHuntInfo = !showHuntInfo">
+                    <span class="collapse-icon" :class="{ collapsed: !showHuntInfo }">▼</span>
+                    <h3>Hunt Status</h3>
+                </div>
+                <div class="info-box-content" v-show="showHuntInfo" v-cloak>
+                    <h2 style="margin-top: 0;">Hello, {{username}}! It is currently {{time}} TIMEMIT.</h2>
+                    <div id = "status">
+                        <p>{{roundStats["solved"]}} rounds solved out of {{roundStats["count"]}} open.
+                            {{puzzleStats["Solved"]}} puzzles solved out of {{puzzleStats["Count"]}} open. Page status: </p>
+                        <div :class = updateState></div>
+                    </div>
+                    <?php
+                    // Render navbar with special styling for index.php
+                    $navbar = render_navbar('index');
+                    // Add inline style to the nav-links div
+                    $navbar = str_replace('<div class="nav-links">', '<div class="nav-links" style="margin-top: 15px;">', $navbar);
+                    echo $navbar;
+                    ?>
+                </div>
             </div>
 
-            <settings v-if="settings && statuses && statuses.length > 0" :s="settings" :statuses="statuses" @settings-updated="updateSetting"></settings>
+            <div class="info-box" v-if="settings && statuses && statuses.length > 0">
+                <div class="info-box-header" @click="showSettings = !showSettings">
+                    <span class="collapse-icon" :class="{ collapsed: !showSettings }">▼</span>
+                    <h3>Search and Settings</h3>
+                </div>
+                <div class="info-box-content" v-show="showSettings">
+                    <div id="links">
+                        <p>Tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect></p>
+                    </div>
+                    <settings :s="settings" :statuses="statuses" @settings-updated="updateSetting"></settings>
+                    <div v-if="settings.showControls">
+                        <solvesound ref="solveSound"></solvesound>
+                    </div>
+                </div>
+            </div>
 
             <div id = "allrounds" :class = "{'usecolumns': useColumns}">
                 <div id = "rounds" :class = "{'usecolumns': useColumns}">
@@ -61,10 +88,6 @@
                 </div>
             </div>
 
-            <div>
-                <solvesound ref="solveSound"></solvesound>
-            </div>
-
             <datalist id="taglist">
                 <option
                     v-for="tag in tags"
@@ -91,7 +114,7 @@
                 Settings,
             },
             computed: {
-                
+
                 //
                 // This function returns the unhidden rounds.
                 //
@@ -100,7 +123,7 @@
 
                     return [...this.data.rounds].filter((round) => this.showBody[round.id]);
                 },
-                
+
                 //
                 // This function returns the hidden rounds.
                 //
@@ -108,6 +131,13 @@
                     if(this.data.rounds === undefined) return []
 
                     return [...this.data.rounds].filter((round) => !this.showBody[round.id]);
+                },
+
+                //
+                // This function returns the useColumns setting value
+                //
+                useColumns() {
+                    return this.settings?.useColumns || false;
                 },
             },
             setup() {
@@ -157,7 +187,6 @@
                 // Get authenticated username (with test mode support)
                 //
                 <?php
-                require_once('puzzlebosslib.php');
                 $auth_solver = getauthenticatedsolver();
                 echo "const username = ref(\"" . $auth_solver->name . "\");";
                 ?>
@@ -167,6 +196,9 @@
                 const tags = ref([]);
                 const tagFilter = ref("");
                 const statuses = ref([]);
+
+                const showHuntInfo = ref(true);
+                const showSettings = ref(true);
 
                 //
                 // This function fetches data from an endpoint and updates the
@@ -460,7 +492,8 @@
                     uid, username, tags, solvers,
                     currPuzz, initialPuzz, clearInitPuzz,
                     tags, tagFilter,
-                    settings, statuses, updateSetting
+                    settings, statuses, updateSetting,
+                    showHuntInfo, showSettings
                 }
             },
         }).mount('#main');

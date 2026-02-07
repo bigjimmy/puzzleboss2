@@ -4,47 +4,46 @@
   <meta charset="UTF-8">
   <title>Puzztech-only Tools</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./pb-ui.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
-    body {
-      background-color: aliceblue;
-      display: grid;
-      font-family: 'Lora';
-      height: 100vh;
-      justify-items: center;
-      margin: 0;
-      width: 100vw;
-    }
-    h1 {
-      line-height: 1em;
-    }
-    h1 > span {
-      font-size: 50%;
-    }
-    main {
-      margin-top: 50px;
-      max-width: 700px;
-    }
-    table.registration {
-      text-align: right;
-    }
-    table.registration tr > td:last-child {
-      text-align: left;
-      font-size: 80%;
-      font-style: italic;
-    }
-    table.registration tr:last-child {
-      text-align: center;
-    }
-    input[type="submit"] {
-      font-family: inherit;
-    }
-    .error {
-      background-color: lightpink;
-      padding: 10px;
-    }
+  /* Match status.php table styling */
+  #app table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+    font-size: 0.9em;
+  }
+
+  #app th, #app td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+  }
+
+  #app th {
+    background: #e6f2ff;
+    color: #0066cc;
+    font-weight: 600;
+  }
+
+  #app tbody tr:hover {
+    background: #f5f5f5;
+  }
+
+  #app .info-box-content {
+    font-size: 0.9em;
+  }
+
+  #app .info-box-content p, #app .info-box-content ul {
+    font-size: 1em;
+  }
   </style>
 </head>
-<body>
+<body style="background: aliceblue; margin: 0; padding: 20px; min-height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
 
 <?php
 // Permissions check
@@ -83,118 +82,179 @@ if (!$allowed) {
 
 
 ?>
-<main>
-<h1>Puzztech-only Super Admin Tools</h1>
+<main style="max-width: none;">
+<div id="app">
+<div class="status-header">
+  <h1>PuzzTech Super Admin Tools</h1>
+</div>
 
-<hr>
-<h3>Delete Puzzle</h3>
-<p>
-BE CAREFUL:<br>
-Deleting a puzzle will delete all record of it from the puzzleboss database.
-It will also move the puzzle's google sheet to the sheets trash folder.
-It will NOT delete the discord chat room. Do that in discord (or find a puzztech who can) if it's necessary.
-</p>
-<table border="2" cellpadding="3">
-  <tr>
-    <td>To delete a puzzle (enter puzzle name):</td>
-    <td valign="middle">
-      <form action="deletepuzzle.php" method="post">
-        <input type="text" name="name">
-        <input type="submit" name="submit" value="Delete Puzzle">
-      </form>
-    </td>
-  </tr>
-</table>
-<br>
+<?= render_navbar('admin') ?>
 
-<hr>
-<h3>Check Privileges</h3>
-<table border="2" cellpadding="3">
-  <tr>
-    <td>To check if a user has a specific privilege:</td>
-    <td valign="middle">
-      Enter Username:
-      <form action="checkpriv.php" method="post">
-	<input type="text" name="name">
-        <input type="hidden" name="priv" value="puzztech">
-        <input type="submit" name="check" value="Check Puzztech Priv">
-      </form>
-    <td valign="middle">
-      Enter Username:
-      <form action="checkpriv.php" method="post">
-        <input type="text" name="name">
-        <input type="hidden" name="priv" value="puzzleboss">
-        <input type="submit" name="check" value="Check Puzzleboss Priv">
-      </form>
-  </tr>
-</table>
+<div class="info-box">
+  <div class="info-box-header" @click="showDeletePuzzle = !showDeletePuzzle">
+    <span class="collapse-icon" :class="{ collapsed: !showDeletePuzzle }">▼</span>
+    <h3>Delete Puzzle</h3>
+  </div>
+  <div class="info-box-content" v-show="showDeletePuzzle">
+    <p>
+      <strong>BE CAREFUL:</strong><br>
+      Deleting a puzzle will delete all record of it from the puzzleboss database.
+      It will also move the puzzle's google sheet to the sheets trash folder.
+      It will NOT delete the discord chat room. Do that in discord (or find a puzztech who can) if it's necessary.
+    </p>
+    <table>
+      <tr>
+        <td>To delete a puzzle (enter puzzle name):</td>
+        <td>
+          <form action="deletepuzzle.php" method="post">
+            <input type="text" name="name">
+            <input type="submit" name="submit" value="Delete Puzzle">
+          </form>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
 
-<hr>
-<h3>Set Privileges</h3>
-<table border="2" cellpadding="3">
-  <tr>
-    <td>To modify a role for a user:</td>
-    <td valign="middle">
-      Enter Username:
-      <form action="setpriv.php" method="post">
-        <input type="text" name="name">
-	<input type="hidden" name="priv" value="puzztech">
-	<input type="radio" name="allowed" id="YES" value="YES">
-        <label for="YES">YES</label>
-	<input type="radio" name="allowed" id="NO" value="NO">
-        <label for="NO">NO</label>
-        <input type="submit" name="setpriv" value="Set Puzztech Priv">
-      </form>
-    <td valign="middle">
-      Enter Username:
-      <form action="setpriv.php" method="post">
-        <input type="text" name="name">
-        <input type="hidden" name="priv" value="puzzleboss">
-        <input type="radio" name="allowed" id="YES" value="YES">
-        <label for="YES">YES</label>
-        <input type="radio" name="allowed" id="NO" value="NO">
-        <label for="NO">NO</label>
-        <input type="submit" name="setpriv" value="Set Puzzleboss Priv">
-      </form>
-  </tr>
-</table>
+<div class="info-box">
+  <div class="info-box-header" @click="showCheckPrivileges = !showCheckPrivileges">
+    <span class="collapse-icon" :class="{ collapsed: !showCheckPrivileges }">▼</span>
+    <h3>Check Privileges</h3>
+  </div>
+  <div class="info-box-content" v-show="showCheckPrivileges">
+    <table>
+      <tr>
+        <td>To check if a user has a specific privilege:</td>
+        <td>
+          Enter Username:
+          <form action="checkpriv.php" method="post" style="display:inline;">
+            <input type="text" name="name">
+            <input type="hidden" name="priv" value="puzztech">
+            <input type="submit" name="check" value="Check Puzztech Priv">
+          </form>
+        </td>
+        <td>
+          Enter Username:
+          <form action="checkpriv.php" method="post" style="display:inline;">
+            <input type="text" name="name">
+            <input type="hidden" name="priv" value="puzzleboss">
+            <input type="submit" name="check" value="Check Puzzleboss Priv">
+          </form>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
 
-<hr>
-<h3>Config Edit</h3>
-<p>BE CAREFUL:</br>
-Changes to these configuration values are not reversible and may cause irreparable damage or breakage to the hunt if set improperly. Please proceed with caution. Set only one at a time.
-</p>
-<p style="background-color: #e7f3ff; border: 2px solid #0066cc; border-radius: 6px; color: #004080; padding: 15px;">
-<strong>ℹ️ Automatic Config Refresh:</strong> Configuration changes take effect automatically within <strong>30 seconds</strong> across all API workers and the BigJimmyBot. No manual refresh or restart is required.
-</p>
-<table border="2" cellpadding="3">
-<tr><th>Config Variable</th><th>Current Value</th><th>Desired Value</th></tr>
-<?php
-foreach ($config as $key => $value){
-  echo "<tr><td>".$key."</td>";
-  echo "<td bgcolor=lightgray><code>".$value."</code></td>";
-  echo "<td style='width:90%'><form id='".$key."' action='changeconfig.php' method='post'>";
-  echo "<textarea name='configval' cols='40' rows='10' form='".$key."'></textarea>";
-  #echo "<input type='text' name='configval'>";
-  echo "<input type='hidden' name='key' value='".$key."'>";
-  echo "<input type='submit' name='changeconfig' value='Set Value'>";
-  echo "</form></td></tr>";
-}
-?>
-</table>
-<hr>
-<h3>Add Config Variable:</h3>
+<div class="info-box">
+  <div class="info-box-header" @click="showSetPrivileges = !showSetPrivileges">
+    <span class="collapse-icon" :class="{ collapsed: !showSetPrivileges }">▼</span>
+    <h3>Set Privileges</h3>
+  </div>
+  <div class="info-box-content" v-show="showSetPrivileges">
+    <table>
+      <tr>
+        <td>To modify a role for a user:</td>
+        <td>
+          Enter Username:
+          <form action="setpriv.php" method="post" style="display:inline;">
+            <input type="text" name="name">
+            <input type="hidden" name="priv" value="puzztech">
+            <input type="radio" name="allowed" id="YES_puzztech" value="YES">
+            <label for="YES_puzztech">YES</label>
+            <input type="radio" name="allowed" id="NO_puzztech" value="NO">
+            <label for="NO_puzztech">NO</label>
+            <input type="submit" name="setpriv" value="Set Puzztech Priv">
+          </form>
+        </td>
+        <td>
+          Enter Username:
+          <form action="setpriv.php" method="post" style="display:inline;">
+            <input type="text" name="name">
+            <input type="hidden" name="priv" value="puzzleboss">
+            <input type="radio" name="allowed" id="YES_puzzleboss" value="YES">
+            <label for="YES_puzzleboss">YES</label>
+            <input type="radio" name="allowed" id="NO_puzzleboss" value="NO">
+            <label for="NO_puzzleboss">NO</label>
+            <input type="submit" name="setpriv" value="Set Puzzleboss Priv">
+          </form>
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
 
-<form id="newconfig" action='changeconfig.php' method='post'>
-<table border="2" cellpadding="3">
-<tr><th>New Config Key</th><th>New Config Value</th><th></th>
-<tr><td><input type="text" name="key"</td>
-<td><textarea name='configval' cols='40' rows='10' form="newconfig"></textarea></td>
-<td><input type="submit" name="changeconfig" value='Set New Config Entry'></td></tr>
+<div class="info-box">
+  <div class="info-box-header" @click="showAddConfig = !showAddConfig">
+    <span class="collapse-icon" :class="{ collapsed: !showAddConfig }">▼</span>
+    <h3>Add Config Variable</h3>
+  </div>
+  <div class="info-box-content" v-show="showAddConfig">
+    <form id="newconfig" action='changeconfig.php' method='post'>
+    <table>
+    <thead>
+    <tr><th>New Config Key</th><th>New Config Value</th><th></th></tr>
+    </thead>
+    <tbody>
+    <tr><td><input type="text" name="key"></td>
+    <td><textarea name='configval' cols='40' rows='10' form="newconfig"></textarea></td>
+    <td><input type="submit" name="changeconfig" value='Set New Config Entry'></td></tr>
+    </tbody>
+    </table>
+    </form>
+  </div>
+</div>
 
+<div class="info-box">
+  <div class="info-box-header" @click="showConfigEdit = !showConfigEdit">
+    <span class="collapse-icon" :class="{ collapsed: !showConfigEdit }">▼</span>
+    <h3>Config Edit</h3>
+  </div>
+  <div class="info-box-content" v-show="showConfigEdit">
+    <p><strong>BE CAREFUL:</strong><br>
+    Changes to these configuration values are not reversible and may cause irreparable damage or breakage to the hunt if set improperly. Please proceed with caution. Set only one at a time.
+    </p>
+    <p style="background-color: #e7f3ff; border: 2px solid #0066cc; border-radius: 6px; color: #004080; padding: 15px;">
+    <strong>ℹ️ Automatic Config Refresh:</strong> Configuration changes take effect automatically within <strong>30 seconds</strong> across all API workers and the BigJimmyBot. No manual refresh or restart is required.
+    </p>
+    <table>
+    <thead>
+    <tr><th>Config Variable</th><th>Current Value</th><th>Desired Value</th></tr>
+    </thead>
+    <tbody>
+    <?php
+    foreach ($config as $key => $value){
+      echo "<tr><td>".$key."</td>";
+      echo "<td style='background-color: #f0f0f0;'><code>".$value."</code></td>";
+      echo "<td><form id='".$key."' action='changeconfig.php' method='post' style='display:inline;'>";
+      echo "<textarea name='configval' cols='40' rows='10' form='".$key."'></textarea>";
+      echo "<input type='hidden' name='key' value='".$key."'>";
+      echo "<input type='submit' name='changeconfig' value='Set Value'>";
+      echo "</form></td></tr>";
+    }
+    ?>
+    </tbody>
+    </table>
+  </div>
+</div>
 
-</table>
+</div>
 </main>
-<footer><br><hr><br><a href="index.php">Puzzleboss Home</a></footer>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  data() {
+    return {
+      showDeletePuzzle: true,
+      showCheckPrivileges: true,
+      showSetPrivileges: true,
+      showAddConfig: true,
+      showConfigEdit: true
+    }
+  }
+}).mount('#app');
+</script>
 </body>
 </html>

@@ -7,52 +7,46 @@ require('puzzlebosslib.php');
   <meta charset="UTF-8">
   <title>Add Puzzle</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./pb-ui.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
-  body {
-    background-color: aliceblue;
-    display: grid;
-    font-family: 'Lora';
-    height: 100vh;
-    justify-items: center;
-    margin: 0;
-    width: 100vw;
+  /* Match status.php table styling */
+  #app table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+    font-size: 0.9em;
   }
-  h1 {
-    line-height: 1em;
-  }
-  h1 > span {
-    font-size: 50%;
-  }
-  main {
-    margin-top: 50px;
-    max-width: 700px;
-  }
-  table.registration {
-    text-align: right;
-  }
-  table.registration tr > td:last-child {
+
+  #app th, #app td {
+    padding: 8px 10px;
     text-align: left;
-    font-size: 80%;
-    font-style: italic;
+    border-bottom: 1px solid #ddd;
   }
-  table.registration tr:last-child {
+
+  #app th {
+    background: #e6f2ff;
+    color: #0066cc;
+    font-weight: 600;
+  }
+
+  #app tbody tr:hover {
+    background: #f5f5f5;
+  }
+
+  #app table td:first-child {
     text-align: center;
+    width: 60px;
   }
-  input[type="submit"] {
-    font-family: inherit;
+
+  #app table label {
+    cursor: pointer;
   }
-  input[type="submit"]:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .error {
-    background-color: lightpink;
-    padding: 10px;
-  }
-  .success {
-    background-color: lightgreen;
-    padding: 10px;
-  }
+
+  /* Page-specific styles for progress indicator */
   #progress-container {
     margin: 20px 0;
     font-family: monospace;
@@ -102,7 +96,7 @@ require('puzzlebosslib.php');
   }
 
   function updatePuzzleMode() {
-    const promotePuzzleSelect = document.getElementById('promote_puzzle_id');
+    const promotePuzzleRadio = document.querySelector('input[name="promote_puzzle_id"]:checked');
     const speculativeCheckbox = document.getElementById('speculative-checkbox-row');
     const submitButton = document.querySelector('input[type="submit"]');
     const nameField = document.getElementById('name');
@@ -112,7 +106,7 @@ require('puzzlebosslib.php');
     const currentPuzzleInfo = document.getElementById('current-puzzle-info');
 
     // Check if a speculative puzzle is selected
-    const isPromoting = promotePuzzleSelect && promotePuzzleSelect.value !== '';
+    const isPromoting = promotePuzzleRadio && promotePuzzleRadio.value !== '';
 
     if (isPromoting) {
       // Promotion mode
@@ -123,11 +117,10 @@ require('puzzlebosslib.php');
       if (puzzleModeInput) puzzleModeInput.value = 'promote';
 
       // Show current puzzle info
-      const selectedOption = promotePuzzleSelect.options[promotePuzzleSelect.selectedIndex];
-      if (currentPuzzleInfo && selectedOption) {
-        document.getElementById('current-puzzle-name').textContent = selectedOption.dataset.puzzleName || '';
-        document.getElementById('current-puzzle-round').textContent = selectedOption.dataset.puzzleRound || '';
-        document.getElementById('current-puzzle-uri').textContent = selectedOption.dataset.puzzleUri || '(none)';
+      if (currentPuzzleInfo && promotePuzzleRadio) {
+        document.getElementById('current-puzzle-name').textContent = promotePuzzleRadio.dataset.puzzleName || '';
+        document.getElementById('current-puzzle-round').textContent = promotePuzzleRadio.dataset.puzzleRound || '';
+        document.getElementById('current-puzzle-uri').textContent = promotePuzzleRadio.dataset.puzzleUri || '(none)';
         currentPuzzleInfo.style.display = 'block';
       }
 
@@ -247,12 +240,18 @@ require('puzzlebosslib.php');
   }
   </script>
 </head>
-<body>
-<main>
+<body style="background: aliceblue; margin: 0; padding: 20px; min-height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
+<main style="max-width: none;">
 <?php
 
 $round_id = null;
 if (isset($_POST['submit'])) {
+  // Show header and navbar when processing form submission
+  echo '<div class="status-header">';
+  echo '  <h1>Adding Puzzle...</h1>';
+  echo '</div>';
+  echo render_navbar();
+
   // Check if this is a promotion workflow
   $puzzle_mode = isset($_POST['puzzle_mode']) ? $_POST['puzzle_mode'] : 'new';
 
@@ -404,8 +403,7 @@ if (isset($_POST['submit'])) {
     }
     echo '<a href="editpuzzle.php?pid='.$promote_puzzle_id.'">View puzzle</a>';
     echo '</div><br><hr>';
-    echo '<a href="addpuzzle.php">Add another puzzle</a><br>';
-    echo '<a href="index.php">Return to Puzzleboss Home</a>';
+    echo '<a href="addpuzzle.php">Add another puzzle</a>';
     exit(0);
   }
 
@@ -529,8 +527,7 @@ HTML;
   <strong>ERROR:</strong>
   <span id="error-message"></span>
   <br><br>
-  <a href="addpuzzle.php">Try again</a> or
-  <a href="index.php">Return to Puzzleboss Home</a>
+  <a href="addpuzzle.php">Try again</a>
 </div>
 <div id="success-container" style="display: none;">
   <h2>✅ Puzzle creation successful!</h2>
@@ -539,8 +536,7 @@ HTML;
     <a href="#" id="success-puzzle-link"></a>.
   </p>
   <p>
-    <a href="addpuzzle.php">Add another puzzle</a> |
-    <a href="index.php">Return to Puzzleboss Home</a>
+    <a href="addpuzzle.php">Add another puzzle</a>
   </p>
 </div>
 <script>
@@ -599,27 +595,68 @@ try {
 }
 ?>
 
-<h1>Add a puzzle!</h1>
+<div class="status-header">
+  <h1>Add a puzzle!</h1>
+</div>
+
+<?= render_navbar() ?>
+
+<div id="app">
+
 <form action="addpuzzle.php" method="post" onsubmit="return handleSubmit(event)">
 
   <!-- Hidden field to track puzzle mode (new vs promote) -->
   <input type="hidden" id="puzzle_mode_value" name="puzzle_mode" value="new" />
 
 <?php if (count($speculative_puzzles) > 0): ?>
+<div class="info-box">
+  <div class="info-box-header" @click="showPromote = !showPromote">
+    <span class="collapse-icon" :class="{ collapsed: !showPromote }">▼</span>
+    <h3>🔮 Promote a Speculative Puzzle (Optional)</h3>
+  </div>
+  <div class="info-box-content" v-show="showPromote">
   <div id="promote-puzzle-fields">
-    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-      <p style="margin: 0 0 10px 0;"><strong>🔮 Promote a speculative puzzle (optional):</strong></p>
-      <select name="promote_puzzle_id" id="promote_puzzle_id" style="width: 100%; max-width: 600px; padding: 8px; font-size: 14px;" onchange="updatePuzzleMode()">
-        <option value="">-- Or create a new puzzle --</option>
+    <table>
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>Puzzle Name</th>
+          <th>Round</th>
+          <th>Current URI</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <input type="radio"
+                   name="promote_puzzle_id"
+                   value=""
+                   id="promote_puzzle_new"
+                   onclick="updatePuzzleMode()"
+                   checked>
+          </td>
+          <td><label for="promote_puzzle_new"><strong>New Puzzle</strong></label></td>
+          <td colspan="2"><em>Create a new puzzle</em></td>
+        </tr>
 <?php foreach ($speculative_puzzles as $sp): ?>
-        <option value="<?= htmlentities($sp->id) ?>"
-                data-puzzle-name="<?= htmlentities($sp->name) ?>"
-                data-puzzle-round="<?= htmlentities($sp->round_name) ?>"
-                data-puzzle-uri="<?= htmlentities($sp->puzzle_uri ?? '') ?>">
-          <?= htmlentities($sp->name) ?> (Round: <?= htmlentities($sp->round_name) ?>)
-        </option>
+        <tr>
+          <td>
+            <input type="radio"
+                   name="promote_puzzle_id"
+                   value="<?= htmlentities($sp->id) ?>"
+                   id="promote_puzzle_<?= htmlentities($sp->id) ?>"
+                   data-puzzle-name="<?= htmlentities($sp->name) ?>"
+                   data-puzzle-round="<?= htmlentities($sp->round_name) ?>"
+                   data-puzzle-uri="<?= htmlentities($sp->puzzle_uri ?? '') ?>"
+                   onclick="updatePuzzleMode()">
+          </td>
+          <td><label for="promote_puzzle_<?= htmlentities($sp->id) ?>"><?= htmlentities($sp->name) ?></label></td>
+          <td><?= htmlentities($sp->round_name) ?></td>
+          <td><?= htmlentities($sp->puzzle_uri ?? '(none)') ?></td>
+        </tr>
 <?php endforeach; ?>
-      </select>
+      </tbody>
+    </table>
       <div id="current-puzzle-info" style="display: none; margin-top: 15px; padding: 10px; background-color: #fff; border-radius: 3px; border: 1px solid #ddd;">
         <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 90%;">Current puzzle values:</p>
         <p style="margin: 5px 0; font-size: 85%; font-family: monospace;">
@@ -631,10 +668,17 @@ try {
       <p style="font-size: 90%; font-style: italic; margin: 10px 0 0 0; color: #666;">
         Fill in the name, round, and URI fields below to update the puzzle. Leave blank to keep current values.
       </p>
-    </div>
   </div>
+  </div>
+</div>
 <?php endif; ?>
 
+<div class="info-box">
+  <div class="info-box-header" @click="showPuzzleForm = !showPuzzleForm">
+    <span class="collapse-icon" :class="{ collapsed: !showPuzzleForm }">▼</span>
+    <h3>Puzzle Details</h3>
+  </div>
+  <div class="info-box-content" v-show="showPuzzleForm">
   <table>
     <tr>
       <td><label for="name">Name:</label></td>
@@ -720,8 +764,24 @@ if ($offer_create_new_round) {
   </table>
 
   <input type="submit" name="submit" value="Add New Puzzle"/>
+  </div>
+</div>
 </form>
+
+</div>
 </main>
-<footer><br><hr><br><a href="index.php">Puzzleboss Home</a></footer>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  data() {
+    return {
+      showPromote: true,
+      showPuzzleForm: true
+    }
+  }
+}).mount('#app');
+</script>
 </body>
 </html>

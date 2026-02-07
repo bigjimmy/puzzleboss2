@@ -11,58 +11,74 @@ $bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot],
   <meta charset="UTF-8">
   <title>Puzzleboss-only Tools</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./pb-ui.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
-    body {
-      background-color: aliceblue;
-      display: grid;
-      font-family: 'Lora';
-      height: 100vh;
-      justify-items: center;
-      margin: 0;
-      width: 100vw;
+    #app .info-box-content {
+      font-size: 0.9em;
     }
-    h1 {
-      line-height: 1em;
+    #app .info-box-content p, #app .info-box-content ul {
+      font-size: 1em;
     }
-    h1 > span {
-      font-size: 50%;
+
+    /* Match status.php table styling */
+    #app table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #ddd;
+      font-size: 0.9em;
     }
-    main {
-      margin-top: 50px;
-      max-width: 700px;
-    }
-    table.registration {
-      text-align: right;
-    }
-    table.registration tr > td:last-child {
+
+    #app th, #app td {
+      padding: 8px 10px;
       text-align: left;
-      font-size: 80%;
-      font-style: italic;
+      border-bottom: 1px solid #ddd;
     }
-    table.registration tr:last-child {
-      text-align: center;
+
+    #app th {
+      background: #e6f2ff;
+      color: #0066cc;
+      font-weight: 600;
     }
-    input[type="submit"] {
-      font-family: inherit;
+
+    #app tr:hover {
+      background: #f5f5f5;
     }
-    .error {
-      background-color: lightpink;
-      padding: 10px;
+
+    /* Align column widths for Add New Round, Solver Assignment, and Tag Management tables */
+    #app .info-box-content table td:first-child {
+      width: 65%;
+    }
+
+    #app .info-box-content table td:last-child {
+      width: 35%;
     }
   </style>
 </head>
-<body>
-<main>
-<h1>Puzzleboss-only Admin Tools</h1>
+<body style="background: aliceblue; margin: 0; padding: 20px; min-height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
+<main style="max-width: none;">
+<div id="app">
+<div class="status-header">
+  <h1>Puzzleboss-only Admin Tools</h1>
+</div>
 
-<hr>
-<h3>New Puzzle / Check for Puzzles Bookmarklet</h3>
+<?= render_navbar('pbtools') ?>
+
+<div class="info-box">
+  <div class="info-box-header" @click="showBookmarklet = !showBookmarklet">
+    <span class="collapse-icon" :class="{ collapsed: !showBookmarklet }">▼</span>
+    <h3>New Puzzle / Check for Puzzles Bookmarklet</h3>
+  </div>
+  <div class="info-box-content" v-show="showBookmarklet">
 A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
 <ul>
   <li>On a puzzle page, click it to create a new puzzle</li>
   <li>On the List of Puzzles page (<tt>/puzzles</tt>), click it to check if PB is missing anything.</li>
 </ul>
-<table border="2" cellpadding="3">
+<table>
   <tr>
     <td>Drag this link to your bookmarks:</td>
     <td><a href="<?= $bookmarkuri ?>">Add to Puzzboss</a></td>
@@ -76,25 +92,35 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
     </td>
   </tr>
 </table>
-<br>
+  </div>
+</div>
 
-<hr>
-<h3>Add New Puzzle</h3>
-<strong><a href="addpuzzle.php" target="_blank">Page to add new puzzles</a></strong>
-<br>
+<div class="info-box">
+  <div class="info-box-header" @click="showAddPuzzle = !showAddPuzzle">
+    <span class="collapse-icon" :class="{ collapsed: !showAddPuzzle }">▼</span>
+    <h3>Add New Puzzle</h3>
+  </div>
+  <div class="info-box-content" v-show="showAddPuzzle">
+    <strong><a href="addpuzzle.php" target="_blank">Page to add new puzzles</a></strong>
+  </div>
+</div>
 
-<hr>
-<h3>Add New Round (backup)</h3>
+<div class="info-box">
+  <div class="info-box-header" @click="showAddRound = !showAddRound">
+    <span class="collapse-icon" :class="{ collapsed: !showAddRound }">▼</span>
+    <h3>Add New Round</h3>
+  </div>
+  <div class="info-box-content" v-show="showAddRound">
 <p>
   <strong>No longer necessary!</strong>
   If you use the bookmarklet above on a puzzle in a new round,
   you can create new rounds
   <a href="addpuzzle.php" target="_blank">on the new puzzle page</a>.
 </p>
-<table border="2" cellpadding="3">
+<table>
   <tr>
     <td>To add a new round (enter round name):</td>
-    <td valign="middle">
+    <td>
       <form action="addround.php" method="post">
         <input type="text" name="name">
         <input type="submit" name="submit" value="Add Round">
@@ -102,14 +128,19 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
     </td>
   </tr>
 </table>
-<br>
+  </div>
+</div>
 
-<hr>
-<h3>Solver Assignment</h3>
-<table border="2" cellpadding="3">
+<div class="info-box">
+  <div class="info-box-header" @click="showSolverAssignment = !showSolverAssignment">
+    <span class="collapse-icon" :class="{ collapsed: !showSolverAssignment }">▼</span>
+    <h3>Solver Assignment</h3>
+  </div>
+  <div class="info-box-content" v-show="showSolverAssignment">
+<table>
   <tr>
     <td>To manually edit a solver's current puzzle assignment (enter username):</td>
-    <td valign="middle">
+    <td>
       <form action="editsolver.php" method="get">
         <input type="text" name="assumedid">
         <input type="submit" name="ok" value="Edit Solver">
@@ -117,9 +148,15 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
     </td>
   </tr>
 </table>
+  </div>
+</div>
 
-<hr>
-<h3>Tag Management</h3>
+<div class="info-box">
+  <div class="info-box-header" @click="showTagManagement = !showTagManagement">
+    <span class="collapse-icon" :class="{ collapsed: !showTagManagement }">▼</span>
+    <h3>Tag Management</h3>
+  </div>
+  <div class="info-box-content" v-show="showTagManagement">
 <?php
 // Handle tag creation
 if (isset($_POST['create_tag']) && !empty($_POST['new_tag_name'])) {
@@ -173,7 +210,7 @@ try {
 
 <p><a href="search.php">Search Puzzles by Tag</a></p>
 
-<table border="2" cellpadding="3">
+<table>
   <tr>
     <td>Create a new tag:</td>
     <td>
@@ -189,7 +226,7 @@ try {
 
 <?php if (count($alltags) > 0): ?>
 <strong>Existing Tags:</strong>
-<table border="2" cellpadding="3">
+<table>
   <tr>
     <th>Tag Name</th>
     <th>ID</th>
@@ -211,10 +248,26 @@ try {
 <?php else: ?>
 <p><em>No tags defined in the system yet.</em></p>
 <?php endif; ?>
+  </div>
+</div>
 
+</div>
 </main>
-<footer><br><hr><br><a href="index.php">Puzzleboss Home</a>
-<br><a href="admin.php">Puzztech-only Puzzleboss Administration Page</a>
-</footer>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  data() {
+    return {
+      showBookmarklet: true,
+      showAddPuzzle: true,
+      showAddRound: true,
+      showSolverAssignment: true,
+      showTagManagement: true
+    }
+  }
+}).mount('#app');
+</script>
 </body>
 </html>

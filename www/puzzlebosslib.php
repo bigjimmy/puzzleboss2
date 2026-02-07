@@ -224,4 +224,47 @@ function get_status_display($status, $use_text = false) {
   return $use_text ? substr($status, 0, 1) : '❓';
 }
 
+// Generates the navigation bar HTML
+// $current_page: one of 'index', 'status', 'pbtools', 'admin', or null
+function render_navbar($current_page = null) {
+  $uid = getauthenticateduser();
+  $has_puzztech = checkpriv("puzztech", $uid);
+
+  $pages = [
+    'index' => ['href' => './index.php', 'label' => 'Main Dashboard'],
+    'status' => ['href' => './status.php', 'label' => 'Status Overview'],
+    'pbtools' => ['href' => './pbtools.php', 'label' => 'PB Tools'],
+    'wiki' => ['href' => '../', 'label' => 'Wiki', 'target' => '_blank'],
+    'old' => ['href' => './old.php', 'label' => 'Old UI'],
+    'admin' => ['href' => './admin.php', 'label' => 'PuzzTech Admin'],
+  ];
+
+  $html = '<div class="nav-links">' . "\n";
+
+  foreach ($pages as $key => $page) {
+    $class = '';
+    $target = '';
+
+    // Determine if this is the current page
+    if ($key === $current_page) {
+      $class = ' class="current"';
+    }
+    // Gray out admin link if user doesn't have puzztech privilege
+    elseif ($key === 'admin' && !$has_puzztech) {
+      $class = ' class="current"';
+    }
+
+    // Add target for external links
+    if (isset($page['target'])) {
+      $target = ' target="' . $page['target'] . '"';
+    }
+
+    $html .= '  <a href="' . $page['href'] . '"' . $target . $class . '>' . $page['label'] . '</a>' . "\n";
+  }
+
+  $html .= '</div>';
+
+  return $html;
+}
+
 ?>
