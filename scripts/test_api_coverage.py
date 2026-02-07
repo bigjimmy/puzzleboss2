@@ -3344,6 +3344,142 @@ class TestRunner:
             self.logger.log_error(f"Exception message: {str(e)}")
             self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
 
+    def test_api_documentation(self, result: TestResult):
+        """Test API documentation endpoints (Swagger/OpenAPI)."""
+        self.logger.log_operation("Starting API documentation test")
+
+        try:
+            # Test /apidocs/ endpoint (Swagger UI page)
+            self.logger.log_operation("Testing /apidocs/ endpoint")
+            response = requests.get(f"{self.base_url}/apidocs/")
+            if not response.ok:
+                result.fail(f"Failed to get /apidocs/ endpoint: HTTP {response.status_code}")
+                return
+
+            if response.headers.get("Content-Type", "").startswith("text/html"):
+                self.logger.log_operation("✓ /apidocs/ returns HTML content")
+            else:
+                result.fail(f"Invalid content type for /apidocs/: {response.headers.get('Content-Type')}")
+                return
+
+            # Check if Swagger UI is present in the HTML
+            html_content = response.text
+            if "swagger-ui" not in html_content.lower():
+                result.fail("/apidocs/ HTML does not contain swagger-ui")
+                return
+
+            self.logger.log_operation("✓ /apidocs/ contains Swagger UI markup")
+
+            # Test /apispec_1.json endpoint (OpenAPI spec)
+            self.logger.log_operation("Testing /apispec_1.json endpoint")
+            response = requests.get(f"{self.base_url}/apispec_1.json")
+            if not response.ok:
+                result.fail(f"Failed to get /apispec_1.json endpoint: HTTP {response.status_code}")
+                return
+
+            try:
+                api_spec = response.json()
+                self.logger.log_operation("✓ /apispec_1.json returns valid JSON")
+            except Exception as e:
+                result.fail(f"Failed to parse /apispec_1.json as JSON: {e}")
+                return
+
+            # Validate OpenAPI/Swagger spec structure
+            if not isinstance(api_spec, dict):
+                result.fail("API spec should be a JSON object/dict")
+                return
+
+            # Check for required OpenAPI/Swagger fields
+            if "swagger" not in api_spec and "openapi" not in api_spec:
+                result.fail("API spec missing 'swagger' or 'openapi' version field")
+                return
+
+            swagger_version = api_spec.get("swagger") or api_spec.get("openapi")
+            self.logger.log_operation(f"✓ Swagger/OpenAPI version: {swagger_version}")
+
+            if "paths" not in api_spec:
+                result.fail("API spec missing 'paths' field")
+                return
+
+            paths = api_spec["paths"]
+            if not isinstance(paths, dict):
+                result.fail("API spec 'paths' should be an object/dict")
+                return
+
+            self.logger.log_operation(f"✓ API spec contains {len(paths)} endpoint paths")
+
+            # Verify critical endpoints are documented
+            critical_endpoints = [
+                "/puzzles",
+                "/rounds",
+                "/solvers",
+                "/botstats",
+                "/botstats/{key}"
+            ]
+
+            missing_endpoints = []
+            for endpoint in critical_endpoints:
+                if endpoint not in paths:
+                    missing_endpoints.append(endpoint)
+
+            if missing_endpoints:
+                result.fail(f"Missing critical endpoints in API spec: {', '.join(missing_endpoints)}")
+                return
+
+            self.logger.log_operation(f"✓ All critical endpoints present in API spec")
+
+            # Verify /botstats endpoint has both GET and POST methods
+            botstats_endpoint = paths.get("/botstats", {})
+            if "get" not in botstats_endpoint:
+                result.fail("/botstats endpoint missing GET method in API spec")
+                return
+            if "post" not in botstats_endpoint:
+                result.fail("/botstats endpoint missing POST method in API spec (batch update)")
+                return
+
+            self.logger.log_operation("✓ /botstats endpoint has both GET and POST methods")
+
+            # Verify /botstats/{key} endpoint has POST method (single stat update)
+            botstats_key_endpoint = paths.get("/botstats/{key}", {})
+            if "post" not in botstats_key_endpoint:
+                result.fail("/botstats/{key} endpoint missing POST method in API spec")
+                return
+
+            self.logger.log_operation("✓ /botstats/{key} endpoint has POST method")
+
+            # Check if spec has info section
+            if "info" in api_spec:
+                info = api_spec["info"]
+                self.logger.log_operation(
+                    f"✓ API info: title='{info.get('title', 'N/A')}', version='{info.get('version', 'N/A')}'"
+                )
+
+            # Verify some endpoints have proper response schemas
+            endpoints_to_check = ["/puzzles", "/rounds", "/solvers"]
+            for endpoint in endpoints_to_check:
+                endpoint_spec = paths.get(endpoint, {})
+                if "get" in endpoint_spec:
+                    get_spec = endpoint_spec["get"]
+                    if "responses" not in get_spec:
+                        result.fail(f"{endpoint} GET method missing 'responses' in spec")
+                        return
+                    if "200" not in get_spec["responses"]:
+                        result.fail(f"{endpoint} GET method missing '200' response in spec")
+                        return
+
+            self.logger.log_operation("✓ Sample endpoints have proper response schemas")
+
+            result.set_success(
+                f"API documentation test completed successfully - "
+                f"{len(paths)} endpoints documented, Swagger UI accessible"
+            )
+
+        except Exception as e:
+            result.fail(f"Error in API documentation test: {str(e)}")
+            self.logger.log_error(f"Exception type: {type(e).__name__}")
+            self.logger.log_error(f"Exception message: {str(e)}")
+            self.logger.log_error(f"Exception traceback: {traceback.format_exc()}")
+
     def test_bot_statistics(self, result: TestResult):
         """Test bot statistics update and retrieval."""
         self.logger.log_operation("Starting bot statistics test")
@@ -3853,6 +3989,7 @@ class TestRunner:
             ("Sheetcount", self.test_sheetcount),
             ("Tagging", self.test_tagging),
             ("API Endpoints", self.test_api_endpoints),
+            ("API Documentation", self.test_api_documentation),
             ("Bot Statistics", self.test_bot_statistics),
             ("Cache Invalidation", self.test_cache_invalidation),
             ("Puzzle Deletion", self.test_puzzle_deletion),

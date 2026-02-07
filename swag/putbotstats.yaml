@@ -3,40 +3,42 @@ tags:
 summary: Update multiple bot statistics
 description: |
   Updates or inserts multiple bot statistics in a single call.
-  Accepts either an array of objects or a dictionary/object format.
-  Maintains backwards compatibility with the single-stat endpoint.
+
+  Accepts either format:
+  - Array: [{"key": "k1", "val": "v1"}, {"key": "k2", "val": "v2"}]
+  - Object: {"k1": "v1", "k2": "v2"}
+
+  Maintains backwards compatibility with the single-stat endpoint POST /botstats/{key}
 parameters:
   - name: body
     in: body
     required: true
+    description: Array of key-value pairs or object/dictionary
     schema:
-      oneOf:
-        - type: array
-          description: Array of key-value pairs
-          items:
-            type: object
-            required:
-              - key
-              - val
-            properties:
-              key:
-                type: string
-                description: The statistic key to update
-              val:
-                type: string
-                description: The new value for the statistic
-          example:
-            - key: "puzzle_count"
-              val: "42"
-            - key: "solver_count"
-              val: "15"
-        - type: object
-          description: Dictionary/object of key-value pairs
-          additionalProperties:
+      type: array
+      items:
+        type: object
+        required:
+          - key
+          - val
+        properties:
+          key:
             type: string
-          example:
-            puzzle_count: "42"
-            solver_count: "15"
+            description: The statistic key to update
+          val:
+            type: string
+            description: The new value for the statistic
+    examples:
+      array_format:
+        value:
+          - key: "puzzle_count"
+            val: "42"
+          - key: "solver_count"
+            val: "15"
+      object_format:
+        value:
+          puzzle_count: "42"
+          solver_count: "15"
 responses:
   200:
     description: Statistics updated successfully
