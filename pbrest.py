@@ -1340,6 +1340,12 @@ def create_puzzle():
             (myid, 100),
         )
         conn.commit()
+
+        # If this is a meta puzzle, check round completion status
+        # This handles unmarking rounds that were previously solved when a new unsolved meta is added
+        if ismeta:
+            from pblib import check_round_completion
+            check_round_completion(round_id, conn)
     except Exception:
         raise Exception("Exception checking database for puzzle after insert")
 
@@ -1660,6 +1666,12 @@ def finish_puzzle_creation(code):
                 (myid, 100),
             )
             conn.commit()
+
+            # If this is a meta puzzle, check round completion status
+            # This handles unmarking rounds that were previously solved when a new unsolved meta is added
+            if ismeta:
+                from pblib import check_round_completion
+                check_round_completion(round_id, conn)
 
             debug_log(3, f"Step 4: Inserted puzzle {name} into database with ID {myid}")
 
