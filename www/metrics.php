@@ -131,109 +131,62 @@ try {
         if (isset($botstats_response->botstats)) {
             $botstats = (array)$botstats_response->botstats;
 
-            $stats_to_log = array(
-                // BigJimmyBot stats (key is prometheus metric name, db_key is database field name)
-                "bigjimmy_loop_time_seconds" => array(
-                    "type" => "gauge",
-                    "description" => "Total time in seconds for last full puzzle scan loop (setup + processing)",
-                    "db_key" => "loop_time_seconds",
-                ),
-                "bigjimmy_loop_setup_seconds" => array(
-                    "type" => "gauge",
-                    "description" => "Time in seconds for loop setup (API fetch, thread creation)",
-                    "db_key" => "loop_setup_seconds",
-                ),
-                "bigjimmy_loop_processing_seconds" => array(
-                    "type" => "gauge",
-                    "description" => "Time in seconds for actual puzzle processing",
-                    "db_key" => "loop_processing_seconds",
-                ),
-                "bigjimmy_loop_puzzle_count" => array(
-                    "type" => "gauge",
-                    "description" => "Number of puzzles processed in last loop",
-                    "db_key" => "loop_puzzle_count",
-                ),
-                "bigjimmy_avg_seconds_per_puzzle" => array(
-                    "type" => "gauge",
-                    "description" => "Average processing seconds per puzzle in last loop",
-                    "db_key" => "loop_avg_seconds_per_puzzle",
-                ),
-                "bigjimmy_quota_failures" => array(
-                    "type" => "counter",
-                    "description" => "Total Google API quota failures (429 errors) since bot start",
-                    "db_key" => "quota_failures",
-                ),
-                "bigjimmy_loop_iterations_total" => array(
-                    "type" => "counter",
-                    "description" => "Total number of loop iterations completed (resets on bot restart)",
-                    "db_key" => "loop_iterations_total",
-                ),
-                // Cache metrics
-                "cache_hits_total" => array(
-                    "type" => "counter",
-                    "description" => "Total cache hits for /allcached endpoint",
-                ),
-                "cache_misses_total" => array(
-                    "type" => "counter",
-                    "description" => "Total cache misses for /allcached endpoint",
-                ),
-                "cache_invalidations_total" => array(
-                    "type" => "counter",
-                    "description" => "Total cache invalidations",
-                ),
-                "tags_assigned_total" => array(
-                    "type" => "counter",
-                    "description" => "Total tags assigned to puzzles",
-                ),
-                // Puzzcord metrics
-                "puzzcord_members_total" => array(
-                    "type" => "gauge",
-                    "description" => "Total number of Discord team members (with member role)",
-                ),
-                "puzzcord_members_online" => array(
-                    "type" => "gauge",
-                    "description" => "Number of Discord team members online (according to Discord)",
-                ),
-                "puzzcord_members_active_in_voice" => array(
-                    "type" => "gauge",
-                    "description" => "Number of team members currently active in voice on Discord",
-                ),
-                "puzzcord_members_active_in_text" => array(
-                    "type" => "gauge",
-                    "description" => "Number of team members active in text on Discord in the last 15 minutes",
-                ),
-                "puzzcord_members_active_in_sheets" => array(
-                    "type" => "gauge",
-                    "description" => "Number of team members active in Sheets in the last 15 minutes",
-                ),
-                "puzzcord_members_active_in_discord" => array(
-                    "type" => "gauge",
-                    "description" => "Number of team members currently active in voice OR active in text in the last 15 minutes",
-                ),
-                "puzzcord_members_active_anywhere" => array(
-                    "type" => "gauge",
-                    "description" => "Number of team members currently active in voice OR active in (text OR Sheets) in the last 15 minutes",
-                ),
-                "puzzcord_members_active_in_person" => array(
-                    "type" => "gauge",
-                    "description" => "Number of in-person team members currently active in voice OR active in (text OR Sheets) in the last 15 minutes",
-                ),
-                "puzzcord_messages_per_minute" => array(
-                    "type" => "gauge",
-                    "description" => "Discord messages per minute",
-                ),
-                "puzzcord_tables_in_use" => array(
-                    "type" => "gauge",
-                    "description" => "Discord tables (voice channels) in use",
-                ),
-            );
+            // Load metric metadata from config (dynamically configured)
+            $stats_to_log = array();
+            try {
+                $config_response = readapi('/config');
+                if (isset($config_response->config->METRICS_METADATA)) {
+                    $metadata_json = $config_response->config->METRICS_METADATA;
+                    $stats_to_log = json_decode($metadata_json, true);
+                    if (!is_array($stats_to_log)) {
+                        error_log("METRICS_METADATA config is not valid JSON, using empty array");
+                        $stats_to_log = array();
+                    }
+                }
+            } catch (Exception $e) {
+                error_log("Failed to load METRICS_METADATA from config: " . $e->getMessage());
+            }
 
+            // Export metrics defined in metadata config
             foreach ($stats_to_log as $stat => $stat_info) {
                 // Use db_key if provided, otherwise use stat name as-is
                 $db_key = $stat_info["db_key"] ?? $stat;
-                $metrics[] = sprintf("#HELP puzzleboss_%s %s", $stat, $stat_info["description"]);
-                $metrics[] = sprintf("#TYPE puzzleboss_%s %s", $stat, $stat_info["type"]);
+
+                // Skip if the metric doesn't exist in botstats
+                if (!isset($botstats[$db_key])) {
+                    continue;
+                }
+
+                $metrics[] = sprintf("# HELP puzzleboss_%s %s", $stat, $stat_info["description"]);
+                $metrics[] = sprintf("# TYPE puzzleboss_%s %s", $stat, $stat_info["type"]);
                 $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$db_key]->val ?? "0");
+                $metrics[] = "";
+            }
+
+            // Also export any botstats not in metadata using convention-based defaults
+            // This ensures new metrics are automatically available without config changes
+            foreach ($botstats as $db_key => $stat_value) {
+                // Check if this metric is already handled by metadata
+                $already_handled = false;
+                foreach ($stats_to_log as $stat => $stat_info) {
+                    if (($stat_info["db_key"] ?? $stat) === $db_key) {
+                        $already_handled = true;
+                        break;
+                    }
+                }
+
+                if ($already_handled) {
+                    continue;
+                }
+
+                // Convention-based: metrics ending in _total are counters, others are gauges
+                $metric_name = $db_key;
+                $metric_type = (substr($metric_name, -6) === '_total') ? 'counter' : 'gauge';
+                $metric_description = ucfirst(str_replace('_', ' ', $metric_name));
+
+                $metrics[] = sprintf("# HELP puzzleboss_%s %s", $metric_name, $metric_description);
+                $metrics[] = sprintf("# TYPE puzzleboss_%s %s", $metric_name, $metric_type);
+                $metrics[] = sprintf("puzzleboss_%s %s", $metric_name, $stat_value->val ?? "0");
                 $metrics[] = "";
             }
         }
