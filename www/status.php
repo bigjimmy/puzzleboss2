@@ -546,7 +546,7 @@ $uid = getauthenticateduser();
 
                 const noLocPuzzles = computed(() => {
                     const filtered = allPuzzles.value.filter(p =>
-                        !p.xyzloc && p.status !== 'Solved'
+                        !p.xyzloc && p.status !== 'Solved' && p.status !== 'Unnecessary'
                     )
                     return sortPuzzles(filtered, 'noLoc')
                 })
