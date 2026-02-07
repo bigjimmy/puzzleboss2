@@ -49,7 +49,9 @@ export default {
         },
 
         isSolved() {
-            return Consts.isRoundSolved(this.round);
+            // Use the authoritative round.status from backend instead of computing from puzzle statuses
+            // The backend maintains this via check_round_completion() which handles all edge cases
+            return this.round.status === 'Solved';
         }
     },
     components: {

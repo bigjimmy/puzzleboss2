@@ -252,6 +252,15 @@ def load_sql_file(config, sql_file):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description='Reset hunt database (DESTRUCTIVE)')
+    parser.add_argument(
+        '--yes-i-am-sure-i-want-to-destroy-all-data',
+        action='store_true',
+        help='Bypass interactive confirmation (DANGEROUS - for automated testing only)'
+    )
+    args = parser.parse_args()
+
     print("==WARNING!!!===WARNING!!!===WARNING!!!===WARNING==")
     print("")
     print("Hunt reset: This will ERASE ALL PROGRESS AND PUZZLE DATA")
@@ -260,10 +269,14 @@ def main():
     print("DO NOT DO THIS DURING HUNT!")
     print()
 
-    confirmation = input("Enter the phrase IWANTTODESTROYTHEHUNT to continue: ")
-    if confirmation != "IWANTTODESTROYTHEHUNT":
-        print("ABORTED.")
-        sys.exit(2)
+    if args.yes_i_am_sure_i_want_to_destroy_all_data:
+        print("WARNING: Using --yes-i-am-sure-i-want-to-destroy-all-data flag")
+        print("Proceeding with automated reset...")
+    else:
+        confirmation = input("Enter the phrase IWANTTODESTROYTHEHUNT to continue: ")
+        if confirmation != "IWANTTODESTROYTHEHUNT":
+            print("ABORTED.")
+            sys.exit(2)
 
     print("OK. You asked for it.")
 

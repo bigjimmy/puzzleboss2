@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+WARNING: This script will RESET THE HUNT DATABASE when run with --allow-destructive!
+         The --allow-destructive flag is REQUIRED to run this script.
+         DO NOT run this on a production system!
+"""
 
 import requests
 import random
@@ -9,6 +14,8 @@ import json
 import sys
 import traceback
 import string
+import argparse
+import subprocess
 
 BASE_URL = "http://localhost:5000"
 
@@ -3679,22 +3686,24 @@ class TestRunner:
         rounds = self.get_all_rounds()
         puzzles = self.get_all_puzzles()
 
+        # Note: The system should be empty after reset_hunt() is called in main()
+        # This check verifies the reset worked correctly
         if rounds or puzzles:
-            self.logger.log_error("System is not empty!")
+            self.logger.log_error("System is not empty after reset!")
             self.logger.log_error(
                 f"Found {len(rounds)} rounds and {len(puzzles)} puzzles"
             )
             self.logger.log_error(
-                "Please run reset_hunt.py to reset the system before running tests"
+                "The hunt reset may have failed. Please check the reset-hunt.py output."
             )
             print("\n" + "=" * 80)
-            print("ERROR: System is not empty!")
+            print("ERROR: System is not empty after reset!")
             print(f"Found {len(rounds)} rounds and {len(puzzles)} puzzles")
-            print("Please run reset_hunt.py to reset the system before running tests")
+            print("The hunt reset may have failed. Please check the reset-hunt.py output.")
             print("=" * 80 + "\n")
             sys.exit(1)
 
-        self.logger.log_operation("System is empty, proceeding with tests")
+        self.logger.log_operation("System is empty (reset successful), proceeding with tests")
 
         # Ensure we have enough test solvers for all tests
         self.ensure_min_solvers(min_count=10)
@@ -3735,6 +3744,64 @@ class TestRunner:
         self.print_results()
 
 
+def reset_hunt():
+    """Reset the hunt database before running tests."""
+    print("\n" + "=" * 80)
+    print("RESETTING HUNT DATABASE...")
+    print("=" * 80 + "\n")
+
+    result = subprocess.run(
+        ['python3', 'scripts/reset-hunt.py', '--yes-i-am-sure-i-want-to-destroy-all-data'],
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0:
+        print(f"ERROR: Hunt reset failed!")
+        print(f"stdout: {result.stdout}")
+        print(f"stderr: {result.stderr}")
+        sys.exit(1)
+
+    print("Hunt reset completed successfully\n")
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description='Comprehensive Puzzleboss API Test Suite',
+        epilog='WARNING: This script will RESET THE HUNT DATABASE!'
+    )
+    parser.add_argument(
+        '--allow-destructive',
+        action='store_true',
+        required=True,
+        help='Required flag to confirm you understand this will DESTROY ALL PUZZLE DATA and reset the hunt'
+    )
+
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        print("\n" + "=" * 80)
+        print("ERROR: --allow-destructive flag is required to run this test suite")
+        print("=" * 80)
+        print("\nThis script will RESET THE HUNT DATABASE, destroying all puzzle data.")
+        print("Solver accounts, tags, and configuration will be preserved.")
+        print("\nUsage: python3 scripts/test_api_coverage.py --allow-destructive")
+        print("\nDO NOT RUN THIS ON A PRODUCTION SYSTEM!")
+        print("=" * 80 + "\n")
+        sys.exit(1)
+
+    # Display warning about destructive operation
+    print("\n" + "=" * 80)
+    print("WARNING: DESTRUCTIVE OPERATION")
+    print("=" * 80)
+    print("This script will RESET THE HUNT DATABASE!")
+    print("All puzzle data will be DESTROYED.")
+    print("Solver accounts, tags, and configuration will be preserved.")
+    print("=" * 80 + "\n")
+
+    # Reset the hunt database
+    reset_hunt()
+
+    # Run the tests
     runner = TestRunner()
     runner.run_all_tests()
