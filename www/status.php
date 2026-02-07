@@ -129,8 +129,12 @@ $uid = getauthenticateduser();
                     <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="puzzle.drive_uri" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
                     <td :class="{ 'hidden-column': !visibleColumns.sheetcount }">{{ puzzle.sheetcount || 0 }}</td>
                     <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="puzzle.chat_channel_link" target="_blank" data-tooltip="Discord">🗣️</a></td>
-                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">{{ puzzle.cursolvers }}</td>
-                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.solvers }">{{ puzzle.solvers }}</td>
+                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">
+                        <div v-for="solver in formatSolvers(puzzle.cursolvers)" :key="solver">{{ solver }}</div>
+                    </td>
+                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.solvers }">
+                        <div v-for="solver in formatSolvers(puzzle.solvers)" :key="solver">{{ solver }}</div>
+                    </td>
                     <td class="location-col" :class="{ 'hidden-column': !visibleColumns.location }">
                         <div v-if="puzzle.xyzloc" class="location-display">{{ puzzle.xyzloc }}</div>
                         <div class="inline-form">
@@ -200,8 +204,12 @@ $uid = getauthenticateduser();
                     <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="puzzle.drive_uri" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
                     <td :class="{ 'hidden-column': !visibleColumns.sheetcount }">{{ puzzle.sheetcount || 0 }}</td>
                     <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="puzzle.chat_channel_link" target="_blank" data-tooltip="Discord">🗣️</a></td>
-                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">{{ puzzle.cursolvers }}</td>
-                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.solvers }">{{ puzzle.solvers }}</td>
+                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">
+                        <div v-for="solver in formatSolvers(puzzle.cursolvers)" :key="solver">{{ solver }}</div>
+                    </td>
+                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.solvers }">
+                        <div v-for="solver in formatSolvers(puzzle.solvers)" :key="solver">{{ solver }}</div>
+                    </td>
                     <td class="location-col" :class="{ 'hidden-column': !visibleColumns.location }">
                         <div v-if="puzzle.xyzloc" class="location-display">{{ puzzle.xyzloc }}</div>
                         <div class="inline-form">
@@ -271,8 +279,12 @@ $uid = getauthenticateduser();
                     <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="puzzle.drive_uri" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
                     <td :class="{ 'hidden-column': !visibleColumns.sheetcount }">{{ puzzle.sheetcount || 0 }}</td>
                     <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="puzzle.chat_channel_link" target="_blank" data-tooltip="Discord">🗣️</a></td>
-                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">{{ puzzle.cursolvers }}</td>
-                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.solvers }">{{ puzzle.solvers }}</td>
+                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">
+                        <div v-for="solver in formatSolvers(puzzle.cursolvers)" :key="solver">{{ solver }}</div>
+                    </td>
+                    <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.solvers }">
+                        <div v-for="solver in formatSolvers(puzzle.solvers)" :key="solver">{{ solver }}</div>
+                    </td>
                     <td class="location-col" :class="{ 'hidden-column': !visibleColumns.location }">
                         <div v-if="puzzle.xyzloc" class="location-display">{{ puzzle.xyzloc }}</div>
                         <div class="inline-form">
@@ -587,6 +599,12 @@ $uid = getauthenticateduser();
                     if (!tags) return ''
                     return tags
                 }
+
+                function formatSolvers(solvers) {
+                    // solvers comes as a comma-separated string from puzzle_view
+                    if (!solvers) return []
+                    return solvers.split(',').map(s => s.trim()).filter(s => s)
+                }
                 
                 async function fetchData() {
                     try {
@@ -765,6 +783,7 @@ $uid = getauthenticateduser();
                     getRoundName,
                     getPuzzleRowClass,
                     formatTags,
+                    formatSolvers,
                     getStatusEmoji,
                     toggleSort,
                     getSortIcon,
