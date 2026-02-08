@@ -8,7 +8,7 @@
   <style>
   /* Page-specific blue info box style */
   .info-box {
-    background-color: #e7f3ff;
+    background-color: #e6f2ff;
     border: 2px solid #0066cc;
     border-radius: 6px;
     color: #004080;

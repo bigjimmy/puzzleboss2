@@ -12,43 +12,6 @@ $bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot],
   <title>Puzzleboss-only Tools</title>
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <style>
-    /* Align column widths for Add New Round, Solver Assignment, and Tag Management tables */
-    #app .info-box-content table td:first-child {
-      width: 65%;
-    }
-
-    #app .info-box-content table td:last-child {
-      width: 35%;
-    }
-
-    /* Table styling matching status.php */
-    #app table {
-      width: 100%;
-      border-collapse: collapse;
-      background: white;
-      border-radius: 8px;
-      overflow: hidden;
-      border: 1px solid #ddd;
-    }
-
-    #app th, #app td {
-      padding: 8px 10px;
-      text-align: left;
-      border-bottom: 1px solid #ddd;
-      font-size: 0.9em;
-    }
-
-    #app th {
-      background: #e6f2ff;
-      color: #0066cc;
-      font-weight: 600;
-    }
-
-    #app tr:hover {
-      background: #f5f5f5;
-    }
-  </style>
 </head>
 <body class="status-page">
 <div id="app">
@@ -69,7 +32,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
   <li>On a puzzle page, click it to create a new puzzle</li>
   <li>On the List of Puzzles page (<tt>/puzzles</tt>), click it to check if PB is missing anything.</li>
 </ul>
-<table>
+<table class="table-cols-65-35">
   <tr>
     <td>Drag this link to your bookmarks:</td>
     <td><a href="<?= $bookmarkuri ?>">Add to Puzzboss</a></td>
@@ -108,7 +71,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
   you can create new rounds
   <a href="addpuzzle.php" target="_blank">on the new puzzle page</a>.
 </p>
-<table>
+<table class="table-cols-65-35">
   <tr>
     <td>To add a new round (enter round name):</td>
     <td>
@@ -128,7 +91,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
     <h3>Solver Assignment</h3>
   </div>
   <div class="info-box-content" v-show="showSolverAssignment">
-<table>
+<table class="table-cols-65-35">
   <tr>
     <td>To manually edit a solver's current puzzle assignment (enter username):</td>
     <td>
@@ -201,11 +164,11 @@ try {
 
 <p><a href="search.php">Search Puzzles by Tag</a></p>
 
-<table>
+<table class="table-cols-65-35">
   <tr>
     <td>Create a new tag:</td>
     <td>
-      <form action="pbtools.php" method="post" style="display:inline;">
+      <form action="pbtools.php" method="post" class="inline-form">
         <input type="text" name="new_tag_name" placeholder="tag-name" pattern="[a-zA-Z0-9_-]+" title="Alphanumeric, hyphens, and underscores only" required>
         <input type="submit" name="create_tag" value="Create Tag">
       </form>
@@ -228,7 +191,7 @@ try {
     <td><?= htmlentities($tag->name) ?></td>
     <td><?= $tag->id ?></td>
     <td>
-      <form action="pbtools.php" method="post" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete tag \'<?= htmlentities($tag->name) ?>\'? This will remove it from all puzzles.');">
+      <form action="pbtools.php" method="post" class="inline-form" onsubmit="return confirm('Are you sure you want to delete tag \'<?= htmlentities($tag->name) ?>\'? This will remove it from all puzzles.');">
         <input type="hidden" name="tag_to_delete" value="<?= htmlentities($tag->name) ?>">
         <input type="submit" name="delete_tag" value="Delete" style="color: red;">
       </form>

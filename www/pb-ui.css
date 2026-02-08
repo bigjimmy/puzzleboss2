@@ -1,5 +1,47 @@
+/* ========================================
+   COLOR PALETTE
+   ======================================== */
+:root {
+    /* Primary/Brand Colors */
+    --primary-blue: #0066cc;
+    --primary-blue-hover: #0052a3;
+    --primary-blue-dark: #004080;
+
+    /* Background Colors */
+    --bg-page: aliceblue;           /* Main page background */
+    --bg-white: #fff;                /* White backgrounds */
+    --bg-light-gray: #f5f5f5;        /* Light gray backgrounds */
+    --bg-gray: #f0f0f0;              /* Medium gray backgrounds */
+    --bg-light-blue: #e6f2ff;        /* Light blue backgrounds (headers, badges, info boxes) */
+    --bg-lighter-blue: #f0f7ff;      /* Lighter blue (hover states) */
+
+    /* Text Colors */
+    --text-primary: #333;            /* Primary text color */
+    --text-secondary: #666;          /* Secondary text color */
+    --text-tertiary: #999;           /* Tertiary text color */
+    --text-disabled: #ccc;           /* Disabled text color */
+    --text-black: #000;              /* Pure black text */
+
+    /* Border Colors */
+    --border-light: #ddd;            /* Light borders */
+    --border-medium: #ccc;           /* Medium borders */
+    --border-blue: #cce5ff;          /* Blue borders (unified from #cce5ff/#cce7ff) */
+
+    /* State Colors - Success */
+    --success-bg: lightgreen;        /* Success background */
+    --success-bg-light: #d4f4dd;     /* Light success background */
+    --success-green: #66FF99;        /* Active/success green */
+
+    /* State Colors - Error */
+    --error-bg: lightpink;           /* Error background */
+    --error-border: #ffcccc;         /* Error border */
+
+    /* Neutral Grays */
+    --gray-hover: #e0e0e0;           /* Hover gray */
+}
+
 body {
-    background: aliceblue;
+    background: var(--bg-page);
     margin: 0;
     padding: 0;
 }
@@ -12,13 +54,13 @@ body {
     display: flex;
     flex-direction: column;
     font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: #333;
+    color: var(--text-primary);
     padding: 20px;
 }
 
 .info-box {
-    background: white;
-    border: 1px solid #ccc;
+    background: var(--bg-white);
+    border: 1px solid var(--border-medium);
     border-radius: 8px;
     padding: 15px;
     margin-bottom: 15px;
@@ -97,7 +139,7 @@ body {
 }
 
 #main a {
-    color: #0066cc;
+    color: var(--primary-blue);
     text-decoration: none;
 }
 
@@ -512,12 +554,12 @@ body.form-page input[type="submit"]:disabled {
 }
 
 body.form-page .error {
-    background-color: lightpink;
+    background-color: var(--error-bg);
     padding: 10px;
 }
 
 body.form-page .success {
-    background-color: lightgreen;
+    background-color: var(--success-bg);
     padding: 10px;
 }
 
@@ -577,14 +619,14 @@ body.status-page table {
     background: white;
     border-radius: 8px;
     overflow: hidden;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
 }
 
 body.status-page th,
 body.status-page td {
     padding: 8px 10px;
     text-align: left;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid var(--border-light);
     font-size: 0.9em;
 }
 
@@ -596,8 +638,8 @@ body.status-page td:first-child {
 }
 
 body.status-page th {
-    background: #e6f2ff;
-    color: #0066cc;
+    background: var(--bg-light-blue);
+    color: var(--primary-blue);
     font-weight: 600;
     cursor: pointer;
     user-select: none;
@@ -605,7 +647,7 @@ body.status-page th {
 }
 
 body.status-page th:hover {
-    background: #cce5ff;
+    background: var(--bg-lighter-blue);
 }
 
 body.status-page th.sortable {
@@ -669,7 +711,7 @@ td:first-child [data-tooltip]::after {
 }
 
 body.status-page tr:hover {
-    background: #f5f5f5;
+    background: var(--bg-light-gray);
 }
 
 /* Hidden column for column visibility toggle */
@@ -686,7 +728,7 @@ body.status-page tr:hover {
 }
 
 body.status-page a {
-    color: #0066cc;
+    color: var(--primary-blue);
     text-decoration: none;
 }
 
@@ -704,13 +746,13 @@ body.status-page a:hover {
 }
 
 .critical-row {
-    background: #ffcccb !important;
+    background: #ffcccc !important;
 }
 
 body.status-page select,
 body.status-page input[type="text"] {
     background: white;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-medium);
     color: #333;
     padding: 4px 6px;
     border-radius: 4px;
@@ -725,13 +767,13 @@ body.status-page select {
 body.status-page select:focus,
 body.status-page input[type="text"]:focus {
     outline: none;
-    border-color: #0066cc;
+    border-color: var(--primary-blue);
     box-shadow: 0 0 3px rgba(0, 102, 204, 0.3);
 }
 
 body.status-page button,
 body.status-page input[type="submit"] {
-    background: #0066cc;
+    background: var(--primary-blue);
     border: none;
     color: white;
     padding: 4px 10px;
@@ -746,7 +788,7 @@ body.status-page input[type="submit"] {
 
 body.status-page button:hover,
 body.status-page input[type="submit"]:hover {
-    background: #0052a3;
+    background: var(--primary-blue-hover);
 }
 
 /* Section headers use same style as info-box-header */
@@ -770,8 +812,8 @@ body.status-page input[type="submit"]:hover {
 }
 
 .badge {
-    background: #e6f2ff;
-    color: #0066cc;
+    background: var(--bg-light-blue);
+    color: var(--primary-blue);
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 0.85em;
@@ -783,7 +825,7 @@ body.status-page footer {
     padding-top: 20px;
     border-top: 1px solid #ccc;
     text-align: center;
-    color: #666;
+    color: var(--text-secondary);
 }
 
 .inline-form {
@@ -819,7 +861,7 @@ body.status-page footer {
 
 .comment-display {
     margin-bottom: 3px;
-    color: #666;
+    color: var(--text-secondary);
     font-style: italic;
     white-space: pre-wrap;
     word-break: break-word;
@@ -840,7 +882,7 @@ body.status-page footer {
 
 .location-display {
     margin-bottom: 3px;
-    color: #666;
+    color: var(--text-secondary);
     font-size: 0.85em;
 }
 
@@ -877,11 +919,11 @@ body.status-page footer {
 }
 
 .nav-links a {
-    color: #0066cc;
+    color: var(--primary-blue);
     text-decoration: none;
     padding: 8px 16px;
     background: white;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-medium);
     border-radius: 4px;
     display: inline-block;
     margin-right: 10px;
@@ -890,15 +932,66 @@ body.status-page footer {
 }
 
 .nav-links a:hover {
-    background: #cce5ff;
+    background: var(--bg-lighter-blue);
     text-decoration: none;
 }
 
 .nav-links a.current {
-    background: #e0e0e0;
+    background: var(--gray-hover);
     color: #999;
     cursor: default;
     pointer-events: none;
+}
+
+/* Inline form utility class */
+form.inline-form {
+    display: inline;
+}
+
+/* Table styling for admin/tools pages */
+body.status-page #app table {
+    width: auto;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+}
+
+body.status-page #app th,
+body.status-page #app td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 0.9em;
+}
+
+body.status-page #app th {
+    background: var(--bg-light-blue);
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+body.status-page #app tbody tr:hover {
+    background: var(--bg-light-gray);
+}
+
+/* Table column width utility classes */
+body.status-page #app table.table-cols-65-35 td:first-child {
+    width: 65%;
+}
+
+body.status-page #app table.table-cols-65-35 td:last-child {
+    width: 35%;
+}
+
+body.status-page #app table.table-cols-40-auto td:first-child {
+    width: 40%;
+    white-space: normal;
+}
+
+body.status-page #app table.table-cols-40-auto td:not(:first-child) {
+    width: auto;
 }
 
 /* Column visibility styling now handled by .info-box-header */

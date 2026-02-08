@@ -15,6 +15,19 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
     <title>PuzzBot - Hunt Assistant</title>
     <link rel="stylesheet" href="./pb-ui.css">
     <style>
+        /* Chat UI specific color palette */
+        :root {
+            --chat-container-bg: #f9f9f9;    /* Chat container background */
+            --chat-user-bg: #f0e6ff;         /* User message background (purple) */
+            --chat-user-border: #d9ccff;     /* User message border */
+            --chat-error-bg: #ffe6e6;        /* Error message background */
+            --chat-error-border: #ffcccc;    /* Error message border */
+            --chat-error-text: #cc0000;      /* Error message text */
+            --chat-warning-bg: #fff3cd;      /* Warning background */
+            --chat-warning-border: #ffc107;  /* Warning border */
+            --chat-warning-text: #856404;    /* Warning text */
+        }
+
         /* Fix whitespace between inline-block navbar elements */
         .nav-links {
             font-size: 0;
@@ -39,7 +52,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             gap: 1rem;
             overflow-y: auto;
             max-height: 500px;
-            background: #f9f9f9;
+            background: var(--chat-container-bg);
             border: 1px solid #ddd;
             border-radius: 4px;
         }
@@ -64,22 +77,22 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
 
         .message.bot {
             background: #e6f2ff;
-            border: 1px solid #cce7ff;
+            border: 1px solid #cce5ff;
             align-self: flex-start;
             border-bottom-left-radius: 0.25rem;
         }
 
         .message.user {
-            background: #f0e6ff;
-            border: 1px solid #d9ccff;
+            background: var(--chat-user-bg);
+            border: 1px solid var(--chat-user-border);
             align-self: flex-end;
             border-bottom-right-radius: 0.25rem;
         }
 
         .message.error {
-            background: #ffe6e6;
-            border: 1px solid #ffcccc;
-            color: #cc0000;
+            background: var(--chat-error-bg);
+            border: 1px solid var(--chat-error-border);
+            color: var(--chat-error-text);
             align-self: flex-start;
         }
 
@@ -136,15 +149,15 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
         .disclaimers {
             margin-top: 1rem;
             padding: 1rem;
-            background: #fff3cd;
-            border: 1px solid #ffc107;
+            background: var(--chat-warning-bg);
+            border: 1px solid var(--chat-warning-border);
             border-radius: 4px;
         }
 
         .disclaimers ul {
             margin: 0;
             padding-left: 1.5rem;
-            color: #856404;
+            color: var(--chat-warning-text);
         }
 
         .disclaimers li {
@@ -220,7 +233,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
         .model-badge {
             display: inline-block;
             background: #e6f2ff;
-            border: 1px solid #cce7ff;
+            border: 1px solid #cce5ff;
             padding: 0.25rem 0.75rem;
             border-radius: 1rem;
             font-family: monospace;
@@ -250,7 +263,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
         .system-instruction pre {
             white-space: pre-wrap;
             word-wrap: break-word;
-            background: #f9f9f9;
+            background: var(--chat-container-bg);
             border: 1px solid #ddd;
             padding: 0.75rem;
             border-radius: 0.5rem;
