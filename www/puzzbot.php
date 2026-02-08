@@ -12,27 +12,21 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PuzzBot - Hunt Assistant</title>
-    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./pb-ui.css">
     <style>
-        body {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+        /* Fix whitespace between inline-block navbar elements */
+        .nav-links {
+            font-size: 0;
         }
 
-        main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
+        .nav-links a {
+            font-size: 1rem;
         }
 
         .user-info {
             color: #666;
-            font-size: 0.9rem;
-            margin-top: 5px;
+            font-size: 0.9em;
         }
 
         .chat-container {
@@ -271,11 +265,9 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
-<body style="background: aliceblue; margin: 0; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
-<main style="max-width: none;">
+<body class="status-page">
     <div class="status-header">
-        <h1>🤖 PuzzBot - Hunt Assistant</h1>
-        <div class="user-info">Logged in as: <?php echo htmlentities($username); ?></div>
+        <h1>PuzzBot - Hunt Assistant</h1>
     </div>
 
     <?= render_navbar('puzzbot') ?>
@@ -352,7 +344,6 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             </div>
         </div>
     </div>
-</main>
 
     <script>
         const username = <?php echo json_encode($username); ?>;

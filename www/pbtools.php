@@ -10,18 +10,19 @@ $bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot],
 <head>
   <meta charset="UTF-8">
   <title>Puzzleboss-only Tools</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
-    #app .info-box-content {
-      font-size: 0.9em;
-    }
-    #app .info-box-content p, #app .info-box-content ul {
-      font-size: 1em;
+    /* Align column widths for Add New Round, Solver Assignment, and Tag Management tables */
+    #app .info-box-content table td:first-child {
+      width: 65%;
     }
 
-    /* Match status.php table styling */
+    #app .info-box-content table td:last-child {
+      width: 35%;
+    }
+
+    /* Table styling matching status.php */
     #app table {
       width: 100%;
       border-collapse: collapse;
@@ -29,13 +30,13 @@ $bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot],
       border-radius: 8px;
       overflow: hidden;
       border: 1px solid #ddd;
-      font-size: 0.9em;
     }
 
     #app th, #app td {
       padding: 8px 10px;
       text-align: left;
       border-bottom: 1px solid #ddd;
+      font-size: 0.9em;
     }
 
     #app th {
@@ -47,19 +48,9 @@ $bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot],
     #app tr:hover {
       background: #f5f5f5;
     }
-
-    /* Align column widths for Add New Round, Solver Assignment, and Tag Management tables */
-    #app .info-box-content table td:first-child {
-      width: 65%;
-    }
-
-    #app .info-box-content table td:last-child {
-      width: 35%;
-    }
   </style>
 </head>
-<body style="background: aliceblue; margin: 0; padding: 20px; min-height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
-<main style="max-width: none;">
+<body class="status-page">
 <div id="app">
 <div class="status-header">
   <h1>Puzzleboss-only Admin Tools</h1>
@@ -252,7 +243,6 @@ try {
 </div>
 
 </div>
-</main>
 
 <script>
 const { createApp } = Vue;
