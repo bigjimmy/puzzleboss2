@@ -19,11 +19,17 @@ export default {
 
         //
         // This function returns the puzzles which should be displayed based on
-        // current filters. 
+        // current filters.
         //
         filteredPuzzles() {
-            const fp = this.round.puzzles.filter(puzzle => this.settings.puzzleFilter[puzzle.status])
-                                         .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter)));
+            const fp = this.round.puzzles.filter(puzzle => {
+                    // Always filter out [hidden] puzzles unless showHidden is enabled
+                    if (puzzle.status === '[hidden]' && !this.settings.showHidden) {
+                        return false;
+                    }
+                    return this.settings.puzzleFilter[puzzle.status];
+                })
+                .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter)));
 
             if(!this.settings.sortPuzzles) return fp;
 
@@ -43,9 +49,15 @@ export default {
         // filters.
         //
         hiddenCount() {
-            return this.round.puzzles.length - 
-                this.round.puzzles.filter(puzzle => this.settings.puzzleFilter[puzzle.status])
-                                  .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter))).length;
+            return this.round.puzzles.length -
+                this.round.puzzles.filter(puzzle => {
+                    // Always filter out [hidden] puzzles unless showHidden is enabled
+                    if (puzzle.status === '[hidden]' && !this.settings.showHidden) {
+                        return false;
+                    }
+                    return this.settings.puzzleFilter[puzzle.status];
+                })
+                .filter(puzzle => !this.tagfilter || (puzzle.tags && puzzle.tags.includes(this.tagfilter))).length;
         },
 
         isSolved() {
@@ -166,8 +178,7 @@ export default {
     template: `
     <div class = "round">
         <div :class = "{'round-header': true, 'solved': isSolved, 'highlighted': highlighted}" @click="$emit('toggle-body', round.id);">
-            <p v-if="showbody" class="puzzle-icon">▼</p>
-            <p v-if="!showbody" class="puzzle-icon">▶</p>
+            <span class="collapse-icon" :class="{ collapsed: !showbody }">▼</span>
             <h3 @mouseover="scroll($event, 0)" @mouseout="stopscroll">{{round.name}}</h3>
 
             <!-- spoiled layout -->

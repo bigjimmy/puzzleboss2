@@ -53,7 +53,7 @@ export default {
     // List of available settings.
     //
 
-    "settings": ["puzzleFilter", "useColumns", "scrollSpeed", "sortPuzzles", "showControls", "spoilAll", "showTags"],
+    "settings": ["puzzleFilter", "useColumns", "scrollSpeed", "sortPuzzles", "showControls", "spoilAll", "showTags", "showHidden"],
 
     //
     // Default values of available settings.
@@ -74,7 +74,9 @@ export default {
             // spoilAll
             false,
             // showTags
-            true
+            true,
+            // showHidden
+            false
         ];
     },
 

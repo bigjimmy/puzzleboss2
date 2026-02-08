@@ -8,7 +8,8 @@ export default {
     computed: {
         puzzleFilterKeys() {
             // Use passed statuses prop - component won't render until statuses are loaded
-            return this.statuses;
+            // Filter out [hidden] since it has its own separate checkbox
+            return this.statuses.filter(status => status !== '[hidden]');
         }
     },
     emits: ['settings-updated'],
@@ -50,7 +51,8 @@ export default {
            Show tags: <input type="checkbox" :checked="s.showTags" @change="$emit('settings-updated', 'showTags', !s.showTags)" /> &nbsp; &nbsp; &nbsp;
            <button @click="$emit('settings-updated', 'showControls', !s.showControls)">{{s.showControls ? 'Hide ' : 'Show '}}advanced controls</button>
         </p>
-        <div v-if="s.showControls" id="detailed-controls"> 
+        <hr v-if="s.showControls" style="border: none; border-top: 1px solid #ccc; margin: 15px 0;" />
+        <div v-if="s.showControls" id="detailed-controls">
         <div>
             Show puzzles:
             <div
@@ -65,6 +67,7 @@ export default {
         </div>
         <br/>
         <div>
+            <p>Show hidden puzzles: <input type="checkbox" :checked="s.showHidden" @change="$emit('settings-updated', 'showHidden', !s.showHidden)" /></p>
             <p>Use columns display (fixed-height, scroll-to-right) <input type="checkbox" :checked="s.useColumns" @change="$emit('settings-updated', 'useColumns', !s.useColumns)"></input></p>
             <p>Scroll speed (default 1) <input type="number" :value="s.scrollSpeed" @input="$emit('settings-updated', 'scrollSpeed', parseFloat($event.target.value))" min="1"></input></p>
         </div>
