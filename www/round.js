@@ -218,15 +218,14 @@ export default {
                     @mouseout="stopscroll" >
 
                     <em>{{ puzzle.name === currpuzz ?
-                               'CURRENT PUZZLE'.padStart(16) :
+                               'CURRENT PUZZLE' :
                                 ( settings.showTags ?
-                                     (puzzle.tags ? puzzle.tags.padStart(16) : '' )
-                                     : '') }}</em>
+                                     puzzle.tags || '' : '') }}</em>
                 </p>
                 <p
                     v-if = "puzzle.answer !== null"
                     :class = "{'answer': true, 'spoil': settings.spoilAll || spoilRound, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
-                    {{ puzzle.answer.padStart(16) }}
+                    {{ puzzle.answer }}
                 </p>
                 <AddGeneric type="puzzle-settings" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
             </div>

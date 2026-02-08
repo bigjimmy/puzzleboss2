@@ -380,17 +380,23 @@ def test_speculative_puzzle_promotion():
         print("  [Browser 1] Promoting puzzle...")
         page1.goto(f"{BASE_URL}/addpuzzle.php?assumedid=testuser")
 
-        # Wait for the promote dropdown to be loaded
-        page1.wait_for_selector("select[name='promote_puzzle_id']", timeout=5000)
+        # Wait for the speculative puzzles table to load
+        page1.wait_for_selector(".speculative-puzzles", timeout=5000)
 
-        # Select the speculative puzzle by visible text
-        page1.select_option("select[name='promote_puzzle_id']", label=f"{puzzle_name} (Round: {round_name})")
+        # Find the row containing our puzzle name and click its radio button
+        # The table cells contain the puzzle name, we need to find it and click the radio in that row
+        radio_selector = f"tr:has-text('{puzzle_name}') input[name='promote_puzzle_id']"
+        page1.wait_for_selector(radio_selector, timeout=5000)
+        page1.click(radio_selector)
+
+        # Wait a moment for the form to update
+        page1.wait_for_timeout(500)
 
         # Update the URL for the real puzzle
         page1.fill("input[name='puzzle_uri']", "https://example.com/real_puzzle")
 
         # Submit to promote
-        page1.click("input[type='submit'][value='Promote Puzzle']")
+        page1.click("input[type='submit']")
 
         # Wait for success
         page1.wait_for_selector("div.success", timeout=10000)

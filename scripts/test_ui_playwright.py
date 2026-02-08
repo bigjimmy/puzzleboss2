@@ -27,7 +27,7 @@ def test_basic_page_load():
         page = context.new_page()
 
         # Enable console logging from browser
-        page.on("console", lambda msg: print(f"Browser console: {msg.text()}"))
+        page.on("console", lambda msg: print(f"Browser console: {msg.text}"))
 
         try:
             print("Navigating to main page...")
@@ -70,7 +70,7 @@ def test_advanced_controls():
         page = context.new_page()
 
         # Enable console logging
-        page.on("console", lambda msg: print(f"Browser console: {msg.text()}"))
+        page.on("console", lambda msg: print(f"Browser console: {msg.text}"))
 
         try:
             print("Navigating to main page...")
@@ -120,7 +120,7 @@ def test_puzzle_creation_flow():
         page = context.new_page()
 
         # Enable console logging
-        page.on("console", lambda msg: print(f"Browser console: {msg.text()}"))
+        page.on("console", lambda msg: print(f"Browser console: {msg.text}"))
 
         try:
             print("Navigating to add puzzle page...")
