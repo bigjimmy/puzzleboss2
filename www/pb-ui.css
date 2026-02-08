@@ -177,14 +177,15 @@ body {
     gap: 10px;
     flex-direction: row;
     align-items: center;
-    justify-content: space-around;
+    justify-content: flex-start;
     padding: 10px;
     box-shadow: 0 0 8px 0 rgba(0,0,0,0.5);
     background-color: rgba(0,0,0,0.1);
     transition: background-color 0.5s ease;
     cursor: pointer;
     user-select: none;
-    min-width: 450px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .round-header > * {
@@ -193,7 +194,7 @@ body {
 }
 
 .round-header > h3 {
-    width: 120px;
+    width: 220px;
     overflow: hidden;
     font-size: 1.1em;
     margin: 0;
@@ -216,7 +217,8 @@ body {
 .round-body {
     display: flex;
     flex-direction: column;
-    min-width: 450px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .hiding {
@@ -297,6 +299,8 @@ dialog::backdrop {
     align-items: center;
     box-shadow: 0 0 2px 0 rgba(0,0,0,0.2);
     transition: background-color 0.5s ease;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .puzzle.saved, .puzzle.meta.saved, .puzzle.meta.solved.saved {
@@ -315,24 +319,33 @@ dialog::backdrop {
     align-items: last baseline;
     margin: 0px;
     gap: 8px;
-    flex-shrink: 0;
-    width: max-content;
+    flex-shrink: 1;
+    flex-grow: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .puzzle-icon {
     cursor: pointer;
+    flex-shrink: 0;
+    flex-grow: 0;
 }
 
 .puzzle-icon:hover {
     transform: scale(1.25);
 }
 
+.puzzle-icons > .puzzle-icon:last-child {
+    margin-left: auto;
+}
+
 .puzzle-name {
-    width: 150px;
+    width: 160px;
     overflow: hidden;
     white-space: nowrap;
-    flex-shrink: 0;
+    flex-shrink: 1;
     flex-grow: 0;
+    margin-right: 0;
 }
 
 .puzzle-icons > p, .puzzle > p, .puzzle-icon {
@@ -388,7 +401,7 @@ div.currpuzz {
 
 .answer {
     font-family: 'Courier New', Courier, monospace;
-    white-space: pre;
+    white-space: nowrap;
     width: 17ch;
     overflow: hidden;
     flex-shrink: 0;
