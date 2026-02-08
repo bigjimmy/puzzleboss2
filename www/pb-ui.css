@@ -257,15 +257,16 @@ dialog::backdrop {
     display: flex;
     flex-direction: column;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
-    min-width: 505px;
+    width: 505px;
     flex-shrink: 0;
 }
 
 .round-header {
     display: flex;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 5px;
     align-items: center;
-    padding: 10px;
+    padding: 8px;
     box-shadow: 0 0 8px 0 rgba(0,0,0,0.5);
     background-color: rgba(0,0,0,0.1);
     transition: background-color 0.5s ease;
@@ -274,9 +275,22 @@ dialog::backdrop {
 }
 
 .round-header > h3 {
-    width: 220px;
+    width: 250px;
     font-size: 1.1em;
+    margin: 0 10px 0 0;
+}
+
+.round-header-stats {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    font-size: small;
+}
+
+.round-header-stats p {
     margin: 0;
+    line-height: 1;
 }
 
 .round-header.solved {
@@ -327,6 +341,7 @@ dialog::backdrop {
 
 .round-header-icons {
     display: flex;
+    line-height: 1;
 }
 
 /*
@@ -362,6 +377,8 @@ dialog::backdrop {
 .puzzle-icon {
     cursor: pointer;
     padding: 0;
+    margin: 0;
+    line-height: 1;
 }
 
 .puzzle-icon:hover {
@@ -765,7 +782,8 @@ body.status-page input[type="text"]:focus {
 }
 
 body.status-page button,
-body.status-page input[type="submit"] {
+body.status-page input[type="submit"],
+.round-header button {
     background: var(--primary-blue);
     border: none;
     color: white;
@@ -780,8 +798,14 @@ body.status-page input[type="submit"] {
 }
 
 body.status-page button:hover,
-body.status-page input[type="submit"]:hover {
+body.status-page input[type="submit"]:hover,
+.round-header button:hover {
     background: var(--primary-blue-hover);
+}
+
+/* Position the spoiler button on the right side of round header */
+.round-header button {
+    margin-left: auto;
 }
 
 /* Section headers use same style as info-box-header */

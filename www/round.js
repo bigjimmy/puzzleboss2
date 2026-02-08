@@ -181,22 +181,15 @@ export default {
             <span class="collapse-icon" :class="{ collapsed: !showbody }">▼</span>
             <h3 @mouseover="scroll($event, 0)" @mouseout="stopscroll">{{round.name}}</h3>
 
-            <!-- spoiled layout -->
-            <p v-if="settings.spoilAll">({{solved}} solved / {{open}} open)</p>
-            <div class="round-header-icons" v-if="settings.spoilAll">
-                <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
-                <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
-            </div>
-
-            <!-- unspoiled layout -->
-            <div class="round-header-column" v-if="!settings.spoilAll">
-                <p>({{solved}} solved / {{open}} open)</p>
+            <!-- unified horizontal layout -->
+            <div class="round-header-stats">
+                <p>({{solved}} solved / {{open}})</p>
                 <div class="round-header-icons">
                     <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
                     <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
                 </div>
             </div>
-            <button v-if="showbody && !settings.spoilAll" @click.stop="toggleSpoil">{{ spoilRound ? 'Hide' : 'Show' }} Spoilers</button>
+            <button v-if="showbody && !settings.spoilAll" @click.stop="toggleSpoil">Spoilers</button>
         </div>
         <div :class = "{'round-body': true, hiding: !showbody}">
             <div

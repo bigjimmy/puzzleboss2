@@ -72,7 +72,7 @@ export default {
             // showControls
             false,
             // spoilAll
-            false,
+            true,
             // showTags
             true,
             // showHidden
