@@ -14,174 +14,172 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PuzzBot - Hunt Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./pb-ui.css">
     <style>
-        :root {
-            --bg-dark: #1a1a2e;
-            --bg-card: #16213e;
-            --accent: #e94560;
-            --accent-hover: #ff6b6b;
-            --text: #eee;
-            --text-muted: #888;
-            --bot-bg: #0f3460;
-            --user-bg: #533483;
-        }
-        
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
         body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: var(--bg-dark);
-            color: var(--text);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        
-        header {
-            background: var(--bg-card);
-            padding: 1rem 2rem;
-            border-bottom: 2px solid var(--accent);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        header h1 {
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        header h1::before {
-            content: '🤖';
-        }
-        
-        .user-info {
-            color: var(--text-muted);
-            font-size: 0.9rem;
-        }
-        
-        .chat-container {
+
+        main {
             flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-info {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .chat-container {
             max-width: 900px;
             width: 100%;
             margin: 0 auto;
             padding: 1rem;
-            display: flex;
+            display: none;
             flex-direction: column;
             gap: 1rem;
             overflow-y: auto;
+            max-height: 500px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
         }
-        
+
+        .chat-container.has-messages {
+            display: flex;
+        }
+
         .message {
             padding: 1rem 1.25rem;
             border-radius: 1rem;
             max-width: 85%;
             line-height: 1.5;
             animation: fadeIn 0.3s ease;
+            color: #333;
         }
-        
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
+
         .message.bot {
-            background: var(--bot-bg);
+            background: #e6f2ff;
+            border: 1px solid #cce7ff;
             align-self: flex-start;
             border-bottom-left-radius: 0.25rem;
         }
-        
+
         .message.user {
-            background: var(--user-bg);
+            background: #f0e6ff;
+            border: 1px solid #d9ccff;
             align-self: flex-end;
             border-bottom-right-radius: 0.25rem;
         }
-        
+
         .message.error {
-            background: #8b0000;
+            background: #ffe6e6;
+            border: 1px solid #ffcccc;
+            color: #cc0000;
             align-self: flex-start;
         }
-        
+
         .message.loading {
-            background: var(--bot-bg);
+            background: #f5f5f5;
+            border: 1px solid #ddd;
             align-self: flex-start;
-            color: var(--text-muted);
+            color: #666;
         }
-        
+
         .message.loading::after {
             content: '...';
             animation: dots 1.5s infinite;
         }
-        
+
         @keyframes dots {
             0%, 20% { content: '.'; }
             40% { content: '..'; }
             60%, 100% { content: '...'; }
         }
-        
+
         .message code {
-            background: rgba(0, 0, 0, 0.3);
+            background: rgba(0, 0, 0, 0.08);
             padding: 0.15rem 0.4rem;
             border-radius: 0.25rem;
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 0.9em;
         }
-        
+
         .message ul, .message ol {
             margin: 0.5rem 0;
             padding-left: 1.5rem;
         }
-        
+
         .message li {
             margin: 0.25rem 0;
         }
-        
+
         .message strong {
-            color: #fff;
+            color: #000;
         }
         
         .input-area {
-            background: var(--bg-card);
-            padding: 1rem 2rem;
-            border-top: 1px solid #333;
+            background: white;
+            padding: 1rem 0;
+            margin-top: 1rem;
         }
-        
+
         .input-wrapper {
-            max-width: 900px;
-            margin: 0 auto;
             display: flex;
             gap: 0.75rem;
         }
-        
+
+        .disclaimers {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+        }
+
+        .disclaimers ul {
+            margin: 0;
+            padding-left: 1.5rem;
+            color: #856404;
+        }
+
+        .disclaimers li {
+            margin: 0.5rem 0;
+        }
+
         #query-input {
             flex: 1;
             padding: 0.875rem 1.25rem;
-            border: 2px solid #333;
+            border: 2px solid #ccc;
             border-radius: 2rem;
-            background: var(--bg-dark);
-            color: var(--text);
+            background: white;
+            color: #333;
             font-size: 1rem;
             outline: none;
             transition: border-color 0.2s;
         }
-        
+
         #query-input:focus {
-            border-color: var(--accent);
+            border-color: #0066cc;
         }
-        
+
         #query-input::placeholder {
-            color: var(--text-muted);
+            color: #999;
         }
-        
+
         #send-btn {
             padding: 0.875rem 1.75rem;
-            background: var(--accent);
+            background: #0066cc;
             color: white;
             border: none;
             border-radius: 2rem;
@@ -190,139 +188,108 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             cursor: pointer;
             transition: background 0.2s, transform 0.1s;
         }
-        
+
         #send-btn:hover {
-            background: var(--accent-hover);
+            background: #0052a3;
         }
-        
+
         #send-btn:active {
             transform: scale(0.98);
         }
-        
+
         #send-btn:disabled {
-            background: #555;
+            background: #ccc;
             cursor: not-allowed;
-        }
-        
-        .examples {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-muted);
-        }
-        
-        .examples h3 {
-            margin-bottom: 1rem;
-            font-weight: normal;
         }
         
         .example-chips {
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
             gap: 0.5rem;
         }
-        
+
         .example-chip {
-            background: var(--bg-card);
-            border: 1px solid #444;
+            background: white;
+            border: 1px solid #ccc;
             padding: 0.5rem 1rem;
             border-radius: 1rem;
             cursor: pointer;
             transition: border-color 0.2s, background 0.2s;
+            color: #333;
         }
-        
+
         .example-chip:hover {
-            border-color: var(--accent);
-            background: var(--bot-bg);
+            border-color: #0066cc;
+            background: #f0f7ff;
         }
-        
-        .bot-info {
-            background: var(--bg-card);
-            border: 1px solid #333;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            text-align: left;
-            max-width: 600px;
-        }
-        
-        .bot-info h3 {
-            color: var(--accent);
-            margin-bottom: 0.75rem;
-            font-size: 1.1rem;
-        }
-        
-        .bot-info p {
-            color: var(--text-muted);
-            margin-bottom: 0.75rem;
-            line-height: 1.5;
-        }
-        
-        .bot-info ul {
-            color: var(--text-muted);
-            margin-left: 1.25rem;
-            margin-bottom: 0.75rem;
-        }
-        
-        .bot-info li {
-            margin-bottom: 0.25rem;
-        }
-        
-        .bot-info .model-badge {
+
+        .model-badge {
             display: inline-block;
-            background: var(--bot-bg);
+            background: #e6f2ff;
+            border: 1px solid #cce7ff;
             padding: 0.25rem 0.75rem;
             border-radius: 1rem;
             font-family: monospace;
             font-size: 0.85rem;
-            color: var(--text);
+            color: #333;
         }
-        
+
         .system-instruction {
-            background: var(--bg-card);
-            border-top: 1px solid #333;
-            padding: 1rem 2rem;
-            font-size: 0.75rem;
-            color: var(--text-muted);
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #ddd;
+            font-size: 0.85rem;
+            color: #666;
         }
-        
+
         .system-instruction summary {
             cursor: pointer;
             font-weight: 600;
             margin-bottom: 0.5rem;
+            color: #333;
         }
-        
+
         .system-instruction summary:hover {
-            color: var(--text);
+            color: #0066cc;
         }
-        
+
         .system-instruction pre {
             white-space: pre-wrap;
             word-wrap: break-word;
-            background: var(--bg-dark);
+            background: #f9f9f9;
+            border: 1px solid #ddd;
             padding: 0.75rem;
             border-radius: 0.5rem;
             margin-top: 0.5rem;
             max-height: 200px;
             overflow-y: auto;
             line-height: 1.4;
+            color: #333;
+            font-size: 0.75rem;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 </head>
-<body>
-    <header>
-        <h1>PuzzBot</h1>
-        <span class="user-info">Logged in as: <?php echo htmlentities($username); ?></span>
-    </header>
-    
-    <div class="chat-container" id="chat-container">
-        <div class="examples" id="examples">
-            <div class="bot-info">
-                <h3>🤖 About PuzzBot</h3>
+<body style="background: aliceblue; margin: 0; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
+<main style="max-width: none;">
+    <div class="status-header">
+        <h1>🤖 PuzzBot - Hunt Assistant</h1>
+        <div class="user-info">Logged in as: <?php echo htmlentities($username); ?></div>
+    </div>
+
+    <?= render_navbar('puzzbot') ?>
+
+    <div id="vue-app">
+        <div class="info-box">
+            <div class="info-box-header" @click="showAbout = !showAbout">
+                <span class="collapse-icon" :class="{ collapsed: !showAbout }">▼</span>
+                <h3>About PuzzBot</h3>
+            </div>
+            <div class="info-box-content" v-show="showAbout">
                 <p>I'm an AI assistant that can answer questions about the hunt in natural language.</p>
-                
-                <h3>📊 Data I Can Access</h3>
+
+                <h4>📊 Data I Can Access</h4>
                 <ul>
                     <li>All puzzles, rounds, and their statuses</li>
                     <li>Team wiki (puzzle-solving techniques, resources, policies)</li>
@@ -330,71 +297,96 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
                     <li>Solver information: current assignments and puzzle history</li>
                     <li>Hunt statistics: open/solved counts, progress by round</li>
                 </ul>
-                
-                <h3>⚙️ Model</h3>
+
+                <h4>⚙️ Model</h4>
                 <p><span class="model-badge"><?php echo htmlentities($gemini_model); ?></span></p>
+
+                <div class="system-instruction">
+                    <details>
+                        <summary>📜 System Instruction (click to expand)</summary>
+                        <pre><?php echo htmlentities($gemini_instruction); ?></pre>
+                    </details>
+                </div>
             </div>
-            
-            <h3>Try asking me something!</h3>
-            <div class="example-chips">
-                <span class="example-chip" onclick="askExample(this)">What's the hunt status?</span>
-                <span class="example-chip" onclick="askExample(this)">What puzzle should I work on?</span>
-                <span class="example-chip" onclick="askExample(this)">What puzzles have I worked on?</span>
-                <span class="example-chip" onclick="askExample(this)">Which round has the most open puzzles?</span>
-                <span class="example-chip" onclick="askExample(this)">What puzzles are critical?</span>
-                <span class="example-chip" onclick="askExample(this)">How do I solve a cryptic crossword?</span>
+        </div>
+
+        <div class="info-box">
+            <div class="info-box-header" @click="showExamples = !showExamples">
+                <span class="collapse-icon" :class="{ collapsed: !showExamples }">▼</span>
+                <h3>Example Queries</h3>
+            </div>
+            <div class="info-box-content" v-show="showExamples">
+                <div class="example-chips">
+                    <span class="example-chip" onclick="askExample(this)">What's the hunt status?</span>
+                    <span class="example-chip" onclick="askExample(this)">What puzzle should I work on?</span>
+                    <span class="example-chip" onclick="askExample(this)">What puzzles have I worked on?</span>
+                    <span class="example-chip" onclick="askExample(this)">Which round has the most open puzzles?</span>
+                    <span class="example-chip" onclick="askExample(this)">What puzzles are critical?</span>
+                    <span class="example-chip" onclick="askExample(this)">How do I solve a cryptic crossword?</span>
+                </div>
             </div>
         </div>
     </div>
-    
-    <div class="input-area">
-        <div class="input-wrapper">
-            <input type="text" id="query-input" placeholder="Ask about puzzles, rounds, solvers..." autocomplete="off">
-            <button id="send-btn" onclick="sendQuery()">Send</button>
+
+    <div class="info-box" id="chat-box">
+        <div class="info-box-header" onclick="toggleChat()">
+            <span class="collapse-icon" id="chat-collapse-icon">▼</span>
+            <h3>Bot Chat</h3>
+        </div>
+        <div class="info-box-content" id="chat-content">
+            <div class="chat-container" id="chat-container">
+            </div>
+
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <input type="text" id="query-input" placeholder="Ask about puzzles, rounds, solvers..." autocomplete="off">
+                    <button id="send-btn" onclick="sendQuery()">Send</button>
+                </div>
+            </div>
+
+            <div class="disclaimers">
+                <ul>
+                    <li>Warning: this feature is very experimental. It is not guaranteed to be correct, even when constrained to its own limited data sets.</li>
+                    <li>This query interface is not a conversation. Puzzbot does not remember context or any past queries or answers.</li>
+                </ul>
+            </div>
         </div>
     </div>
-    
-    <div class="system-instruction">
-        <details>
-            <summary>📜 System Instruction (click to expand)</summary>
-            <pre><?php echo htmlentities($gemini_instruction); ?></pre>
-        </details>
-    </div>
-    
+</main>
+
     <script>
         const username = <?php echo json_encode($username); ?>;
         const chatContainer = document.getElementById('chat-container');
         const queryInput = document.getElementById('query-input');
         const sendBtn = document.getElementById('send-btn');
-        const examples = document.getElementById('examples');
-        
+
         queryInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !sendBtn.disabled) {
                 sendQuery();
             }
         });
-        
+
         function askExample(el) {
             queryInput.value = el.textContent;
             sendQuery();
         }
-        
+
         function addMessage(text, type) {
-            // Hide examples on first message
-            if (examples) {
-                examples.style.display = 'none';
+            // Show chat container when first message is added
+            if (!chatContainer.classList.contains('has-messages')) {
+                chatContainer.classList.add('has-messages');
             }
-            
+
             const msg = document.createElement('div');
             msg.className = 'message ' + type;
-            
+
             // Format bot messages with markdown, plain text for user messages
             if (type === 'bot') {
                 msg.innerHTML = marked.parse(text);
             } else {
                 msg.textContent = text;
             }
-            
+
             chatContainer.appendChild(msg);
             chatContainer.scrollTop = chatContainer.scrollHeight;
             return msg;
@@ -441,6 +433,30 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             
             sendBtn.disabled = false;
             queryInput.focus();
+        }
+
+        // Initialize Vue for collapsible info boxes
+        const { createApp } = Vue;
+        createApp({
+            data() {
+                return {
+                    showAbout: true,
+                    showExamples: true
+                }
+            }
+        }).mount('#vue-app');
+
+        // Toggle chat box collapse (vanilla JavaScript)
+        function toggleChat() {
+            const content = document.getElementById('chat-content');
+            const icon = document.getElementById('chat-collapse-icon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.classList.remove('collapsed');
+            } else {
+                content.style.display = 'none';
+                icon.classList.add('collapsed');
+            }
         }
     </script>
 </body>

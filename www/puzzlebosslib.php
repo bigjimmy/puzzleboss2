@@ -225,7 +225,7 @@ function get_status_display($status, $use_text = false) {
 }
 
 // Generates the navigation bar HTML
-// $current_page: one of 'index', 'status', 'pbtools', 'admin', or null
+// $current_page: one of 'index', 'status', 'puzzbot', 'pbtools', 'admin', or null
 function render_navbar($current_page = null) {
   $uid = getauthenticateduser();
   $has_puzztech = checkpriv("puzztech", $uid);
@@ -233,6 +233,7 @@ function render_navbar($current_page = null) {
   $pages = [
     'index' => ['href' => './index.php', 'label' => 'Main Dashboard'],
     'status' => ['href' => './status.php', 'label' => 'Status Overview'],
+    'puzzbot' => ['href' => './puzzbot.php', 'label' => 'PuzzBot'],
     'pbtools' => ['href' => './pbtools.php', 'label' => 'PB Tools'],
     'wiki' => ['href' => '../', 'label' => 'Wiki', 'target' => '_blank'],
     'old' => ['href' => './old.php', 'label' => 'Old UI'],

@@ -70,7 +70,9 @@ export default {
     },
 
     template: `
-    <p> Play sound: <input type="checkbox" v-model="ps"/> <input type="file" ref="fileInput" @change="storeSound"/> {{warning}} <button v-if="customFileExists" @click="deleteSound">Clear custom sound</button> (experimental, no guarantees for functionality)</p>
+    <div>
+        <p style="margin: 2px; font-size: small;">Play sound: <input type="checkbox" v-model="ps"/> <input type="file" ref="fileInput" @change="storeSound"/> {{warning}} <button v-if="customFileExists" @click="deleteSound">Clear custom sound</button> (experimental, no guarantees for functionality)</p>
+    </div>
     `
 }
   
