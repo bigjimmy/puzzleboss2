@@ -323,15 +323,21 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
     history = json.loads(history_str)
 
     # Add to history if not already present
-    if not any(s["solver_id"] == solver_id for s in history["solvers"]):
-        history["solvers"].append({"solver_id": solver_id})
+    # Normalize to int for storage, but check against both int and string for legacy data
+    solver_id_int = int(solver_id)
+    existing_ids = [s["solver_id"] for s in history["solvers"]]
+    # Check if already present as either int or string
+    if not any(sid == solver_id_int or str(sid) == str(solver_id_int) for sid in existing_ids):
+        history["solvers"].append({"solver_id": solver_id_int})
+        history_json = json.dumps(history)
+        debug_log(5, f"Storing solver_history for puzzle {puzzle_id}: {history_json}, solver_id_int type: {type(solver_id_int)}")
         cursor.execute(
             """
             UPDATE puzzle
             SET solver_history = %s
             WHERE id = %s
         """,
-            (json.dumps(history), puzzle_id),
+            (history_json, puzzle_id),
         )
 
     conn.commit()

@@ -3041,12 +3041,13 @@ def add_solver_to_history(id):
     history = json.loads(history_str)
 
     # Add solver to history if not already present
-    if not any(s["solver_id"] == solver_id for s in history["solvers"]):
+    existing_ids = [s["solver_id"] for s in history["solvers"]]
+    if solver_id not in existing_ids:
         history["solvers"].append({"solver_id": solver_id})
         cursor.execute(
             """
-            UPDATE puzzle 
-            SET solver_history = %s 
+            UPDATE puzzle
+            SET solver_history = %s
             WHERE id = %s
         """,
             (json.dumps(history), id),
@@ -3104,12 +3105,15 @@ def remove_solver_from_history(id):
     history = json.loads(history_str)
 
     # Remove solver from history if present
-    history["solvers"] = [s for s in history["solvers"] if s["solver_id"] != solver_id]
+    history["solvers"] = [
+        s for s in history["solvers"]
+        if s["solver_id"] != solver_id
+    ]
 
     cursor.execute(
         """
-        UPDATE puzzle 
-        SET solver_history = %s 
+        UPDATE puzzle
+        SET solver_history = %s
         WHERE id = %s
     """,
         (json.dumps(history), id),

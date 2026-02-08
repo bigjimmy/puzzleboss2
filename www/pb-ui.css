@@ -389,9 +389,10 @@ div.currpuzz {
 .answer {
     font-family: 'Courier New', Courier, monospace;
     white-space: pre;
-    width: 15ch;
+    width: 17ch;
     overflow: hidden;
     flex-shrink: 0;
+    font-size: 0.85em;
 }
 
 .answer.done {

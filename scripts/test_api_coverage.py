@@ -70,8 +70,9 @@ class TestResult:
         self.logger.log_error(message)
 
     def set_success(self, message: str):
-        self.success = True
-        self.message = message
+        # Only set success if we haven't already failed
+        if self.success:
+            self.message = message
 
     def __str__(self) -> str:
         status = "✅" if self.success else "❌"
@@ -600,7 +601,13 @@ class TestRunner:
             response = requests.post(
                 f"{self.base_url}/solvers/{solver_id}/puzz", json={"puzz": puzzle_id}
             )
-            return response.status_code == 200
+            if response.status_code != 200:
+                self.logger.log_error(
+                    f"Failed to assign solver {solver_id} to puzzle {puzzle_id}: "
+                    f"status={response.status_code}, response={response.text}"
+                )
+                return False
+            return True
         except Exception as e:
             self.logger.log_error(f"Error assigning solver to puzzle: {str(e)}")
             return False
@@ -1307,15 +1314,47 @@ class TestRunner:
         self.logger.log_operation("Starting meta puzzles and round completion test")
 
         try:
-            # Get all rounds and select one for testing
-            rounds = self.get_all_rounds()
-            if not rounds:
-                result.fail("No rounds found for testing")
+            # Create a new round for testing to avoid conflicts with existing puzzles
+            timestamp = str(int(time.time()))
+            round_name = f"Test Meta Round {timestamp}"
+            response = requests.post(
+                f"{BASE_URL}/rounds",
+                json={"name": round_name}
+            )
+            if not response.ok:
+                result.fail(f"Failed to create test round: {response.text}")
                 return
 
-            test_round = random.choice(rounds)
+            # The round name gets sanitized (spaces removed) by the API
+            # So "Test Meta Round 1234" becomes "TestMetaRound1234"
+            sanitized_round_name = round_name.replace(" ", "")
+
+            # Fetch the created round to get its ID
+            # Add a small delay to allow the round to be visible
+            time.sleep(0.1)
+
+            rounds = self.get_all_rounds()
+            test_round = None
+            for r in rounds:
+                if r["name"] == sanitized_round_name:
+                    test_round = r
+                    break
+
+            if not test_round:
+                # Retry once more after another delay
+                time.sleep(0.2)
+                rounds = self.get_all_rounds()
+                for r in rounds:
+                    if r["name"] == sanitized_round_name:
+                        test_round = r
+                        break
+
+            if not test_round:
+                result.fail(f"Failed to find created round {sanitized_round_name}")
+                return
+
             self.logger.log_operation(
-                f"Selected round for testing: {test_round['name']}"
+                f"Created test round: {test_round['name']} (ID: {test_round['id']})"
             )
 
             # Create two new puzzles for testing
@@ -1396,7 +1435,23 @@ class TestRunner:
                 return
 
             # Verify round is now solved
+            # Add a small delay to allow database changes to propagate
+            time.sleep(0.1)
+
             if not self.is_round_complete(test_round["id"]):
+                # Debug: Get all puzzles in this round to see what's happening
+                response = requests.get(f"{BASE_URL}/rounds/{test_round['id']}")
+                if response.ok:
+                    round_data = response.json()
+                    puzzles = round_data.get("round", {}).get("puzzles", [])
+                    meta_puzzles = [p for p in puzzles if p.get("ismeta")]
+                    self.logger.log_error(
+                        f"Round completion check failed. Meta puzzles in round: {len(meta_puzzles)}"
+                    )
+                    for p in meta_puzzles:
+                        self.logger.log_error(
+                            f"  Puzzle {p['name']}: status={p.get('status')}, answer={p.get('answer')}"
+                        )
                 result.fail(
                     "Round not marked complete after all meta puzzles were solved"
                 )
@@ -1695,9 +1750,12 @@ class TestRunner:
                 result.fail("Failed to get puzzle details")
                 return
 
-            # Group puzzles by round
+            # Group puzzles by round (exclude solved puzzles)
             puzzles_by_round = {}
             for puzzle in detailed_puzzles:
+                # Skip solved puzzles - can't assign solvers to them
+                if puzzle.get("status") == "Solved":
+                    continue
                 round_id = str(puzzle.get("round_id", ""))
                 if round_id:
                     if round_id not in puzzles_by_round:
@@ -2174,7 +2232,18 @@ class TestRunner:
 
                 selected_solvers = random.sample(solvers, 2)
 
+                # Check initial history state
+                initial_puzzle_data = self.get_puzzle_details(puzzle["id"])
+                initial_history = initial_puzzle_data.get("solvers", "") or ""
+                self.logger.log_operation(
+                    f"Puzzle {puzzle['name']} (ID: {puzzle['id']}) initial history: '{initial_history}'"
+                )
+
                 for solver in selected_solvers:
+                    self.logger.log_operation(
+                        f"Testing solver {solver['name']} (ID: {solver['id']}, type: {type(solver['id'])})"
+                    )
+
                     # Add solver to history
                     success = self.add_solver_to_history(puzzle["id"], solver["id"])
                     if not success:
@@ -2195,9 +2264,13 @@ class TestRunner:
                     historical_solvers = puzzle_data.get("solvers", "")
                     if historical_solvers is None:
                         historical_solvers = ""
-                    if solver["name"] not in historical_solvers:
+
+                    # Split by comma and check for exact match (not substring)
+                    solver_list = [s.strip() for s in historical_solvers.split(",") if s.strip()]
+                    if solver["name"] not in solver_list:
                         result.fail(
-                            f"Solver {solver['name']} not found in puzzle's historical solvers"
+                            f"Solver {solver['name']} not found in puzzle's historical solvers. "
+                            f"Historical solvers: '{historical_solvers}', Solver list: {solver_list}"
                         )
                         continue
 
@@ -2227,9 +2300,41 @@ class TestRunner:
                     historical_solvers = puzzle_data.get("solvers", "")
                     if historical_solvers is None:
                         historical_solvers = ""
-                    if solver["name"] in historical_solvers:
+
+                    # Split by comma and check for exact match (not substring)
+                    solver_list = [s.strip() for s in historical_solvers.split(",") if s.strip()]
+                    if solver["name"] in solver_list:
+                        # Debug: Check database directly to see what's actually stored
+                        try:
+                            import MySQLdb
+                            import yaml
+                            with open("puzzleboss.yaml") as f:
+                                config = yaml.load(f, Loader=yaml.FullLoader)
+
+                            db_conn = MySQLdb.connect(
+                                host=config["MYSQL"]["HOST"],
+                                user=config["MYSQL"]["USERNAME"],
+                                passwd=config["MYSQL"]["PASSWORD"],
+                                db=config["MYSQL"]["DATABASE"]
+                            )
+                            cursor = db_conn.cursor()
+                            cursor.execute(f"SELECT solver_history FROM puzzle WHERE id=%s", (puzzle['id'],))
+                            db_row = cursor.fetchone()
+                            db_conn.close()
+                            db_value = db_row[0] if db_row else "NULL"
+                        except Exception as db_err:
+                            db_value = f"Error querying database: {str(db_err)}"
+
+                        self.logger.log_error(
+                            f"REMOVAL FAILED DEBUG:\n"
+                            f"  Solver: {solver['name']} (ID: {solver['id']}, type: {type(solver['id'])})\n"
+                            f"  Puzzle: {puzzle['name']} (ID: {puzzle['id']})\n"
+                            f"  API returned solvers: '{historical_solvers}'\n"
+                            f"  Database solver_history column:\n{db_value}"
+                        )
                         result.fail(
-                            f"Solver {solver['name']} still found in puzzle's historical solvers after removal"
+                            f"Solver {solver['name']} still found in puzzle's historical solvers after removal. "
+                            f"Historical solvers: '{historical_solvers}', Solver list: {solver_list}"
                         )
                         continue
 

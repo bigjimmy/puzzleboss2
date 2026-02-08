@@ -244,14 +244,11 @@ require_once('puzzlebosslib.php');
                             //
                             const huntinfo_url = `${Consts.api}/apicall.php?&apicall=huntinfo`;
                             const huntinfoData = await (await fetch(huntinfo_url)).json();
-                            console.log('DEBUG: huntinfo response:', huntinfoData);
                             if (huntinfoData.statuses && Array.isArray(huntinfoData.statuses)) {
                                 statuses.value = huntinfoData.statuses.map(s => s.name);
-                                console.log('DEBUG: statuses set to:', statuses.value);
 
                                 // Now that statuses are loaded, populate puzzleFilter
                                 if (settings.value) {
-                                    console.log('DEBUG: settings exists, populating puzzleFilter');
                                     if (!settings.value.puzzleFilter) {
                                         settings.value.puzzleFilter = {};
                                     }
@@ -261,12 +258,11 @@ require_once('puzzlebosslib.php');
                                             settings.value.puzzleFilter[status] = (status !== '[hidden]');
                                         }
                                     });
-                                    console.log('DEBUG: puzzleFilter after population:', settings.value.puzzleFilter);
                                 } else {
-                                    console.error('DEBUG: settings.value is null/undefined when trying to populate puzzleFilter');
+                                    console.error('settings.value is null/undefined when trying to populate puzzleFilter');
                                 }
                             } else {
-                                console.error('DEBUG: huntinfo did not return valid statuses array');
+                                console.error('huntinfo did not return valid statuses array');
                             }
                         }
 
@@ -365,7 +361,9 @@ require_once('puzzlebosslib.php');
                     })
 
                     if(puzzleStats.value['Solved'] < puzzleStatsLocal['Solved'] && !firstUpdate) {
-                        solveSoundRef.value.playSound();
+                        if (solveSoundRef.value) {
+                            solveSoundRef.value.playSound();
+                        }
                     } 
 
                     roundStats.value = roundStatsLocal;
@@ -419,7 +417,6 @@ require_once('puzzlebosslib.php');
                     // Don't merge statuses here - will be done after huntinfo loads in firstUpdate
 
                     settings.value = s;
-                    console.log('DEBUG: settings initialized from localStorage:', settings.value);
 
                     const sb = localStorage.getItem("showBody");
                     if (sb !== null && sb !== undefined) showBody.value = JSON.parse(sb);
@@ -437,15 +434,6 @@ require_once('puzzlebosslib.php');
                         });
                         showBody.value = showBodyUpdate;
                     }
-
-                    console.log('DEBUG: After fetchData(true):');
-                    console.log('  - settings exists:', !!settings.value);
-                    console.log('  - statuses exists:', !!statuses.value);
-                    console.log('  - statuses.length:', statuses.value ? statuses.value.length : 0);
-                    console.log('  - statuses array:', statuses.value);
-                    console.log('  - puzzleFilter exists:', !!settings.value?.puzzleFilter);
-                    console.log('  - puzzleFilter keys:', settings.value?.puzzleFilter ? Object.keys(settings.value.puzzleFilter) : []);
-                    console.log('  - Condition (settings && statuses && statuses.length > 0):', !!(settings.value && statuses.value && statuses.value.length > 0));
                     setInterval(fetchData, 5000);
                 });
 
@@ -498,15 +486,6 @@ require_once('puzzlebosslib.php');
                 watch(showBody, update => {
                     persist("showBody", update);
                 });
-
-                watch(statuses, newVal => {
-                    console.log('DEBUG: statuses changed to:', newVal);
-                    console.log('DEBUG: After statuses change - condition check:', !!(settings.value && statuses.value && statuses.value.length > 0));
-                });
-
-                watch(settings, newVal => {
-                    console.log('DEBUG: settings changed, puzzleFilter keys:', newVal?.puzzleFilter ? Object.keys(newVal.puzzleFilter) : []);
-                }, { deep: true });
 
                 //
                 // Watch for changes to showSolvedRounds setting and update showBody accordingly
