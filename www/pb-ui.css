@@ -275,7 +275,7 @@ dialog::backdrop {
 }
 
 .round-header > h3 {
-    width: 250px;
+    width: 235px;
     font-size: 1.1em;
     margin: 0 10px 0 0;
 }
@@ -285,7 +285,7 @@ dialog::backdrop {
     flex-direction: row;
     align-items: center;
     gap: 5px;
-    font-size: small;
+    font-size: 1em;
 }
 
 .round-header-stats p {
