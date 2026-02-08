@@ -232,6 +232,21 @@ textarea {
     resize: none;
 }
 
+/* Modal dialogs - ensure they appear above all other content */
+dialog {
+    z-index: 9999;
+    position: fixed;
+    border: 2px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    background: white;
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
 .round-header-column {
     display: flex;
     flex-direction: column;
