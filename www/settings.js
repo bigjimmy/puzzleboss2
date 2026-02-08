@@ -48,7 +48,8 @@ export default {
     <div id="control-bar">
         <p>Spoil all puzzles: <input type="checkbox" :checked="s.spoilAll" @change="$emit('settings-updated', 'spoilAll', !s.spoilAll)" /> |
            Sort puzzles by status: <input type="checkbox" :checked="s.sortPuzzles" @change="$emit('settings-updated', 'sortPuzzles', !s.sortPuzzles)" /> |
-           Show tags: <input type="checkbox" :checked="s.showTags" @change="$emit('settings-updated', 'showTags', !s.showTags)" /> &nbsp; &nbsp; &nbsp;
+           Show tags: <input type="checkbox" :checked="s.showTags" @change="$emit('settings-updated', 'showTags', !s.showTags)" /> |
+           Show solved rounds: <input type="checkbox" :checked="s.showSolvedRounds" @change="$emit('settings-updated', 'showSolvedRounds', !s.showSolvedRounds)" /> &nbsp; &nbsp; &nbsp;
            <button @click="$emit('settings-updated', 'showControls', !s.showControls)">{{s.showControls ? 'Hide ' : 'Show '}}advanced controls</button>
         </p>
         <hr v-if="s.showControls" style="border: none; border-top: 1px solid #ccc; margin: 15px 0;" />

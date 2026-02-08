@@ -314,15 +314,26 @@ require_once('puzzlebosslib.php');
                                     // would be smarter, but hopefully we'll
                                     // never have enough rounds to care.
 
-                    // 
+                    //
                     // Extend showBody if new rounds appear. Show new rounds
-                    // by default.
+                    // by default, unless they are solved and showSolvedRounds is false.
                     //
 
                     let showBodyUpdate = showBody.value.slice();
                     let highlightUpdate = highlight.value.slice();
+
+                    // Build a map of round ID to solved status
+                    const roundSolvedMap = {};
+                    data.value.rounds.forEach((round) => {
+                        roundSolvedMap[round.id] = Consts.isRoundSolved(round);
+                    });
+
                     while(max_round > showBodyUpdate.length) {
-                        showBodyUpdate.push(true);
+                        const roundId = showBodyUpdate.length;
+                        const isSolved = roundSolvedMap[roundId] || false;
+                        // Show round by default unless it's solved and showSolvedRounds is false
+                        const shouldShow = !isSolved || settings.value.showSolvedRounds;
+                        showBodyUpdate.push(shouldShow);
                         highlightUpdate.push(false);
                     }
                     showBodyUpdate.splice(max_round);
@@ -414,6 +425,19 @@ require_once('puzzlebosslib.php');
                     if (sb !== null && sb !== undefined) showBody.value = JSON.parse(sb);
 
                     await fetchData(true);
+
+                    // Apply showSolvedRounds setting to override localStorage values for solved rounds
+                    if (!settings.value.showSolvedRounds && data.value.rounds.length > 0) {
+                        let showBodyUpdate = showBody.value.slice();
+                        data.value.rounds.forEach((round) => {
+                            const isSolved = Consts.isRoundSolved(round);
+                            if (isSolved) {
+                                showBodyUpdate[round.id] = false;
+                            }
+                        });
+                        showBody.value = showBodyUpdate;
+                    }
+
                     console.log('DEBUG: After fetchData(true):');
                     console.log('  - settings exists:', !!settings.value);
                     console.log('  - statuses exists:', !!statuses.value);
@@ -483,6 +507,23 @@ require_once('puzzlebosslib.php');
                 watch(settings, newVal => {
                     console.log('DEBUG: settings changed, puzzleFilter keys:', newVal?.puzzleFilter ? Object.keys(newVal.puzzleFilter) : []);
                 }, { deep: true });
+
+                //
+                // Watch for changes to showSolvedRounds setting and update showBody accordingly
+                //
+                watch(() => settings.value?.showSolvedRounds, (newVal) => {
+                    if (data.value.rounds.length === 0) return;
+
+                    let showBodyUpdate = showBody.value.slice();
+                    data.value.rounds.forEach((round) => {
+                        const isSolved = Consts.isRoundSolved(round);
+                        if (isSolved) {
+                            // If round is solved, show/hide based on showSolvedRounds setting
+                            showBodyUpdate[round.id] = newVal;
+                        }
+                    });
+                    showBody.value = showBodyUpdate;
+                });
 
                 return {
                     data,
