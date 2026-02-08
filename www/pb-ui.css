@@ -260,7 +260,7 @@ dialog::backdrop {
 
 .round-header {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 5px;
     align-items: center;
     padding: 8px;
@@ -272,7 +272,7 @@ dialog::backdrop {
 }
 
 .round-header > h3 {
-    width: 235px;
+    width: 225px;
     font-size: 1.1em;
     margin: 0 10px 0 0;
 }
