@@ -36,8 +36,13 @@
     --error-bg: lightpink;           /* Error background */
     --error-border: #ffcccc;         /* Error border */
 
+    /* State Colors - Info/Warning */
+    --info-bg: lightyellow;          /* Info/warning background */
+
     /* Neutral Grays */
     --gray-hover: #e0e0e0;           /* Hover gray */
+    --gray-medium: gray;             /* Medium gray for closed/disabled states */
+    --gray-light: lightgray;         /* Light gray for solved states */
 }
 
 body {
@@ -98,6 +103,40 @@ body {
     margin-top: 10px;
 }
 
+/* ========================================
+   GENERAL UI ELEMENTS
+   ======================================== */
+
+textarea {
+    resize: none;
+}
+
+/* Modal dialogs - ensure they appear above all other content */
+dialog {
+    z-index: 9999;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    border: 2px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    background: white;
+    margin: 0;
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+/* ========================================
+   CONTROL BAR
+   ======================================== */
+
 #control-bar {
     display: flex;
     flex-direction: column;
@@ -156,7 +195,7 @@ body {
  
 #allrounds {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
 }
 
 #allrounds.usecolumns {
@@ -170,78 +209,74 @@ body {
     flex-direction: column;
     padding: 10px;
     gap: 10px;
-    margin-left: auto;
+    margin-top: 20px;
+}
+
+#roundshidden h4 {
+    margin: 0 0 10px 0;
+    padding-left: 10px;
 }
 
 
 /*
- * #Rounds is a grid flex-box of .rounds.
- * Each .round consists of a header and a body.
- * 
+ * #rounds is a flex container of .round cards.
+ * Each .round consists of a .round-header and .round-body.
+ *
  * The header is clickable and highlights on hover.
- * The body consists of a column of .puzzles. The body is .hideable and
- * expands and contracts to a max height of 5000px.
- * 
+ * The body contains .puzzle rows and can be collapsed with .hiding class.
+ *
  */
+
+/* Consolidate box-sizing and overflow for round cards and puzzle rows */
+.round, .round * {
+    box-sizing: border-box;
+}
+
+.round-header, .round-header > h3, .puzzle, .puzzle-name, .answer {
+    overflow: hidden;
+}
+
+.round-header > h3, .puzzle-name, .answer {
+    white-space: nowrap;
+}
 
 #rounds {
     display: flex;
-    flex-direction: row;
     flex-wrap: wrap;
     padding: 10px;
     gap: 10px;
-}
-
-#rounds.usecolumns {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    overflow-x: auto;
     align-items: flex-start;
 }
 
-#rounds.usecolumns .round {
-    min-width: 450px;
-    max-width: 450px;
-    flex-shrink: 0;
+#rounds.usecolumns {
+    flex-wrap: nowrap;
+    overflow-x: auto;
 }
 
 .round {
     display: flex;
     flex-direction: column;
-    height: fit-content;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
-    min-width: 450px;
+    min-width: 505px;
     flex-shrink: 0;
 }
 
 .round-header {
     display: flex;
     gap: 10px;
-    flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
     padding: 10px;
     box-shadow: 0 0 8px 0 rgba(0,0,0,0.5);
     background-color: rgba(0,0,0,0.1);
     transition: background-color 0.5s ease;
     cursor: pointer;
     user-select: none;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.round-header > * {
-    margin-block-start: 0.5em;
-    margin-block-end: 0.5em;
 }
 
 .round-header > h3 {
     width: 220px;
-    overflow: hidden;
     font-size: 1.1em;
     margin: 0;
-    white-space: nowrap;
-    text-overflow: clip;
 }
 
 .round-header.solved {
@@ -259,8 +294,6 @@ body {
 .round-body {
     display: flex;
     flex-direction: column;
-    box-sizing: border-box;
-    overflow: hidden;
 }
 
 .hiding {
@@ -271,37 +304,10 @@ body {
 
 .round-header.highlighted, .round-header.highlighted:hover, .round-header.solved.highlighted, .round-header.solved.highlighted:hover {
     background-color: orangered;
-    transition: background-color 0.2s ease;
 }
 
 .round a {
     text-decoration: none;
-}
-
-textarea {
-    resize: none;
-}
-
-/* Modal dialogs - ensure they appear above all other content */
-dialog {
-    z-index: 9999;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    max-width: 90vw;
-    max-height: 90vh;
-    overflow-y: auto;
-    border: 2px solid #333;
-    border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    padding: 20px;
-    background: white;
-    margin: 0;
-}
-
-dialog::backdrop {
-    background: rgba(0, 0, 0, 0.5);
 }
 
 .round-header-column {
@@ -316,83 +322,57 @@ dialog::backdrop {
 }
 
 .round-header-column p {
-    margin: 0px;
+    margin: 0;
 }
 
 .round-header-icons {
     display: flex;
-    flex-direction: row;
 }
 
 /*
- * Puzzles are layed out horizontally.
- * 
- * They layout links in p form and include an answer element.
- * They are colored azure and bolded if they are the meta.
+ * Puzzles are laid out horizontally in a flex row.
+ *
+ * Each .puzzle contains icons, name, and answer field.
+ * Meta puzzles have cyan background and bold text.
  *
  */
 
 .puzzle {
     padding: 10px;
     display: flex;
-    flex-direction: row;
-    gap: 10px;
-    justify-content: flex-start;
     align-items: center;
     box-shadow: 0 0 2px 0 rgba(0,0,0,0.2);
     transition: background-color 0.5s ease;
-    box-sizing: border-box;
-    overflow: hidden;
 }
 
 .puzzle.saved, .puzzle.meta.saved, .puzzle.meta.solved.saved {
-    background-color: green;
-    transition: background-color 0.2s ease;
+    background-color: var(--success-bg);
 }
 
 .puzzle.closed, .puzzle.meta.closed, .puzzle.meta.solved.closed {
-    background-color: gray;
-    transition: background-color 0.2s ease;
+    background-color: var(--gray-medium);
 }
 
-.puzzle-icons {
-    display: flex;
-    flex-direction: row;
-    align-items: last baseline;
-    margin: 0px;
-    gap: 8px;
-    flex-shrink: 1;
-    flex-grow: 1;
-    min-width: 0;
-    overflow: hidden;
+.puzzle > * {
+    margin: 0;
+    flex-grow: 0;
+    flex-shrink: 0;
 }
 
 .puzzle-icon {
     cursor: pointer;
-    flex-shrink: 0;
-    flex-grow: 0;
+    padding: 0;
 }
 
 .puzzle-icon:hover {
     transform: scale(1.25);
 }
 
-.puzzle-icons > .puzzle-icon:last-child {
-    margin-left: auto;
-}
-
 .puzzle-name {
-    width: 160px;
-    overflow: hidden;
-    white-space: nowrap;
-    flex-shrink: 1;
-    flex-grow: 0;
-    margin-right: 0;
-}
-
-.puzzle-icons > p, .puzzle > p, .puzzle-icon {
-    margin: 0px;
-    display: inline;
+    width: 200px;
+    min-width: 0;
+    margin-left: 5px;
+    margin-right: 5px;
 }
 
 .puzzle.meta, .puzzle.meta.solved {
@@ -404,50 +384,28 @@ p.meta, p.meta.solved {
 }
 
 .solved {
-    background-color: lightgray;
+    background-color: var(--gray-light);
 }
-
-/* Reconsider status-based colors if desired.
-.unnecessary {
-    background-color: lightgray;
-}
-
-div.critical, div.meta.critical {
-    background-color: coral;
-}
-
-div.needseyes, div.meta.needseyes {
-    background-color: rgba(255, 215, 0, 0.8);
-}
-
-div.wtf, div.meta.wtf {
-    background-color: rgb(173, 255, 47, 0.8);
-} */
 
 div.currpuzz {
-    outline: 6px rgba(173,255,47,1);
-    outline-style: outset;
+    outline: 6px outset rgba(173,255,47,1);
 }
 
 /*
- * Answers are constant-width (up to 16.5 chars - half is used to show that the
- * answer continues if it is longer than 16 chars.)
+ * Answers are constant-width (18 characters in monospace font).
  *
- * An unspoiled answer is blacked out. No guarantees on if your browser chooses
- * to, e.g., for dark mode, display background-color and color differently.
- *
- * An unspoiled answer can be spoiled on hover or by clicking spoil all, which
- * adds the spoil class.
+ * An unspoiled answer is blacked out and can be revealed on hover
+ * or by clicking "spoil all" (adds the .spoil class).
  *
  */
 
 .answer {
     font-family: 'Courier New', Courier, monospace;
-    white-space: nowrap;
-    width: 17ch;
-    overflow: hidden;
-    flex-shrink: 0;
+    width: 18ch;
+    min-width: 0;
     font-size: 0.85em;
+    margin-left: 5px;
+    margin-right: 5px;
 }
 
 .answer.done {
@@ -471,22 +429,18 @@ div.currpuzz {
 }
 
 .active {
-    background: #66FF99;
+    background: var(--success-green);
 }
 
 .stale {
     background: rgba(0,0,0,0.4);
 }
 
-.error{
-    background: red;
-}
-
 .circle {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    box-shadow: 0px 0px 1px 1px #0000001a;
+    box-shadow: 0 0 1px 1px #0000001a;
 }
 
 .pulse {
@@ -563,6 +517,38 @@ body.form-page .success {
     padding: 10px;
 }
 
+/* Global message box styles (all pages) */
+.error {
+    background-color: var(--error-bg);
+    padding: 10px;
+    margin: 10px 0;
+}
+
+.success {
+    background-color: var(--success-bg);
+    padding: 10px;
+    margin: 10px 0;
+}
+
+.info {
+    background-color: var(--info-bg);
+    padding: 10px;
+    margin: 10px 0;
+}
+
+/* Code and monospace text */
+code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85em;
+}
+
+.code-block {
+    background-color: var(--bg-light-gray);
+    padding: 10px;
+    overflow-x: auto;
+    word-break: break-all;
+}
+
 /*
  * Status page styles
  * Used by status.php
@@ -613,48 +599,55 @@ body.status-page h3 {
     min-width: 150px;
 }
 
-body.status-page table {
-    width: 100%;
+/* All status-page tables (everything is inside #app) */
+body.status-page #app table {
     border-collapse: collapse;
     background: white;
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid var(--border-light);
+    width: auto;  /* Default: auto width for form tables */
 }
 
-body.status-page th,
-body.status-page td {
+body.status-page #app th,
+body.status-page #app td {
     padding: 8px 10px;
     text-align: left;
     border-bottom: 1px solid var(--border-light);
     font-size: 0.9em;
 }
 
-body.status-page th:first-child,
-body.status-page td:first-child {
+body.status-page #app th {
+    background: var(--bg-light-blue);
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+/* Status page puzzle/stats tables: full width */
+body.status-page #app .puzzle-table table,
+body.status-page #app .stats-grid table {
+    width: 100%;
+}
+
+body.status-page #app th:first-child,
+body.status-page #app td:first-child {
     text-align: center;
     width: 30px;
     padding: 8px 4px;
 }
 
-body.status-page th {
-    background: var(--bg-light-blue);
-    color: var(--primary-blue);
-    font-weight: 600;
+/* Status page tables have sortable headers */
+body.status-page #app th {
     cursor: pointer;
     user-select: none;
     position: relative;
 }
 
-body.status-page th:hover {
+body.status-page #app th:hover {
     background: var(--bg-lighter-blue);
 }
 
-body.status-page th.sortable {
-    position: relative;
-}
-
-body.status-page td {
+body.status-page #app td {
     position: relative;
 }
 
@@ -710,7 +703,7 @@ td:first-child [data-tooltip]::after {
     margin-bottom: 0;
 }
 
-body.status-page tr:hover {
+body.status-page #app tr:hover {
     background: var(--bg-light-gray);
 }
 
@@ -828,6 +821,22 @@ body.status-page footer {
     color: var(--text-secondary);
 }
 
+/* Consolidated column styling */
+.solver-col,
+.tags-col,
+.comment-col,
+.location-col {
+    font-size: 0.8em;
+}
+
+.tags-col,
+.comment-col,
+.location-col {
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* Inline form for input/button groups (used in status.php) */
 .inline-form {
     display: inline-flex;
     gap: 5px;
@@ -836,21 +845,14 @@ body.status-page footer {
 
 .solver-col {
     white-space: nowrap;
-    font-size: 0.8em;
 }
 
 .tags-col {
     max-width: 120px;
-    white-space: normal;
-    word-break: break-word;
-    font-size: 0.8em;
 }
 
 .comment-col {
     max-width: 250px;
-    white-space: normal;
-    word-break: break-word;
-    font-size: 0.8em;
     vertical-align: top;
 }
 
@@ -870,9 +872,6 @@ body.status-page footer {
 
 .location-col {
     max-width: 150px;
-    white-space: normal;
-    word-break: break-word;
-    font-size: 0.8em;
 }
 
 .location-col input[type="text"] {
@@ -943,46 +942,54 @@ body.status-page footer {
     pointer-events: none;
 }
 
-/* Inline form utility class */
+/* Inline form for actual <form> elements (used in admin/tools pages) */
 form.inline-form {
-    display: inline;
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
 
-/* Table styling for admin/tools pages */
-body.status-page #app table {
-    width: auto;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid var(--border-light);
+form.inline-form input[type="text"],
+form.inline-form select {
+    flex: 0 1 auto;
+    min-width: 250px;
 }
 
-body.status-page #app th,
-body.status-page #app td {
-    padding: 8px 10px;
-    text-align: left;
-    border-bottom: 1px solid var(--border-light);
-    font-size: 0.9em;
+form.inline-form input[type="submit"] {
+    margin-left: auto;
+    min-width: 80px;
+    flex-shrink: 0;
 }
 
-body.status-page #app th {
-    background: var(--bg-light-blue);
-    color: var(--primary-blue);
-    font-weight: 600;
-}
-
+/* Admin page tables have hover effect on rows */
 body.status-page #app tbody tr:hover {
     background: var(--bg-light-gray);
 }
 
 /* Table column width utility classes */
+body.status-page #app table.table-cols-65-35,
+body.status-page #app table.table-cols-40-auto {
+    max-width: 600px;
+}
+
+body.status-page #app table.table-wide {
+    max-width: 900px;
+}
+
 body.status-page #app table.table-cols-65-35 td:first-child {
     width: 65%;
 }
 
 body.status-page #app table.table-cols-65-35 td:last-child {
     width: 35%;
+}
+
+body.status-page #app table.table-cols-35-65 td:first-child {
+    width: 35%;
+}
+
+body.status-page #app table.table-cols-35-65 td:last-child {
+    width: 65%;
 }
 
 body.status-page #app table.table-cols-40-auto td:first-child {

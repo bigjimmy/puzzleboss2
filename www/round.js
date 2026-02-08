@@ -203,14 +203,12 @@ export default {
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
                 :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] ? ' ' + highlightedPuzzle[puzzle.id] : '')">
-                <div class="puzzle-icons">
-                    <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers"></AddGeneric>
-                    <AddGeneric type="workstate" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
-                    <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
-                    <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">📊</a></p>
-                    <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
-                    <AddGeneric type="note-tags" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
-                </div>
+                <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers"></AddGeneric>
+                <AddGeneric type="workstate" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
+                <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
+                <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">📊</a></p>
+                <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
+                <AddGeneric type="note-tags" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 <p
                     v-if = "puzzle.answer === null"
                     :class = "{'answer': true, 'spoil': true}"

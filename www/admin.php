@@ -119,7 +119,7 @@ if (!$allowed) {
         <td>To modify a role for a user:</td>
         <td>
           Enter Username:<br>
-          <form action="setpriv.php" method="post" class="inline-form">
+          <form action="setpriv.php" method="post">
             <input type="text" name="name"><br>
             <input type="hidden" name="priv" value="puzztech">
             <input type="radio" name="allowed" id="YES_puzztech" value="YES">
@@ -131,7 +131,7 @@ if (!$allowed) {
         </td>
         <td>
           Enter Username:<br>
-          <form action="setpriv.php" method="post" class="inline-form">
+          <form action="setpriv.php" method="post">
             <input type="text" name="name"><br>
             <input type="hidden" name="priv" value="puzzleboss">
             <input type="radio" name="allowed" id="YES_puzzleboss" value="YES">

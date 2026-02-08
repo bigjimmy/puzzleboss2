@@ -40,9 +40,10 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
   <meta charset="UTF-8">
   <title>Search Puzzles by Tag</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./pb-ui.css">
   <style>
   body {
-    background-color: aliceblue;
+    background-color: var(--bg-page);
     font-family: 'Lora';
     margin: 20px;
   }
@@ -50,8 +51,8 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
     margin-bottom: 10px;
   }
   .search-form {
-    background-color: white;
-    border: 1px solid #ccc;
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-medium);
     padding: 20px;
     margin-bottom: 20px;
     max-width: 600px;
@@ -62,7 +63,7 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
   .tag-list {
     max-height: 200px;
     overflow-y: auto;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-light);
     padding: 10px;
     margin: 10px 0;
   }
@@ -72,29 +73,14 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
     cursor: pointer;
   }
   .tag-list label:hover {
-    background-color: #f0f0f0;
-  }
-  .error {
-    background-color: lightpink;
-    padding: 10px;
-    margin: 10px 0;
-  }
-  .success {
-    background-color: lightgreen;
-    padding: 10px;
-    margin: 10px 0;
-  }
-  .info {
-    background-color: lightyellow;
-    padding: 10px;
-    margin: 10px 0;
+    background-color: var(--bg-gray);
   }
   table.results {
     border-collapse: collapse;
     margin: 10px 0;
   }
   table.results th, table.results td {
-    border: 1px solid #999;
+    border: 1px solid var(--text-secondary);
     padding: 5px 10px;
     text-align: left;
   }

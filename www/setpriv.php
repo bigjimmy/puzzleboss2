@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <title>Set Privilege</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./pb-ui.css">
   <style>
   body {
-    background-color: aliceblue;
+    background-color: var(--bg-page);
     display: grid;
     font-family: 'Lora';
     height: 100vh;
@@ -37,14 +38,6 @@
   }
   input[type="submit"] {
     font-family: inherit;
-  }
-  .error {
-    background-color: lightpink;
-    padding: 10px;
-  }
-  .success {
-    background-color: lightgreen;
-    padding: 10px;
   }
   </style>
 </head>

@@ -10,42 +10,6 @@ require('puzzlebosslib.php');
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
-  /* Match status.php table styling */
-  #app table {
-    width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid #ddd;
-    font-size: 0.9em;
-  }
-
-  #app th, #app td {
-    padding: 8px 10px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-  }
-
-  #app th {
-    background: #e6f2ff;
-    color: #0066cc;
-    font-weight: 600;
-  }
-
-  #app tbody tr:hover {
-    background: #f5f5f5;
-  }
-
-  #app table td:first-child {
-    text-align: center;
-    width: 60px;
-  }
-
-  #app table label {
-    cursor: pointer;
-  }
-
   /* Page-specific styles for progress indicator */
   #progress-container {
     margin: 20px 0;
@@ -240,7 +204,7 @@ require('puzzlebosslib.php');
   }
   </script>
 </head>
-<body style="background: aliceblue; margin: 0; padding: 20px; min-height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333;">
+<body class="status-page">
 <main style="max-width: none;">
 <?php
 

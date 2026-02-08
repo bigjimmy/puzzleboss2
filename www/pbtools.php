@@ -32,7 +32,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
   <li>On a puzzle page, click it to create a new puzzle</li>
   <li>On the List of Puzzles page (<tt>/puzzles</tt>), click it to check if PB is missing anything.</li>
 </ul>
-<table class="table-cols-65-35">
+<table class="table-cols-35-65 table-wide">
   <tr>
     <td>Drag this link to your bookmarks:</td>
     <td><a href="<?= $bookmarkuri ?>">Add to Puzzboss</a></td>
@@ -40,7 +40,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
   <tr>
     <td>Or alternatively, copy the following into a new bookmark:</td>
     <td>
-      <div style="background-color: lightgray; font-size: 40%;">
+      <div class="code-block">
         <code><?= $bookmarkuri ?></code>
       </div>
     </td>
@@ -75,7 +75,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
   <tr>
     <td>To add a new round (enter round name):</td>
     <td>
-      <form action="addround.php" method="post">
+      <form action="addround.php" method="post" class="inline-form">
         <input type="text" name="name">
         <input type="submit" name="submit" value="Add Round">
       </form>
@@ -95,7 +95,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
   <tr>
     <td>To manually edit a solver's current puzzle assignment (enter username):</td>
     <td>
-      <form action="editsolver.php" method="get">
+      <form action="editsolver.php" method="get" class="inline-form">
         <input type="text" name="assumedid">
         <input type="submit" name="ok" value="Edit Solver">
       </form>

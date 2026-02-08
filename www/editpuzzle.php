@@ -16,34 +16,6 @@
     line-height: 1.15;
   }
 
-  /* Table styling matching status.php */
-  #app table {
-    width: auto;
-    max-width: 100%;
-    border-collapse: collapse;
-    background: white;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid #ddd;
-  }
-
-  #app th, #app td {
-    padding: 8px 10px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-    font-size: 0.9em;
-  }
-
-  #app th {
-    background: #e6f2ff;
-    color: #0066cc;
-    font-weight: 600;
-  }
-
-  #app tbody tr:hover {
-    background: #f5f5f5;
-  }
-
   /* Read-only info table styling */
   .info-table td:first-child {
     font-weight: 600;
@@ -57,21 +29,6 @@
   /* Edit form table styling */
   .edit-table td:first-child {
     font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .edit-table input[type="text"] {
-    width: 400px;
-    max-width: 100%;
-  }
-
-  .edit-table select {
-    width: auto;
-    min-width: 150px;
-    max-width: 100%;
-  }
-
-  .edit-table td:last-child {
     white-space: nowrap;
   }
   </style>
@@ -361,15 +318,13 @@ if (isset($puzzleobj->lastact->time)) {
       <!-- Change puzzle name -->
       <tr>
         <td>Puzzle Name</td>
-        <td>
-          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post">
+        <td colspan="2">
+          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
             <input type="hidden" name="part" value="name">
             <input type="text" required minlength="1" name="value" value="<?= htmlentities($puzname) ?>">
-        </td>
-        <td>
             <input type="submit" name="submit" value="Update">
           </form>
         </td>
@@ -386,8 +341,8 @@ if (isset($puzzleobj->lastact->time)) {
       ?>
       <tr>
         <td>Round</td>
-        <td>
-          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post">
+        <td colspan="2">
+          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
@@ -399,8 +354,6 @@ if (isset($puzzleobj->lastact->time)) {
                 <option value="<?= $round->id ?>"<?= $selected ?>><?= htmlentities($round->name) ?></option>
               <?php endforeach; ?>
             </select>
-        </td>
-        <td>
             <input type="submit" name="submit" value="Update">
           </form>
         </td>
@@ -415,15 +368,13 @@ if (isset($puzzleobj->lastact->time)) {
       ?>
       <tr>
         <td>Answer</td>
-        <td>
-          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post">
+        <td colspan="2">
+          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
             <input type="hidden" name="part" value="answer">
             <input type="text" required minlength="1" name="value" value="<?= htmlentities($answer ?? '') ?>">
-        </td>
-        <td>
             <input type="submit" name="submit" value="Update">
           </form>
         </td>
@@ -432,15 +383,13 @@ if (isset($puzzleobj->lastact->time)) {
       <!-- Enter location -->
       <tr>
         <td>Location</td>
-        <td>
-          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post">
+        <td colspan="2">
+          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
             <input type="hidden" name="part" value="xyzloc">
             <input type="text" name="value" value="<?= htmlentities($puzzleobj->puzzle->xyzloc ?? '') ?>">
-        </td>
-        <td>
             <input type="submit" name="submit" value="Update">
           </form>
         </td>
@@ -449,15 +398,13 @@ if (isset($puzzleobj->lastact->time)) {
       <!-- Enter Comments -->
       <tr>
         <td>Comments</td>
-        <td>
-          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post">
+        <td colspan="2">
+          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
             <input type="hidden" name="part" value="comments">
             <input type="text" name="value" value="<?= htmlentities($puzzleobj->puzzle->comments ?? '') ?>">
-        </td>
-        <td>
             <input type="submit" name="submit" value="Update">
           </form>
         </td>
@@ -471,8 +418,8 @@ if (isset($puzzleobj->lastact->time)) {
       ?>
       <tr>
         <td>Status</td>
-        <td>
-          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post">
+        <td colspan="2">
+          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
@@ -485,8 +432,6 @@ if (isset($puzzleobj->lastact->time)) {
                 <?php endif; ?>
               <?php endforeach; ?>
             </select>
-        </td>
-        <td>
             <input type="submit" name="submit" value="Update">
           </form>
         </td>
@@ -496,8 +441,8 @@ if (isset($puzzleobj->lastact->time)) {
       <?php $ismeta = $puzzleobj->puzzle->ismeta; ?>
       <tr>
         <td>Meta For Round</td>
-        <td>
-          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post">
+        <td colspan="2">
+          <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
@@ -506,8 +451,6 @@ if (isset($puzzleobj->lastact->time)) {
               <option value="0"<?= $ismeta ? '' : ' selected' ?>>No</option>
               <option value="1"<?= $ismeta ? ' selected' : '' ?>>Yes</option>
             </select>
-        </td>
-        <td>
             <input type="submit" name="submit" value="Update">
           </form>
         </td>
