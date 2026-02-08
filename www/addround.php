@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Add Round</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./pb-ui.css">
 </head>
 <body class="form-page">

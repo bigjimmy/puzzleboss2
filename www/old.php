@@ -113,16 +113,7 @@ function get_user_network() {
 $user_network = get_user_network();
 if ($user_network === 'MIT GUEST' || isset($_GET['wifi_debug'])) {
   $wifi_warning = <<<HTML
-  <style>
-    .error {
-      background-color: lightpink;
-      font-family: 'Lora';
-      margin: 20px;
-      max-width: 700px;
-      padding: 10px;
-    }
-  </style>
-  <div class="error">
+  <div class="error" style="max-width: 700px;">
     <strong>WARNING:</strong>&nbsp;
     You are on <tt>MIT GUEST</tt> Wifi right now, which does NOT support
     Discord audio calls and is much slower!
@@ -141,7 +132,7 @@ HTML;
 
 function print_rounds_table($rounds, $mypuzzle) {
   global $use_text, $username, $mypuzzle, $min_hint_time;
-  echo '<table border=4 style="vertical-align:top;" class="rounds"><tr>';
+  echo '<table border=4 class="rounds"><tr>';
   foreach ($rounds as $round) {
     $num_open = 0;
     $num_solved = 0;
@@ -194,7 +185,7 @@ function print_rounds_table($rounds, $mypuzzle) {
   }
   echo '</tr><tr>';
   foreach ($rounds as $round) {
-    echo '<td style="vertical-align:top;">';
+    echo '<td>';
     $puzzlearray = $round->puzzles;
     echo '<table>';
     foreach ($puzzlearray as $puzzle) {
@@ -203,20 +194,21 @@ function print_rounds_table($rounds, $mypuzzle) {
       }
       $puzzleid = $puzzle->id;
       $puzzlename = $puzzle->name;
-      $styleinsert = "";
+      $classes = array();
       if ($puzzle->ismeta && $puzzle->status != "Critical") {
-        $styleinsert .= " bgcolor='Gainsboro' ";
+        $classes[] = 'meta-row';
       }
       if ($puzzlename == $mypuzzle) {
-        $styleinsert .= " style='text-decoration:underline overline wavy' ";
+        $classes[] = 'currpuzz-row';
       }
       if ($puzzle->status == "New" && !$puzzle->ismeta) {
-        $styleinsert .= " bgcolor='aquamarine' ";
+        $classes[] = 'new-row';
       }
       if ($puzzle->status == "Critical") {
-        $styleinsert .= " bgcolor='HotPink' ";
+        $classes[] = 'critical-row';
       }
-      echo '<tr ' . $styleinsert . '>';
+      $classattr = count($classes) > 0 ? ' class="' . implode(' ', $classes) . '"' : '';
+      echo '<tr' . $classattr . '>';
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
       echo get_status_display($puzzle->status, $use_text);
       echo '</a></td>';
@@ -252,7 +244,7 @@ function print_rounds_table($rounds, $mypuzzle) {
       echo '</td>';
       echo '<td><a href="' . $puzzle->drive_uri . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
       echo '<td><a href="' . $puzzle->chat_channel_link  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
-      echo '<td style="font-family:monospace;font-style:bold">' . $puzzle->answer .'</td>';
+      echo '<td><code><strong>' . $puzzle->answer .'</strong></code></td>';
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank" title="Edit puzzle in PB">'. ($use_text ? '±' : '⚙️') . '</a></td>';
 
       echo '</tr>';
@@ -269,24 +261,7 @@ function print_rounds_table($rounds, $mypuzzle) {
 <head>
   <meta http-equiv="refresh" content=30>
   <title>Puzzleboss Interface</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
-  <style>
-  body {
-    background-color: aliceblue;
-  }
-  .error {
-    background-color: lightpink;
-    padding: 10px;
-  }
-  .success {
-    background-color: lightgreen;
-    padding: 10px;
-  }
-  table.rounds span.round-stats {
-    font-weight: normal;
-    font-size: 70%;
-  }
-  </style>
+  <link rel="stylesheet" href="./pb-ui.css">
 </head>
 <body>
 <?php
@@ -471,15 +446,15 @@ if (count($solved_rounds) > 0) {
 <a href="pbtools.php">Puzzleboss Admin Tools (e.g. add new round, manage tags)</a>
 <br><h3>Legend:</h3>
 <table>
-  <tr bgcolor="Gainsboro"><td><?= $use_text ? '.' : '🆕' ?></td><td>Meta Puzzle</td></tr>
-  <tr bgcolor="aquamarine"><td><?= $use_text ? '.' : '🆕' ?></td><td>Open Puzzle</td></tr>
-  <tr bgcolor="HotPink"><td><?= $use_text ? '!' : '⚠️' ?></td><td>Critical Puzzle</td></tr>
+  <tr class="meta-row"><td><?= $use_text ? '.' : '🆕' ?></td><td>Meta Puzzle</td></tr>
+  <tr class="new-row"><td><?= $use_text ? '.' : '🆕' ?></td><td>Open Puzzle</td></tr>
+  <tr class="critical-row"><td><?= $use_text ? '!' : '⚠️' ?></td><td>Critical Puzzle</td></tr>
   <tr><td><?= $use_text ? 'O' : '🙇' ?></td><td>Puzzle Being Worked On</td></tr>
   <tr><td><?= $use_text ? '*' : '✅' ?></td><td>Solved Puzzle</td></tr>
   <tr><td><?= $use_text ? '?' : '☢️' ?></td><td>WTF Puzzle</td></tr>
   <tr><td><?= $use_text ? 'E' : '👀' ?></td><td>Puzzle Needs Eyes</td></tr>
   <tr><td><?= $use_text ? 'X' : '😶‍🌫️' ?></td><td>Puzzle Not Needed</td></tr>
-  <tr style="text-decoration:underline overline wavy;"><td>&nbsp</td><td>My Current Puzzle</td></tr>
+  <tr class="currpuzz-row"><td>&nbsp</td><td>My Current Puzzle</td></tr>
 </table>
 <br>
 <br>

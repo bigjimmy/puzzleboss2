@@ -39,72 +39,16 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
 <head>
   <meta charset="UTF-8">
   <title>Search Puzzles by Tag</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./pb-ui.css">
-  <style>
-  body {
-    background-color: var(--bg-page);
-    font-family: 'Lora';
-    margin: 20px;
-  }
-  h1 {
-    margin-bottom: 10px;
-  }
-  .search-form {
-    background-color: var(--bg-white);
-    border: 1px solid var(--border-medium);
-    padding: 20px;
-    margin-bottom: 20px;
-    max-width: 600px;
-  }
-  .search-form h3 {
-    margin-top: 0;
-  }
-  .tag-list {
-    max-height: 200px;
-    overflow-y: auto;
-    border: 1px solid var(--border-light);
-    padding: 10px;
-    margin: 10px 0;
-  }
-  .tag-list label {
-    display: block;
-    padding: 2px 0;
-    cursor: pointer;
-  }
-  .tag-list label:hover {
-    background-color: var(--bg-gray);
-  }
-  table.results {
-    border-collapse: collapse;
-    margin: 10px 0;
-  }
-  table.results th, table.results td {
-    border: 1px solid var(--text-secondary);
-    padding: 5px 10px;
-    text-align: left;
-  }
-  table.results th {
-    background-color: #ddd;
-  }
-  .round-section {
-    margin-bottom: 20px;
-  }
-  .round-section h3 {
-    margin-bottom: 5px;
-    background-color: #e0e0e0;
-    padding: 5px 10px;
-  }
-  </style>
 </head>
-<body>
+<body class="status-page">
 <h1>Search Puzzles by Tag</h1>
 <p>You are: <?= htmlentities($username) ?> | <a href="old.php">Back to Main Board</a></p>
 
 <div class="search-form">
   <form method="get" action="search.php">
     <h3>Search by Tag Name</h3>
-    <input type="text" name="tag" placeholder="Enter tag name..." value="<?= htmlentities($search_tag ?? '') ?>" style="width: 200px;">
+    <input type="text" name="tag" placeholder="Enter tag name..." value="<?= htmlentities($search_tag ?? '') ?>" size="30">
     <input type="submit" value="Search">
   </form>
   
@@ -153,7 +97,7 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
             <a href="<?= htmlentities($puzzle->puzzle_uri ?? '#') ?>" target="_blank"><?= htmlentities($puzzle->name) ?></a>
             <?php if ($puzzle->ismeta): ?><span title="Meta">🎯</span><?php endif; ?>
           </td>
-          <td style="font-family: monospace; font-weight: bold;"><?= htmlentities($puzzle->answer ?? '') ?></td>
+          <td><code><strong><?= htmlentities($puzzle->answer ?? '') ?></strong></code></td>
           <td><?= htmlentities($puzzle->tags ?? '') ?></td>
           <td>
             <a href="<?= htmlentities($puzzle->drive_uri ?? '#') ?>" target="_blank" title="Spreadsheet">🗒️</a>

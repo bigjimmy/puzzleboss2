@@ -6,42 +6,8 @@ require('puzzlebosslib.php');
 <head>
   <meta charset="UTF-8">
   <title>Add Puzzle</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <style>
-  /* Page-specific styles for progress indicator */
-  #progress-container {
-    margin: 20px 0;
-    font-family: monospace;
-  }
-  .step {
-    padding: 8px 0;
-    opacity: 0.5;
-  }
-  .step.active {
-    opacity: 1;
-    font-weight: bold;
-  }
-  .step.complete {
-    opacity: 1;
-    color: green;
-  }
-  .step.skipped {
-    opacity: 0.7;
-    color: #666;
-    font-style: italic;
-  }
-  .step.error {
-    opacity: 1;
-    color: red;
-  }
-  .step .status {
-    display: inline-block;
-    width: 30px;
-    text-align: center;
-  }
-  </style>
   <script>
   let formSubmitted = false;
   function handleSubmit(event) {
@@ -234,11 +200,48 @@ if (isset($_POST['submit'])) {
     $is_meta = isset($_POST['is_meta']) && $_POST['is_meta'] == '1';
 
     echo '<h2>Promoting Speculative Puzzle</h2>';
-    echo "<p>Validating puzzle ID $promote_puzzle_id...</p>";
 
-    // Step 1: Validate everything before making any changes
+    // Build the list of promotion steps
+    $promote_steps = array();
+    $promote_steps[] = array('label' => 'Validate puzzle data');
+    $promote_steps[] = array('label' => 'Update status to New');
+    $promote_steps[] = array('label' => 'Update puzzle URI');
+    if (!empty($name) && sanitize_string($name) != '') {
+      $promote_steps[] = array('label' => 'Update puzzle name');
+    }
+    if (is_numeric($round_id)) {
+      $promote_steps[] = array('label' => 'Move to new round');
+    }
+    if ($is_meta) {
+      $promote_steps[] = array('label' => 'Mark as meta');
+    }
+    $promote_steps[] = array('label' => 'Finalize promotion');
+
+    // Render progress container
+    echo '<div id="progress-container">';
+    foreach ($promote_steps as $i => $s) {
+      $id = 'step' . ($i + 1);
+      echo '<div class="step" id="' . $id . '">';
+      echo '<span class="status">⏳</span>';
+      echo '<span class="label">' . $s['label'] . '</span>';
+      echo '</div>';
+    }
+    echo '</div>';
+
+    // Helper to update a step's status via inline script
+    function promote_step($step_num, $status, $label = null) {
+      $label_js = $label ? ", '" . addslashes($label) . "'" : '';
+      echo "<script>setStepStatus('step{$step_num}', '{$status}'{$label_js});</script>";
+      flush();
+    }
+
+    $step = 1;
+    $promotion_failed = false;
+    $rollback_needed = false;
+
+    // Step: Validate everything before making any changes
+    promote_step($step, 'active');
     try {
-      // Validate puzzle exists and is actually Speculative
       $puzzle_resp = readapi("/puzzles/{$promote_puzzle_id}");
       if (!isset($puzzle_resp->puzzle)) {
         throw new Exception("Puzzle ID $promote_puzzle_id not found");
@@ -246,15 +249,9 @@ if (isset($_POST['submit'])) {
       if ($puzzle_resp->puzzle->status !== 'Speculative') {
         throw new Exception("Puzzle is not in Speculative status (current: {$puzzle_resp->puzzle->status})");
       }
-      echo '<div class="success">✓ Puzzle found and is Speculative</div>';
-
-      // Validate puzzle URI is provided
       if (empty($puzzle_uri)) {
         throw new Exception('You must provide a puzzle URI when promoting a speculative puzzle');
       }
-      echo '<div class="success">✓ Puzzle URI provided</div>';
-
-      // Validate name if provided (check for duplicates)
       if (!empty($name) && sanitize_string($name) != '') {
         $sanitized_name = sanitize_string($name);
         $all_puzzles = readapi("/puzzles");
@@ -263,111 +260,109 @@ if (isset($_POST['submit'])) {
             throw new Exception("Duplicate puzzle name detected: $sanitized_name");
           }
         }
-        echo '<div class="success">✓ Puzzle name is valid and unique</div>';
       }
-
-      // Validate round exists if specified
       if (is_numeric($round_id)) {
         $round_resp = readapi("/rounds/{$round_id}");
         if (!isset($round_resp->round)) {
           throw new Exception("Round ID $round_id not found");
         }
-        echo '<div class="success">✓ Round ID validated</div>';
       }
-
+      promote_step($step, 'complete', 'Validation passed');
     } catch (Exception $e) {
-      exit_with_error_message('Validation failed: '.$e->getMessage());
+      promote_step($step, 'error', 'Validation failed: ' . $e->getMessage());
+      echo '<div class="error"><strong>ERROR:</strong> ' . htmlentities($e->getMessage()) . '<br><br><a href="addpuzzle.php">Try again</a></div>';
+      exit(0);
     }
 
-    // Step 2: Make changes (validation passed, now update)
-    echo '<p>All validations passed. Applying changes...</p>';
-    $promotion_failed = false;
-    $rollback_needed = false;
-
-    // Update status to New
+    // Step: Update status to New
+    $step++;
+    promote_step($step, 'active');
     try {
-      $status_data = array('status' => 'New');
-      $status_resp = postapi("/puzzles/{$promote_puzzle_id}/status", $status_data);
+      $status_resp = postapi("/puzzles/{$promote_puzzle_id}/status", array('status' => 'New'));
       assert_api_success($status_resp);
-      echo '<div class="success">✓ Status changed to "New"</div>';
-      $rollback_needed = true; // We've made changes, rollback possible if later steps fail
+      promote_step($step, 'complete', 'Status changed to "New"');
+      $rollback_needed = true;
     } catch (Exception $e) {
-      exit_with_error_message('Failed to update status: '.$e->getMessage());
+      promote_step($step, 'error', 'Failed: ' . $e->getMessage());
+      echo '<div class="error"><strong>ERROR:</strong> ' . htmlentities($e->getMessage()) . '<br><br><a href="addpuzzle.php">Try again</a></div>';
+      exit(0);
     }
 
-    // Update puzzle URI
+    // Step: Update puzzle URI
+    $step++;
+    promote_step($step, 'active');
     try {
-      $uri_data = array('puzzle_uri' => $puzzle_uri);
-      $uri_resp = postapi("/puzzles/{$promote_puzzle_id}/puzzle_uri", $uri_data);
+      $uri_resp = postapi("/puzzles/{$promote_puzzle_id}/puzzle_uri", array('puzzle_uri' => $puzzle_uri));
       assert_api_success($uri_resp);
-      echo '<div class="success">✓ Puzzle URI updated</div>';
+      promote_step($step, 'complete', 'Puzzle URI updated');
     } catch (Exception $e) {
+      promote_step($step, 'error', 'Failed: ' . $e->getMessage());
       // Critical failure - try to rollback
-      echo '<div class="error">CRITICAL: Failed to update puzzle URI: '.$e->getMessage().'</div>';
       if ($rollback_needed) {
         try {
           postapi("/puzzles/{$promote_puzzle_id}/status", array('status' => 'Speculative'));
-          echo '<div class="error">⟲ Rolled back to Speculative status</div>';
         } catch (Exception $rollback_e) {
-          echo '<div class="error">⚠ Rollback failed - puzzle may be in inconsistent state</div>';
+          // Rollback failed silently
         }
       }
-      exit_with_error_message('Promotion failed. Please check puzzle state and try again.');
+      echo '<div class="error"><strong>ERROR:</strong> ' . htmlentities($e->getMessage()) . '. Rolled back to Speculative.<br><br><a href="addpuzzle.php">Try again</a></div>';
+      exit(0);
     }
 
-    // Update name if provided
+    // Step: Update name (if provided)
     if (!empty($name) && sanitize_string($name) != '') {
+      $step++;
+      promote_step($step, 'active');
       try {
-        $name_data = array('name' => $name);
-        $name_resp = postapi("/puzzles/{$promote_puzzle_id}/name", $name_data);
+        $name_resp = postapi("/puzzles/{$promote_puzzle_id}/name", array('name' => $name));
         assert_api_success($name_resp);
-        echo '<div class="success">✓ Puzzle name updated</div>';
+        promote_step($step, 'complete', 'Puzzle name updated');
       } catch (Exception $e) {
-        // Non-critical - puzzle is still usable with old name
-        echo '<div class="error">Warning: Could not update name: '.$e->getMessage().'</div>';
-        echo '<div class="error">Promotion partially successful - puzzle is now "New" status with updated URL but old name.</div>';
+        promote_step($step, 'error', 'Warning: ' . $e->getMessage());
         $promotion_failed = true;
       }
     }
 
-    // Update round if provided
+    // Step: Move to new round (if provided)
     if (is_numeric($round_id)) {
+      $step++;
+      promote_step($step, 'active');
       try {
-        $round_data = array('round_id' => $round_id);
-        $round_resp = postapi("/puzzles/{$promote_puzzle_id}/round_id", $round_data);
+        $round_resp = postapi("/puzzles/{$promote_puzzle_id}/round_id", array('round_id' => $round_id));
         assert_api_success($round_resp);
-        echo '<div class="success">✓ Puzzle moved to new round</div>';
+        promote_step($step, 'complete', 'Moved to new round');
       } catch (Exception $e) {
-        // Non-critical - puzzle is still in original round
-        echo '<div class="error">Warning: Could not move to new round: '.$e->getMessage().'</div>';
+        promote_step($step, 'error', 'Warning: ' . $e->getMessage());
         $promotion_failed = true;
       }
     }
 
-    // Update ismeta if checkbox was checked
+    // Step: Mark as meta (if requested)
     if ($is_meta) {
+      $step++;
+      promote_step($step, 'active');
       try {
-        $meta_data = array('ismeta' => true);
-        $meta_resp = postapi("/puzzles/{$promote_puzzle_id}/ismeta", $meta_data);
+        $meta_resp = postapi("/puzzles/{$promote_puzzle_id}/ismeta", array('ismeta' => true));
         assert_api_success($meta_resp);
-        echo '<div class="success">✓ Puzzle marked as meta</div>';
+        promote_step($step, 'complete', 'Marked as meta');
       } catch (Exception $e) {
-        // Non-critical
-        echo '<div class="error">Warning: Could not mark as meta: '.$e->getMessage().'</div>';
+        promote_step($step, 'error', 'Warning: ' . $e->getMessage());
         $promotion_failed = true;
       }
     }
 
-    echo '<br><div class="'.($promotion_failed ? 'error' : 'success').'">';
+    // Final step
+    $step++;
     if ($promotion_failed) {
-      echo '<strong>Puzzle partially promoted.</strong> ';
-      echo 'Status and URL were updated, but some optional fields failed. ';
+      promote_step($step, 'error', 'Promotion partially complete');
+      echo '<div class="error"><strong>Puzzle partially promoted.</strong> Status and URL were updated, but some optional fields failed. ';
+      echo '<a href="editpuzzle.php?pid='.$promote_puzzle_id.'">View puzzle</a></div>';
     } else {
-      echo '<strong>Puzzle promoted successfully!</strong> ';
+      promote_step($step, 'complete', 'Promotion successful!');
+      echo '<h2>✅ Puzzle promoted successfully!</h2>';
+      echo '<p><a href="editpuzzle.php?pid='.$promote_puzzle_id.'">View puzzle</a></p>';
     }
-    echo '<a href="editpuzzle.php?pid='.$promote_puzzle_id.'">View puzzle</a>';
-    echo '</div><br><hr>';
-    echo '<a href="addpuzzle.php">Add another puzzle</a>';
+    echo '<p><a href="addpuzzle.php">Add another puzzle</a></p>';
     exit(0);
   }
 
@@ -621,9 +616,9 @@ try {
 <?php endforeach; ?>
       </tbody>
     </table>
-      <div id="current-puzzle-info" style="display: none; margin-top: 15px; padding: 10px; background-color: #fff; border-radius: 3px; border: 1px solid #ddd;">
+      <div id="current-puzzle-info" class="info-callout" style="display: none;">
         <p style="margin: 0 0 5px 0; font-weight: bold; font-size: 90%;">Current puzzle values:</p>
-        <p style="margin: 5px 0; font-size: 85%; font-family: monospace;">
+        <p style="margin: 5px 0; font-size: 85%; font-family: 'Courier New', Courier, monospace;">
           <strong>Name:</strong> <span id="current-puzzle-name"></span><br>
           <strong>Round:</strong> <span id="current-puzzle-round"></span><br>
           <strong>URI:</strong> <span id="current-puzzle-uri"></span>

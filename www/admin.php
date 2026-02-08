@@ -176,7 +176,7 @@ if (!$allowed) {
     <p><strong>BE CAREFUL:</strong><br>
     Changes to these configuration values are not reversible and may cause irreparable damage or breakage to the hunt if set improperly. Please proceed with caution. Set only one at a time.
     </p>
-    <p style="background-color: #e6f2ff; border: 2px solid #0066cc; border-radius: 6px; color: #004080; padding: 15px;">
+    <p class="info-callout">
     <strong>ℹ️ Automatic Config Refresh:</strong> Configuration changes take effect automatically within <strong>30 seconds</strong> across all API workers and the BigJimmyBot. No manual refresh or restart is required.
     </p>
     <table>
@@ -187,7 +187,7 @@ if (!$allowed) {
     <?php
     foreach ($config as $key => $value){
       echo "<tr><td>".$key."</td>";
-      echo "<td style='background-color: #f0f0f0;'><code>".$value."</code></td>";
+      echo "<td><code>".$value."</code></td>";
       echo "<td><form id='".$key."' action='changeconfig.php' method='post' class='inline-form'>";
       echo "<textarea name='configval' cols='40' rows='10' form='".$key."'></textarea>";
       echo "<input type='hidden' name='key' value='".$key."'>";

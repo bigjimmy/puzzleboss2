@@ -10,28 +10,6 @@
   <meta http-equiv="pragma" content="no-cache" />
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <style>
-  /* Normalize h1 height when puzzle names contain emojis */
-  .status-header h1 {
-    line-height: 1.15;
-  }
-
-  /* Read-only info table styling */
-  .info-table td:first-child {
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .info-table td:last-child {
-    min-width: 200px;
-  }
-
-  /* Edit form table styling */
-  .edit-table td:first-child {
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  </style>
 </head>
 <body class="status-page">
 <?php
@@ -493,7 +471,7 @@ if (isset($puzzleobj->lastact->time)) {
             <td><?= $isAssigned ? '✅ Assigned' : '—' ?></td>
             <td>
               <?php if ($isAssigned): ?>
-                <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" style="display:inline;">
+                <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
                   <input type="hidden" name="removetag" value="yes">
                   <input type="hidden" name="pid" value="<?= $puzzid ?>">
                   <input type="hidden" name="uid" value="<?= $userid ?>">
@@ -501,7 +479,7 @@ if (isset($puzzleobj->lastact->time)) {
                   <input type="submit" name="submit" value="Remove">
                 </form>
               <?php else: ?>
-                <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" style="display:inline;">
+                <form action="editpuzzle.php?pid=<?= $puzzid ?>" method="post" class="inline-form">
                   <input type="hidden" name="addtag" value="yes">
                   <input type="hidden" name="pid" value="<?= $puzzid ?>">
                   <input type="hidden" name="uid" value="<?= $userid ?>">
@@ -547,7 +525,7 @@ createApp({
 }).mount('#app');
 </script>
 
-<footer style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ccc; text-align: center;">
+<footer>
   <a href="index.php">← Back to Puzzleboss Home</a>
 </footer>
 </body>

@@ -3,23 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Config Updated</title>
-  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./pb-ui.css">
-  <style>
-  /* Page-specific blue info box style */
-  .info-box {
-    background-color: #e6f2ff;
-    border: 2px solid #0066cc;
-    border-radius: 6px;
-    color: #004080;
-    padding: 15px;
-    margin: 20px 0;
-  }
-  .info-box h3 {
-    margin-top: 0;
-    color: #0066cc;
-  }
-  </style>
 </head>
 <body class="form-page">
 <main>
@@ -51,7 +35,7 @@ HTML;
   echo '<br><div class="success">';
   echo 'OK. config ' . $key . ' is now set to: ' . $configval;
   echo '</div>';
-  echo '<div class="info-box">';
+  echo '<div class="info-callout">';
   echo '<h3>ℹ️ Automatic Config Refresh</h3>';
   echo '<p>Configuration changes take effect automatically within <strong>30 seconds</strong> across all API workers and the BigJimmyBot. No manual refresh or restart is required.</p>';
   echo '</div>';

@@ -118,7 +118,7 @@ if (isset($_POST['create_tag']) && !empty($_POST['new_tag_name'])) {
   try {
     $responseobj = postapi('/tags', array('name' => $new_tag_name));
     if ($responseobj && $responseobj->status == 'ok') {
-      echo '<div class="success" style="background-color: lightgreen; padding: 10px; margin: 10px 0;">✅ Tag "' . htmlentities($responseobj->tag->name) . '" created (ID: ' . $responseobj->tag->id . ').</div>';
+      echo '<div class="success">✅ Tag "' . htmlentities($responseobj->tag->name) . '" created (ID: ' . $responseobj->tag->id . ').</div>';
     } else {
       $error_msg = $responseobj && isset($responseobj->error) ? $responseobj->error : 'Unknown error';
       echo '<div class="error">❌ Failed to create tag: ' . htmlentities($error_msg) . '</div>';
@@ -142,7 +142,7 @@ if (isset($_POST['delete_tag']) && !empty($_POST['tag_to_delete'])) {
     
     $result = json_decode($response);
     if ($http_code == 200 && $result && $result->status == 'ok') {
-      echo '<div class="success" style="background-color: lightgreen; padding: 10px; margin: 10px 0;">✅ Tag "' . htmlentities($tag_to_delete) . '" deleted. Removed from ' . $result->puzzles_updated . ' puzzle(s).</div>';
+      echo '<div class="success">✅ Tag "' . htmlentities($tag_to_delete) . '" deleted. Removed from ' . $result->puzzles_updated . ' puzzle(s).</div>';
     } else {
       $error_msg = $result && $result->error ? $result->error : 'Unknown error';
       echo '<div class="error">❌ Failed to delete tag: ' . htmlentities($error_msg) . '</div>';

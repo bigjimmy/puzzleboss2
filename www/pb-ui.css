@@ -19,8 +19,6 @@
     --text-primary: #333;            /* Primary text color */
     --text-secondary: #666;          /* Secondary text color */
     --text-tertiary: #999;           /* Tertiary text color */
-    --text-disabled: #ccc;           /* Disabled text color */
-    --text-black: #000;              /* Pure black text */
 
     /* Border Colors */
     --border-light: #ddd;            /* Light borders */
@@ -46,7 +44,9 @@
 }
 
 body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: var(--bg-page);
+    color: var(--text-primary);
     margin: 0;
     padding: 0;
 }
@@ -58,8 +58,6 @@ body {
 #main {
     display: flex;
     flex-direction: column;
-    font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: var(--text-primary);
     padding: 20px;
 }
 
@@ -84,10 +82,15 @@ body {
     opacity: 0.8;
 }
 
+.info-box-header h2,
 .info-box-header h3 {
     margin: 0;
     color: inherit;
     font-size: 1.1em;
+}
+
+.info-box-header h2 {
+    flex: 1;
 }
 
 .collapse-icon {
@@ -171,12 +174,6 @@ dialog::backdrop {
     margin-bottom: 0.5em;
 }
 
-#status {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
 #main a {
     color: var(--primary-blue);
     text-decoration: none;
@@ -184,7 +181,7 @@ dialog::backdrop {
 
 #main a:hover {
     text-decoration: underline;
-    color: #004080;
+    color: var(--primary-blue-dark);
 }
 
 /*
@@ -322,21 +319,6 @@ dialog::backdrop {
 
 .round a {
     text-decoration: none;
-}
-
-.round-header-column {
-    display: flex;
-    flex-direction: column;
-    font-size: small;
-}
-
-.round-header-column.spoiled {
-    flex-direction: row;
-    justify-content: space-between;
-}
-
-.round-header-column p {
-    margin: 0;
 }
 
 .round-header-icons {
@@ -481,7 +463,6 @@ div.currpuzz {
 body.form-page {
     background-color: aliceblue;
     display: grid;
-    font-family: 'Lora', serif;
     height: 100vh;
     justify-items: center;
     margin: 0;
@@ -524,14 +505,125 @@ body.form-page input[type="submit"]:disabled {
     cursor: not-allowed;
 }
 
-body.form-page .error {
-    background-color: var(--error-bg);
-    padding: 10px;
+/* Old-style rounds table (old.php) */
+table.rounds td {
+    vertical-align: top;
 }
 
-body.form-page .success {
-    background-color: var(--success-bg);
+table.rounds span.round-stats {
+    font-weight: normal;
+    font-size: 70%;
+}
+
+/* Search form box (used by search.php) */
+.search-form {
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-medium);
+    padding: 20px;
+    margin-bottom: 20px;
+    max-width: 600px;
+}
+
+.search-form h3 {
+    margin-top: 0;
+}
+
+.tag-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-light);
     padding: 10px;
+    margin: 10px 0;
+}
+
+.tag-list label {
+    display: block;
+    padding: 2px 0;
+    cursor: pointer;
+}
+
+.tag-list label:hover {
+    background-color: var(--bg-gray);
+}
+
+/* Results table (used by search.php) */
+table.results {
+    border-collapse: collapse;
+    margin: 10px 0;
+}
+
+table.results th, table.results td {
+    border: 1px solid var(--text-secondary);
+    padding: 5px 10px;
+    text-align: left;
+}
+
+table.results th {
+    background-color: var(--border-light);
+}
+
+/* Round section groups (used by search.php) */
+.round-section {
+    margin-bottom: 20px;
+}
+
+.round-section h3 {
+    margin-bottom: 5px;
+    background-color: var(--gray-hover);
+    padding: 5px 10px;
+}
+
+/* Step-by-step progress indicator (used by addpuzzle.php) */
+#progress-container {
+    margin: 20px 0;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.step {
+    padding: 8px 0;
+    opacity: 0.5;
+}
+
+.step.active {
+    opacity: 1;
+    font-weight: bold;
+}
+
+.step.complete {
+    opacity: 1;
+    color: green;
+}
+
+.step.skipped {
+    opacity: 0.7;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.step.error {
+    opacity: 1;
+    color: red;
+}
+
+.step .status {
+    display: inline-block;
+    width: 30px;
+    text-align: center;
+}
+
+/* Blue informational callout box (used for notices, tips) */
+.info-callout {
+    background-color: var(--bg-light-blue);
+    border: 2px solid var(--primary-blue);
+    border-radius: 6px;
+    color: var(--primary-blue-dark);
+    padding: 15px;
+    margin: 20px 0;
+}
+
+.info-callout h3 {
+    margin-top: 0;
+    color: var(--primary-blue);
 }
 
 /* Global message box styles (all pages) */
@@ -572,10 +664,6 @@ code {
  */
 
 body.status-page {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: aliceblue;
-    color: #333;
-    margin: 0;
     padding: 20px;
     min-height: 100vh;
 }
@@ -596,6 +684,7 @@ body.status-page h3 {
 
 .status-header h1 {
     margin: 0;
+    line-height: 1.15;  /* Normalize height when names contain emojis */
 }
 
 .stats-grid {
@@ -720,10 +809,6 @@ td:first-child [data-tooltip]::after {
     margin-bottom: 0;
 }
 
-body.status-page #app tr:hover {
-    background: var(--bg-light-gray);
-}
-
 /* Hidden column for column visibility toggle */
 .hidden-column {
     display: none !important;
@@ -744,32 +829,37 @@ body.status-page a {
 
 body.status-page a:hover {
     text-decoration: underline;
-    color: #004080;
+    color: var(--primary-blue-dark);
 }
 
 .meta-row {
-    background: #e0e0e0 !important;
+    background: var(--gray-hover) !important;
 }
 
 .new-row {
-    background: #d4f4dd !important;
+    background: var(--success-bg-light) !important;
 }
 
 .critical-row {
-    background: #ffcccc !important;
+    background: var(--error-border) !important;
+}
+
+.currpuzz-row {
+    text-decoration: underline overline wavy;
 }
 
 body.status-page select,
 body.status-page input[type="text"] {
-    background: white;
+    background: var(--bg-white);
     border: 1px solid var(--border-medium);
-    color: #333;
+    color: var(--text-primary);
     padding: 4px 6px;
     border-radius: 4px;
     font-size: 0.8em;
 }
 
-body.status-page select {
+/* Compact selects in puzzle table cells (status.php) */
+body.status-page .puzzle-table select {
     max-width: 60px;
     text-align: center;
 }
@@ -808,24 +898,9 @@ body.status-page input[type="submit"]:hover,
     margin-left: auto;
 }
 
-/* Section headers use same style as info-box-header */
+/* Section headers extend .info-box-header with added margin */
 .section-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    user-select: none;
     margin-bottom: 15px;
-}
-
-.section-header:hover {
-    opacity: 0.8;
-}
-
-.section-header h2 {
-    margin: 0;
-    font-size: 1.1em;
-    flex: 1;
 }
 
 .badge {
@@ -834,13 +909,13 @@ body.status-page input[type="submit"]:hover,
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 0.85em;
-    border: 1px solid #cce5ff;
+    border: 1px solid var(--border-blue);
 }
 
 body.status-page footer {
     margin-top: 40px;
     padding-top: 20px;
-    border-top: 1px solid #ccc;
+    border-top: 1px solid var(--border-medium);
     text-align: center;
     color: var(--text-secondary);
 }
@@ -860,8 +935,19 @@ body.status-page footer {
     word-break: break-word;
 }
 
-/* Inline form for input/button groups (used in status.php) */
-.inline-form {
+/* Info/edit table styling (used by editpuzzle.php and similar pages) */
+.info-table td:first-child,
+.edit-table td:first-child {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.info-table td:last-child {
+    min-width: 200px;
+}
+
+/* Inline input/button groups (used in status.php table cells) */
+.inline-group {
     display: inline-flex;
     gap: 5px;
     align-items: center;
@@ -885,13 +971,16 @@ body.status-page footer {
     min-width: 120px;
 }
 
-.comment-display {
+/* Shared base for small display text in table cells */
+.cell-display {
     margin-bottom: 3px;
     color: var(--text-secondary);
+    font-size: 0.85em;
+}
+
+.comment-display {
     font-style: italic;
     white-space: pre-wrap;
-    word-break: break-word;
-    font-size: 0.85em;
 }
 
 .location-col {
@@ -901,12 +990,6 @@ body.status-page footer {
 .location-col input[type="text"] {
     width: 100px;
     min-width: 80px;
-}
-
-.location-display {
-    margin-bottom: 3px;
-    color: var(--text-secondary);
-    font-size: 0.85em;
 }
 
 .gear-icon {
@@ -961,12 +1044,12 @@ body.status-page footer {
 
 .nav-links a.current {
     background: var(--gray-hover);
-    color: #999;
+    color: var(--text-tertiary);
     cursor: default;
     pointer-events: none;
 }
 
-/* Inline form for actual <form> elements (used in admin/tools pages) */
+/* Inline form layout (used by <form> elements in admin/tools/editpuzzle pages) */
 form.inline-form {
     display: flex;
     gap: 10px;

@@ -90,7 +90,7 @@ $uid = getauthenticateduser();
         </div>
 
         <div class="puzzle-table">
-            <div class="section-header" @click="showNoLoc = !showNoLoc">
+            <div class="info-box-header section-header" @click="showNoLoc = !showNoLoc">
                 <span class="collapse-icon" :class="{ collapsed: !showNoLoc }">▼</span>
                 <h2>Unsolved Puzzles Missing Location</h2>
                 <span class="badge">{{ noLocPuzzles.length }} puzzles</span>
@@ -136,8 +136,8 @@ $uid = getauthenticateduser();
                         <div v-for="solver in formatSolvers(puzzle.solvers)" :key="solver">{{ solver }}</div>
                     </td>
                     <td class="location-col" :class="{ 'hidden-column': !visibleColumns.location }">
-                        <div v-if="puzzle.xyzloc" class="location-display">{{ puzzle.xyzloc }}</div>
-                        <div class="inline-form">
+                        <div v-if="puzzle.xyzloc" class="cell-display">{{ puzzle.xyzloc }}</div>
+                        <div class="inline-group">
                             <input type="text"
                                    v-model="locationEdits[puzzle.id]"
                                    placeholder="Set location..."
@@ -149,8 +149,8 @@ $uid = getauthenticateduser();
                     </td>
                     <td class="tags-col" :class="{ 'hidden-column': !visibleColumns.tags }">{{ formatTags(puzzle.tags) }}</td>
                     <td class="comment-col" :class="{ 'hidden-column': !visibleColumns.comment }">
-                        <div v-if="puzzle.comments" class="comment-display">{{ puzzle.comments }}</div>
-                        <div class="inline-form">
+                        <div v-if="puzzle.comments" class="cell-display comment-display">{{ puzzle.comments }}</div>
+                        <div class="inline-group">
                             <input type="text"
                                    v-model="commentEdits[puzzle.id]"
                                    placeholder="Update comment..."
@@ -165,7 +165,7 @@ $uid = getauthenticateduser();
         </div>
 
         <div class="puzzle-table" v-if="sheetDisabledPuzzles.length > 0">
-            <div class="section-header" @click="showSheetDisabled = !showSheetDisabled">
+            <div class="info-box-header section-header" @click="showSheetDisabled = !showSheetDisabled">
                 <span class="collapse-icon" :class="{ collapsed: !showSheetDisabled }">▼</span>
                 <h2>Puzzles Without Sheet Tracking Enabled</h2>
                 <span class="badge">{{ sheetDisabledPuzzles.length }} puzzles</span>
@@ -211,8 +211,8 @@ $uid = getauthenticateduser();
                         <div v-for="solver in formatSolvers(puzzle.solvers)" :key="solver">{{ solver }}</div>
                     </td>
                     <td class="location-col" :class="{ 'hidden-column': !visibleColumns.location }">
-                        <div v-if="puzzle.xyzloc" class="location-display">{{ puzzle.xyzloc }}</div>
-                        <div class="inline-form">
+                        <div v-if="puzzle.xyzloc" class="cell-display">{{ puzzle.xyzloc }}</div>
+                        <div class="inline-group">
                             <input type="text"
                                    v-model="locationEdits[puzzle.id]"
                                    placeholder="Set location..."
@@ -224,8 +224,8 @@ $uid = getauthenticateduser();
                     </td>
                     <td class="tags-col" :class="{ 'hidden-column': !visibleColumns.tags }">{{ formatTags(puzzle.tags) }}</td>
                     <td class="comment-col" :class="{ 'hidden-column': !visibleColumns.comment }">
-                        <div v-if="puzzle.comments" class="comment-display">{{ puzzle.comments }}</div>
-                        <div class="inline-form">
+                        <div v-if="puzzle.comments" class="cell-display comment-display">{{ puzzle.comments }}</div>
+                        <div class="inline-group">
                             <input type="text"
                                    v-model="commentEdits[puzzle.id]"
                                    placeholder="Update comment..."
@@ -240,7 +240,7 @@ $uid = getauthenticateduser();
         </div>
 
         <div class="puzzle-table">
-            <div class="section-header" @click="showOverview = !showOverview">
+            <div class="info-box-header section-header" @click="showOverview = !showOverview">
                 <span class="collapse-icon" :class="{ collapsed: !showOverview }">▼</span>
                 <h2>Total Hunt Overview</h2>
                 <span class="badge">{{ workOnPuzzles.length }} puzzles</span>
@@ -286,8 +286,8 @@ $uid = getauthenticateduser();
                         <div v-for="solver in formatSolvers(puzzle.solvers)" :key="solver">{{ solver }}</div>
                     </td>
                     <td class="location-col" :class="{ 'hidden-column': !visibleColumns.location }">
-                        <div v-if="puzzle.xyzloc" class="location-display">{{ puzzle.xyzloc }}</div>
-                        <div class="inline-form">
+                        <div v-if="puzzle.xyzloc" class="cell-display">{{ puzzle.xyzloc }}</div>
+                        <div class="inline-group">
                             <input type="text"
                                    v-model="locationEdits[puzzle.id]"
                                    placeholder="Set location..."
@@ -299,8 +299,8 @@ $uid = getauthenticateduser();
                     </td>
                     <td class="tags-col" :class="{ 'hidden-column': !visibleColumns.tags }">{{ formatTags(puzzle.tags) }}</td>
                     <td class="comment-col" :class="{ 'hidden-column': !visibleColumns.comment }">
-                        <div v-if="puzzle.comments" class="comment-display">{{ puzzle.comments }}</div>
-                        <div class="inline-form">
+                        <div v-if="puzzle.comments" class="cell-display comment-display">{{ puzzle.comments }}</div>
+                        <div class="inline-group">
                             <input type="text"
                                    v-model="commentEdits[puzzle.id]"
                                    placeholder="Update comment..."

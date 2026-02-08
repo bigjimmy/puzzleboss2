@@ -118,7 +118,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             background: rgba(0, 0, 0, 0.08);
             padding: 0.15rem 0.4rem;
             border-radius: 0.25rem;
-            font-family: 'Consolas', 'Monaco', monospace;
+            font-family: 'Courier New', Courier, monospace;
             font-size: 0.9em;
         }
 
@@ -236,7 +236,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             border: 1px solid #cce5ff;
             padding: 0.25rem 0.75rem;
             border-radius: 1rem;
-            font-family: monospace;
+            font-family: 'Courier New', Courier, monospace;
             font-size: 0.85rem;
             color: #333;
         }
