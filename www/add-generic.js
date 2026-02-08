@@ -60,7 +60,7 @@ export default {
             }
             if ((this.type === 'note') || (this.type === 'comments')) {
                 return ((this.puzzle.comments === null) || (this.puzzle.comments.length === 0)) ?
-                        '➕' : '📝'
+                        '✏️' : '📝'
             }
             if (this.type === 'note-tags') {
                 const hasNote = (this.puzzle.comments !== null) && (this.puzzle.comments.length !== 0);
