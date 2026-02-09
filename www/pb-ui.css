@@ -41,6 +41,9 @@
     --gray-hover: #e0e0e0;           /* Hover gray */
     --gray-medium: gray;             /* Medium gray for closed/disabled states */
     --gray-light: lightgray;         /* Light gray for solved states */
+
+    /* Fonts */
+    --font-mono: 'Courier New', Courier, monospace;
 }
 
 body {
@@ -124,11 +127,11 @@ dialog {
     max-width: 90vw;
     max-height: 90vh;
     overflow-y: auto;
-    border: 2px solid #333;
+    border: 2px solid var(--text-primary);
     border-radius: 8px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     padding: 20px;
-    background: white;
+    background: var(--bg-white);
     margin: 0;
 }
 
@@ -286,12 +289,14 @@ dialog::backdrop {
     margin-bottom: 0.5em;
 }
 
-#main a {
+#main a,
+body.status-page a {
     color: var(--primary-blue);
     text-decoration: none;
 }
 
-#main a:hover {
+#main a:hover,
+body.status-page a:hover {
     text-decoration: underline;
     color: var(--primary-blue-dark);
 }
@@ -516,7 +521,7 @@ div.currpuzz {
  */
 
 .answer {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     flex: 1 0 17ch;
     font-size: 0.85em;
     margin-left: 5px;
@@ -577,11 +582,10 @@ div.currpuzz {
  */
 
 body.form-page {
-    background-color: aliceblue;
+    background-color: var(--bg-page);
     display: grid;
     height: 100vh;
     justify-items: center;
-    margin: 0;
     width: 100vw;
 }
 
@@ -692,7 +696,7 @@ table.results th {
 /* Step-by-step progress indicator (used by addpuzzle.php) */
 #progress-container {
     margin: 20px 0;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
 }
 
 .step {
@@ -700,13 +704,15 @@ table.results th {
     opacity: 0.5;
 }
 
-.step.active {
+.step.active, .step.complete, .step.error {
     opacity: 1;
+}
+
+.step.active {
     font-weight: bold;
 }
 
 .step.complete {
-    opacity: 1;
     color: green;
 }
 
@@ -717,7 +723,6 @@ table.results th {
 }
 
 .step.error {
-    opacity: 1;
     color: red;
 }
 
@@ -743,27 +748,18 @@ table.results th {
 }
 
 /* Global message box styles (all pages) */
-.error {
-    background-color: var(--error-bg);
+.error, .success, .info {
     padding: 10px;
     margin: 10px 0;
 }
 
-.success {
-    background-color: var(--success-bg);
-    padding: 10px;
-    margin: 10px 0;
-}
-
-.info {
-    background-color: var(--info-bg);
-    padding: 10px;
-    margin: 10px 0;
-}
+.error   { background-color: var(--error-bg); }
+.success { background-color: var(--success-bg); }
+.info    { background-color: var(--info-bg); }
 
 /* Code and monospace text */
 code {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 0.85em;
 }
 
@@ -824,7 +820,7 @@ body.status-page h3 {
 /* All status-page tables (everything is inside #app) */
 body.status-page #app table {
     border-collapse: collapse;
-    background: white;
+    background: var(--bg-white);
     border-radius: 8px;
     overflow: hidden;
     border: 1px solid var(--border-light);
@@ -843,6 +839,9 @@ body.status-page #app th {
     background: var(--bg-light-blue);
     color: var(--primary-blue);
     font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
 }
 
 /* Status page puzzle/stats tables: full width */
@@ -856,13 +855,6 @@ body.status-page #app td:first-child {
     text-align: center;
     width: 30px;
     padding: 8px 4px;
-}
-
-/* Status page tables have sortable headers */
-body.status-page #app th {
-    cursor: pointer;
-    user-select: none;
-    position: relative;
 }
 
 body.status-page #app th:hover {
@@ -891,8 +883,8 @@ body.status-page #app td {
     left: 50%;
     transform: translateX(-50%);
     padding: 4px 8px;
-    background: #333;
-    color: #fff;
+    background: var(--text-primary);
+    color: var(--bg-white);
     border-radius: 4px;
     font-size: 0.75em;
     white-space: nowrap;
@@ -936,16 +928,6 @@ td:first-child [data-tooltip]::after {
 
 .puzzle-table table {
     font-size: 0.9em;
-}
-
-body.status-page a {
-    color: var(--primary-blue);
-    text-decoration: none;
-}
-
-body.status-page a:hover {
-    text-decoration: underline;
-    color: var(--primary-blue-dark);
 }
 
 .meta-row {
@@ -992,7 +974,7 @@ body.status-page input[type="submit"],
 .round-header button {
     background: var(--primary-blue);
     border: none;
-    color: white;
+    color: var(--bg-white);
     padding: 4px 10px;
     border-radius: 4px;
     cursor: pointer;
@@ -1118,11 +1100,6 @@ body.status-page footer {
     opacity: 1;
 }
 
-.saving {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
 .flash {
     animation: flash-green 0.5s ease-out;
 }
@@ -1146,7 +1123,7 @@ body.status-page footer {
     text-decoration: none;
     font-size: 0.9rem;
     padding: 8px 16px;
-    background: white;
+    background: var(--bg-white);
     border: 1px solid var(--border-medium);
     border-radius: 4px;
     display: inline-block;
