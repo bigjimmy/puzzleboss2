@@ -1164,11 +1164,23 @@ body.status-page footer {
     text-decoration: none;
 }
 
-.nav-links a.current {
-    background: var(--gray-hover);
-    color: var(--text-tertiary);
+.nav-links a.current,
+.nav-links a.disabled {
     cursor: default;
     pointer-events: none;
+}
+
+.nav-links a.current {
+    background: var(--bg-light-blue);
+    border-color: var(--primary-blue);
+    color: var(--primary-blue) !important;
+    font-weight: 600;
+}
+
+.nav-links a.disabled {
+    background: var(--bg-light-gray);
+    border-color: var(--border-medium);
+    color: var(--text-tertiary) !important;
 }
 
 /* Inline form layout (used by <form> elements in admin/tools/editpuzzle pages) */

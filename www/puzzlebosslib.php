@@ -250,9 +250,9 @@ function render_navbar($current_page = null) {
     if ($key === $current_page) {
       $class = ' class="current"';
     }
-    // Gray out admin link if user doesn't have puzztech privilege
+    // Disable admin link if user doesn't have puzztech privilege
     elseif ($key === 'admin' && !$has_puzztech) {
-      $class = ' class="current"';
+      $class = ' class="disabled"';
     }
 
     // Add target for external links
