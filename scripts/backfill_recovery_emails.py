@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import ldap
 from pblib import configstruct, debug_log
-from pbgooglelib import initadmin, admincreds
+import pbgooglelib
 from googleapiclient.discovery import build
 import googleapiclient.errors
 
@@ -137,9 +137,9 @@ def main():
     ldap_users = get_ldap_users()
 
     # 2. Get all Google Workspace users
-    initadmin()
+    pbgooglelib.initadmin()
     domain = configstruct["DOMAINNAME"]
-    userservice = build("admin", "directory_v1", credentials=admincreds)
+    userservice = build("admin", "directory_v1", credentials=pbgooglelib.admincreds)
     google_users = get_google_users(userservice, domain)
 
     # 3. Compare and update
