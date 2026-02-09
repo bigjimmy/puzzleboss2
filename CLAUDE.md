@@ -77,7 +77,7 @@ The Docker setup:
 - Creates a test user (`testuser`) with admin privileges
 - Runs Apache (PHP frontend) + Gunicorn (Python API) in one container
 - Enables live code reloading via volume mounts
-- Disables optional integrations (Google, Discord, LDAP) by default
+- Disables optional integrations (Google, Discord) by default
 
 See `docker/README.md` for detailed Docker documentation.
 

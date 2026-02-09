@@ -69,7 +69,6 @@ services:
       - ./pbgooglelib.py:/app/pbgooglelib.py
       - ./pbdiscordlib.py:/app/pbdiscordlib.py
       - ./pbllmlib.py:/app/pbllmlib.py
-      - ./pbldaplib.py:/app/pbldaplib.py
       - ./bigjimmybot.py:/app/bigjimmybot.py
       - ./wsgi.py:/app/wsgi.py
       - ./gunicorn_config.py:/app/gunicorn_config.py

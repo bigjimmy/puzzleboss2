@@ -136,12 +136,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $fullname = rtrim($_POST['fullname']);
   $email    = $_POST['email'];
   $password = $_POST['password'];
-  if (array_key_exists("reset", $_POST)) {
-    $reset = $_POST['reset'];
-  } else {
-    $reset = "false";
-  }
-  $request_type = $reset === 'false' ? 'account creation' : 'password reset';
 
   // Run validation
   if (!ctype_alnum($username)) {
@@ -164,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     // no code, but user data. present the page to submit user for verification
     print <<<HTML
-      <h1>Confirm $request_type details</h1>
+      <h1>Confirm account creation details</h1>
       <table>
         <tr><td>Username:</td><td><tt>$username</tt></td></tr>
         <tr><td>Full Name:</td><td><tt>$fullname</tt></td></tr>
@@ -177,7 +171,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <input type="hidden" name="password" value="$password">
         <input type="hidden" name="email" value="$email">
         <input type="hidden" name="userok" value="yes">
-        <input type="hidden" name="reset" value="$reset">
         <p>
           If the above information looks correct, click here:&nbsp;
           <input type="submit" name="submit" value="Confirm"><br>
@@ -202,8 +195,7 @@ HTML;
         'username' => $username,
         'password' => $password,
         'fullname' => $fullname,
-        'email' => $email,
-        'reset' => $reset
+        'email' => $email
       )
     );
   } catch (Exception $e) {
@@ -212,7 +204,7 @@ HTML;
   }
   assert_api_success($responseobj);
   print <<<HTML
-  <h2>Request for $request_type submitted!</h2>
+  <h2>Account creation request submitted!</h2>
   <p>
     Check your email ($email) for further instructions from $regemail.<br>
     (Also check your spam folder; sometimes the email ends up there.)
@@ -237,13 +229,9 @@ if (isset($_GET['code'])) {
     </div>
     <div class="step" id="step3">
       <span class="status">⏳</span>
-      <span class="label">Creating LDAP account...</span>
-    </div>
-    <div class="step" id="step4">
-      <span class="status">⏳</span>
       <span class="label">Adding to solver database...</span>
     </div>
-    <div class="step" id="step5">
+    <div class="step" id="step4">
       <span class="status">⏳</span>
       <span class="label">Finishing up...</span>
     </div>
@@ -324,14 +312,11 @@ if (isset($_GET['code'])) {
     const code = '$code';
     
     const steps = [
-      { id: 'step1', num: 1, newLabel: 'Verification code validated', updateLabel: 'Verification code validated' },
-      { id: 'step2', num: 2, newLabel: 'Google account created', updateLabel: 'Google password updated' },
-      { id: 'step3', num: 3, newLabel: 'LDAP account created', updateLabel: 'LDAP password updated' },
-      { id: 'step4', num: 4, newLabel: 'Added to solver database', updateLabel: 'Solver database (skipped - existing account)' },
-      { id: 'step5', num: 5, newLabel: 'Cleanup complete', updateLabel: 'Cleanup complete' }
+      { id: 'step1', label: 'Verification code validated' },
+      { id: 'step2', label: 'Google account created' },
+      { id: 'step3', label: 'Added to solver database' },
+      { id: 'step4', label: 'Cleanup complete' }
     ];
-    
-    let operation = 'new';
     
     function setStepStatus(stepId, status, label) {
       const el = document.getElementById(stepId);
@@ -356,10 +341,6 @@ if (isset($_GET['code'])) {
       
       try {
         let url = proxyUrl + '?code=' + code + '&step=' + stepNum;
-        // Pass operation to steps 2-5 so backend doesn't have to re-check Google
-        if (stepNum > 1 && operation) {
-          url += '&operation=' + operation;
-        }
         const response = await fetch(url);
         const data = await response.json();
         
@@ -370,23 +351,11 @@ if (isset($_GET['code'])) {
           throw new Error(data.message || 'Unknown error');
         }
         
-        // Step 1 tells us if this is new or update
-        if (stepNum === 1 && data.operation) {
-          operation = data.operation;
-          // Update labels for password reset flow
-          if (operation === 'update') {
-            document.querySelector('#step2 .label').textContent = 'Updating Google password...';
-            document.querySelector('#step3 .label').textContent = 'Updating LDAP password...';
-            document.querySelector('#step4 .label').textContent = 'Solver database (skipped for reset)...';
-          }
-        }
-        
         // Mark complete with appropriate label
-        const label = operation === 'new' ? step.newLabel : step.updateLabel;
         if (data.skipped) {
-          setStepStatus(step.id, 'skipped', label);
+          setStepStatus(step.id, 'skipped', step.label);
         } else {
-          setStepStatus(step.id, 'complete', label);
+          setStepStatus(step.id, 'complete', step.label);
         }
         
         return true;
@@ -399,7 +368,7 @@ if (isset($_GET['code'])) {
     }
     
     async function runAllSteps() {
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 1; i <= 4; i++) {
         const success = await runStep(i);
         if (!success) return;
       }
@@ -416,17 +385,15 @@ HTML;
 }
 
 ?>
-<h1>
-  Puzzleboss 2000 New Account Registration<br>
-  <span>(or password reset)</span>
-</h1>
+<h1>Puzzleboss 2000 New Account Registration</h1>
 <p>
   Welcome aboard! <em>Puzzleboss</em> is our team's puzzlesolving infrastructure:
   it helps us track which puzzles we have open, create spreadsheets for each of them,
   and know who's working on what. <strong>You'll need an account to hunt with us.</strong>
 </p>
 <p>
-  If you're a new solver, welcome! If you're returning, you only need to use this if you've forgotten your password. (If so, check the password reset box as you fill this out.)
+  If you're a returning solver and need to reset your password, use
+  <a href="https://accounts.google.com/signin/recovery" target="_blank">Google's password recovery</a>.
 </p>
 <form action="?" method="POST">
 <table class="registration">
@@ -467,10 +434,6 @@ HTML;
         maxlength="24"
       />
     </td>
-  </tr>
-  <tr>
-    <td><label for="reset">Check box if this is a password reset:</label></td>
-    <td><input type="checkbox" id="reset" name="reset" value="reset"></td>
   </tr>
   <tr>
     <td />

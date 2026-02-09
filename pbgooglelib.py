@@ -973,7 +973,7 @@ def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
     return 0
 
 
-def add_user_to_google(username, firstname, lastname, password):
+def add_user_to_google(username, firstname, lastname, password, recovery_email=None):
     debug_log(
         4,
         "start with (username, firstname, lastname, password): %s %s %s REDACTED"
@@ -989,6 +989,8 @@ def add_user_to_google(username, firstname, lastname, password):
         "password": password,
         "primaryEmail": "%s@%s" % (username, configstruct["DOMAINNAME"]),
     }
+    if recovery_email:
+        userbody["recoveryEmail"] = recovery_email
 
     debug_log(5, "Attempting to add user with post body: %s" % json.dumps(userbody))
     try:

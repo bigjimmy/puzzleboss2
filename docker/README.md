@@ -59,7 +59,7 @@ The default config is pre-configured for Docker with:
 - MySQL host set to `mysql` (Docker service name)
 - MySQL SSL/TLS enabled with auto-generated certificates
 - Test credentials (username: puzzleboss, password: puzzleboss123)
-- All optional integrations disabled (Google, Discord, LDAP)
+- All optional integrations disabled (Google, Discord)
 - Test mode enabled for PHP authentication
 
 **To customize configuration:**
@@ -233,10 +233,6 @@ docker-compose up --build
 ### Discord Integration
 1. Set up puzzcord daemon separately
 2. Update database config table with `SKIP_PUZZCORD=false` and connection details
-
-### LDAP
-1. Configure LDAP server connection in database config table
-2. Disable test mode in `www/puzzlebosslib.php`
 
 ## Troubleshooting
 
