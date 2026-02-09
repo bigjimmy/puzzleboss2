@@ -421,9 +421,9 @@ if ($hasGoogle) {
       <th>Recovery Email</th>
       <th data-col="created" onclick="sortTable('created')">Created <span class="sort-arrow">▲</span></th>
       <th data-col="lastlogin" onclick="sortTable('lastlogin')">Last Login <span class="sort-arrow">▲</span></th>
-      <th>Status</th>
-      <th class="col-priv-header">PT</th>
-      <th class="col-priv-header">PB</th>
+      <th data-col="status" onclick="sortTable('status')">Status <span class="sort-arrow">▲</span></th>
+      <th class="col-priv-header" data-col="pt" onclick="sortTable('pt')">PT <span class="sort-arrow">▲</span></th>
+      <th class="col-priv-header" data-col="pb" onclick="sortTable('pb')">PB <span class="sort-arrow">▲</span></th>
       <th></th>
     </tr>
   </thead>
@@ -442,6 +442,17 @@ if ($hasGoogle) {
 
       // Google lookup
       $g = $googleByUsername[$solverNameLower] ?? null;
+
+      // Compute sortable status string
+      if ($g) {
+        if ($g->suspended) $statusStr = 'SUSPENDED';
+        elseif ($g->isAdmin) $statusStr = 'ADMIN';
+        else $statusStr = 'OK';
+      } elseif ($hasGoogle) {
+        $statusStr = 'NO GOOGLE';
+      } else {
+        $statusStr = '';
+      }
     ?>
     <tr class="<?= (!$g && $hasGoogle) ? 'no-google' : '' ?>"
         data-username="<?= htmlspecialchars($solverName) ?>"
@@ -450,6 +461,9 @@ if ($hasGoogle) {
         data-googlename="<?= $g ? htmlspecialchars($g->fullName) : '' ?>"
         data-created="<?= $g ? htmlspecialchars($g->creationTime) : '' ?>"
         data-lastlogin="<?= $g ? htmlspecialchars($g->lastLoginTime) : '' ?>"
+        data-status="<?= $statusStr ?>"
+        data-pt="<?= $isPuzztech ?>"
+        data-pb="<?= $isPuzzleboss ?>"
         data-id="<?= $solverId ?>">
       <td class="col-id"><?= $solverId ?></td>
       <td class="col-username"><?= htmlspecialchars($solverName) ?></td>
@@ -489,6 +503,9 @@ if ($hasGoogle) {
         data-googlename="<?= htmlspecialchars($gu->fullName) ?>"
         data-created="<?= htmlspecialchars($gu->creationTime) ?>"
         data-lastlogin="<?= htmlspecialchars($gu->lastLoginTime) ?>"
+        data-status="NO SOLVER<?= $gu->suspended ? ' SUSPENDED' : '' ?>"
+        data-pt=""
+        data-pb=""
         data-id="">
       <td class="col-id na">—</td>
       <td class="col-username"><?= htmlspecialchars($gu->username) ?></td>
