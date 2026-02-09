@@ -1413,8 +1413,8 @@ def create_puzzle_stepwise():
     except Exception:
         return jsonify({"error": f"Round ID {round_id} not found"}), 404
 
-    # Generate unique code and store request
-    code = token_hex(12)
+    # Generate unique code and store request (8 bytes = 16 hex chars, fits varchar(16))
+    code = token_hex(8)
 
     try:
         conn, cursor = _cursor()

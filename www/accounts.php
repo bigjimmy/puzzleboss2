@@ -59,6 +59,33 @@
     #accounts-table .col-google.na {
       color: var(--text-tertiary);
     }
+    #accounts-table tr.no-google {
+      background: #fff8f0;
+    }
+    #accounts-table tr.no-google:hover {
+      background: #fff0e0;
+    }
+    #accounts-table tr.no-solver {
+      background: #f0f8ff;
+    }
+    #accounts-table tr.no-solver:hover {
+      background: #e0f0ff;
+    }
+    .mismatch-badge {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .mismatch-badge.no-google {
+      background: #fff0e0;
+      color: #b45309;
+    }
+    .mismatch-badge.no-solver {
+      background: #e0f0ff;
+      color: #1a5fb4;
+    }
     #accounts-table .priv-yes {
       color: green;
       font-weight: bold;
@@ -324,20 +351,51 @@ foreach ($googleUsers as $gu) {
 
 $hasGoogle = count($googleUsers) > 0;
 $googleCount = count($googleUsers);
+
+// Build set of solver usernames (lowercase) for orphan detection
+$solverNames = [];
+foreach ($solvers as $s) {
+  $solverNames[strtolower($s->name)] = true;
+}
+
+// Find Google accounts with no matching solver
+$googleOrphans = [];
+foreach ($googleUsers as $gu) {
+  if (!isset($solverNames[strtolower($gu->username)])) {
+    $googleOrphans[] = $gu;
+  }
+}
+
+// Count solvers missing from Google
+$solversMissingGoogle = 0;
+if ($hasGoogle) {
+  foreach ($solvers as $s) {
+    if (!isset($googleByUsername[strtolower($s->name)])) {
+      $solversMissingGoogle++;
+    }
+  }
+}
 ?>
 
 <div class="status-header">
   <h1>Accounts Management</h1>
 </div>
 
-<?= render_navbar('admin') ?>
+<?= render_navbar() ?>
 
 <div id="status-area"></div>
 
 <div class="toolbar">
   <input type="text" class="filter-input" id="filter" placeholder="Filter by username or name..." oninput="filterTable()">
   <button class="refresh-btn" onclick="location.reload()">Refresh</button>
-  <span class="account-count"><?= count($solvers) ?> solvers, <?= $googleCount ?> Google accounts</span>
+  <span class="account-count"><?= count($solvers) ?> solvers, <?= $googleCount ?> Google accounts<?php
+    if ($solversMissingGoogle > 0 || count($googleOrphans) > 0) {
+      $parts = [];
+      if ($solversMissingGoogle > 0) $parts[] = $solversMissingGoogle . ' missing Google';
+      if (count($googleOrphans) > 0) $parts[] = count($googleOrphans) . ' orphaned Google';
+      echo ' — ' . implode(', ', $parts);
+    }
+  ?></span>
   <?php if ($googleDisabled): ?>
     <span class="google-note">— Google API disabled</span>
   <?php elseif ($googleError): ?>
@@ -379,7 +437,8 @@ $googleCount = count($googleUsers);
       // Google lookup
       $g = $googleByUsername[$solverNameLower] ?? null;
     ?>
-    <tr data-username="<?= htmlspecialchars($solverName) ?>"
+    <tr class="<?= (!$g && $hasGoogle) ? 'no-google' : '' ?>"
+        data-username="<?= htmlspecialchars($solverName) ?>"
         data-fullname="<?= htmlspecialchars($fullname) ?>"
         data-discord="<?= htmlspecialchars($chatName) ?>"
         data-googlename="<?= $g ? htmlspecialchars($g->fullName) : '' ?>"
@@ -400,6 +459,8 @@ $googleCount = count($googleUsers);
           <?php if ($g->suspended): ?><span class="suspended-badge">SUSPENDED</span><?php endif; ?>
           <?php if ($g->isAdmin): ?><span class="admin-badge">ADMIN</span><?php endif; ?>
           <?php if (!$g->suspended && !$g->isAdmin): ?>OK<?php endif; ?>
+        <?php elseif ($hasGoogle): ?>
+          <span class="mismatch-badge no-google">NO GOOGLE</span>
         <?php else: ?>
           <span class="na">—</span>
         <?php endif; ?>
@@ -412,6 +473,34 @@ $googleCount = count($googleUsers);
         <button class="update-btn" onclick="savePrivs(this)">Update</button>
         <button class="delete-btn" onclick="confirmDelete('<?= htmlspecialchars($solverName, ENT_QUOTES) ?>')">Delete</button>
       </td>
+    </tr>
+    <?php endforeach; ?>
+    <?php foreach ($googleOrphans as $gu): ?>
+    <tr class="no-solver"
+        data-username="<?= htmlspecialchars($gu->username) ?>"
+        data-fullname=""
+        data-discord=""
+        data-googlename="<?= htmlspecialchars($gu->fullName) ?>"
+        data-created="<?= htmlspecialchars($gu->creationTime) ?>"
+        data-lastlogin="<?= htmlspecialchars($gu->lastLoginTime) ?>"
+        data-id="">
+      <td class="col-id na">—</td>
+      <td class="col-username"><?= htmlspecialchars($gu->username) ?></td>
+      <td></td>
+      <td class="col-discord"></td>
+      <td class="col-google"><?= htmlspecialchars($gu->fullName) ?></td>
+      <td class="col-google"><?= htmlspecialchars($gu->primaryEmail) ?></td>
+      <td class="col-google"><?= htmlspecialchars($gu->recoveryEmail ?: '—') ?></td>
+      <td class="col-google"><?= substr($gu->creationTime, 0, 10) ?></td>
+      <td class="col-google"><?= $gu->lastLoginTime ? substr($gu->lastLoginTime, 0, 10) : 'never' ?></td>
+      <td class="col-google">
+        <span class="mismatch-badge no-solver">NO SOLVER</span>
+        <?php if ($gu->suspended): ?> <span class="suspended-badge">SUSPENDED</span><?php endif; ?>
+        <?php if ($gu->isAdmin): ?> <span class="admin-badge">ADMIN</span><?php endif; ?>
+      </td>
+      <td class="col-priv na">—</td>
+      <td class="col-priv na">—</td>
+      <td class="col-actions"></td>
     </tr>
     <?php endforeach; ?>
   </tbody>
