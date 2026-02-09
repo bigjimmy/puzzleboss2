@@ -1,3 +1,4 @@
+<?php ob_start(); ?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -17,8 +18,12 @@
     h1 {
       line-height: 1em;
     }
-    h1 > span {
-      font-size: 50%;
+    .team-name {
+      font-size: 60%;
+      font-weight: normal;
+      color: #555;
+      display: block;
+      margin-top: 4px;
     }
     main {
       margin-top: 50px;
@@ -47,6 +52,8 @@
 <body>
 <main>
 <?php
+session_start();
+
 if (array_key_exists('debug', $_GET)) {
   error_reporting(E_ALL);
   ini_set('display_errors', 'On');
@@ -68,7 +75,7 @@ function readapi($apicall) {
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);
   curl_close($curl);
-  return json_decode($resp, true);
+  return json_decode($resp);
 }
 
 //TODO: add error handling here for mandatory config values. should direct user to admin page for config editing.
@@ -77,6 +84,60 @@ $bookmarkuri = $config->bookmarklet_js;
 $pbroot = $config->BIN_URI;
 $regemail = $config->REGEMAIL;
 $google_domain = $config->DOMAINNAME;
+$teamname = htmlspecialchars($config->TEAMNAME ?? 'Our Team');
+
+// --- Registration page access gate ---
+// Credentials managed via config table (ACCT_USERNAME / ACCT_PASSWORD).
+// If both are empty, registration is closed.
+$gate_username = $config->ACCT_USERNAME ?? '';
+$gate_password = $config->ACCT_PASSWORD ?? '';
+
+if ($gate_username === '' && $gate_password === '') {
+  print <<<HTML
+    <h1>Puzzleboss 2000<span class="team-name">$teamname</span></h1>
+    <p>Account registration is currently closed.</p>
+    <p>Contact the team for assistance.</p>
+  </main></body></html>
+HTML;
+  exit(0);
+}
+
+if (empty($_SESSION['acct_authenticated'])) {
+  $gate_error = '';
+  if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gate_username'])) {
+    if ($_POST['gate_username'] === $gate_username && $_POST['gate_password'] === $gate_password) {
+      $_SESSION['acct_authenticated'] = true;
+      // Redirect to GET to prevent form resubmission
+      header('Location: ' . $_SERVER['REQUEST_URI']);
+      exit(0);
+    } else {
+      $gate_error = '<div class="error">Incorrect username or password.</div>';
+    }
+  }
+  print <<<HTML
+    <h1>Puzzleboss 2000 Account Registration<span class="team-name">$teamname</span></h1>
+    <p>Enter the team credentials to access account registration.</p>
+    $gate_error
+    <form action="?" method="POST">
+      <table class="registration">
+        <tr>
+          <td><label for="gate_username">Username:</label></td>
+          <td><input type="text" id="gate_username" name="gate_username" required autofocus /></td>
+        </tr>
+        <tr>
+          <td><label for="gate_password">Password:</label></td>
+          <td><input type="password" id="gate_password" name="gate_password" required /></td>
+        </tr>
+        <tr>
+          <td></td>
+          <td><input type="submit" value="Enter"></td>
+        </tr>
+      </table>
+    </form>
+  </main></body></html>
+HTML;
+  exit(0);
+}
 
 
 function postapi($apicall, $data) {
@@ -385,7 +446,7 @@ HTML;
 }
 
 ?>
-<h1>Puzzleboss 2000 New Account Registration</h1>
+<h1>Puzzleboss 2000 Account Registration<span class="team-name"><?= $teamname ?></span></h1>
 <p>
   Welcome aboard! <em>Puzzleboss</em> is our team's puzzlesolving infrastructure:
   it helps us track which puzzles we have open, create spreadsheets for each of them,

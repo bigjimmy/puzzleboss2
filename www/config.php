@@ -578,13 +578,13 @@ ksort($configArr);
 // Category definitions: key => [label, description]
 $categories = [
   'hunt' => ['Current Hunt Adjustments', 'Settings you may change during the hunt'],
+  'signup' => ['Account Signup', 'Registration page credentials and email settings'],
   'general' => ['General', 'Core team and hunt settings'],
   'bigjimmy' => ['BigJimmy Bot', 'Sheet activity polling bot configuration'],
   'google' => ['Google Sheets & Drive', 'Google API and sheet template settings'],
   'discord' => ['Discord (Puzzcord)', 'Discord bot integration'],
   'memcache' => ['Memcache', 'Response caching layer'],
   'llm' => ['LLM & AI', 'Gemini AI, natural language queries, and wiki RAG'],
-  'urls' => ['URLs & Email', 'Service endpoints and email configuration'],
   'metadata' => ['Status & Metrics Metadata', 'JSON definitions for puzzle statuses and bot metrics'],
   'other' => ['Other', 'Uncategorized configuration values'],
 ];
@@ -627,10 +627,13 @@ $keyCategoryMap = [
   'WIKI_EXCLUDE_PREFIXES' => 'llm',
   'WIKI_PRIORITY_PAGES' => 'llm',
 
-  'ACCT_URI' => 'urls',
-  'BIN_URI' => 'urls',
-  'REGEMAIL' => 'urls',
-  'MAILRELAY' => 'urls',
+  'ACCT_USERNAME' => 'signup',
+  'ACCT_PASSWORD' => 'signup',
+  'ACCT_URI' => 'signup',
+  'REGEMAIL' => 'signup',
+  'MAILRELAY' => 'signup',
+
+  'BIN_URI' => 'general',
 
   'STATUS_METADATA' => 'metadata',
   'METRICS_METADATA' => 'metadata',
@@ -667,7 +670,9 @@ $keyDescriptions = [
   'WIKI_CHROMADB_PATH' => 'File path to ChromaDB vector store',
   'WIKI_EXCLUDE_PREFIXES' => 'Wiki page prefixes to skip during indexing',
   'WIKI_PRIORITY_PAGES' => 'Comma-separated priority pages for RAG',
-  'ACCT_URI' => 'URL to the account management page',
+  'ACCT_USERNAME' => 'Username for the registration page access gate',
+  'ACCT_PASSWORD' => 'Password for the registration page access gate',
+  'ACCT_URI' => 'URL to the account registration page',
   'BIN_URI' => 'URL root for the Puzzleboss web UI',
   'REGEMAIL' => 'Admin email address for registration',
   'MAILRELAY' => 'SMTP relay server for outbound email',

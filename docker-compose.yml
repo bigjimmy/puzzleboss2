@@ -64,6 +64,7 @@ services:
     volumes:
       # Mount code for live development (optional - comment out for production)
       - ./www:/app/www
+      - ./account:/app/account
       - ./pbrest.py:/app/pbrest.py
       - ./pblib.py:/app/pblib.py
       - ./pbgooglelib.py:/app/pbgooglelib.py

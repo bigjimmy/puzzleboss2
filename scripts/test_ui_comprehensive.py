@@ -1822,6 +1822,87 @@ def test_privilege_and_gear_visibility():
 
 
 # ──────────────────────────────────────────────────────────
+# Test 24: Account Registration Auth Gate
+# ──────────────────────────────────────────────────────────
+
+def test_account_registration_gate():
+    """Test the account registration page auth gate using DB-managed credentials."""
+
+    # Read current credentials from the API — use whatever is in the database
+    config = requests.get(f"{API_URL}/config").json().get("config", {})
+    acct_username = config.get("ACCT_USERNAME", "")
+    acct_password = config.get("ACCT_PASSWORD", "")
+
+    if not acct_username or not acct_password:
+        print("  ⚠ ACCT_USERNAME and/or ACCT_PASSWORD not set — skipping test")
+        print("  Set these config values in the database to enable this test")
+        print("✓ Account registration auth gate test skipped (no credentials configured)")
+        return
+
+    print(f"  Using credentials from config: {acct_username} / {'*' * len(acct_password)}")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+
+        # Step 1: Unauthenticated visit shows gate form
+        print("  Step 1: Unauthenticated access shows gate form...")
+        page = browser.new_page()
+        page.goto(f"{BASE_URL}/account/", wait_until="networkidle")
+        body_text = page.locator("body").inner_text()
+        assert "Enter the team credentials" in body_text, \
+            f"Expected gate form, got: {body_text[:200]}"
+        assert page.locator("input[name='gate_username']").count() > 0, "Missing gate_username input"
+        assert page.locator("input[name='gate_password']").count() > 0, "Missing gate_password input"
+        print("    ✓ Gate form displayed with username and password fields")
+
+        # Step 2: Wrong credentials show error
+        print("  Step 2: Wrong credentials show error...")
+        page.fill("input[name='gate_username']", "wronguser")
+        page.fill("input[name='gate_password']", "wrongpass")
+        page.click("input[type='submit']")
+        page.wait_for_load_state("networkidle")
+        assert "Incorrect username or password" in page.locator("body").inner_text(), \
+            "Expected error message for wrong credentials"
+        print("    ✓ Error message displayed for wrong credentials")
+
+        # Step 3: Correct credentials grant access to registration form
+        print("  Step 3: Correct credentials grant access...")
+        page.fill("input[name='gate_username']", acct_username)
+        page.fill("input[name='gate_password']", acct_password)
+        page.click("input[type='submit']")
+        page.wait_for_load_state("networkidle")
+        body_text = page.locator("body").inner_text()
+        assert "Account Registration" in body_text, \
+            f"Expected registration form, got: {body_text[:200]}"
+        assert page.locator("input[name='username']").count() > 0, "Missing registration username field"
+        assert page.locator("input[name='password']").count() > 0, "Missing registration password field"
+        print("    ✓ Registration form displayed after correct credentials")
+
+        # Step 4: Session persists — navigating back still shows registration form
+        print("  Step 4: Session persistence...")
+        page.goto(f"{BASE_URL}/account/", wait_until="networkidle")
+        body_text = page.locator("body").inner_text()
+        assert "Account Registration" in body_text, \
+            "Session should persist — registration form should still be shown"
+        assert "Enter the team credentials" not in body_text, \
+            "Gate form should NOT appear with active session"
+        print("    ✓ Session persists, registration form shown without re-authentication")
+
+        # Step 5: New browser context (no cookies) shows gate form again
+        print("  Step 5: New browser context requires re-authentication...")
+        page2 = browser.new_page()
+        page2.goto(f"{BASE_URL}/account/", wait_until="networkidle")
+        assert "Enter the team credentials" in page2.locator("body").inner_text(), \
+            "New browser context should show gate form"
+        page2.close()
+        print("    ✓ New browser context shows gate form (no session leakage)")
+
+        page.close()
+        browser.close()
+        print("✓ Account registration auth gate test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
 # Main Entry Point
 # ──────────────────────────────────────────────────────────
 
@@ -1873,6 +1954,7 @@ def main():
         ('21', 'accounts', test_accounts_page, 'Accounts Management Page'),
         ('22', 'config', test_config_page, 'Config Page'),
         ('23', 'privs', test_privilege_and_gear_visibility, 'Privilege And Gear Visibility'),
+        ('24', 'acctgate', test_account_registration_gate, 'Account Registration Auth Gate'),
     ]
 
     if args.list:

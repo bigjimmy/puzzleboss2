@@ -140,7 +140,9 @@ CREATE TABLE `config` (
 LOCK TABLES `config` WRITE;
 /*!40000 ALTER TABLE `config` DISABLE KEYS */;
 INSERT INTO `config` VALUES
+  ('ACCT_PASSWORD', 'funkychicken'),
   ('ACCT_URI', 'https://yourdomain.org/account'),
+  ('ACCT_USERNAME', 'hunt'),
   ('BIN_URI', 'https://yourdomain.org/pb'),
   ('BIGJIMMY_ABANDONED_STATUS', 'Abandoned'),
   ('BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', '10'),
