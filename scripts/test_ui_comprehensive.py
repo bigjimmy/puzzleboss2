@@ -235,6 +235,15 @@ def close_dialog(page):
     page.wait_for_selector("dialog", state="hidden", timeout=5000)
 
 
+def save_settings_dialog(page):
+    """Save the puzzle-settings gear modal with its two-step confirmation flow.
+    Clicks 'Save Changes' to reveal the confirmation banner, then 'Yes, Save'."""
+    page.click("dialog button:has-text('Save Changes')")
+    page.wait_for_selector("dialog .confirm-banner", timeout=3000)
+    page.click("dialog button:has-text('Yes, Save')")
+    page.wait_for_selector("dialog", state="hidden", timeout=5000)
+
+
 def claim_puzzle(page, puzzle_elem):
     """Click the workstate icon and claim the puzzle (click Yes)."""
     icons = get_puzzle_icons(puzzle_elem)
@@ -983,7 +992,7 @@ def test_move_puzzle_between_rounds():
         page1.wait_for_selector("dialog", timeout=5000)
         time.sleep(0.5)
         page1.select_option("dialog select#puzzle-round", label=round2_name)
-        save_and_close_dialog(page1)
+        save_settings_dialog(page1)
         print("  [Browser 1] ✓ Puzzle moved")
 
         # Browser 2: Verify move via auto-refresh
@@ -1042,7 +1051,7 @@ def test_rename_puzzle():
         page1.wait_for_selector("dialog", timeout=5000)
         time.sleep(0.5)
         page1.query_selector("dialog input#puzzle-name").fill(new_name)
-        save_and_close_dialog(page1)
+        save_settings_dialog(page1)
         print("  [Browser 1] ✓ Puzzle renamed")
 
         # Browser 2: Verify via auto-refresh
@@ -1546,6 +1555,273 @@ def test_solved_puzzles_excluded():
 
 
 # ──────────────────────────────────────────────────────────
+# Test 21: Accounts Management Page
+# ──────────────────────────────────────────────────────────
+
+def test_accounts_page():
+    """Test that accounts.php renders correctly with expected sections and elements."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        print("  Navigating to accounts page as admin...")
+        page.goto(f"{BASE_URL}/accounts.php?assumedid=testuser", wait_until="networkidle")
+
+        # Verify page loaded (not access denied)
+        page.wait_for_selector("h1", timeout=5000)
+        title = page.locator("h1").inner_text()
+        assert "Accounts Management" in title, f"Unexpected title: {title}"
+        print(f"    ✓ Page title: {title}")
+
+        # Verify navbar is rendered
+        page.wait_for_selector(".nav-links", timeout=5000)
+        print("    ✓ Navbar rendered")
+
+        # Verify accounts table is populated
+        print("  Checking accounts table...")
+        page.wait_for_selector("#accounts-table", timeout=5000)
+        solver_rows = page.locator("#accounts-table tbody tr").count()
+        assert solver_rows > 0, "Accounts table has no data rows"
+        print(f"    ✓ Accounts table has {solver_rows} solver row(s)")
+
+        # Verify table headers include key columns
+        print("  Checking table columns...")
+        for col in ["Username", "Full Name", "PT", "PB"]:
+            assert page.locator(f"#accounts-table th:has-text('{col}')").count() > 0, f"Missing column: {col}"
+            print(f"    ✓ Found column: {col}")
+
+        # Verify filter input exists
+        filter_input = page.locator("#filter")
+        assert filter_input.count() > 0, "Filter input not found"
+        print("    ✓ Filter input present")
+
+        # Verify delete modal exists (hidden)
+        assert page.locator("#delete-modal").count() > 0, "Delete confirmation modal not found"
+        print("    ✓ Delete confirmation modal present")
+
+        # Test access denied for non-admin user
+        print("  Testing access restriction for non-admin user...")
+        page.goto(f"{BASE_URL}/accounts.php?assumedid=testsolver1", wait_until="networkidle")
+        denied_text = page.locator("body").inner_text()
+        assert "ACCESS DENIED" in denied_text, "Non-admin user should see ACCESS DENIED"
+        print("    ✓ Non-admin access correctly denied")
+
+        browser.close()
+        print("✓ Accounts management page test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
+# Test 22: Config Page
+# ──────────────────────────────────────────────────────────
+
+def test_config_page():
+    """Test that config.php renders correctly with warning modal, categories, and editing controls."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        print("  Navigating to config page as admin...")
+        page.goto(f"{BASE_URL}/config.php?assumedid=testuser", wait_until="networkidle")
+
+        # Verify warning modal appears on load
+        print("  Checking for warning modal...")
+        modal = page.locator("#warn-modal")
+        assert modal.is_visible(), "Warning modal should be visible on page load"
+        print("    ✓ Warning modal displayed")
+
+        # Verify config content is hidden behind modal
+        content = page.locator("#config-content")
+        assert not content.is_visible(), "Config content should be hidden until modal dismissed"
+        print("    ✓ Config content hidden behind modal")
+
+        # Dismiss the warning modal
+        print("  Dismissing warning modal...")
+        page.click("#warn-modal button:has-text('I understand')")
+        page.wait_for_selector("#config-content", state="visible", timeout=3000)
+        print("    ✓ Modal dismissed, config content revealed")
+
+        # Verify categories are rendered
+        print("  Checking for config categories...")
+        page_text = page.locator("#config-content").inner_text()
+
+        for category in ["Current Hunt Adjustments", "General", "BigJimmy Bot",
+                         "Google Sheets & Drive", "Discord (Puzzcord)", "LLM & AI"]:
+            assert category in page_text, f"Missing category: {category}"
+            print(f"    ✓ Found category: {category}")
+
+        # Cross-reference: fetch all config keys from the API and verify each one
+        # appears on the page (accounting for hidden/deprecated keys)
+        print("  Cross-referencing config keys from API against rendered page...")
+        api_config = requests.get(f"{API_URL}/config").json().get("config", {})
+        api_keys = set(api_config.keys())
+
+        # Get rendered config keys from the page's data-key attributes
+        rendered_keys = set(page.evaluate("""
+            () => Array.from(document.querySelectorAll('#config-content .config-row[data-key]'))
+                        .map(row => row.dataset.key)
+        """))
+
+        # Known hidden keys (deprecated, intentionally not shown)
+        hidden_keys = {'SLACK_EMAIL_WEBHOOK', 'LDAP_ADMINDN', 'LDAP_ADMINPW',
+                       'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0'}
+
+        missing_from_page = api_keys - rendered_keys - hidden_keys
+        extra_on_page = rendered_keys - api_keys
+
+        print(f"    API has {len(api_keys)} keys, page renders {len(rendered_keys)} rows, {len(hidden_keys)} intentionally hidden")
+        assert len(missing_from_page) == 0, f"Config keys in API but NOT on page: {missing_from_page}"
+        print(f"    ✓ All {len(api_keys - hidden_keys)} visible config keys accounted for on the page")
+
+        if extra_on_page:
+            print(f"    ⚠ Page has keys not in API (may be added via UI): {extra_on_page}")
+
+        # Verify config rows exist
+        config_rows = page.locator("#config-content .config-row").count()
+        print(f"    ✓ Found {config_rows} config rows")
+        assert config_rows > 5, f"Expected more than 5 config rows, found {config_rows}"
+
+        # Verify Save/Revert buttons exist
+        save_buttons = page.locator("#config-content button:has-text('Save')").count()
+        revert_buttons = page.locator("#config-content button:has-text('Revert')").count()
+        assert save_buttons > 0, "No Save buttons found"
+        assert revert_buttons > 0, "No Revert buttons found"
+        print(f"    ✓ Found {save_buttons} Save and {revert_buttons} Revert buttons")
+
+        # Verify structured editors exist
+        print("  Checking for structured editors...")
+        assert page.locator("text=STATUS_METADATA").count() > 0, "Missing STATUS_METADATA editor"
+        assert page.locator("text=METRICS_METADATA").count() > 0, "Missing METRICS_METADATA editor"
+        print("    ✓ Structured editors present")
+
+        # Test access denied for non-admin user
+        print("  Testing access restriction for non-admin user...")
+        page.goto(f"{BASE_URL}/config.php?assumedid=testsolver1", wait_until="networkidle")
+        denied_text = page.locator("body").inner_text()
+        assert "ACCESS DENIED" in denied_text, "Non-admin user should see ACCESS DENIED"
+        print("    ✓ Non-admin access correctly denied")
+
+        browser.close()
+        print("✓ Config page test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
+# Test 23: Privilege Assignment and Gear Visibility
+# ──────────────────────────────────────────────────────────
+
+def test_privilege_and_gear_visibility():
+    """Test assigning and revoking privileges, and verify that gear icon
+    visibility and admin page access are correctly gated on those privileges."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        # Create test data: a round and a puzzle so we can check gear visibility
+        round_name = create_round_via_ui(page, "Priv Test Round")["name"]
+        puzzle_name = create_puzzle_via_ui(page, "Priv Test Puzzle", round_name)["name"]
+
+        # Step 1: Verify non-admin user has NO gear icon
+        print("  Step 1: Non-admin user should NOT see gear icon...")
+        page.goto(f"{BASE_URL}/index.php?assumedid=testsolver1", wait_until="networkidle")
+        page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+
+        puzzle_elem = find_puzzle(page, puzzle_name)
+        icons = get_puzzle_icons(puzzle_elem)
+        has_settings = any(
+            icon.get_attribute("title") and "settings" in icon.get_attribute("title").lower()
+            for icon in icons
+        )
+        # Also check if any icon opens a puzzle-settings dialog
+        gear_icon_count = page.locator(f".puzzle:has-text('{puzzle_name}') dialog select#puzzle-round").count()
+        # Simpler: just check for the ⚙️ icon in puzzle icons
+        puzzle_html = puzzle_elem.inner_html()
+        has_gear = "⚙️" in puzzle_html or "puzzle-settings" in puzzle_html
+        assert not has_gear, "Non-admin user should NOT see gear (⚙️) icon"
+        print("    ✓ Non-admin user: no gear icon")
+
+        # Step 2: Verify non-admin user is blocked from admin pages
+        print("  Step 2: Non-admin user should be blocked from admin pages...")
+        page.goto(f"{BASE_URL}/admin.php?assumedid=testsolver1", wait_until="networkidle")
+        assert "ACCESS DENIED" in page.locator("body").inner_text(), "Non-admin should be denied admin.php"
+        print("    ✓ admin.php: ACCESS DENIED")
+
+        page.goto(f"{BASE_URL}/accounts.php?assumedid=testsolver1", wait_until="networkidle")
+        assert "ACCESS DENIED" in page.locator("body").inner_text(), "Non-admin should be denied accounts.php"
+        print("    ✓ accounts.php: ACCESS DENIED")
+
+        page.goto(f"{BASE_URL}/config.php?assumedid=testsolver1", wait_until="networkidle")
+        assert "ACCESS DENIED" in page.locator("body").inner_text(), "Non-admin should be denied config.php"
+        print("    ✓ config.php: ACCESS DENIED")
+
+        # Step 3: Grant puzztech privilege via API
+        print("  Step 3: Granting puzztech privilege to testsolver1...")
+        # Look up solver ID
+        solver_data = requests.get(f"{API_URL}/solvers/byname/testsolver1").json()
+        solver_id = solver_data["solver"]["id"]
+
+        grant_result = requests.post(
+            f"{API_URL}/rbac/puzztech/{solver_id}",
+            json={"allowed": "YES"}
+        )
+        assert grant_result.ok, f"Failed to grant puzztech: {grant_result.text}"
+        print(f"    ✓ puzztech granted to testsolver1 (id={solver_id})")
+
+        # Step 4: Verify admin user NOW sees gear icon
+        print("  Step 4: Newly privileged user should see gear icon...")
+        page.goto(f"{BASE_URL}/index.php?assumedid=testsolver1", wait_until="networkidle")
+        page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+
+        puzzle_elem = find_puzzle(page, puzzle_name)
+        puzzle_html = puzzle_elem.inner_html()
+        has_gear = "⚙️" in puzzle_html
+        assert has_gear, "Newly privileged user SHOULD see gear (⚙️) icon"
+        print("    ✓ Privileged user: gear icon visible")
+
+        # Step 5: Verify admin pages now accessible
+        print("  Step 5: Privileged user should access admin pages...")
+        page.goto(f"{BASE_URL}/admin.php?assumedid=testsolver1", wait_until="networkidle")
+        admin_text = page.locator("body").inner_text()
+        assert "ACCESS DENIED" not in admin_text, "Privileged user should access admin.php"
+        assert "Super Admin" in admin_text, "admin.php should show Super Admin content"
+        print("    ✓ admin.php: accessible")
+
+        page.goto(f"{BASE_URL}/accounts.php?assumedid=testsolver1", wait_until="networkidle")
+        assert "ACCESS DENIED" not in page.locator("body").inner_text(), "Privileged user should access accounts.php"
+        print("    ✓ accounts.php: accessible")
+
+        page.goto(f"{BASE_URL}/config.php?assumedid=testsolver1", wait_until="networkidle")
+        assert "ACCESS DENIED" not in page.locator("body").inner_text(), "Privileged user should access config.php"
+        print("    ✓ config.php: accessible")
+
+        # Step 6: Revoke privilege and verify gear icon disappears
+        print("  Step 6: Revoking puzztech privilege...")
+        revoke_result = requests.post(
+            f"{API_URL}/rbac/puzztech/{solver_id}",
+            json={"allowed": "NO"}
+        )
+        assert revoke_result.ok, f"Failed to revoke puzztech: {revoke_result.text}"
+        print("    ✓ puzztech revoked")
+
+        print("  Verifying gear icon removed after privilege revocation...")
+        page.goto(f"{BASE_URL}/index.php?assumedid=testsolver1", wait_until="networkidle")
+        page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+
+        puzzle_elem = find_puzzle(page, puzzle_name)
+        puzzle_html = puzzle_elem.inner_html()
+        has_gear = "⚙️" in puzzle_html
+        assert not has_gear, "User without privileges should NOT see gear icon after revocation"
+        print("    ✓ Gear icon removed after privilege revocation")
+
+        # Step 7: Verify admin pages blocked again
+        print("  Step 7: Verifying admin pages blocked after revocation...")
+        page.goto(f"{BASE_URL}/admin.php?assumedid=testsolver1", wait_until="networkidle")
+        assert "ACCESS DENIED" in page.locator("body").inner_text(), "Unprivileged user should be denied admin.php"
+        print("    ✓ admin.php: ACCESS DENIED after revocation")
+
+        browser.close()
+        print("✓ Privilege assignment and gear visibility test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
 # Main Entry Point
 # ──────────────────────────────────────────────────────────
 
@@ -1594,6 +1870,9 @@ def main():
         ('18', 'navbar', test_navbar_functionality, 'Navbar Functionality'),
         ('19', 'statuspage', test_status_page, 'Status Page'),
         ('20', 'solved', test_solved_puzzles_excluded, 'Solved Puzzles Excluded'),
+        ('21', 'accounts', test_accounts_page, 'Accounts Management Page'),
+        ('22', 'config', test_config_page, 'Config Page'),
+        ('23', 'privs', test_privilege_and_gear_visibility, 'Privilege And Gear Visibility'),
     ]
 
     if args.list:

@@ -212,6 +212,13 @@ export default {
         const puzzleRoundId = ref(null);
         const allRounds = ref([]);
 
+        //
+        // Confirmation state for destructive actions in the gear modal.
+        // confirmSave gates the Save button; confirmDelete gates the Delete button.
+        //
+        const confirmSave = ref(false);
+        const confirmDelete = ref(false);
+
         // Force answers to be all uppercase.
         watch(answer, () => {
             answer.value = answer.value.toUpperCase();
@@ -312,6 +319,8 @@ export default {
                     // Initialize puzzle settings
                     stateStrA.value = props.puzzle.name;
                     puzzleRoundId.value = parseInt(props.puzzle.round_id, 10);
+                    confirmSave.value = false;
+                    confirmDelete.value = false;
 
                     // Fetch all rounds for dropdown
                     try {
@@ -593,6 +602,29 @@ export default {
             }
         }
 
+        //
+        // Delete puzzle function. Calls the DELETE /deletepuzzle/<name> endpoint
+        // through apicall.php.
+        //
+        async function deletePuzzle() {
+            const url = `${Consts.api}/apicall.php?apicall=deletepuzzle&apiparam1=${encodeURIComponent(props.puzzle.name)}`;
+            try {
+                const resp = await fetch(url, { method: 'DELETE' });
+                const data = await resp.json();
+                if (data.error) {
+                    warning.value = "Delete failed: " + data.error;
+                    return;
+                }
+                showModal.value = false;
+                context.emit('please-fetch');
+                puzzle.value.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
+                context.emit('highlight-me', 'saved');
+            } catch (e) {
+                warning.value = "failed to DELETE; check devtools";
+                console.log(e);
+            }
+        }
+
         function updateTags(tag, add) {
             if (tag === "") return;
 
@@ -612,7 +644,8 @@ export default {
             answer, isMetaLoc, lastActInfo, lastActTime,
             nextTag, updateTags,
             showStatus, currentlyWorking, claimCurrentPuzzle,
-            puzzleRoundId, allRounds
+            puzzleRoundId, allRounds,
+            confirmSave, confirmDelete, deletePuzzle
         };
     },
     mounted() {
@@ -734,6 +767,17 @@ export default {
                 </select>
                 <span v-if="allRounds.length === 0"> (loading rounds...)</span>
             </p>
+            <hr style="margin: 15px 0; border-color: #ccc;">
+            <p v-if="!confirmDelete">
+                <button class="delete-btn" @click.stop="confirmDelete = true">Delete Puzzle</button>
+            </p>
+            <div v-if="confirmDelete" class="confirm-banner confirm-delete">
+                Are you sure? This will permanently delete "{{puzzle.name}}" and its Google Sheet.
+                <div class="confirm-buttons">
+                    <button class="delete-btn" @click.stop="deletePuzzle()">Yes, Delete Forever</button>
+                    <button @click.stop="confirmDelete = false">Cancel</button>
+                </div>
+            </div>
         </div>
 
         <!-- status -->
@@ -758,8 +802,21 @@ export default {
             </select>
         </p>
         <p v-if="type === 'status' && stateStrA === 'Solved'">Answer: <input v-model = "answer"></input></p>
-        <button @click.stop="toggleModal(false)">Close</button>
-        <button @click.stop="toggleModal(true)">Save</button>
+        <div class="modal-actions">
+            <button @click.stop="toggleModal(false)">Close</button>
+            <button v-if="type !== 'puzzle-settings'" @click.stop="toggleModal(true)">Save</button>
+            <button v-if="type === 'puzzle-settings' && !confirmSave" @click.stop="confirmSave = true" :disabled="stateStrA === puzzle.name && puzzleRoundId === parseInt(puzzle.round_id, 10)">Save Changes</button>
+        </div>
+        <div v-if="type === 'puzzle-settings' && confirmSave" class="confirm-banner confirm-save">
+            <span v-if="stateStrA !== puzzle.name">Rename "{{puzzle.name}}" → "{{stateStrA}}"</span>
+            <span v-if="stateStrA !== puzzle.name && puzzleRoundId !== parseInt(puzzle.round_id, 10)"> and </span>
+            <span v-if="puzzleRoundId !== parseInt(puzzle.round_id, 10)">Move to "{{allRounds.find(r => r.id === puzzleRoundId)?.name || '?'}}"</span>
+            — are you sure?
+            <div class="confirm-buttons">
+                <button @click.stop="toggleModal(true); confirmSave = false;">Yes, Save</button>
+                <button @click.stop="confirmSave = false">Cancel</button>
+            </div>
+        </div>
     </dialog>
     `
   }

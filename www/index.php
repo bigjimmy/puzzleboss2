@@ -62,6 +62,7 @@ require_once('puzzlebosslib.php');
                         :tagfilter="tagFilter"
                         :key="round.id"
                         :uid="uid"
+                        :isadmin="isAdmin"
                         :currpuzz="currPuzz"
                         :solvers="solvers"
                         :initialpuzz="initialPuzz"
@@ -81,6 +82,7 @@ require_once('puzzlebosslib.php');
                         :tagfilter="tagFilter"
                         :key="round.id"
                         :uid="uid"
+                        :isadmin="isAdmin"
                         :currpuzz="currPuzz"
                         :initialpuzz="initialPuzz"
                         @toggle-body="toggleBody"
@@ -191,8 +193,11 @@ require_once('puzzlebosslib.php');
                 <?php
                 $auth_solver = getauthenticatedsolver();
                 echo "const username = ref(\"" . $auth_solver->name . "\");";
+                $is_pt = checkpriv("puzztech", $auth_solver->id) ? 'true' : 'false';
+                $is_pb = checkpriv("puzzleboss", $auth_solver->id) ? 'true' : 'false';
                 ?>
                 const uid = ref(<?php echo $auth_solver->id; ?>);
+                const isAdmin = ref(<?php echo $is_pt; ?> || <?php echo $is_pb; ?>);
                 const solvers = ref(null);
 
                 const tags = ref([]);
@@ -511,7 +516,7 @@ require_once('puzzlebosslib.php');
                     showBody, highlight, toggleBody,
                     roundStats, puzzleStats,
                     fetchData, time, updateState,
-                    uid, username, tags, solvers,
+                    uid, username, isAdmin, tags, solvers,
                     currPuzz, initialPuzz, clearInitPuzz,
                     tags, tagFilter,
                     settings, statuses, updateSetting,

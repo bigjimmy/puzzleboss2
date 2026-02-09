@@ -139,6 +139,51 @@ dialog::backdrop {
     background: rgba(0, 0, 0, 0.5);
 }
 
+dialog .modal-actions {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+}
+
+dialog .delete-btn {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+dialog .delete-btn:hover {
+    background-color: #a71d2a;
+}
+
+dialog .confirm-banner {
+    margin-top: 10px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+dialog .confirm-banner.confirm-save {
+    background-color: #fff3e0;
+    border: 1px solid #e0a030;
+    color: #7a4f00;
+}
+
+dialog .confirm-banner.confirm-delete {
+    background-color: #fde8e8;
+    border: 1px solid #dc3545;
+    color: #8b1a1a;
+}
+
+dialog .confirm-banner .confirm-buttons {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+}
+
 /* ========================================
    CONTROL BAR (Search and Settings panel)
    ======================================== */

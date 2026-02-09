@@ -1426,7 +1426,183 @@ class TestRunner:
         result.set_success("Cache invalidation test completed successfully")
 
     # ------------------------------------------------------------------
-    # Test 25: Puzzle Deletion
+    # Test 25: Solver CRUD (Create and Delete)
+    # ------------------------------------------------------------------
+    def test_solver_crud(self, result: TestResult):
+        """Test creating a solver, verifying it exists, and deleting it."""
+        ts = str(int(time.time()))
+        username = f"crudtest{ts}"
+        fullname = f"CRUD Test User {ts}"
+
+        # Create solver
+        self.logger.log_operation(f"Creating solver: {username}")
+        data = self.create_solver(username, fullname)
+        if data.get("status") != "ok":
+            result.fail(f"Solver creation failed: {data}")
+            return
+
+        # Find the new solver by name
+        solver = None
+        for s in self.get_all_solvers():
+            if s["name"] == username:
+                solver = s
+                break
+        if not solver:
+            result.fail(f"Solver '{username}' not found after creation")
+            return
+
+        sid = solver["id"]
+        self.logger.log_operation(f"  Created solver id={sid}")
+
+        # Verify details
+        details = self.get_solver_details(sid)
+        if not details or details.get("name") != username:
+            result.fail(f"Solver details mismatch: {details}")
+            return
+        if details.get("fullname") != fullname:
+            result.fail(f"Fullname mismatch: expected {fullname!r}, got {details.get('fullname')!r}")
+            return
+
+        # Verify lookup by name
+        byname = self.api_get(f"/solvers/byname/{username}")
+        if byname.get("solver", {}).get("id") != sid:
+            result.fail(f"/solvers/byname/{username} returned wrong id")
+            return
+
+        # Duplicate creation should fail gracefully
+        r = self.api_post_raw("/solvers", {"name": username, "fullname": fullname})
+        self.logger.log_operation(f"  Duplicate creation: {r.status_code}")
+
+        # Delete solver
+        # Note: /deleteuser also tries to delete from Google Workspace, which may
+        # fail in Docker (no Google API). The DB deletion happens first, so we
+        # accept either success or a Google-related error.
+        self.logger.log_operation(f"Deleting solver: {username}")
+        r = self.api_get_raw(f"/deleteuser/{username}")
+        if r.ok:
+            self.logger.log_operation(f"  Delete returned ok")
+        else:
+            body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+            error_msg = body.get("error", "")
+            if "Google" in error_msg or "credentials" in error_msg.lower():
+                self.logger.log_warning(f"  Google API error (expected in Docker): {error_msg[:80]}")
+            else:
+                result.fail(f"Solver deletion failed unexpectedly: {r.status_code} {error_msg}")
+                return
+
+        # Verify gone from DB regardless of Google error
+        for s in self.get_all_solvers():
+            if s["name"] == username:
+                result.fail(f"Solver '{username}' still exists after deletion")
+                return
+        self.logger.log_operation(f"  ✓ Solver removed from database")
+
+        # Delete non-existent solver
+        r = self.api_get_raw(f"/deleteuser/nonexistent{ts}")
+        self.logger.log_operation(f"  Delete non-existent: {r.status_code}")
+
+        result.set_success("Solver CRUD test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 26: RBAC Privilege Management
+    # ------------------------------------------------------------------
+    def test_rbac_privileges(self, result: TestResult):
+        """Test granting, checking, and revoking privileges via the RBAC API."""
+        solvers = self.get_all_solvers()
+        if not solvers:
+            result.fail("No solvers found")
+            return
+
+        # Use a non-admin solver (not the first one which may be testuser with privs)
+        test_solver = None
+        for s in solvers:
+            if s["name"] != "testuser":
+                test_solver = s
+                break
+        if not test_solver:
+            result.fail("Need a non-testuser solver for RBAC test")
+            return
+
+        sid = test_solver["id"]
+        self.logger.log_operation(f"Testing RBAC on solver {test_solver['name']} (id={sid})")
+
+        # Check initial state - should not have puzztech
+        data = self.api_get(f"/rbac/puzztech/{sid}")
+        if data.get("status") != "ok":
+            result.fail(f"RBAC check failed: {data}")
+            return
+        initial_puzztech = data.get("allowed", False)
+        self.logger.log_operation(f"  Initial puzztech: {initial_puzztech}")
+
+        # Grant puzztech
+        self.logger.log_operation(f"  Granting puzztech...")
+        data = self.api_post(f"/rbac/puzztech/{sid}", {"allowed": "YES"})
+        if data.get("status") != "ok":
+            result.fail(f"Grant puzztech failed: {data}")
+            return
+
+        # Verify granted
+        data = self.api_get(f"/rbac/puzztech/{sid}")
+        if not data.get("allowed"):
+            result.fail("puzztech not granted after POST YES")
+            return
+        self.logger.log_operation(f"  ✓ puzztech granted")
+
+        # Grant puzzleboss
+        self.logger.log_operation(f"  Granting puzzleboss...")
+        data = self.api_post(f"/rbac/puzzleboss/{sid}", {"allowed": "YES"})
+        if data.get("status") != "ok":
+            result.fail(f"Grant puzzleboss failed: {data}")
+            return
+        data = self.api_get(f"/rbac/puzzleboss/{sid}")
+        if not data.get("allowed"):
+            result.fail("puzzleboss not granted after POST YES")
+            return
+        self.logger.log_operation(f"  ✓ puzzleboss granted")
+
+        # Check /privs endpoint includes this user
+        privs_data = self.api_get("/privs")
+        found = False
+        for p in privs_data.get("privs", []):
+            if p.get("uid") == sid:
+                if p.get("puzztech") != "YES" or p.get("puzzleboss") != "YES":
+                    result.fail(f"Privs mismatch in /privs: {p}")
+                    return
+                found = True
+                break
+        if not found:
+            result.fail(f"Solver {sid} not found in /privs")
+            return
+        self.logger.log_operation(f"  ✓ Verified in /privs endpoint")
+
+        # Revoke puzztech
+        self.logger.log_operation(f"  Revoking puzztech...")
+        self.api_post(f"/rbac/puzztech/{sid}", {"allowed": "NO"})
+        data = self.api_get(f"/rbac/puzztech/{sid}")
+        if data.get("allowed"):
+            result.fail("puzztech not revoked after POST NO")
+            return
+        self.logger.log_operation(f"  ✓ puzztech revoked")
+
+        # Revoke puzzleboss
+        self.api_post(f"/rbac/puzzleboss/{sid}", {"allowed": "NO"})
+        data = self.api_get(f"/rbac/puzzleboss/{sid}")
+        if data.get("allowed"):
+            result.fail("puzzleboss not revoked after POST NO")
+            return
+        self.logger.log_operation(f"  ✓ puzzleboss revoked")
+
+        # Test invalid priv value
+        r = self.api_post_raw(f"/rbac/puzztech/{sid}", {"allowed": "MAYBE"})
+        if r.ok:
+            result.fail("Invalid priv value 'MAYBE' was accepted")
+            return
+        self.logger.log_operation(f"  ✓ Invalid value correctly rejected")
+
+        result.set_success("RBAC privilege management test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 27: Puzzle Deletion
     # ------------------------------------------------------------------
     def test_puzzle_deletion(self, result: TestResult):
         ts = str(int(time.time()))
@@ -1493,6 +1669,8 @@ class TestRunner:
             ("API Documentation", self.test_api_documentation),
             ("Bot Statistics", self.test_bot_statistics),
             ("Cache Invalidation", self.test_cache_invalidation),
+            ("Solver CRUD", self.test_solver_crud),
+            ("RBAC Privilege Management", self.test_rbac_privileges),
             ("Puzzle Deletion", self.test_puzzle_deletion),
         ]
 
@@ -1571,7 +1749,7 @@ def main():
     parser.add_argument("--allow-destructive", action="store_true",
                         help="Allow destructive database operations (required)")
     parser.add_argument("--tests", nargs="+", type=int,
-                        help="Run specific test numbers (1-25)")
+                        help="Run specific test numbers (1-27)")
     parser.add_argument("--list", action="store_true",
                         help="List all tests")
     parser.add_argument("--base-url", default=BASE_URL,
@@ -1588,7 +1766,8 @@ def main():
             "Solve Clears Location and Solvers", "Solver Reassignment", "Activity Tracking",
             "Puzzle Activity Endpoint", "Solver Activity Endpoint", "Solver History",
             "Sheetcount", "Tagging", "API Endpoints", "API Documentation",
-            "Bot Statistics", "Cache Invalidation", "Puzzle Deletion",
+            "Bot Statistics", "Cache Invalidation",
+            "Solver CRUD", "RBAC Privilege Management", "Puzzle Deletion",
         ]
         for i, name in enumerate(tests, 1):
             print(f"  {i:2d}. {name}")

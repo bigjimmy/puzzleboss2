@@ -11,6 +11,7 @@ export default {
       highlighted: Boolean,
       currpuzz: String,
       uid: Number,
+      isadmin: Boolean,
       solvers: Object,
       initialpuzz: Object,
     },
@@ -218,7 +219,7 @@ export default {
                     :class = "{'answer': true, 'spoil': settings.spoilAll || spoilRound, 'done': true}" @mouseover="scroll($event, 300)" @mouseout="stopscroll">
                     {{ puzzle.answer }}
                 </p>
-                <AddGeneric type="puzzle-settings" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
+                <AddGeneric v-if="isadmin" type="puzzle-settings" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
             </div>
             <div
                 v-if="hiddenCount > 0"

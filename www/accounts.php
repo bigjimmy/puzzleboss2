@@ -319,9 +319,15 @@ $uid = getuid($username);
 $allowed = checkpriv("puzztech", $uid);
 
 if (!$allowed) {
-  echo "<h1>ACCESS DENIED</h1>";
-  echo "<br><hr><br>Access to this page is restricted to users with the puzztech role. Contact puzzleboss or puzztech for assistance.</body>";
-  echo "</html>";
+?>
+<div class="status-header">
+  <h1>ACCESS DENIED</h1>
+</div>
+<?= render_navbar() ?>
+<p>Access to this page is restricted to users with the <strong>puzztech</strong> role. Contact puzzleboss or puzztech for assistance.</p>
+</body>
+</html>
+<?php
   exit(2);
 }
 

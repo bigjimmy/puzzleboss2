@@ -53,6 +53,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     case "tag":
       echo json_encode(postapi('/tags', $post));
       break;
+    case "config":
+      echo json_encode(postapi('/config', $post));
+      break;
     default:
       http_response_code(500);
       die('Error: improper apicall specified.');
@@ -62,6 +65,9 @@ else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
   switch ($apicall) {
     case "tag":
       echo json_encode(deleteapi('/tags/' . $apiparam1));
+      break;
+    case "deletepuzzle":
+      echo json_encode(deleteapi('/deletepuzzle/' . $apiparam1));
       break;
     default:
       http_response_code(500);
@@ -130,6 +136,9 @@ else {
       break;
     case "googleusers":
       echo json_encode(readapi('/google/users'));
+      break;
+    case "config":
+      echo json_encode(readapi('/config'));
       break;
     default:
       http_response_code(500);

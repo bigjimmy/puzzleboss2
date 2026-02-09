@@ -165,7 +165,6 @@ INSERT INTO `config` VALUES
   ('PUZZCORD_PORT', '3141'),
   ('REGEMAIL', 'admin@yourdomain.org'),
   ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
-  ('SLACK_EMAIL_WEBHOOK', ''),
   ('SKIP_GOOGLE_API', 'true'),
   ('SKIP_PUZZCORD', 'true'),
   ('STATUS_METADATA', '[{"name":"WTF","emoji":"☢️","text":"?","order":0},{"name":"Critical","emoji":"⚠️","text":"!","order":1},{"name":"Needs eyes","emoji":"👀","text":"E","order":2},{"name":"Being worked","emoji":"🙇","text":"W","order":3},{"name":"Speculative","emoji":"🔮","text":"S","order":4},{"name":"Under control","emoji":"🤝","text":"U","order":5},{"name":"New","emoji":"🆕","text":"N","order":6},{"name":"Grind","emoji":"⛏️","text":"G","order":7},{"name":"Waiting for HQ","emoji":"⌛","text":"H","order":8},{"name":"Abandoned","emoji":"🏳️","text":"A","order":9},{"name":"Solved","emoji":"✅","text":"*","order":10},{"name":"Unnecessary","emoji":"🙃","text":"X","order":11},{"name":"[hidden]","emoji":"👻","text":"H","order":99}]'),
