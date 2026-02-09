@@ -46,34 +46,39 @@ export default {
 
     template: `
     <div id="control-bar">
-        <p>Spoil all puzzles: <input type="checkbox" :checked="s.spoilAll" @change="$emit('settings-updated', 'spoilAll', !s.spoilAll)" /> |
-           Sort puzzles by status: <input type="checkbox" :checked="s.sortPuzzles" @change="$emit('settings-updated', 'sortPuzzles', !s.sortPuzzles)" /> |
-           Show tags: <input type="checkbox" :checked="s.showTags" @change="$emit('settings-updated', 'showTags', !s.showTags)" /> |
-           Show solved rounds: <input type="checkbox" :checked="s.showSolvedRounds" @change="$emit('settings-updated', 'showSolvedRounds', !s.showSolvedRounds)" /> &nbsp; &nbsp; &nbsp;
-           <button @click="$emit('settings-updated', 'showControls', !s.showControls)">{{s.showControls ? 'Hide ' : 'Show '}}advanced controls</button>
-        </p>
-        <hr v-if="s.showControls" style="border: none; border-top: 1px solid #ccc; margin: 15px 0;" />
-        <div v-if="s.showControls" id="detailed-controls">
-        <div>
-            Show puzzles:
-            <div
-                v-for="key in puzzleFilterKeys"
-                class="filter"
-                @click="toggleKey(key)"
-                >
-                {{key}} <input type="checkbox" :checked="s.puzzleFilter[key]" @change="toggleKey(key)" @click.stop/>
+        <div class="toggle-row pills">
+            <label :class="{ on: !s.spoilAll }" @click.prevent="$emit('settings-updated', 'spoilAll', !s.spoilAll)">No spoilers</label>
+            <label :class="{ on: s.sortPuzzles }" @click.prevent="$emit('settings-updated', 'sortPuzzles', !s.sortPuzzles)"> Sort by status</label>
+            <label :class="{ on: s.showSolvedRounds }" @click.prevent="$emit('settings-updated', 'showSolvedRounds', !s.showSolvedRounds)"> Solved rounds</label>
+            <label :class="{ on: s.showControls }" @click.prevent="$emit('settings-updated', 'showControls', !s.showControls)">Advanced</label>
+        </div>
+        <template v-if="s.showControls">
+        <hr class="controls-divider" />
+        <div id="detailed-controls">
+            <div class="controls-section">
+                <div
+                    v-for="key in puzzleFilterKeys"
+                    class="filter"
+                    :class="{ active: s.puzzleFilter[key] }"
+                    @click="toggleKey(key)"
+                    >
+                    {{key}} <input type="checkbox" :checked="s.puzzleFilter[key]" @change="toggleKey(key)" @click.stop/>
+                </div>
             </div>
-            <button @click="applyShowFilter(false)">Hide All Puzzles</button>
-            <button @click="applyShowFilter(true)">Show All Puzzles</button>
+            <div class="toggle-row">
+                <button @click="applyShowFilter(false)">Hide All</button>
+                <button @click="applyShowFilter(true)">Show All</button>
+            </div>
+            <hr class="controls-divider" />
+            <div class="toggle-row pills">
+                <label :class="{ on: !s.showTags }" @click.prevent="$emit('settings-updated', 'showTags', !s.showTags)">Hide Tags</label>
+                <label :class="{ on: s.showHidden }" @click.prevent="$emit('settings-updated', 'showHidden', !s.showHidden)">Show Hidden Puzzles</label>
+                <label :class="{ on: s.useColumns }" @click.prevent="$emit('settings-updated', 'useColumns', !s.useColumns)">Column Mode</label>
+                <label>Scroll speed <input type="number" :value="s.scrollSpeed" @input="$emit('settings-updated', 'scrollSpeed', parseFloat($event.target.value))" min="1" style="width: 50px;"></label>
+                <slot></slot>
+            </div>
         </div>
-        <br/>
-        <div>
-            <p>Show hidden puzzles: <input type="checkbox" :checked="s.showHidden" @change="$emit('settings-updated', 'showHidden', !s.showHidden)" /></p>
-            <p>Use columns display (fixed-height, scroll-to-right) <input type="checkbox" :checked="s.useColumns" @change="$emit('settings-updated', 'useColumns', !s.useColumns)"></input></p>
-            <p>Scroll speed (default 1) <input type="number" :value="s.scrollSpeed" @input="$emit('settings-updated', 'scrollSpeed', parseFloat($event.target.value))" min="1"></input></p>
-        </div>
-        <div>
-        </div>
+        </template>
     </div>`
   }
   

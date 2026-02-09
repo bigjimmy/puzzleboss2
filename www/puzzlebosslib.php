@@ -237,7 +237,7 @@ function render_navbar($current_page = null) {
     'pbtools' => ['href' => './pbtools.php', 'label' => 'PB Tools'],
     'wiki' => ['href' => '../', 'label' => 'Wiki', 'target' => '_blank'],
     'old' => ['href' => './old.php', 'label' => 'Old UI'],
-    'admin' => ['href' => './admin.php', 'label' => 'PuzzTech Admin'],
+    'admin' => ['href' => './admin.php', 'label' => 'Admin'],
   ];
 
   $html = '<div class="nav-links">' . "\n";

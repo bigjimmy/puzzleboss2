@@ -39,12 +39,14 @@ require_once('puzzlebosslib.php');
                     <h3>Search and Settings</h3>
                 </div>
                 <div class="info-box-content" v-show="showSettings">
-                    <div id="links">
-                        <p>Tag search: <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect></p>
-                    </div>
-                    <settings :s="settings" :statuses="statuses" @settings-updated="updateSetting"></settings>
-                    <div v-if="settings.showControls">
-                        <solvesound ref="solveSound"></solvesound>
+                    <div id="settings-bar">
+                        <div id="tag-search">
+                            <label>Tag search:</label>
+                            <tagselect v-model:current="tagFilter" :allowAdd="false" :tags="[]"></tagselect>
+                        </div>
+                        <settings :s="settings" :statuses="statuses" @settings-updated="updateSetting">
+                            <solvesound ref="solveSound"></solvesound>
+                        </settings>
                     </div>
                 </div>
             </div>

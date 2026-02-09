@@ -70,9 +70,13 @@ export default {
     },
 
     template: `
-    <div>
-        <p style="margin: 2px; font-size: small;">Play sound: <input type="checkbox" v-model="ps"/> <input type="file" ref="fileInput" @change="storeSound"/> {{warning}} <button v-if="customFileExists" @click="deleteSound">Clear custom sound</button> (experimental, no guarantees for functionality)</p>
-    </div>
+    <label :class="{ on: ps }" @click.prevent="ps = !ps">🔊 Solve sound
+        <template v-if="ps">
+            <input type="file" class="sound-file-input" ref="fileInput" @click.stop @change="storeSound" accept="audio/*"/>
+            <span v-if="warning" @click.stop>{{warning}}</span>
+            <button v-if="customFileExists" @click.stop="deleteSound">Clear</button>
+        </template>
+    </label>
     `
 }
   

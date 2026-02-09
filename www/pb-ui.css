@@ -137,39 +137,151 @@ dialog::backdrop {
 }
 
 /* ========================================
-   CONTROL BAR
+   CONTROL BAR (Search and Settings panel)
    ======================================== */
 
 #control-bar {
-    display: flex;
-    flex-direction: column;
-    flex-wrap: wrap;
-    gap: 10px;
-    font-size: small;
+    display: contents;
 }
 
-#detailed-controls > div {
+/* Toggle row: horizontal strip of label+checkbox pairs */
+.toggle-row {
     display: flex;
-    flex-direction: row;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 6px;
     align-items: center;
 }
 
-#detailed-controls > div > p {
-    margin: 2px;
-    font-size: small;
-}
-
-.filter {
-    box-shadow: 0 2px 4px 0 rgba(0,0,0,0.2);
-    width: fit-content;
-    height: fit-content;
-    padding: 5px;
+.toggle-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     cursor: pointer;
+    padding: 4px 0;
+    white-space: nowrap;
 }
 
-#status > p, #links > p{
+/* Pill-style toggle buttons (hide checkbox, style as clickable pill) */
+.toggle-row.pills label {
+    padding: 0 12px;
+    height: 28px;
+    line-height: 28px;
+    border-radius: 4px;
+    border: 1px solid var(--border-medium);
+    background: var(--bg-light-gray);
+    transition: all 0.15s;
+    gap: 0;
+}
+
+.toggle-row.pills label:hover {
+    background: var(--bg-lighter-blue);
+    border-color: var(--primary-blue);
+}
+
+.toggle-row.pills label.on {
+    background: var(--bg-light-blue);
+    border-color: var(--primary-blue);
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+.toggle-row.pills input[type="checkbox"] {
+    display: none;
+}
+
+.toggle-row.pills input[type="number"] {
+    margin-left: 6px;
+}
+
+
+/* Solve sound file input (sits inside pill label) */
+.sound-file-input {
+    font-size: 0.85em;
+    max-width: 200px;
+    margin-left: 8px;
+}
+
+/* Section divider within control bar */
+.controls-divider {
+    width: 100%;
+    border: none;
+    border-top: 1px solid var(--border-light);
+    margin: 4px 0;
+}
+
+/* Advanced controls area */
+#detailed-controls {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.controls-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.controls-section > span {
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+/* Filter pills for puzzle status toggles */
+.filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border-medium);
+    background: var(--bg-light-gray);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s;
+    font-size: 0.9em;
+}
+
+.filter:hover {
+    background: var(--bg-lighter-blue);
+    border-color: var(--primary-blue);
+}
+
+.filter.active {
+    background: var(--bg-light-blue);
+    border-color: var(--primary-blue);
+    color: var(--primary-blue);
+    font-weight: 600;
+}
+
+/* Settings bar: tag search + pill toggles on one row */
+#settings-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85em;
+}
+
+#tag-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#tag-search label {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+#control-bar > .toggle-row.pills {
+    flex-wrap: nowrap;
+}
+
+#status > p {
     margin-top: 0;
     margin-bottom: 0.5em;
 }
@@ -254,7 +366,7 @@ dialog::backdrop {
     display: flex;
     flex-direction: column;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
-    width: 505px;
+    width: 450px;
     flex-shrink: 0;
 }
 
@@ -269,12 +381,14 @@ dialog::backdrop {
     transition: background-color 0.5s ease;
     cursor: pointer;
     user-select: none;
+    font-size: 14px;
+    -webkit-text-size-adjust: 100%;
 }
 
 .round-header > h3 {
-    width: 215px;
+    width: 190px;
     font-size: 1.1em;
-    margin: 0 10px 0 0;
+    margin: 0 4px 0 0;
 }
 
 .round-header-stats {
@@ -340,6 +454,8 @@ dialog::backdrop {
     align-items: center;
     box-shadow: 0 0 2px 0 rgba(0,0,0,0.2);
     transition: background-color 0.5s ease;
+    font-size: 14px;
+    -webkit-text-size-adjust: 100%;
 }
 
 .puzzle.saved, .puzzle.meta.saved, .puzzle.meta.solved.saved {
@@ -356,6 +472,7 @@ dialog::backdrop {
     flex-shrink: 0;
 }
 
+
 .puzzle-icon {
     cursor: pointer;
     padding: 0;
@@ -368,7 +485,7 @@ dialog::backdrop {
 }
 
 .puzzle-name {
-    width: 200px;
+    width: 175px;
     min-width: 0;
     margin-left: 5px;
     margin-right: 5px;
@@ -400,8 +517,7 @@ div.currpuzz {
 
 .answer {
     font-family: 'Courier New', Courier, monospace;
-    width: 18ch;
-    min-width: 0;
+    flex: 1 0 17ch;
     font-size: 0.85em;
     margin-left: 5px;
     margin-right: 5px;
@@ -1018,6 +1134,7 @@ body.status-page footer {
 
 .nav-links {
     margin-bottom: 15px;
+    font-size: 0;
 }
 
 .info-box-content .nav-links {
@@ -1027,6 +1144,7 @@ body.status-page footer {
 .nav-links a {
     color: var(--primary-blue);
     text-decoration: none;
+    font-size: 0.9rem;
     padding: 8px 16px;
     background: white;
     border: 1px solid var(--border-medium);
@@ -1035,6 +1153,10 @@ body.status-page footer {
     margin-right: 10px;
     margin-bottom: 10px;
     transition: all 0.2s;
+}
+
+.nav-links a:last-child {
+    margin-right: 0;
 }
 
 .nav-links a:hover {
