@@ -592,6 +592,7 @@ $categories = [
 // Map config keys to categories
 $keyCategoryMap = [
   'bookmarklet_js' => 'hunt',
+  'hunt_domain' => 'hunt',
 
   'TEAMNAME' => 'general',
   'HUNT_FOLDER_NAME' => 'general',
@@ -638,6 +639,7 @@ $keyCategoryMap = [
 // Key descriptions for helpful tooltips
 $keyDescriptions = [
   'bookmarklet_js' => 'JavaScript bookmarklet for adding puzzles from the hunt site',
+  'hunt_domain' => 'Domain of the current hunt website (e.g. puzzlehunt.example.com)',
   'TEAMNAME' => 'Display name for your team',
   'HUNT_FOLDER_NAME' => 'Google Drive folder name for the hunt',
   'DOMAINNAME' => 'Primary domain for the team',
