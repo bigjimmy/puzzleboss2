@@ -1,6 +1,5 @@
 <?php
 global $apiroot;
-global $noremoteusertestmode;
 global $pbroot;
 global $bookmarkuri;
 global $config;
@@ -9,7 +8,6 @@ global $huntinfo;
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 $apiroot = $yaml['API']['APIURI'];
 $phproot = "http://localhost:8080/puzzleboss/www/";
-$noremoteusertestmode = "true"; //TODO: eliminate this
 
 function readapi($apicall) {
   $url = $GLOBALS['apiroot'] . $apicall;
@@ -128,13 +126,13 @@ function getauthenticatedsolver() {
   }
   
   $username = "";
-  global $noremoteusertestmode;
   global $config;
+  $allow_override = ($config->ALLOW_USERNAME_OVERRIDE ?? 'false') === 'true';
   if (!isset($_SERVER['REMOTE_USER'])) {
-    if ($noremoteusertestmode == 'true') {
+    if ($allow_override) {
       $username = "testuser";
     }
-    if (isset($_GET['assumedid'])) {
+    if ($allow_override && isset($_GET['assumedid'])) {
       $username = $_GET['assumedid'];
     }
     if ($username == "") {
@@ -145,6 +143,10 @@ function getauthenticatedsolver() {
   }
   else {
     $username = $_SERVER['REMOTE_USER'];
+    // Only allow assumedid override when REMOTE_USER is also present and override is enabled
+    if ($allow_override && isset($_GET['assumedid'])) {
+      $username = $_GET['assumedid'];
+    }
   }
   
   // Single API call to get full solver by name
@@ -194,12 +196,24 @@ function idx($container, $key, $default=null) {
 }
 
 function checkpriv($priv, $uid) {
+  static $cache = [];
+  $key = $priv . ':' . $uid;
+  if (isset($cache[$key])) {
+    return $cache[$key];
+  }
   try {
     $resp = readapi('/rbac/' . $priv . '/' . $uid);
   } catch (Exception $e) {
     exit_with_api_error($resp);
     throw $e;
   }
+  // Cache all privs returned by the API (avoids extra round-trips)
+  if (isset($resp->all_privs)) {
+    foreach ($resp->all_privs as $p => $allowed) {
+      $cache[$p . ':' . $uid] = $allowed;
+    }
+  }
+  $cache[$key] = $resp->allowed;
   return $resp->allowed;
 }
 

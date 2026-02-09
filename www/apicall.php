@@ -14,6 +14,21 @@ if (!isset($_GET['apicall']) || empty($_GET['apicall'])) {
 
 $apicall = $_GET['apicall'];
 
+// Operations that require puzztech privilege
+$puzztech_required = ['deleteuser', 'googleusers', 'privs'];
+$puzztech_required_post = ['rbac', 'config'];
+
+$needs_puzztech = in_array($apicall, $puzztech_required)
+    || ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($apicall, $puzztech_required_post));
+
+if ($needs_puzztech) {
+    $uid = getauthenticateduser();
+    if (!checkpriv("puzztech", $uid)) {
+        http_response_code(403);
+        die(json_encode(['error' => 'Insufficient privileges']));
+    }
+}
+
 if (!isset($_GET['apiparam1']) || empty($_GET['apiparam1'])) {
   $apiparam1 = '';
 }

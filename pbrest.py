@@ -449,35 +449,28 @@ def check_priv(priv, uid):
     except Exception:
         raise Exception("Exception querying database for privs)")
 
-    debug_log(3, "in database user %s ACL is %s" % (uid, rv))
+    debug_log(4, "in database user %s ACL is %s" % (uid, rv))
 
-    if rv is None:
-        return {
-            "status": "ok",
-            "allowed": False,
-        }
+    # Build dict of all privs for this user (the query already fetched them all)
+    all_privs = {}
+    if rv is not None:
+        for key in rv:
+            if key != "uid":
+                all_privs[key] = rv[key] == "YES"
 
     try:
-        privanswer = rv[priv]
+        allowed = all_privs.get(priv, False)
     except Exception:
         raise Exception(
             "Exception in reading priv %s from user %s ACL. No such priv?"
-            % (
-                priv,
-                uid,
-            )
+            % (priv, uid)
         )
 
-    if privanswer == "YES":
-        return {
-            "status": "ok",
-            "allowed": True,
-        }
-    else:
-        return {
-            "status": "ok",
-            "allowed": False,
-        }
+    return {
+        "status": "ok",
+        "allowed": allowed,
+        "all_privs": all_privs,
+    }
 
 
 @app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
@@ -2276,11 +2269,11 @@ def new_account():
     debug_log(4, "start.")
     try:
         data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
         username = data["username"]
         fullname = data["fullname"]
         email = data["email"]
         password = data["password"]
+        debug_log(5, "request data: username=%s fullname=%s email=%s password=REDACTED" % (username, fullname, email))
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
@@ -2354,7 +2347,7 @@ def finish_account(code):
         conn, cursor = _cursor()
         cursor.execute(
             """
-            SELECT username, fullname, email, password
+            SELECT username, fullname, email, password, created_at
             FROM newuser
             WHERE code = %s
             """,
@@ -2362,12 +2355,23 @@ def finish_account(code):
         )
         newuser = cursor.fetchone()
 
-        debug_log(5, "query return: %s" % str(newuser))
-
         username = newuser["username"]
         fullname = newuser["fullname"]
         email = newuser["email"]
         password = newuser["password"]
+        debug_log(5, "newuser lookup: username=%s fullname=%s email=%s password=REDACTED" % (username, fullname, email))
+
+        # Check code expiration (48 hours)
+        import datetime
+        created_at = newuser["created_at"]
+        if isinstance(created_at, str):
+            created_at = datetime.datetime.fromisoformat(created_at)
+        age = datetime.datetime.now() - created_at
+        if age.total_seconds() > 48 * 3600:
+            # Clean up the expired entry
+            cursor.execute("DELETE FROM newuser WHERE code = %s", (code,))
+            conn.commit()
+            raise Exception("Verification code has expired. Please register again.")
 
     except TypeError:
         raise Exception("Code %s is not valid." % code)

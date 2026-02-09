@@ -9,31 +9,10 @@
 <body class="status-page">
 
 <?php
-// Permissions check
 require('puzzlebosslib.php');
 
-// Get authenticated username (with test mode support)
-$username = "";
-if (!isset($_SERVER['REMOTE_USER'])) {
-  // Test mode fallback (only if REMOTE_USER not set)
-  if ($noremoteusertestmode == 'true') {
-    $username = "testuser";
-  }
-  if (isset($_GET['assumedid'])) {
-    $username = $_GET['assumedid'];
-  }
-  if ($username == "") {
-    echo '<br>authenticated REMOTE_USER not provided<br>';
-    echo '</body></html>';
-    exit(2);
-  }
-} else {
-  // Production: use Apache-provided REMOTE_USER
-  $username = $_SERVER['REMOTE_USER'];
-}
-
-$uid = getuid($username);
-$allowed = checkpriv("puzztech", $uid); //puzztech only!
+$uid = getauthenticateduser();
+$allowed = checkpriv("puzztech", $uid);
 
 if (!$allowed) {
 ?>

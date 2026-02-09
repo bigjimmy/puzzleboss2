@@ -38,29 +38,10 @@ if (isset($_GET['submit'])) {
   echo 'OK.  Solver reassigned.';
 } else {
   $solvers = readapi('/solvers')->solvers;
-  $id = "";
-  $username = "";
-
-  // Check for authenticated user
-  if (!isset($_SERVER['REMOTE_USER'])) {
-    if ($noremoteusertestmode == 'true') {
-      $username = "testuser";
-    }
-    if ($username == "") {
-      echo '<br>authenticated REMOTE_USER not provided<br>';
-      echo '</body></html>';
-      exit (2);
-    }
-  } else {
-    $username = $_SERVER['REMOTE_USER'];
-    if (isset($_GET['assumedid'])) {
-      $username = $_GET['assumedid'];
-    }
-  }
-  $id = getuid($username);
+  $id = getauthenticateduser();
 
   if ($id==0) {
-    echo '<br>No solver found for user ' . $username . '. Check Solvers Database<br>';
+    echo '<br>No solver found. Check Solvers Database<br>';
     echo '</body></html>';
     exit (2);
 

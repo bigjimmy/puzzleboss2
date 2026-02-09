@@ -49,6 +49,7 @@ CREATE TABLE `newuser` (
   `email` varchar(100) NOT NULL,
   `password` varchar(100) NOT NULL,
   `code` varchar(8) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -143,6 +144,7 @@ INSERT INTO `config` VALUES
   ('ACCT_PASSWORD', 'funkychicken'),
   ('ACCT_URI', 'https://yourdomain.org/account'),
   ('ACCT_USERNAME', 'hunt'),
+  ('ALLOW_USERNAME_OVERRIDE', 'true'),
   ('BIN_URI', 'https://yourdomain.org/pb'),
   ('BIGJIMMY_ABANDONED_STATUS', 'Abandoned'),
   ('BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', '10'),

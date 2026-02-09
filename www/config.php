@@ -534,27 +534,9 @@
 <body class="status-page">
 
 <?php
-// Permissions check — same as admin.php (puzztech only)
 require('puzzlebosslib.php');
 
-$username = "";
-if (!isset($_SERVER['REMOTE_USER'])) {
-  if ($noremoteusertestmode == 'true') {
-    $username = "testuser";
-  }
-  if (isset($_GET['assumedid'])) {
-    $username = $_GET['assumedid'];
-  }
-  if ($username == "") {
-    echo '<br>authenticated REMOTE_USER not provided<br>';
-    echo '</body></html>';
-    exit(2);
-  }
-} else {
-  $username = $_SERVER['REMOTE_USER'];
-}
-
-$uid = getuid($username);
+$uid = getauthenticateduser();
 $allowed = checkpriv("puzztech", $uid);
 
 if (!$allowed) {
@@ -598,6 +580,7 @@ $keyCategoryMap = [
   'HUNT_FOLDER_NAME' => 'general',
   'DOMAINNAME' => 'general',
   'LOGLEVEL' => 'general',
+  'ALLOW_USERNAME_OVERRIDE' => 'general',
 
   'BIGJIMMY_ABANDONED_STATUS' => 'bigjimmy',
   'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES' => 'bigjimmy',
@@ -647,6 +630,7 @@ $keyDescriptions = [
   'HUNT_FOLDER_NAME' => 'Google Drive folder name for the hunt',
   'DOMAINNAME' => 'Primary domain for the team',
   'LOGLEVEL' => 'Log verbosity: 0=emergency … 5=trace',
+  'ALLOW_USERNAME_OVERRIDE' => 'Allow ?assumedid= URL parameter to override authenticated user (dev/testing only)',
   'BIGJIMMY_ABANDONED_STATUS' => 'Status to set when a puzzle is abandoned',
   'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES' => 'Minutes of inactivity before marking abandoned',
   'BIGJIMMY_AUTOASSIGN' => 'Auto-assign solvers to puzzles from sheets',
@@ -681,7 +665,7 @@ $keyDescriptions = [
 ];
 
 // Known boolean keys (values are "true"/"false" strings)
-$booleanKeys = ['BIGJIMMY_AUTOASSIGN', 'SKIP_GOOGLE_API', 'SKIP_PUZZCORD', 'MEMCACHE_ENABLED'];
+$booleanKeys = ['ALLOW_USERNAME_OVERRIDE', 'BIGJIMMY_AUTOASSIGN', 'SKIP_GOOGLE_API', 'SKIP_PUZZCORD', 'MEMCACHE_ENABLED'];
 
 // Known numeric keys
 $numericKeys = ['LOGLEVEL', 'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', 'BIGJIMMY_PUZZLEPAUSETIME',

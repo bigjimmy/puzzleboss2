@@ -992,7 +992,8 @@ def add_user_to_google(username, firstname, lastname, password, recovery_email=N
     if recovery_email:
         userbody["recoveryEmail"] = recovery_email
 
-    debug_log(5, "Attempting to add user with post body: %s" % json.dumps(userbody))
+    safe_body = {k: ("REDACTED" if k == "password" else v) for k, v in userbody.items()}
+    debug_log(5, "Attempting to add user with post body: %s" % json.dumps(safe_body))
     try:
         addresponse = userservice.users().insert(body=userbody).execute()
     except googleapiclient.errors.HttpError as e:

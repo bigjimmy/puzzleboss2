@@ -295,27 +295,9 @@
 <body class="status-page">
 
 <?php
-// Permissions check — same as admin.php
 require('puzzlebosslib.php');
 
-$username = "";
-if (!isset($_SERVER['REMOTE_USER'])) {
-  if ($noremoteusertestmode == 'true') {
-    $username = "testuser";
-  }
-  if (isset($_GET['assumedid'])) {
-    $username = $_GET['assumedid'];
-  }
-  if ($username == "") {
-    echo '<br>authenticated REMOTE_USER not provided<br>';
-    echo '</body></html>';
-    exit(2);
-  }
-} else {
-  $username = $_SERVER['REMOTE_USER'];
-}
-
-$uid = getuid($username);
+$uid = getauthenticateduser();
 $allowed = checkpriv("puzztech", $uid);
 
 if (!$allowed) {
