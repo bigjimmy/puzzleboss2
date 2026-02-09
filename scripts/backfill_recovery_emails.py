@@ -60,7 +60,7 @@ def get_ldap_users():
         uid_list = entry.get("uid", [])
         email_list = entry.get("email", [])
         if uid_list and email_list:
-            username = uid_list[0].decode("utf-8")
+            username = uid_list[0].decode("utf-8").lower()
             email = email_list[0].decode("utf-8")
             users[username] = email
 
@@ -90,7 +90,7 @@ def get_google_users(userservice, domain):
 
         for user in results.get("users", []):
             primary = user.get("primaryEmail", "")
-            username = primary.split("@")[0] if "@" in primary else primary
+            username = (primary.split("@")[0] if "@" in primary else primary).lower()
             recovery = user.get("recoveryEmail", "")
             users[username] = recovery
 
