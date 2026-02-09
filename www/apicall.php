@@ -47,6 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     case "query":
       echo json_encode(postapi('/v1/query', $post));
       break;
+    case "rbac":
+      echo json_encode(postapi('/rbac/' . $apiparam1 . '/' . $apiparam2, $post));
+      break;
     case "tag":
       echo json_encode(postapi('/tags', $post));
       break;
@@ -114,6 +117,19 @@ else {
       }
       $queryString = count($queryParams) > 0 ? '?' . implode('&', $queryParams) : '';
       echo json_encode(readapi('/createpuzzle/' . $apiparam1 . $queryString));
+      break;
+    case "rbac":
+      // Check privilege: /rbac/<priv>/<uid>
+      echo json_encode(readapi('/rbac/' . $apiparam1 . '/' . $apiparam2));
+      break;
+    case "deleteuser":
+      echo json_encode(readapi('/deleteuser/' . $apiparam1));
+      break;
+    case "privs":
+      echo json_encode(readapi('/privs'));
+      break;
+    case "googleusers":
+      echo json_encode(readapi('/google/users'));
       break;
     default:
       http_response_code(500);

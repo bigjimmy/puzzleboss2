@@ -53,6 +53,12 @@ if (!$allowed) {
 <?= render_navbar('admin') ?>
 
 <div class="info-box">
+  <div class="info-box-header">
+    <h3><a href="./accounts.php">Accounts Management →</a></h3>
+  </div>
+</div>
+
+<div class="info-box">
   <div class="info-box-header" @click="showDeletePuzzle = !showDeletePuzzle">
     <span class="collapse-icon" :class="{ collapsed: !showDeletePuzzle }">▼</span>
     <h3>Delete Puzzle</h3>

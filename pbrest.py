@@ -9,6 +9,7 @@ from flask import Flask, request, jsonify
 from flask_restful import Api
 from flask_mysqldb import MySQL
 from pblib import *
+import pbgooglelib
 from pbgooglelib import *
 from pbdiscordlib import *
 from secrets import token_hex
@@ -658,7 +659,7 @@ def get_all_solvers():
     debug_log(4, "start")
     try:
         conn, cursor = _cursor()
-        cursor.execute("SELECT id, name from solver")
+        cursor.execute("SELECT id, name, fullname, chat_uid, chat_name from solver")
         solvers = cursor.fetchall()
     except Exception:
         raise Exception("Exception in fetching all solvers from database")
@@ -2499,6 +2500,75 @@ def delete_account(username):
 
     debug_log(3, "user %s deleted from Google Workspace" % username)
     return {"status": "ok"}
+
+
+@app.route("/privs", endpoint="get_all_privs", methods=["GET"])
+def get_all_privs():
+    """Return all privilege records from the privs table."""
+    debug_log(4, "start")
+    try:
+        conn, cursor = _cursor()
+        cursor.execute("SELECT uid, puzztech, puzzleboss FROM privs")
+        rows = cursor.fetchall()
+    except Exception:
+        raise Exception("Exception fetching all privs from database")
+
+    debug_log(4, "listed all privs (%d rows)" % len(rows))
+    return {"status": "ok", "privs": rows}
+
+
+@app.route("/google/users", endpoint="get_google_users", methods=["GET"])
+def get_google_users():
+    """Return all Google Workspace user information. Gracefully empty if Google API is disabled."""
+    debug_log(4, "start")
+
+    if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
+        debug_log(3, "Google API disabled, returning empty user list")
+        return {"status": "ok", "users": [], "google_disabled": True}
+
+    try:
+        from googleapiclient.discovery import build
+        pbgooglelib.initadmin()
+        userservice = build("admin", "directory_v1", credentials=pbgooglelib.admincreds)
+        domain = configstruct["DOMAINNAME"]
+
+        users = []
+        page_token = None
+        while True:
+            results = userservice.users().list(
+                domain=domain,
+                maxResults=500,
+                pageToken=page_token,
+                projection="full",
+            ).execute()
+
+            for user in results.get("users", []):
+                primary = user.get("primaryEmail", "")
+                username = primary.split("@")[0].lower() if "@" in primary else primary.lower()
+                name = user.get("name", {})
+                users.append({
+                    "username": username,
+                    "primaryEmail": primary,
+                    "givenName": name.get("givenName", ""),
+                    "familyName": name.get("familyName", ""),
+                    "fullName": name.get("fullName", ""),
+                    "recoveryEmail": user.get("recoveryEmail", ""),
+                    "suspended": user.get("suspended", False),
+                    "creationTime": user.get("creationTime", ""),
+                    "lastLoginTime": user.get("lastLoginTime", ""),
+                    "isAdmin": user.get("isAdmin", False),
+                    "orgUnitPath": user.get("orgUnitPath", ""),
+                })
+
+            page_token = results.get("nextPageToken")
+            if not page_token:
+                break
+
+        debug_log(4, "fetched %d Google Workspace users" % len(users))
+        return {"status": "ok", "users": users}
+    except Exception as e:
+        debug_log(1, "Failed to fetch Google users: %s" % e)
+        return {"status": "ok", "users": [], "error": str(e)}
 
 
 @app.route("/deletepuzzle/<puzzlename>", endpoint="delete_puzzle", methods=["DELETE"])
