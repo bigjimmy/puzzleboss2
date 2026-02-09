@@ -1010,12 +1010,27 @@ def add_user_to_google(username, firstname, lastname, password, recovery_email=N
 
 def delete_google_user(username):
     debug_log(4, "start with username %s" % username)
+
+    if configstruct.get("SKIP_GOOGLE_API") == "true":
+        debug_log(3, "google user deletion skipped by config.")
+        return "OK"
+
     initadmin()
 
     userservice = build("admin", "directory_v1", credentials=admincreds)
     email = "%s@%s" % (username, configstruct["DOMAINNAME"])
 
-    userservice.users().delete(userKey=email).execute()
+    try:
+        userservice.users().delete(userKey=email).execute()
+    except googleapiclient.errors.HttpError as e:
+        if e.resp.status == 404:
+            debug_log(3, "Google user %s not found, nothing to delete" % username)
+            return "OK"
+        msg = json.loads(e.content)["error"]["message"]
+        errmsg = "Error deleting Google user: %s" % msg
+        debug_log(1, errmsg)
+        return errmsg
+
     return "OK"
 
 
