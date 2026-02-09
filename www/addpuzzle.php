@@ -8,6 +8,7 @@ require('puzzlebosslib.php');
   <title>Add Puzzle</title>
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script type="module" src="./auth-reload.js"></script>
   <script>
   let formSubmitted = false;
   function handleSubmit(event) {
@@ -129,6 +130,8 @@ require('puzzlebosslib.php');
         throw new Error(data.message || 'Unknown error');
       }
 
+      window.onFetchSuccess?.();
+
       // Mark complete or skipped
       if (data.skipped) {
         setStepStatus(step.id, 'skipped', data.message || step.label + ' (skipped)');
@@ -138,6 +141,7 @@ require('puzzlebosslib.php');
 
       return data;
     } catch (err) {
+      if (window.onFetchFailure?.()) return;
       setStepStatus(step.id, 'error', err.message);
       throw err;
     }

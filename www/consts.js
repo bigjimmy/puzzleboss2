@@ -1,3 +1,5 @@
+import { onFetchSuccess, onFetchFailure } from './auth-reload.js';
+
 // Status data - must be loaded from huntinfo, no fallback
 let statusData = [];
 
@@ -7,11 +9,13 @@ fetch('./apicall.php?apicall=huntinfo')
     .then(data => {
         if (data.statuses && Array.isArray(data.statuses)) {
             statusData = data.statuses;
+            onFetchSuccess();
         } else {
             console.error('huntinfo did not return valid statuses array');
         }
     })
     .catch(e => {
+        onFetchFailure();
         console.error('FATAL: Failed to load huntinfo for status metadata:', e);
     });
 

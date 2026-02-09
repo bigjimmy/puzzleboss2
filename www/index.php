@@ -107,6 +107,7 @@ require_once('puzzlebosslib.php');
         import Round from './round.js';
         import solvesound from './solve-sound.js';
         import Consts from './consts.js';
+        import { onFetchSuccess, onFetchFailure } from './auth-reload.js';
         import tagselect from './tag-select.js';
         import Settings from './settings.js';
 
@@ -279,8 +280,10 @@ require_once('puzzlebosslib.php');
                         currPuzz.value = solver.solver.puzz;
 
                         success = true;
+                        onFetchSuccess();
                     } catch (e) {
                         console.error(e);
+                        if (onFetchFailure()) return;
                         errorTimer.value = setTimeout(() => {
                             data.value = {'rounds': []};
                         }, 60000);

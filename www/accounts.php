@@ -291,6 +291,7 @@
     .status-msg.success { background: var(--success-bg); }
     .status-msg.error { background: var(--error-bg); }
   </style>
+  <script type="module" src="./auth-reload.js"></script>
 </head>
 <body class="status-page">
 
@@ -616,6 +617,7 @@ async function savePrivs(btn) {
     for (const r of results) {
       if (r.error) throw new Error(r.error);
     }
+    window.onFetchSuccess?.();
 
     // Update originals and clear pending state
     origPrivs[id] = { puzztech: newPt, puzzleboss: newPb };
@@ -624,6 +626,7 @@ async function savePrivs(btn) {
 
     statusArea.innerHTML = '<div class="status-msg success">Privileges updated for <strong>' + username + '</strong>.</div>';
   } catch (err) {
+    if (window.onFetchFailure?.()) return;
     statusArea.innerHTML = '<div class="status-msg error">Failed to update privileges for <strong>' + username + '</strong>: ' + err.message + '</div>';
   } finally {
     btn.disabled = false;
@@ -672,6 +675,8 @@ async function executeDelete() {
       throw new Error(data.message || 'Deletion failed');
     }
 
+    window.onFetchSuccess?.();
+
     // Remove the row from the table
     const row = document.querySelector('tr[data-username="' + CSS.escape(username) + '"]');
     if (row) row.remove();
@@ -682,6 +687,7 @@ async function executeDelete() {
 
     statusArea.innerHTML = '<div class="status-msg success">Account <strong>' + username + '</strong> deleted successfully.</div>';
   } catch (err) {
+    if (window.onFetchFailure?.()) return;
     statusArea.innerHTML = '<div class="status-msg error">Failed to delete <strong>' + username + '</strong>: ' + err.message + '</div>';
   }
 }

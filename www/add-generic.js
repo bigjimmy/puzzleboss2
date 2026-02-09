@@ -1,6 +1,7 @@
 import { ref, useTemplateRef, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
 import TagSelect from './tag-select.js';
 import Consts from './consts.js';
+import { onFetchSuccess, onFetchFailure } from './auth-reload.js';
 
 //
 // This component represents one of three update icons on each puzzle. Much of
@@ -309,6 +310,7 @@ export default {
                             lastActTime.value = "";
                         }
                     } catch (e) {
+                        onFetchFailure();
                         console.log("Failed to fetch lastact:", e);
                         lastActInfo.value = "";
                         lastActTime.value = "";
@@ -329,6 +331,7 @@ export default {
                         allRounds.value = roundsData.rounds;
                         console.log("Loaded rounds:", allRounds.value);
                     } catch (e) {
+                        onFetchFailure();
                         console.log("Failed to fetch rounds:", e);
                         allRounds.value = [];
                     }
@@ -410,6 +413,7 @@ export default {
                         }));
                         context.emit('please-fetch');
                     } catch (e) {
+                        if (onFetchFailure()) return;
                         warning.value = "failed to POST; check devtools";
                         console.log(e);
                         showModal.value = true;
@@ -432,6 +436,7 @@ export default {
                             });
                             noteChanged = true;
                         } catch (e) {
+                            if (onFetchFailure()) return;
                             warning.value = "failed to POST comments; check devtools";
                             console.log(e);
                             showModal.value = true;
@@ -461,6 +466,7 @@ export default {
                             }));
                             noteChanged = true;
                         } catch (e) {
+                            if (onFetchFailure()) return;
                             warning.value = "failed to POST tags; check devtools";
                             console.log(e);
                             showModal.value = true;
@@ -489,6 +495,7 @@ export default {
                             });
                             settingsChanged = true;
                         } catch (e) {
+                            if (onFetchFailure()) return;
                             warning.value = "failed to POST name; check devtools";
                             console.log(e);
                             showModal.value = true;
@@ -506,6 +513,7 @@ export default {
                             });
                             settingsChanged = true;
                         } catch (e) {
+                            if (onFetchFailure()) return;
                             warning.value = "failed to POST round_id; check devtools";
                             console.log(e);
                             showModal.value = true;
@@ -534,6 +542,7 @@ export default {
                         });
                         context.emit('please-fetch');
                     } catch (e) {
+                        if (onFetchFailure()) return;
                         warning.value = "failed to POST; check devtools";
                         console.log(e);
                         showModal.value = true;
@@ -554,6 +563,7 @@ export default {
                         if (!emitFetch) context.emit('please-fetch');
 
                     } catch (e) {
+                        if (onFetchFailure()) return;
                         warning.value = "failed to POST; check devtools";
                         isMetaLoc.value = props.ismeta;
                         console.log(e);
@@ -589,6 +599,7 @@ export default {
                 showModal.value = false;
 
             } catch (e) {
+                if (onFetchFailure()) return;
                 warning.value = "failed to POST; check devtools";
                 console.log(e);
             }
@@ -620,6 +631,7 @@ export default {
                 puzzle.value.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'});
                 context.emit('highlight-me', 'saved');
             } catch (e) {
+                if (onFetchFailure()) return;
                 warning.value = "failed to DELETE; check devtools";
                 console.log(e);
             }

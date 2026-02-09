@@ -277,6 +277,7 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
     </style>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script type="module" src="./auth-reload.js"></script>
 </head>
 <body class="status-page">
     <div class="status-header">
@@ -426,12 +427,14 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
                 loadingMsg.remove();
                 
                 if (data.status === 'ok' && data.response) {
+                    window.onFetchSuccess?.();
                     addMessage(data.response, 'bot');
                 } else {
                     addMessage('Error: ' + (data.error || 'Unknown error'), 'error');
                 }
             } catch (err) {
                 loadingMsg.remove();
+                if (window.onFetchFailure?.()) return;
                 addMessage('Error: ' + err.message, 'error');
             }
             

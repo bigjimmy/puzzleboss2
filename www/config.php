@@ -530,6 +530,7 @@
       flex-direction: row;
     }
   </style>
+  <script type="module" src="./auth-reload.js"></script>
 </head>
 <body class="status-page">
 
@@ -977,6 +978,7 @@ async function saveConfig(btn, key) {
 
     if (data.error) throw new Error(data.error);
     if (data.status !== 'ok') throw new Error('Unexpected response');
+    window.onFetchSuccess?.();
 
     // Update the original value
     input.dataset.orig = value;
@@ -1002,6 +1004,7 @@ async function saveConfig(btn, key) {
     statusArea.innerHTML = '<div class="status-msg success">Updated <strong>' + escapeHtml(key) + '</strong> successfully.</div>';
     setTimeout(() => { statusArea.innerHTML = ''; }, 4000);
   } catch (err) {
+    if (window.onFetchFailure?.()) return;
     btn.textContent = 'Save';
     btn.disabled = false;
     statusArea.innerHTML = '<div class="status-msg error">Failed to update <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message) + '</div>';
@@ -1058,6 +1061,7 @@ async function addNewConfig() {
 
     if (data.error) throw new Error(data.error);
     if (data.status !== 'ok') throw new Error('Unexpected response');
+    window.onFetchSuccess?.();
 
     statusArea.innerHTML = '<div class="status-msg success">Added <strong>' + escapeHtml(key) + '</strong>. Refreshing page…</div>';
     keyInput.value = '';
@@ -1066,6 +1070,7 @@ async function addNewConfig() {
     // Reload to show the new key in the correct category
     setTimeout(() => location.reload(), 1000);
   } catch (err) {
+    if (window.onFetchFailure?.()) return;
     statusArea.innerHTML = '<div class="status-msg error">Failed to add <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message) + '</div>';
   }
 }

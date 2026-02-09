@@ -322,6 +322,7 @@ $uid = getauthenticateduser();
     <script type="module">
         import { createApp, ref, computed, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
         import Consts from './consts.js'
+        import { onFetchSuccess, onFetchFailure } from './auth-reload.js'
 
         <?php
             echo "const currentUid = " . json_encode($uid) . ";";
@@ -633,8 +634,10 @@ $uid = getauthenticateduser();
                             minute: '2-digit',
                             second: '2-digit'
                         })
+                        onFetchSuccess()
                     } catch (e) {
                         console.error('Fetch error:', e)
+                        if (onFetchFailure()) return
                         updateState.value = 'circle error pulse'
                     }
                 }
