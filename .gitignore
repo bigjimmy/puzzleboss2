@@ -7,6 +7,7 @@ puzzleboss.yaml
 credentials.json
 token.json
 admintoken.json
+service-account.json
 oidc-secrets.conf
 puzzleboss2env/
 scripts/solvertable*

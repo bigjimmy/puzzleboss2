@@ -5,7 +5,7 @@ import threading
 import googleapiclient
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 import google_auth_httplib2
 import httplib2
 import pblib
@@ -47,35 +47,45 @@ SCOPES = [
 ADMINSCOPES = ["https://www.googleapis.com/auth/admin.directory.user"]
 
 
+def _get_service_account_file():
+    """Get the path to the service account JSON key file."""
+    # Check config table first, then fall back to default path
+    sa_file = configstruct.get("SERVICE_ACCOUNT_FILE", "service-account.json")
+    if not os.path.exists(sa_file):
+        debug_log(0, "Service account file not found: %s" % sa_file)
+        raise Exception(
+            "Service account key file '%s' not found. "
+            "Download it from Google Cloud Console and place it in the app directory." % sa_file
+        )
+    return sa_file
+
+
+def _get_impersonation_subject():
+    """Get the domain user email to impersonate for API calls."""
+    subject = configstruct.get("SERVICE_ACCOUNT_SUBJECT", "")
+    if not subject:
+        debug_log(0, "SERVICE_ACCOUNT_SUBJECT not set in config table")
+        raise Exception(
+            "SERVICE_ACCOUNT_SUBJECT must be set in the config table to a domain admin email "
+            "(e.g. bigjimmy@importanthuntpoll.org) for service account impersonation."
+        )
+    return subject
+
+
 def initadmin():
     debug_log(4, "start")
 
     global admincreds
     global ADMINSCOPES
 
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists("admintoken.json"):
-        debug_log(4, "Credentials found in admintoken.json.")
-        admincreds = Credentials.from_authorized_user_file(
-            "admintoken.json", ADMINSCOPES
-        )
-    # If there are no (valid) credentials available, let the user log in.
-    if not admincreds or not admincreds.valid:
-        if admincreds and admincreds.expired and admincreds.refresh_token:
-            debug_log(3, "Refreshing credentials.")
-            admincreds.refresh(Request())
-        else:
-            debug_log(
-                0, "Admin Credentials missing. Run googleadmininit.py on console."
-            )
-            raise Exception(
-                "Google API admin credentials on server invalid or missing. Fatal error, contact puzztech immediately."
-            )
+    sa_file = _get_service_account_file()
+    subject = _get_impersonation_subject()
 
-        with open("admintoken.json", "w") as token:
-            token.write(admincreds.to_json())
+    debug_log(4, "Loading admin credentials from service account: %s (subject: %s)" % (sa_file, subject))
+    admincreds = service_account.Credentials.from_service_account_file(
+        sa_file, scopes=ADMINSCOPES, subject=subject
+    )
+    debug_log(3, "Admin credentials initialized via service account")
 
 
 def initdrive():
@@ -90,28 +100,17 @@ def initdrive():
     global creds
     global SCOPES
 
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists("token.json"):
-        debug_log(4, "Credentials found in token.json.")
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            debug_log(3, "Refreshing credentials.")
-            creds.refresh(Request())
-        else:
-            errmsg = "Credentials missing.  Run gdriveinit.py on console."
-            debug_log(0, errmsg)
-            sys.exit(255)
+    sa_file = _get_service_account_file()
+    subject = _get_impersonation_subject()
 
-        with open("token.json", "w") as token:
-            token.write(creds.to_json())
+    debug_log(4, "Loading Drive/Sheets credentials from service account: %s (subject: %s)" % (sa_file, subject))
+    creds = service_account.Credentials.from_service_account_file(
+        sa_file, scopes=SCOPES, subject=subject
+    )
 
     service = build("drive", "v3", credentials=creds)
     sheetsservice = build("sheets", "v4", credentials=creds)
-    debug_log(3, "Drive and Sheets services initialized")
+    debug_log(3, "Drive and Sheets services initialized via service account")
 
     foldername = configstruct["HUNT_FOLDER_NAME"]
 

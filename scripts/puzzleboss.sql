@@ -169,6 +169,8 @@ INSERT INTO `config` VALUES
   ('PUZZCORD_HOST', 'puzzcord-server.example.org'),
   ('PUZZCORD_PORT', '3141'),
   ('REGEMAIL', 'admin@yourdomain.org'),
+  ('SERVICE_ACCOUNT_FILE', 'service-account.json'),
+  ('SERVICE_ACCOUNT_SUBJECT', ''),
   ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
   ('SKIP_GOOGLE_API', 'true'),
   ('SKIP_PUZZCORD', 'true'),
