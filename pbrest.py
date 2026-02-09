@@ -2389,12 +2389,12 @@ def finish_account(code):
         if result != "OK":
             raise Exception("Failed to create Google account: %s" % result)
         if not _solver_exists(username):
-            postbody = {"fullname": "%s %s" % (firstname, lastname), "name": username}
-            solveraddresponse = requests.post(
-                "%s/solvers" % config["API"]["APIURI"], json=postbody
+            conn, cursor = _cursor()
+            cursor.execute(
+                "INSERT INTO solver (name, fullname) VALUES (%s, %s)",
+                (username, "%s %s" % (firstname, lastname)),
             )
-            if not solveraddresponse.ok:
-                raise Exception("Failed to add to solver database")
+            conn.commit()
         conn, cursor = _cursor()
         cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
@@ -2453,12 +2453,12 @@ def finish_account(code):
             "User %s: Step 3 - Adding to Puzzleboss solver database"
             % username,
         )
-        postbody = {"fullname": "%s %s" % (firstname, lastname), "name": username}
-        solveraddresponse = requests.post(
-            "%s/solvers" % config["API"]["APIURI"], json=postbody
+        conn, cursor = _cursor()
+        cursor.execute(
+            "INSERT INTO solver (name, fullname) VALUES (%s, %s)",
+            (username, "%s %s" % (firstname, lastname)),
         )
-        if not solveraddresponse.ok:
-            raise Exception("Failed to add to solver database")
+        conn.commit()
         debug_log(
             4, "User %s: Step 3 - Added to solver database successfully" % username
         )
