@@ -113,6 +113,44 @@ def invalidate_cache_with_stats():
         debug_log(3, f"Failed to increment cache stats: {e}")
 
 
+# ── Internal helpers ──────────────────────────────────────────────────────
+
+def _cursor():
+    """Get a DB connection and cursor."""
+    conn = mysql.connection
+    return conn, conn.cursor()
+
+
+def _read_cursor():
+    """Get a DB cursor with READ UNCOMMITTED for read-only queries."""
+    conn, cursor = _cursor()
+    cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+    return conn, cursor
+
+
+def _log_activity(puzzle_id, activity_type, solver_id=100, source="puzzleboss"):
+    """Log an activity entry. Fails silently (logs error only)."""
+    try:
+        conn, cursor = _cursor()
+        cursor.execute(
+            "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, %s, %s)",
+            (puzzle_id, solver_id, source, activity_type),
+        )
+        conn.commit()
+    except Exception as e:
+        debug_log(1, "Failed to log activity for puzzle %s: %s" % (puzzle_id, e))
+
+
+def _get_status_names():
+    """Get puzzle status names from the DB ENUM definition."""
+    conn, cursor = _cursor()
+    cursor.execute("SHOW COLUMNS FROM puzzle WHERE Field = 'status'")
+    row = cursor.fetchone()
+    if not row or not row.get("Type", "").startswith("enum("):
+        return []
+    return [v.strip("'") for v in row["Type"][5:-1].split("','")]
+
+
 # Periodic config refresh on each request (checks if 60s have passed)
 @app.before_request
 def periodic_config_refresh():
@@ -152,9 +190,7 @@ def _get_all_from_db():
     """Internal function to fetch all rounds/puzzles from database."""
     debug_log(4, "fetching all from database")
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute("SELECT * from puzzle_view")
         puzzle_view = cursor.fetchall()
     except Exception:
@@ -165,9 +201,7 @@ def _get_all_from_db():
         all_puzzles[puzzle["id"]] = puzzle
 
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute("SELECT * from round_view")
         round_view = cursor.fetchall()
     except Exception:
@@ -246,8 +280,7 @@ def get_hunt_info():
     debug_log(5, "start")
     result = {"status": "ok"}
 
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
 
     # Config
     try:
@@ -261,15 +294,9 @@ def get_hunt_info():
     # Statuses - return rich objects with metadata
     try:
         # Get status names from DB ENUM
-        cursor.execute("SHOW COLUMNS FROM puzzle WHERE Field = 'status'")
-        row = cursor.fetchone()
-        status_names = []
-        if row and row.get("Type", "").startswith("enum("):
-            type_str = row["Type"]
-            status_names = [v.strip("'") for v in type_str[5:-1].split("','")]
+        status_names = _get_status_names()
 
         # Parse metadata from config
-        import json
         status_metadata = {}
         try:
             metadata_json = configstruct.get("STATUS_METADATA", "[]")
@@ -321,8 +348,7 @@ def get_hunt_info():
 def get_all_puzzles():
     debug_log(4, "start")
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id, name from puzzle")
         puzzlist = cursor.fetchall()
     except IndexError:
@@ -338,8 +364,7 @@ def get_all_puzzles():
 def get_puzzles_by_tag_id(tag_id):
     """Get all puzzles with a specific tag ID. Reusable helper function."""
     debug_log(4, "start with tag_id: %s" % tag_id)
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
 
     # Use MEMBER OF() to leverage the multi-valued JSON index
     # Return full puzzle data from puzzle_view to avoid N+1 queries on client
@@ -358,8 +383,7 @@ def get_puzzles_by_tag_id(tag_id):
 def get_tag_id_by_name(tag_name):
     """Get tag ID by name (case-insensitive). Returns None if not found."""
     debug_log(4, "start with tag_name: %s" % tag_name)
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
     cursor.execute("SELECT id FROM tag WHERE LOWER(name) = LOWER(%s)", (tag_name,))
     tag_row = cursor.fetchone()
     if not tag_row:
@@ -397,8 +421,7 @@ def search_puzzles():
                 return {"status": "error", "error": "tag_id must be an integer"}, 400
 
             # Verify the tag exists
-            conn = mysql.connection
-            cursor = conn.cursor()
+            conn, cursor = _cursor()
             cursor.execute("SELECT id FROM tag WHERE id = %s", (tag_id,))
             if not cursor.fetchone():
                 debug_log(4, "tag_id %s not found" % tag_id)
@@ -420,8 +443,7 @@ def search_puzzles():
 def check_priv(priv, uid):
     debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid,))
         rv = cursor.fetchone()
     except Exception:
@@ -463,9 +485,7 @@ def check_priv(priv, uid):
 def get_one_puzzle(id):
     debug_log(4, "start. id: %s" % id)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
         puzzle = cursor.fetchone()
     except IndexError:
@@ -493,9 +513,7 @@ def get_puzzle_part(id, part):
         rv = get_last_sheet_activity_for_puzzle(id)
     else:
         try:
-            conn = mysql.connection
-            cursor = conn.cursor()
-            cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+            conn, cursor = _read_cursor()
             cursor.execute(
                 f"SELECT {part} from puzzle_view where id = %s LIMIT 1", (id,)
             )
@@ -523,9 +541,7 @@ def get_puzzle_activity(id):
 
     # Check if puzzle exists
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute("SELECT id FROM puzzle WHERE id = %s", (id,))
         if not cursor.fetchone():
             raise Exception("Puzzle %s not found" % id)
@@ -560,8 +576,7 @@ def get_puzzle_activity(id):
 def get_all_rounds():
     debug_log(4, "start")
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id, name from round")
         roundlist = cursor.fetchall()
     except Exception:
@@ -579,8 +594,7 @@ def get_all_rounds():
 def get_one_round(id):
     debug_log(4, "start. id: %s" % id)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             """
             SELECT r.id, r.name, r.round_uri, r.drive_uri, r.drive_id, r.status, r.comments,
@@ -618,8 +632,7 @@ def get_one_round(id):
 def get_round_part(id, part):
     debug_log(4, "start. id: %s, part: %s" % (id, part))
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         # Use round table directly instead of round_view to get status
         cursor.execute(f"SELECT {part} from round where id = %s", (id,))
         answer = cursor.fetchone()
@@ -645,8 +658,7 @@ def get_round_part(id, part):
 def get_all_solvers():
     debug_log(4, "start")
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id, name from solver")
         solvers = cursor.fetchall()
     except Exception:
@@ -661,9 +673,7 @@ def get_all_solvers():
 def get_one_solver(id):
     debug_log(4, "start. id: %s" % id)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute("SELECT * from solver_view where id = %s", (id,))
         solver = cursor.fetchone()
         if solver is None:
@@ -687,9 +697,7 @@ def get_solver_by_name(name):
     """Get solver by username - more efficient than fetching all solvers"""
     debug_log(4, "start. name: %s" % name)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute("SELECT * from solver_view where name = %s", (name,))
         solver = cursor.fetchone()
         if solver is None:
@@ -714,9 +722,7 @@ def get_solver_activity(id):
 
     # Check if solver exists
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute("SELECT id FROM solver WHERE id = %s", (id,))
         if not cursor.fetchone():
             raise Exception("Solver %s not found" % id)
@@ -753,9 +759,7 @@ def _solver_exists(identifier):
     Does not raise exceptions or log errors for missing solvers.
     """
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
 
         # Check by id if integer, by name if string
         if isinstance(identifier, int):
@@ -810,8 +814,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
         else:
             # Puzz is empty, so this is a de-assignment
             # Find the puzzle the solver is currently assigned to
-            conn = mysql.connection
-            cursor = conn.cursor()
+            conn, cursor = _cursor()
             cursor.execute(
                 """
                 SELECT id FROM puzzle
@@ -833,23 +836,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
         puzzle_id_for_log = current_puzzle["id"] if (not value and current_puzzle) else value
 
         if puzzle_id_for_log:  # Only log if we have a valid puzzle_id
-            try:
-                conn = mysql.connection
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO activity
-                    (puzzle_id, solver_id, source, type)
-                    VALUES (%s, %s, %s, 'interact')
-                    """,
-                    (puzzle_id_for_log, id, source),
-                )
-                conn.commit()
-            except TypeError:
-                raise Exception(
-                    "Exception in logging change to puzzle %s in activity table for solver %s in database"
-                    % (puzzle_id_for_log, id)
-                )
+            _log_activity(puzzle_id_for_log, "interact", id, source)
 
         debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
         debug_log(3, "solver %s puzz updated to %s" % (id, value))
@@ -857,8 +844,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
 
     # For all other parts, just try to update - MySQL will reject invalid columns
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
     except Exception as e:
@@ -946,8 +932,7 @@ def update_solver_part(id, part):
 def get_config():
     debug_log(5, "start")
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT * FROM config")
         config = {row["key"]: row["val"] for row in cursor.fetchall()}
     except TypeError:
@@ -975,8 +960,7 @@ def put_config():
         )
     except Exception as e:
         raise Exception("Exception Interpreting input data for config change: %s" % e)
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
     cursor.execute(
         "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s",
         (mykey, myval, mykey, myval),
@@ -993,8 +977,7 @@ def get_botstats():
     """Get all bot statistics"""
     debug_log(5, "start")
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT `key`, `val`, `updated` FROM botstats")
         rows = cursor.fetchall()
         botstats = {}
@@ -1044,8 +1027,7 @@ def put_botstats():
     except Exception as e:
         raise Exception("Exception interpreting input data for batch botstat update: %s" % e)
 
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
 
     # Update all stats in a single transaction
     for key, val in stats_to_update:
@@ -1073,8 +1055,7 @@ def put_botstat(key):
     except Exception as e:
         raise Exception("Exception interpreting input data for botstat update: %s" % e)
 
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
     cursor.execute(
         "INSERT INTO botstats (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
         (key, myval, myval),
@@ -1093,32 +1074,9 @@ def put_botstat(key):
 def get_statuses():
     """Get all available puzzle statuses from database schema"""
     debug_log(5, "start")
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        # Get enum values from the puzzle table schema
-        cursor.execute(
-            """
-            SELECT COLUMN_TYPE 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = DATABASE() 
-            AND TABLE_NAME = 'puzzle' 
-            AND COLUMN_NAME = 'status'
-        """
-        )
-        row = cursor.fetchone()
-        if not row:
-            raise Exception("Could not find status column in puzzle table")
-
-        # Parse enum('val1','val2',...) format
-        enum_str = row["COLUMN_TYPE"]
-        # Remove "enum(" prefix and ")" suffix, then split by ","
-        values_str = enum_str[5:-1]  # Remove "enum(" and ")"
-        statuses = [v.strip("'") for v in values_str.split("','")]
-
-    except Exception as e:
-        raise Exception("Exception fetching statuses from database: %s" % e)
-
+    statuses = _get_status_names()
+    if not statuses:
+        raise Exception("Could not find status column in puzzle table")
     debug_log(5, "fetched %d statuses from database" % len(statuses))
     return {"status": "ok", "statuses": statuses}
 
@@ -1129,8 +1087,7 @@ def get_tags():
     """Get all tags"""
     debug_log(4, "start")
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id, name, created_at FROM tag ORDER BY name")
         rows = cursor.fetchall()
         tags = []
@@ -1157,8 +1114,7 @@ def get_tag(tag):
     """Get a single tag by name"""
     debug_log(4, "start with tag: %s" % tag)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id, name, created_at FROM tag WHERE name = %s", (tag,))
         row = cursor.fetchone()
         if row is None:
@@ -1198,8 +1154,7 @@ def create_tag():
         }, 400
 
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("INSERT INTO tag (name) VALUES (%s)", (tag_name,))
         conn.commit()
         new_id = cursor.lastrowid
@@ -1221,8 +1176,7 @@ def delete_tag(tag):
     tag_name = tag.lower()  # Normalize to lowercase
 
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
 
         # First, find the tag id
         cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
@@ -1293,8 +1247,7 @@ def create_puzzle():
 
     # Check for duplicate
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
         existing_puzzle = cursor.fetchone()
     except Exception:
@@ -1338,8 +1291,7 @@ def create_puzzle():
 
     # Actually insert into the database
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
 
         # Store the full puzzle name in UTF-8 as the chat channel name
         # The Discord bot will handle creating a proper channel
@@ -1373,22 +1325,12 @@ def create_puzzle():
 
     # We need to figure out what the ID is that the puzzle got assigned
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
         puzzle = cursor.fetchone()
         myid = str(puzzle["id"])
 
-        # Add activity entry for puzzle creation
-        cursor.execute(
-            """
-            INSERT INTO activity
-            (puzzle_id, solver_id, source, type)
-            VALUES (%s, %s, 'puzzleboss', 'create')
-            """,
-            (myid, 100),
-        )
-        conn.commit()
+        _log_activity(myid, "create")
 
         # If this is a meta puzzle, check round completion status
         # This handles unmarking rounds that were previously solved when a new unsolved meta is added
@@ -1454,8 +1396,7 @@ def create_puzzle_stepwise():
 
     # Check for duplicate
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
         existing_puzzle = cursor.fetchone()
     except Exception as e:
@@ -1473,12 +1414,10 @@ def create_puzzle_stepwise():
         return jsonify({"error": f"Round ID {round_id} not found"}), 404
 
     # Generate unique code and store request
-    import secrets
-    code = secrets.token_urlsafe(12)
+    code = token_hex(12)
 
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             """
             INSERT INTO temp_puzzle_creation
@@ -1528,8 +1467,7 @@ def finish_puzzle_creation(code):
 
     # Retrieve puzzle creation request from temp storage
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             "SELECT * FROM temp_puzzle_creation WHERE code = %s",
             (code,)
@@ -1705,16 +1643,7 @@ def finish_puzzle_creation(code):
             puzzle = cursor.fetchone()
             myid = str(puzzle["id"])
 
-            # Add activity entry for puzzle creation
-            cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'puzzleboss', 'create')
-                """,
-                (myid, 100),
-            )
-            conn.commit()
+            _log_activity(myid, "create")
 
             # If this is a meta puzzle, check round completion status
             # This handles unmarking rounds that were previously solved when a new unsolved meta is added
@@ -1809,8 +1738,7 @@ def create_round():
 
     # Check for duplicate
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id FROM round WHERE name = %s LIMIT 1", (roundname,))
         existing_round = cursor.fetchone()
     except Exception:
@@ -1830,16 +1758,12 @@ def create_round():
     round_drive_uri = "https://drive.google.com/drive/u/1/folders/%s" % round_drive_id
     debug_log(5, "Round drive URI created: %s" % round_drive_uri)
     # Actually insert into the database
-    # try:
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
     cursor.execute(
         "INSERT INTO round (name, drive_uri) VALUES (%s, %s)",
         (roundname, round_drive_uri),
     )
     conn.commit()
-    # except:
-    #     raise Exception("Exception in insertion of round %s into database" % roundname)
 
     debug_log(
         3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri)
@@ -1869,8 +1793,7 @@ def set_priv(priv, uid):
 
     # Actually insert into the database
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             f"INSERT INTO privs (uid, {priv}) VALUES (%s, %s) ON DUPLICATE KEY UPDATE uid=%s, {priv}=%s",
             (uid, value, uid, value),
@@ -1896,8 +1819,7 @@ def _update_single_round_part(id, part, value):
 
     # Just try to update - MySQL will reject invalid columns
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
         conn.commit()
     except Exception as e:
@@ -1973,8 +1895,7 @@ def create_solver():
 
     # Actually insert into the database
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             "INSERT INTO solver (name, fullname) VALUES (%s, %s)", (name, fullname)
         )
@@ -2032,48 +1953,11 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             update_puzzle_part_in_db(id, part, value)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
 
-            # Add activity entry for status change
-            try:
-                conn = mysql.connection
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO activity
-                    (puzzle_id, solver_id, source, type)
-                    VALUES (%s, %s, 'puzzleboss', 'interact')
-                    """,
-                    (id, 100),
-                )
-                conn.commit()
-            except Exception:
-                debug_log(
-                    1,
-                    "Exception in logging status change in activity table for puzzle %s"
-                    % id,
-                )
+            _log_activity(id, "interact")
         else:
             # All other valid statuses (Being worked, Unnecessary, Under control, Waiting for HQ, Grind, etc.)
             update_puzzle_part_in_db(id, part, value)
-
-            # Add activity entry for status change
-            try:
-                conn = mysql.connection
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO activity
-                    (puzzle_id, solver_id, source, type)
-                    VALUES (%s, %s, 'puzzleboss', 'interact')
-                    """,
-                    (id, 100),
-                )
-                conn.commit()
-            except Exception:
-                debug_log(
-                    1,
-                    "Exception in logging status change in activity table for puzzle %s"
-                    % id,
-                )
+            _log_activity(id, "interact")
 
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
@@ -2086,25 +1970,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
 
-        # Add activity entry for location change
-        try:
-            conn = mysql.connection
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'puzzleboss', 'interact')
-                """,
-                (id, 100),
-            )
-            conn.commit()
-        except Exception:
-            debug_log(
-                1,
-                "Exception in logging xyzloc change in activity table for puzzle %s"
-                % id,
-            )
+        _log_activity(id, "interact")
 
         if (value is not None) and (value != ""):
             chat_say_something(
@@ -2130,25 +1996,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
             chat_announce_solved(mypuzzle["puzzle"]["name"])
 
-            # Add activity entry for puzzle being solved
-            try:
-                conn = mysql.connection
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT INTO activity
-                    (puzzle_id, solver_id, source, type)
-                    VALUES (%s, %s, 'puzzleboss', 'solve')
-                    """,
-                    (id, 100),
-                )
-                conn.commit()
-            except Exception:
-                debug_log(
-                    1,
-                    "Exception in logging puzzle solve in activity table for puzzle %s"
-                    % id,
-                )
+            _log_activity(id, "solve")
 
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
@@ -2162,23 +2010,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             % (mypuzzle["puzzle"]["name"], value),
         )
 
-        # Add activity entry for comment
-        try:
-            conn = mysql.connection
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'puzzleboss', 'comment')
-                """,
-                (id, 100),
-            )
-            conn.commit()
-        except Exception:
-            debug_log(
-                1, "Exception in logging comment in activity table for puzzle %s" % id
-            )
+        _log_activity(id, "comment")
 
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)
@@ -2186,8 +2018,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
 
     elif part == "round_id":
         # Validate that the round exists
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id FROM round WHERE id = %s", (value,))
         if not cursor.fetchone():
             raise Exception("Round ID %s not found" % value)
@@ -2200,22 +2031,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         updated_puzzle = get_one_puzzle(id)
         chat_announce_move(updated_puzzle["puzzle"]["name"])
 
-        # Add activity entry for round change
-        try:
-            cursor.execute(
-                """
-                INSERT INTO activity
-                (puzzle_id, solver_id, source, type)
-                VALUES (%s, %s, 'puzzleboss', 'interact')
-                """,
-                (id, 100),
-            )
-            conn.commit()
-        except Exception:
-            debug_log(
-                1,
-                "Exception in logging round change in activity table for puzzle %s" % id,
-            )
+        _log_activity(id, "interact")
 
     elif part == "name":
         # Update puzzle name (strip spaces like in create_puzzle)
@@ -2224,8 +2040,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             raise Exception("Puzzle name cannot be empty")
 
         # Check for duplicate names
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             "SELECT id FROM puzzle WHERE name = %s AND id != %s", (sanitized_name, id)
         )
@@ -2244,8 +2059,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
 
     elif part == "tags":
         # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}} or {"tags": {"remove_id": 123}}
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
 
         # Get current tags
         cursor.execute("SELECT tags FROM puzzle WHERE id = %s", (id,))
@@ -2363,19 +2177,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # Log tag change to activity table using system solver_id (100)
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
-            try:
-                cursor.execute(
-                    """
-                    INSERT INTO activity
-                    (puzzle_id, solver_id, source, type)
-                    VALUES (%s, %s, 'puzzleboss', 'comment')
-                    """,
-                    (id, 100),
-                )
-                conn.commit()
-                debug_log(4, "Logged tag change activity for puzzle %s" % id)
-            except Exception as e:
-                debug_log(1, "Failed to log tag activity: %s" % str(e))
+            _log_activity(id, "comment")
 
     else:
         # For any other part, just try to update it directly
@@ -2530,8 +2332,7 @@ def new_account():
 
     # Actually insert into the database
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             """
             INSERT INTO newuser
@@ -2578,8 +2379,7 @@ def finish_account(code):
 
     # Always validate code and get user info first
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute(
             """
             SELECT username, fullname, email, password
@@ -2634,8 +2434,7 @@ def finish_account(code):
         )
         retcode = add_or_update_user(username, firstname, lastname, email, password)
         if retcode == "OK":
-            conn = mysql.connection
-            cursor = conn.cursor()
+            conn, cursor = _cursor()
             cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
             conn.commit()
             debug_log(
@@ -2760,8 +2559,7 @@ def finish_account(code):
             "User %s: Step 5 - Deleting temporary newuser entry from database"
             % username,
         )
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
         debug_log(
@@ -2810,8 +2608,7 @@ def delete_puzzle(puzzlename):
     clear_puzzle_solvers(puzzid, mysql.connection)
 
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("DELETE from puzzle where id = %s", (puzzid,))
         conn.commit()
     except Exception:
@@ -2832,31 +2629,12 @@ def delete_puzzle(puzzlename):
 ############### END REST calls section
 
 
-def unassign_solver_by_name(name):
-    debug_log(4, "start, called with (name): %s" % name)
-
-    # We have to look up the solver id for the given name first.
-    conn = mysql.connection
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM solver WHERE name = %s LIMIT 1", (name,))
-    id = cursor.fetchone()["id"]
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO puzzle_solver (puzzle_id, solver_id) VALUES (NULL, %s)", (id,)
-    )
-    conn.commit()
-
-    debug_log(3, "Solver id: %s, name: %s unassigned" % (id, name))
-
-    return 0
-
 
 def get_puzzle_id_by_name(name):
     debug_log(4, "start, called with (name): %s" % name)
 
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
         rv = cursor.fetchone()["id"]
         debug_log(4, "rv = %s" % rv)
@@ -2867,8 +2645,7 @@ def get_puzzle_id_by_name(name):
 
 
 def update_puzzle_part_in_db(id, part, value):
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
 
     if part == "solvers":
         # Handle solver assignments
@@ -2904,9 +2681,7 @@ def get_puzzles_from_list(list):
 def get_last_activity_for_puzzle(id):
     debug_log(4, "start, called with: %s" % id)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute(
             """SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1""",
             (id,),
@@ -2921,9 +2696,7 @@ def get_last_sheet_activity_for_puzzle(id):
     """Get the last 'revise' type activity for a puzzle (sheet edits only)."""
     debug_log(4, "start, called with: %s" % id)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute(
             """SELECT * from activity where puzzle_id = %s AND type = 'revise' ORDER BY time DESC LIMIT 1""",
             (id,),
@@ -2937,9 +2710,7 @@ def get_last_sheet_activity_for_puzzle(id):
 def get_last_activity_for_solver(id):
     debug_log(4, "start, called with: %s" % id)
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+        conn, cursor = _read_cursor()
         cursor.execute(
             "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
             (id,),
@@ -2955,9 +2726,8 @@ def set_new_activity_for_puzzle(id, actstruct):
 
     try:
         solver_id = actstruct["solver_id"]
-        puzzle_id = id
         source = actstruct["source"]
-        type = actstruct["type"]
+        activity_type = actstruct["type"]
     except Exception:
         debug_log(
             0,
@@ -2966,38 +2736,36 @@ def set_new_activity_for_puzzle(id, actstruct):
         )
         return 255
 
-    try:
-        conn = mysql.connection
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO activity
-            (puzzle_id, solver_id, source, type)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (puzzle_id, solver_id, source, type),
-        )
-        conn.commit()
-    except TypeError:
-        debug_log(
-            0,
-            "Exception in logging change to puzzle %s in activity table for solver %s in database"
-            % (puzzle_id, solver_id),
-        )
-        return 255
-
-    debug_log(3, "Updated activity for puzzle id %s" % (puzzle_id))
+    _log_activity(id, activity_type, solver_id, source)
+    debug_log(3, "Updated activity for puzzle id %s" % id)
     return 0
 
 
 def delete_pb_solver(username):
     debug_log(4, "start, called with username %s" % username)
 
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
     cursor.execute("DELETE from solver where name = %s", (username,))
     conn.commit()
     return 0
+
+
+def _get_validated_history(puzzle_id):
+    """Parse request, validate puzzle+solver, return (solver_id, history, conn, cursor)."""
+    data = request.get_json()
+    solver_id = data["solver_id"]
+
+    mypuzzle = get_one_puzzle(puzzle_id)
+    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
+        raise Exception("Error looking up puzzle %s" % puzzle_id)
+    mysolver = get_one_solver(solver_id)
+    if "status" not in mysolver or mysolver["status"] != "ok":
+        raise Exception("Error looking up solver %s" % solver_id)
+
+    conn, cursor = _cursor()
+    cursor.execute("SELECT solver_history FROM puzzle WHERE id = %s", (puzzle_id,))
+    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
+    return solver_id, json.loads(history_str), conn, cursor
 
 
 @app.route(
@@ -3008,48 +2776,13 @@ def delete_pb_solver(username):
 )
 def add_solver_to_history(id):
     debug_log(4, "start. id: %s" % id)
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        solver_id = data["solver_id"]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected field (solver_id) missing.")
+    solver_id, history, conn, cursor = _get_validated_history(id)
 
-    # Check if this is a legit puzzle
-    mypuzzle = get_one_puzzle(id)
-    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
-        raise Exception("Error looking up puzzle %s" % id)
-
-    # Check if this is a legit solver
-    mysolver = get_one_solver(solver_id)
-    if "status" not in mysolver or mysolver["status"] != "ok":
-        raise Exception("Error looking up solver %s" % solver_id)
-
-    conn = mysql.connection
-    cursor = conn.cursor()
-
-    # Get current history
-    cursor.execute(
-        """
-        SELECT solver_history FROM puzzle WHERE id = %s
-    """,
-        (id,),
-    )
-    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
-    history = json.loads(history_str)
-
-    # Add solver to history if not already present
     existing_ids = [s["solver_id"] for s in history["solvers"]]
     if solver_id not in existing_ids:
         history["solvers"].append({"solver_id": solver_id})
         cursor.execute(
-            """
-            UPDATE puzzle
-            SET solver_history = %s
-            WHERE id = %s
-        """,
+            "UPDATE puzzle SET solver_history = %s WHERE id = %s",
             (json.dumps(history), id),
         )
         conn.commit()
@@ -3072,50 +2805,11 @@ def add_solver_to_history(id):
 )
 def remove_solver_from_history(id):
     debug_log(4, "start. id: %s" % id)
-    try:
-        data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
-        solver_id = data["solver_id"]
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
-    except KeyError:
-        raise Exception("Expected field (solver_id) missing.")
+    solver_id, history, conn, cursor = _get_validated_history(id)
 
-    # Check if this is a legit puzzle
-    mypuzzle = get_one_puzzle(id)
-    if "status" not in mypuzzle or mypuzzle["status"] != "ok":
-        raise Exception("Error looking up puzzle %s" % id)
-
-    # Check if this is a legit solver
-    mysolver = get_one_solver(solver_id)
-    if "status" not in mysolver or mysolver["status"] != "ok":
-        raise Exception("Error looking up solver %s" % solver_id)
-
-    conn = mysql.connection
-    cursor = conn.cursor()
-
-    # Get current history
+    history["solvers"] = [s for s in history["solvers"] if s["solver_id"] != solver_id]
     cursor.execute(
-        """
-        SELECT solver_history FROM puzzle WHERE id = %s
-    """,
-        (id,),
-    )
-    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
-    history = json.loads(history_str)
-
-    # Remove solver from history if present
-    history["solvers"] = [
-        s for s in history["solvers"]
-        if s["solver_id"] != solver_id
-    ]
-
-    cursor.execute(
-        """
-        UPDATE puzzle
-        SET solver_history = %s
-        WHERE id = %s
-    """,
+        "UPDATE puzzle SET solver_history = %s WHERE id = %s",
         (json.dumps(history), id),
     )
     conn.commit()
@@ -3144,8 +2838,7 @@ def force_cache_invalidate():
 def get_all_activities():
     """Get activity counts by type and puzzle timing information."""
     try:
-        conn = mysql.connection
-        cursor = conn.cursor()
+        conn, cursor = _cursor()
 
         # Get activity counts
         cursor.execute(
@@ -3291,8 +2984,7 @@ def llm_query():
         )
 
     # Get database cursor for the library
-    conn = mysql.connection
-    cursor = conn.cursor()
+    conn, cursor = _cursor()
 
     # Process the query using the LLM library
     # Uses cached data when available, falls back to DB
