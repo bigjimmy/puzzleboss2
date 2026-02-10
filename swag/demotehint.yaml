@@ -1,7 +1,7 @@
 tags:
   - Hints
 summary: Demote a hint in the queue
-description: Swaps the hint with the one below it in queue position
+description: Swaps the hint with the one below it in queue position. If the demoted hint was ready or submitted, it resets to queued.
 parameters:
   - name: id
     in: path

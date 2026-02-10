@@ -1,7 +1,7 @@
 tags:
   - Hints
 summary: Mark a hint as answered
-description: Sets hint status to answered, records timestamp, and promotes remaining queue
+description: Sets hint status to answered, records timestamp, and promotes remaining queue. Works on queued, ready, or submitted hints.
 parameters:
   - name: id
     in: path

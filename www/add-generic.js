@@ -1,5 +1,6 @@
 import { ref, useTemplateRef, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
 import TagSelect from './tag-select.js';
+import HintSubmit from './hint-submit.js';
 import Consts from './consts.js';
 import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
 
@@ -24,7 +25,8 @@ import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
 
 export default {
     components: {
-        TagSelect
+        TagSelect,
+        HintSubmit
     },
     props: {
     
@@ -42,7 +44,11 @@ export default {
         solvers: Object,
 
         // the initially opened dialog
-        initialpuzz: Object
+        initialpuzz: Object,
+        // hint queue (for status modal hint display/submit)
+        hints: Array,
+        // authenticated username (for hint submission)
+        username: String
     },
     computed: {
         //
@@ -220,6 +226,16 @@ export default {
         const confirmSave = ref(false);
         const confirmDelete = ref(false);
 
+        //
+        // Hint submit panel state (for status modal)
+        //
+        const showHintSubmit = ref(false);
+
+        function puzzleHints() {
+            if (!props.hints || !props.puzzle) return [];
+            return props.hints.filter(h => h.puzzle_id === props.puzzle.id);
+        }
+
         // Force answers to be all uppercase.
         watch(answer, () => {
             answer.value = answer.value.toUpperCase();
@@ -250,6 +266,7 @@ export default {
             showModal.value = !showModal.value;
             warning.value = "";
             showStatus.value = false;
+            showHintSubmit.value = false;
             
             if (showModal.value) {
 
@@ -657,7 +674,8 @@ export default {
             nextTag, updateTags,
             showStatus, currentlyWorking, claimCurrentPuzzle,
             puzzleRoundId, allRounds,
-            confirmSave, confirmDelete, deletePuzzle
+            confirmSave, confirmDelete, deletePuzzle,
+            showHintSubmit, puzzleHints
         };
     },
     mounted() {
@@ -802,6 +820,22 @@ export default {
             <br v-if="lastActInfo"/>
             {{lastActTime ? lastActTime : ''}}
         </p>
+        <div v-if="type === 'status' && puzzleHints().length > 0" style="margin: 6px 0;">
+            <em>Pending hints:</em>
+            <span v-for="h in puzzleHints()" :key="h.id"> #{{h.queue_position}} ({{h.solver}})<small v-if="h.status === 'ready'"> [ready]</small><small v-else-if="h.status === 'submitted'"> [submitted]</small></span>
+        </div>
+        <p v-if="type === 'status' && !showHintSubmit" style="margin: 6px 0;">
+            <button class="btn-secondary btn-hint-request" @click.stop="showHintSubmit = true"
+                    :disabled="puzzle.status === 'Solved'">💡 Request Hint</button>
+        </p>
+        <hint-submit v-if="type === 'status' && showHintSubmit"
+            :puzzle-name="puzzle.name"
+            :puzzle-id="puzzle.id"
+            :username="$props.username"
+            :queue-size="$props.hints ? $props.hints.length : 0"
+            @submitted="showHintSubmit = false; $emit('please-fetch')"
+            @cancelled="showHintSubmit = false">
+        </hint-submit>
         <p v-if="type === 'status'">Is Meta: <input type="checkbox" v-model="isMetaLoc"></input></p>
         <p v-if="type === 'status'"> Status:
             <select ref="modal-input" class="dropdown" v-model="stateStrA" :disabled="puzzle.status === 'Solved'">

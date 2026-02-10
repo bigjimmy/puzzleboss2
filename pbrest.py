@@ -186,19 +186,43 @@ def handle_error(e):
 # GET/READ Operations
 
 
+_HINT_ACTIVE_STATES = "('queued','ready','submitted')"
+
+_HINT_QUERY = """SELECT h.id, h.puzzle_id, h.solver, h.queue_position,
+                      h.request_text, h.status, h.created_at, h.answered_at,
+                      h.submitted_at, p.name AS puzzle_name
+               FROM hint h
+               LEFT JOIN puzzle p ON h.puzzle_id = p.id
+               WHERE h.status IN """ + _HINT_ACTIVE_STATES + """
+               ORDER BY h.queue_position ASC"""
+
+
 def _format_hint_row(row):
     """Format a hint database row into a JSON-safe dict."""
     return {
         "id": row["id"],
         "puzzle_id": row["puzzle_id"],
-        "puzzle_name": row.get("puzzle_name"),
+        "puzzle_name": row["puzzle_name"],
         "solver": row["solver"],
         "queue_position": row["queue_position"],
         "request_text": row["request_text"],
         "status": row["status"],
         "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None,
         "answered_at": row["answered_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["answered_at"] else None,
+        "submitted_at": row["submitted_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row.get("submitted_at") else None,
     }
+
+
+def _promote_top_hint(cursor):
+    """If the hint at position 1 is 'queued', auto-promote it to 'ready'.
+    Does nothing if the top hint is already 'ready' or 'submitted'."""
+    cursor.execute(
+        "SELECT id, status FROM hint WHERE queue_position = 1 AND status IN ('queued','ready','submitted')"
+    )
+    top = cursor.fetchone()
+    if top and top["status"] == "queued":
+        cursor.execute("UPDATE hint SET status = 'ready' WHERE id = %s", (top["id"],))
+        debug_log(3, "Auto-promoted hint %d to 'ready'" % top["id"])
 
 
 def _get_all_from_db():
@@ -241,23 +265,14 @@ def _get_all_from_db():
             round["puzzles"] = []
         rounds.append(round)
 
-    # Fetch active hints for inclusion in /all response
     try:
         conn, cursor = _read_cursor()
-        cursor.execute(
-            """SELECT h.id, h.puzzle_id, h.solver, h.queue_position,
-                      h.request_text, h.status, h.created_at, h.answered_at,
-                      p.name AS puzzle_name
-               FROM hint h
-               LEFT JOIN puzzle p ON h.puzzle_id = p.id
-               WHERE h.status = 'queued'
-               ORDER BY h.queue_position ASC"""
-        )
+        cursor.execute(_HINT_QUERY)
         hint_rows = cursor.fetchall()
-        hints = [_format_hint_row(row) for row in hint_rows]
-    except Exception as e:
-        debug_log(2, "Could not fetch hints for /all: %s" % e)
-        hints = []
+    except Exception:
+        raise Exception("Exception in querying hint table")
+
+    hints = [_format_hint_row(row) for row in hint_rows]
 
     return {"rounds": rounds, "hints": hints}
 
@@ -3080,15 +3095,7 @@ def get_hints():
     debug_log(4, "start")
     try:
         conn, cursor = _read_cursor()
-        cursor.execute(
-            """SELECT h.id, h.puzzle_id, h.solver, h.queue_position,
-                      h.request_text, h.status, h.created_at, h.answered_at,
-                      p.name AS puzzle_name
-               FROM hint h
-               LEFT JOIN puzzle p ON h.puzzle_id = p.id
-               WHERE h.status = 'queued'
-               ORDER BY h.queue_position ASC"""
-        )
+        cursor.execute(_HINT_QUERY)
         rows = cursor.fetchall()
         hints = [_format_hint_row(row) for row in rows]
     except Exception as e:
@@ -3108,34 +3115,34 @@ def create_hint():
         puzzle_id = data["puzzle_id"]
         solver = data["solver"]
         request_text = data["request_text"]
-    except (TypeError, KeyError) as e:
-        return jsonify({"error": "Missing required fields: puzzle_id, solver, request_text"}), 400
+    except (TypeError, KeyError):
+        return {"status": "error", "error": "Missing required fields: puzzle_id, solver, request_text"}, 400
 
     if not request_text or not request_text.strip():
-        return jsonify({"error": "request_text must be non-empty"}), 400
+        return {"status": "error", "error": "request_text must be non-empty"}, 400
 
     try:
         conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE id = %s", (puzzle_id,))
         if not cursor.fetchone():
-            return jsonify({"error": "Puzzle %s not found" % puzzle_id}), 404
-    except Exception as e:
-        raise Exception("Exception verifying puzzle: %s" % e)
+            debug_log(3, "Puzzle %s not found for hint creation" % puzzle_id)
+            return {"status": "error", "error": "Puzzle %s not found" % puzzle_id}, 404
 
-    try:
         cursor.execute(
-            "SELECT COALESCE(MAX(queue_position), 0) + 1 AS next_pos FROM hint WHERE status = 'queued'"
+            "SELECT COALESCE(MAX(queue_position), 0) + 1 AS next_pos FROM hint WHERE status IN " + _HINT_ACTIVE_STATES
         )
         next_pos = cursor.fetchone()["next_pos"]
 
+        initial_status = 'ready' if next_pos == 1 else 'queued'
         cursor.execute(
             """INSERT INTO hint (puzzle_id, solver, queue_position, request_text, status)
-               VALUES (%s, %s, %s, %s, 'queued')""",
-            (puzzle_id, solver, next_pos, request_text.strip()),
+               VALUES (%s, %s, %s, %s, %s)""",
+            (puzzle_id, solver, next_pos, request_text.strip(), initial_status),
         )
         conn.commit()
         new_id = cursor.lastrowid
     except Exception as e:
+        debug_log(1, "Error creating hint: %s" % e)
         raise Exception("Exception creating hint: %s" % e)
 
     invalidate_cache_with_stats()
@@ -3147,10 +3154,10 @@ def create_hint():
 @swag_from("swag/gethintcount.yaml", endpoint="gethintcount", methods=["GET"])
 def get_hint_count():
     """Return the count of active (queued) hints"""
-    debug_log(5, "start")
+    debug_log(4, "start")
     try:
         conn, cursor = _read_cursor()
-        cursor.execute("SELECT COUNT(*) AS count FROM hint WHERE status = 'queued'")
+        cursor.execute("SELECT COUNT(*) AS count FROM hint WHERE status IN " + _HINT_ACTIVE_STATES)
         row = cursor.fetchone()
     except Exception as e:
         raise Exception("Exception counting hints: %s" % e)
@@ -3161,17 +3168,18 @@ def get_hint_count():
 @app.route("/hints/<int:id>/answer", endpoint="answerhint", methods=["POST"])
 @swag_from("swag/answerhint.yaml", endpoint="answerhint", methods=["POST"])
 def answer_hint(id):
-    """Mark a hint as answered and promote remaining queued hints"""
+    """Mark a hint as answered and promote remaining active hints"""
     debug_log(4, "start with hint id: %d" % id)
     try:
         conn, cursor = _cursor()
         cursor.execute(
-            "SELECT id, queue_position FROM hint WHERE id = %s AND status = 'queued'",
+            "SELECT id, queue_position FROM hint WHERE id = %s AND status IN " + _HINT_ACTIVE_STATES,
             (id,),
         )
         hint = cursor.fetchone()
         if not hint:
-            return jsonify({"error": "Hint %d not found or already answered" % id}), 404
+            debug_log(3, "Hint %d not found or already answered" % id)
+            return {"status": "error", "error": "Hint %d not found or already answered" % id}, 404
 
         answered_pos = hint["queue_position"]
 
@@ -3181,11 +3189,13 @@ def answer_hint(id):
         )
 
         cursor.execute(
-            "UPDATE hint SET queue_position = queue_position - 1 WHERE status = 'queued' AND queue_position > %s",
+            "UPDATE hint SET queue_position = queue_position - 1 WHERE status IN " + _HINT_ACTIVE_STATES + " AND queue_position > %s",
             (answered_pos,),
         )
+        _promote_top_hint(cursor)
         conn.commit()
     except Exception as e:
+        debug_log(1, "Error answering hint %d: %s" % (id, e))
         raise Exception("Exception answering hint %d: %s" % (id, e))
 
     invalidate_cache_with_stats()
@@ -3196,27 +3206,29 @@ def answer_hint(id):
 @app.route("/hints/<int:id>/demote", endpoint="demotehint", methods=["POST"])
 @swag_from("swag/demotehint.yaml", endpoint="demotehint", methods=["POST"])
 def demote_hint(id):
-    """Swap a hint with the one below it in the queue"""
+    """Swap a hint with the one below it in the queue. Resets ready/submitted back to queued."""
     debug_log(4, "start with hint id: %d" % id)
     try:
         conn, cursor = _cursor()
         cursor.execute(
-            "SELECT id, queue_position FROM hint WHERE id = %s AND status = 'queued'",
+            "SELECT id, queue_position, status FROM hint WHERE id = %s AND status IN " + _HINT_ACTIVE_STATES,
             (id,),
         )
         hint = cursor.fetchone()
         if not hint:
-            return jsonify({"error": "Hint %d not found or already answered" % id}), 404
+            debug_log(3, "Hint %d not found or already answered" % id)
+            return {"status": "error", "error": "Hint %d not found or already answered" % id}, 404
 
         current_pos = hint["queue_position"]
 
         cursor.execute(
-            "SELECT id FROM hint WHERE status = 'queued' AND queue_position = %s",
+            "SELECT id FROM hint WHERE status IN " + _HINT_ACTIVE_STATES + " AND queue_position = %s",
             (current_pos + 1,),
         )
         below = cursor.fetchone()
         if not below:
-            return jsonify({"error": "Hint %d is already at the bottom of the queue" % id}), 400
+            debug_log(3, "Hint %d is already at the bottom of the queue" % id)
+            return {"status": "error", "error": "Hint %d is already at the bottom of the queue" % id}, 400
 
         cursor.execute(
             "UPDATE hint SET queue_position = %s WHERE id = %s",
@@ -3226,13 +3238,51 @@ def demote_hint(id):
             "UPDATE hint SET queue_position = %s WHERE id = %s",
             (current_pos, below["id"]),
         )
+        # Reset demoted hint to queued (it's no longer at top)
+        if hint["status"] in ("ready", "submitted"):
+            cursor.execute(
+                "UPDATE hint SET status = 'queued', submitted_at = NULL WHERE id = %s",
+                (id,),
+            )
+        _promote_top_hint(cursor)
         conn.commit()
     except Exception as e:
+        debug_log(1, "Error demoting hint %d: %s" % (id, e))
         raise Exception("Exception demoting hint %d: %s" % (id, e))
 
     invalidate_cache_with_stats()
     debug_log(3, "Hint %d demoted from position %d to %d" % (id, current_pos, current_pos + 1))
     return {"status": "ok", "message": "Hint %d demoted" % id}
+
+
+@app.route("/hints/<int:id>/submit", endpoint="submithint", methods=["POST"])
+@swag_from("swag/submithint.yaml", endpoint="submithint", methods=["POST"])
+def submit_hint(id):
+    """Mark a ready hint as submitted to HQ"""
+    debug_log(4, "start with hint id: %d" % id)
+    try:
+        conn, cursor = _cursor()
+        cursor.execute(
+            "SELECT id, queue_position, status FROM hint WHERE id = %s AND status = 'ready'",
+            (id,),
+        )
+        hint = cursor.fetchone()
+        if not hint:
+            debug_log(3, "Hint %d not found or not in 'ready' state" % id)
+            return {"status": "error", "error": "Hint %d not found or not in 'ready' state" % id}, 404
+
+        cursor.execute(
+            "UPDATE hint SET status = 'submitted', submitted_at = NOW() WHERE id = %s",
+            (id,),
+        )
+        conn.commit()
+    except Exception as e:
+        debug_log(1, "Error submitting hint %d: %s" % (id, e))
+        raise Exception("Exception submitting hint %d: %s" % (id, e))
+
+    invalidate_cache_with_stats()
+    debug_log(3, "Hint %d submitted to HQ" % id)
+    return {"status": "ok", "message": "Hint %d submitted to HQ" % id}
 
 
 @app.route("/hints/<int:id>", endpoint="deletehint", methods=["DELETE"])
@@ -3248,20 +3298,23 @@ def delete_hint(id):
         )
         hint = cursor.fetchone()
         if not hint:
-            return jsonify({"error": "Hint %d not found" % id}), 404
+            debug_log(3, "Hint %d not found for deletion" % id)
+            return {"status": "error", "error": "Hint %d not found" % id}, 404
 
         deleted_pos = hint["queue_position"]
-        was_queued = hint["status"] == "queued"
+        was_active = hint["status"] in ("queued", "ready", "submitted")
 
         cursor.execute("DELETE FROM hint WHERE id = %s", (id,))
 
-        if was_queued and deleted_pos > 0:
+        if was_active and deleted_pos > 0:
             cursor.execute(
-                "UPDATE hint SET queue_position = queue_position - 1 WHERE status = 'queued' AND queue_position > %s",
+                "UPDATE hint SET queue_position = queue_position - 1 WHERE status IN " + _HINT_ACTIVE_STATES + " AND queue_position > %s",
                 (deleted_pos,),
             )
+        _promote_top_hint(cursor)
         conn.commit()
     except Exception as e:
+        debug_log(1, "Error deleting hint %d: %s" % (id, e))
         raise Exception("Exception deleting hint %d: %s" % (id, e))
 
     invalidate_cache_with_stats()

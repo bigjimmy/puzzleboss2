@@ -66,6 +66,8 @@ require_once('puzzlebosslib.php');
                         :currpuzz="currPuzz"
                         :solvers="solvers"
                         :initialpuzz="initialPuzz"
+                        :hints="data.hints || []"
+                        :username="username"
                         @toggle-body="toggleBody"
                         @please-fetch="fetchData"
                         @route-shown="clearInitPuzz"
@@ -85,6 +87,8 @@ require_once('puzzlebosslib.php');
                         :isadmin="isAdmin"
                         :currpuzz="currPuzz"
                         :initialpuzz="initialPuzz"
+                        :hints="data.hints || []"
+                        :username="username"
                         @toggle-body="toggleBody"
                         @please-fetch="fetchData"
                         @route-shown="clearInitPuzz"
@@ -110,6 +114,10 @@ require_once('puzzlebosslib.php');
         import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
         import tagselect from './tag-select.js';
         import Settings from './settings.js';
+
+        // Wait for status metadata (emoji, names) to load before mounting.
+        // Without this, computed icons show 🤡 until the next data poll.
+        await Consts.ready;
 
         createApp({
             components: {

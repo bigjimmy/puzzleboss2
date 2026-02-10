@@ -14,6 +14,8 @@ export default {
       isadmin: Boolean,
       solvers: Object,
       initialpuzz: Object,
+      hints: Array,
+      username: String,
     },
     emits: ['toggle-body', 'please-fetch', 'route-shown'],
     computed: {
@@ -197,7 +199,7 @@ export default {
                 v-for='puzzle in filteredPuzzles'
                 :key='puzzle.id'
                 :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] ? ' ' + highlightedPuzzle[puzzle.id] : '')">
-                <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers"></AddGeneric>
+                <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers" :hints="hints" :username="username"></AddGeneric>
                 <AddGeneric type="workstate" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
                 <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">📊</a></p>

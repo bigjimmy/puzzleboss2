@@ -3,8 +3,11 @@ import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
 // Status data - must be loaded from huntinfo, no fallback
 let statusData = [];
 
-// Fetch huntinfo on module load - REQUIRED for app to function
-fetch('./apicall.php?apicall=huntinfo')
+// Fetch huntinfo on module load - REQUIRED for app to function.
+// The exported `ready` promise lets entry points (index.php, status.php)
+// await this before mounting Vue, preventing the race where icons render
+// as 🤡 because statusData is still empty.
+const ready = fetch('./apicall.php?apicall=huntinfo')
     .then(r => r.json())
     .then(data => {
         if (data.statuses && Array.isArray(data.statuses)) {
@@ -87,4 +90,8 @@ export default {
     },
 
     "api": ".",
+
+    // Promise that resolves once statusData is loaded.
+    // Entry points should `await Consts.ready` before mounting Vue.
+    ready,
 }

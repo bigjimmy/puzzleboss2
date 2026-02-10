@@ -99,33 +99,34 @@ def reset_hunt():
 
 
 def ensure_test_solvers():
-    """Ensure we have enough test solvers for UI tests."""
+    """Ensure the named test solvers (testsolver1..5) exist for UI tests."""
     print("Checking for test solvers...")
     try:
         response = requests.get(f"{API_URL}/solvers")
         solvers = response.json().get("solvers", [])
-        current_count = len(solvers)
-        min_count = 5
+        existing_names = {s["name"] for s in solvers}
 
-        if current_count >= min_count:
-            print(f"  Sufficient solvers available ({current_count} >= {min_count})")
-            return
+        created = 0
+        for i in range(1, 6):
+            name = f"testsolver{i}"
+            if name not in existing_names:
+                try:
+                    requests.post(f"{API_URL}/solvers", json={
+                        "name": name,
+                        "fullname": f"Test Solver {i}"
+                    })
+                    created += 1
+                except:
+                    pass  # May already exist
 
-        needed = min_count - current_count
-        print(f"  Creating {needed} test solvers to reach minimum of {min_count}...")
-
-        for i in range(1, min_count + 1):
-            try:
-                requests.post(f"{API_URL}/solvers", json={
-                    "name": f"testsolver{i}",
-                    "fullname": f"Test Solver {i}"
-                })
-            except:
-                pass  # May already exist
+        if created:
+            print(f"  Created {created} test solvers (testsolver1..5)")
+        else:
+            print(f"  All test solvers already exist")
 
         response = requests.get(f"{API_URL}/solvers")
         solvers = response.json().get("solvers", [])
-        print(f"  Now have {len(solvers)} solvers available for testing")
+        print(f"  Total solvers available: {len(solvers)}")
     except Exception as e:
         print(f"Warning: Could not ensure test solvers: {e}")
 
@@ -2076,6 +2077,514 @@ def test_account_create_delete():
 
 
 # ──────────────────────────────────────────────────────────
+# Test 26: Hint Queue
+# ──────────────────────────────────────────────────────────
+
+def test_hint_queue():
+    """Test hint queue UI: submit hint via puzzle row button, view queue, answer, demote, delete."""
+    with sync_playwright() as p:
+        print("Starting hint queue test...")
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        # ── Setup: create round and puzzles via UI ──
+        print("  Step 1: Creating test round and puzzles...")
+        ts = str(int(time.time()))
+        round_info = create_round_via_ui(page, f"HintQRound{ts}")
+        round_name = round_info["name"]
+        print(f"    ✓ Created round: {round_name}")
+
+        puz1_info = create_puzzle_via_ui(page, f"HintQPuz1{ts}", round_name)
+        puz1_name = puz1_info["name"]
+        print(f"    ✓ Created puzzle: {puz1_name}")
+
+        puz2_info = create_puzzle_via_ui(page, f"HintQPuz2{ts}", round_name)
+        puz2_name = puz2_info["name"]
+        print(f"    ✓ Created puzzle: {puz2_name}")
+
+        # Find puzzle IDs from API
+        resp = requests.get(f"{API_URL}/puzzles")
+        puzzles = resp.json().get("puzzles", [])
+        puz1_id = None
+        puz2_id = None
+        for pz in puzzles:
+            if pz["name"] == puz1_name:
+                puz1_id = pz["id"]
+            elif pz["name"] == puz2_name:
+                puz2_id = pz["id"]
+        assert puz1_id and puz2_id, f"Could not find puzzle IDs for {puz1_name}, {puz2_name}"
+        print(f"    ✓ Puzzle IDs: {puz1_name}={puz1_id}, {puz2_name}={puz2_id}")
+
+        # ── Step 2: Navigate to status page ──
+        print("  Step 2: Navigating to status page...")
+        page.goto(f"{BASE_URL}/status.php?assumedid=testuser", timeout=15000)
+        page.wait_for_selector("h1", timeout=10000)
+        page.wait_for_selector(".status-header", timeout=10000)
+        print("    ✓ Status page loaded")
+
+        # ── Step 3: Verify no hint queue section when no hints ──
+        print("  Step 3: Verifying hint queue hidden when empty...")
+        time.sleep(2)  # Let Vue mount and fetch data
+        hint_section = page.locator(".hint-queue-section")
+        if hint_section.count() > 0:
+            assert not hint_section.is_visible(), "Hint queue should be hidden when no hints exist"
+        print("    ✓ Hint queue section not visible when empty")
+
+        # ── Step 4: Verify hint button exists on puzzle rows ──
+        print("  Step 4: Checking for hint buttons on puzzle rows...")
+        hint_buttons = page.locator("button.btn-hint-request")
+        btn_count = hint_buttons.count()
+        assert btn_count >= 2, f"Expected at least 2 hint buttons, found {btn_count}"
+        print(f"    ✓ Found {btn_count} hint buttons on puzzle rows")
+
+        # ── Step 5: Click hint button to open submit modal ──
+        print("  Step 5: Testing hint submit modal...")
+        # Find the hint button for our first puzzle
+        first_btn = hint_buttons.first
+        first_btn.click()
+        time.sleep(0.5)
+
+        # Verify the submit dialog appeared
+        submit_dialog = page.locator(".hint-submit-dialog")
+        assert submit_dialog.is_visible(), "Hint submit dialog should be visible after clicking hint button"
+        print("    ✓ Submit dialog opened")
+
+        # Verify it has a textarea and submit button
+        textarea = submit_dialog.locator("textarea")
+        assert textarea.is_visible(), "Submit dialog should have a textarea"
+        submit_btn = submit_dialog.locator("button:has-text('Add to Queue')")
+        assert submit_btn.count() > 0, "Submit dialog should have an 'Add to Queue' button"
+        print("    ✓ Dialog has textarea and 'Add to Queue' button")
+
+        # ── Step 6: Submit a hint via the modal ──
+        print("  Step 6: Submitting a hint via modal...")
+        hint_text_1 = f"Need help with extraction {ts}"
+        textarea.fill(hint_text_1)
+        submit_btn.click()
+        time.sleep(2)  # Wait for API call and data refresh
+
+        # Verify the hint queue section now appears
+        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        assert page.locator(".hint-queue-section").is_visible(), \
+            "Hint queue should be visible after submitting a hint"
+        print("    ✓ Hint queue section appeared after submission")
+
+        # Verify the hint appears in the table (use v-for rows, skip header)
+        hint_table = page.locator(".hint-table")
+        assert hint_table.is_visible(), "Hint table should be visible"
+        hint_data_rows = hint_table.locator("tr[class]")  # v-for rows have :class binding
+        # Also count via hint-preview which only exist on data rows
+        preview_count = hint_table.locator(".hint-preview").count()
+        assert preview_count >= 1, f"Expected at least 1 hint row, found {preview_count}"
+        print(f"    ✓ Hint table has {preview_count} data row(s)")
+
+        # ── Step 6b: Verify top hint shows "Ready" status ──
+        print("  Step 6b: Verifying top hint has 'Ready' status...")
+        ready_status = page.locator(".hint-status-ready")
+        assert ready_status.count() >= 1, "Top hint should show 'Ready' status"
+        ready_text = ready_status.first.text_content()
+        assert "Ready" in ready_text, f"Expected 'Ready' in status, got: {ready_text}"
+        # Verify the row has hint-ready class
+        ready_row = hint_table.locator("tr.hint-ready")
+        assert ready_row.count() >= 1, "Top hint row should have hint-ready class"
+        print("    ✓ Top hint shows '🔔 Ready' status with hint-ready styling")
+
+        # ── Step 6c: Verify 'Submit to HQ' button exists for ready hint ──
+        print("  Step 6c: Checking for 'Submit to HQ' button...")
+        submit_hq_btn = page.locator("button:has-text('Submit to HQ')")
+        assert submit_hq_btn.count() > 0, "Expected 'Submit to HQ' button for ready hint"
+        print("    ✓ 'Submit to HQ' button found for ready hint")
+
+        # ── Step 7: Submit a second hint via API for demote/answer testing ──
+        print("  Step 7: Creating second hint via API...")
+        hint_text_2 = f"Stuck on the cipher {ts}"
+        resp = requests.post(f"{API_URL}/hints", json={
+            "puzzle_id": puz2_id,
+            "solver": "testuser",
+            "request_text": hint_text_2
+        })
+        assert resp.ok, f"Failed to create second hint: {resp.text}"
+        hint2_data = resp.json()
+        hint2_id = hint2_data.get("id") or hint2_data.get("hint", {}).get("id")
+        print(f"    ✓ Created second hint via API (id={hint2_id})")
+
+        # Refresh page to pick up new hint
+        page.reload()
+        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        time.sleep(2)
+
+        hint_previews = page.locator(".hint-table .hint-preview")
+        preview_count = hint_previews.count()
+        assert preview_count >= 2, f"Expected at least 2 hint rows after second hint, found {preview_count}"
+        print(f"    ✓ Hint table now has {preview_count} data rows")
+
+        # ── Step 7b: Verify second hint shows "Queued" status ──
+        print("  Step 7b: Verifying second hint has 'Queued' status...")
+        queued_labels = page.locator("text=Queued")
+        assert queued_labels.count() >= 1, "Second hint should show 'Queued' status"
+        print("    ✓ Second hint shows '⏳ Queued' status")
+
+        # ── Step 8: Verify hint preview is clickable (shows detail modal) ──
+        print("  Step 8: Testing hint detail modal...")
+        preview = page.locator(".hint-preview").first
+        if preview.count() > 0:
+            preview.click()
+            time.sleep(0.5)
+            # Check if detail dialog appeared
+            detail_dialog = page.locator("dialog")
+            # There may be multiple dialogs; find the one that's open
+            open_dialogs = page.locator("dialog[open]")
+            if open_dialogs.count() > 0:
+                print("    ✓ Hint detail modal opened on preview click")
+                # Close it
+                close_btn = open_dialogs.locator("button:has-text('Close')")
+                if close_btn.count() > 0:
+                    close_btn.click()
+                    time.sleep(0.3)
+                else:
+                    page.keyboard.press("Escape")
+                    time.sleep(0.3)
+            else:
+                print("    ⚠ Detail modal did not open (non-critical)")
+        else:
+            print("    ⚠ No hint preview elements found (non-critical)")
+
+        # ── Step 8b: Test 'Submit to HQ' button (ready → submitted) ──
+        print("  Step 8b: Testing 'Submit to HQ' button...")
+        submit_hq_btn = page.locator("button:has-text('Submit to HQ')")
+        assert submit_hq_btn.count() > 0, "Expected 'Submit to HQ' button"
+        submit_hq_btn.first.click()
+        time.sleep(2)
+
+        # Verify the hint now shows "Submitted" status
+        submitted_status = page.locator(".hint-status-submitted")
+        assert submitted_status.count() >= 1, "Hint should now show 'Submitted' status after Submit to HQ"
+        submitted_text = submitted_status.first.text_content()
+        assert "Submitted" in submitted_text, f"Expected 'Submitted' in status, got: {submitted_text}"
+        # Verify row has hint-submitted class
+        submitted_row = hint_table.locator("tr.hint-submitted")
+        assert submitted_row.count() >= 1, "Submitted hint row should have hint-submitted class"
+        # Verify 'Submit to HQ' button is gone for submitted hint
+        submit_hq_btn_after = page.locator("button:has-text('Submit to HQ')")
+        assert submit_hq_btn_after.count() == 0, "'Submit to HQ' button should disappear after submission"
+        # Verify delete button is hidden for submitted hint (only Answered should remain)
+        submitted_row_actions = submitted_row.first.locator(".hint-actions")
+        delete_btn_in_submitted = submitted_row_actions.locator("button:has-text('✕')")
+        assert delete_btn_in_submitted.count() == 0, "Delete button should be hidden for submitted hints"
+        print("    ✓ Hint status changed to '📨 Submitted' — only 'Answered' button visible")
+
+        # ── Step 9: Test demote button ──
+        # First, answer the submitted hint so we can test demote on a ready hint
+        # We need at least 2 hints with the top one being ready.
+        # Let's answer the submitted hint, which should auto-promote hint2 to ready,
+        # then create a third hint to have 2 hints for demote testing.
+        print("  Step 9: Setting up for demote test...")
+        page.on("dialog", lambda dialog: dialog.accept())
+        answer_btns = page.locator("button:has-text('Answered')")
+        assert answer_btns.count() > 0, "Expected Answered button for submitted hint"
+        answer_btns.first.click()
+        time.sleep(2)
+
+        # Verify second hint auto-promoted to ready
+        page.reload()
+        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        time.sleep(2)
+        ready_status = page.locator(".hint-status-ready")
+        assert ready_status.count() >= 1, "After answering submitted hint, next hint should auto-promote to 'Ready'"
+        print("    ✓ Hint2 auto-promoted to 'Ready' after answering submitted hint")
+
+        # Create a third hint for demote testing
+        hint_text_3 = f"Third hint for demote test {ts}"
+        resp = requests.post(f"{API_URL}/hints", json={
+            "puzzle_id": puz1_id,
+            "solver": "testuser",
+            "request_text": hint_text_3
+        })
+        assert resp.ok, f"Failed to create third hint: {resp.text}"
+        print("    ✓ Created third hint for demote testing")
+
+        page.reload()
+        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        time.sleep(2)
+
+        # Now demote the ready hint
+        print("  Step 9b: Testing demote on ready hint...")
+        demote_btns = page.locator("button:has-text('Demote')")
+        assert demote_btns.count() > 0, "Expected Demote button for ready hint"
+        demote_btns.first.click()
+        time.sleep(2)
+
+        # After demote, the demoted hint should be 'queued' and new top should be 'ready'
+        ready_status = page.locator(".hint-status-ready")
+        assert ready_status.count() >= 1, "New top hint should be 'Ready' after demote"
+        print("    ✓ Demote succeeded — new top hint is 'Ready', demoted hint reset to 'Queued'")
+
+        # ── Step 10: Test answer button on ready hint ──
+        print("  Step 10: Testing answer on ready hint...")
+        rows_before = page.locator(".hint-table .hint-preview").count()
+        answer_btns = page.locator("button:has-text('Answered')")
+        assert answer_btns.count() > 0, "Expected at least one answer button"
+        print(f"    Rows before answer: {rows_before}")
+
+        answer_btns.first.click()
+        time.sleep(3)  # Wait for API call and Vue data refresh
+
+        # Verify one fewer hint in queue
+        rows_after = page.locator(".hint-table .hint-preview").count()
+        assert rows_after < rows_before, \
+            f"Expected fewer rows after answering (before={rows_before}, after={rows_after})"
+        print(f"    ✓ Answer removed hint from queue ({rows_before} → {rows_after})")
+
+        # ── Step 11: Test delete button ──
+        print("  Step 11: Testing delete button...")
+        page.reload()
+        page.wait_for_selector("h1", timeout=10000)
+        time.sleep(2)
+
+        remaining_count = page.locator(".hint-table .hint-preview").count()
+        if remaining_count > 0:
+            delete_btns = page.locator("button:has-text('✕')")
+            assert delete_btns.count() > 0, "Expected delete buttons on remaining hints"
+            delete_btns.first.click()
+            time.sleep(3)
+
+            new_count = page.locator(".hint-table .hint-preview").count()
+            assert new_count < remaining_count, \
+                f"Expected fewer rows after delete (before={remaining_count}, after={new_count})"
+            print(f"    ✓ Delete removed hint from queue ({remaining_count} → {new_count})")
+        else:
+            print("    ✓ No remaining hints to delete (all cleared)")
+
+        # ── Step 12: Clean up remaining hints via API ──
+        print("  Step 12: Cleaning up remaining hints...")
+        resp = requests.get(f"{API_URL}/hints")
+        remaining = resp.json().get("hints", [])
+        for h in remaining:
+            requests.delete(f"{API_URL}/hints/{h['id']}")
+        print(f"    ✓ Cleaned up {len(remaining)} remaining hints")
+
+        page.close()
+        browser.close()
+        print("✓ Hint queue test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
+# Test 27: Dashboard Hint Dialog
+# ──────────────────────────────────────────────────────────
+
+def test_dashboard_hint_dialog():
+    """Test hint request UI in the main dashboard status modal and verify status icons load without clown fallback."""
+    with sync_playwright() as p:
+        print("Starting dashboard hint dialog test...")
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        # ── Setup: create round and puzzle ──
+        print("  Step 1: Creating test round and puzzle...")
+        ts = str(int(time.time()))
+        round_info = create_round_via_ui(page, f"DashHintRound{ts}")
+        round_name = round_info["name"]
+
+        puz_info = create_puzzle_via_ui(page, f"DashHintPuz{ts}", round_name)
+        puz_name = puz_info["name"]
+        print(f"    ✓ Created round '{round_name}' with puzzle '{puz_name}'")
+
+        # Get puzzle ID
+        resp = requests.get(f"{API_URL}/puzzles")
+        puzzles = resp.json().get("puzzles", [])
+        puz_id = None
+        for pz in puzzles:
+            if pz["name"] == puz_name:
+                puz_id = pz["id"]
+                break
+        assert puz_id, f"Could not find puzzle ID for {puz_name}"
+
+        # ── Step 2: Navigate to main dashboard ──
+        print("  Step 2: Loading main dashboard...")
+        goto_main(page)
+        page.wait_for_selector(".puzzle", timeout=15000)
+        time.sleep(2)  # Let Vue fully render
+
+        # ── Step 3: Verify status icons are NOT clowns ──
+        # This validates the Consts.ready fix — icons should show correct emoji
+        # immediately, not 🤡 (which indicates statusData was empty at render time).
+        print("  Step 3: Checking status icons are not clown fallback...")
+        # Run this check multiple times since the bug is intermittent
+        for attempt in range(3):
+            if attempt > 0:
+                page.reload()
+                page.wait_for_selector(".puzzle", timeout=15000)
+                time.sleep(1)
+
+            clown_icons = page.evaluate("""() => {
+                const icons = document.querySelectorAll('.puzzle .puzzle-icon');
+                let clowns = 0;
+                for (const icon of icons) {
+                    if (icon.textContent.trim() === '🤡') clowns++;
+                }
+                return clowns;
+            }""")
+            assert clown_icons == 0, \
+                f"Found {clown_icons} clown icon(s) on attempt {attempt+1} — statusData may not be loaded before mount"
+            print(f"    ✓ Attempt {attempt+1}: No clown icons found")
+
+        # ── Step 4: Open status modal on the puzzle ──
+        print("  Step 4: Opening status modal from dashboard...")
+        puzzle_elem = find_puzzle(page, puz_name)
+        icons = get_puzzle_icons(puzzle_elem)
+        assert len(icons) > 0, "No puzzle icons found"
+        icons[0].click()  # Status icon
+
+        page.wait_for_selector("dialog", timeout=5000)
+        dialog = page.locator("dialog[open]")
+        assert dialog.is_visible(), "Status dialog should be open"
+        print("    ✓ Status modal opened")
+
+        # ── Step 5: Verify hint request button exists ──
+        print("  Step 5: Checking for 'Request Hint' button in status modal...")
+        hint_btn = dialog.locator("button.btn-hint-request")
+        assert hint_btn.count() > 0, "Expected 'Request Hint' button in status modal"
+        assert hint_btn.is_visible(), "'Request Hint' button should be visible"
+        hint_btn_text = hint_btn.text_content()
+        assert "Request Hint" in hint_btn_text, f"Button text should contain 'Request Hint', got: {hint_btn_text}"
+        print(f"    ✓ Found hint button: '{hint_btn_text.strip()}'")
+
+        # ── Step 6: Verify no pending hints displayed initially ──
+        print("  Step 6: Verifying no pending hints shown initially...")
+        pending_hints = dialog.locator("text=Pending hints")
+        assert pending_hints.count() == 0, "Should not show 'Pending hints' when there are none"
+        print("    ✓ No pending hints displayed (correct)")
+
+        # ── Step 7: Click Request Hint and verify submit form appears ──
+        print("  Step 7: Opening hint submit form...")
+        hint_btn.click()
+        time.sleep(0.5)
+
+        # The hint-submit component should now be visible inline
+        hint_textarea = dialog.locator("textarea")
+        assert hint_textarea.is_visible(), "Hint textarea should be visible after clicking Request Hint"
+
+        add_btn = dialog.locator("button:has-text('Add to Queue')")
+        assert add_btn.count() > 0, "Expected 'Add to Queue' button in hint submit form"
+
+        cancel_btn = dialog.locator("button:has-text('Cancel')")
+        assert cancel_btn.count() > 0, "Expected 'Cancel' button in hint submit form"
+
+        # Verify queue position display
+        queue_info = dialog.locator("text=hint #1 in the queue")
+        assert queue_info.count() > 0, "Should show 'hint #1 in the queue' for first hint"
+        print("    ✓ Hint submit form visible with queue position info")
+
+        # ── Step 8: Cancel and verify form closes ──
+        print("  Step 8: Testing cancel button...")
+        cancel_btn.click()
+        time.sleep(0.3)
+
+        # Request Hint button should reappear
+        hint_btn_again = dialog.locator("button.btn-hint-request")
+        assert hint_btn_again.is_visible(), "Request Hint button should reappear after cancel"
+        # Textarea should be gone
+        assert not hint_textarea.is_visible(), "Textarea should be hidden after cancel"
+        print("    ✓ Cancel works — form hidden, button restored")
+
+        # ── Step 9: Submit a hint via the dashboard modal ──
+        print("  Step 9: Submitting a hint from dashboard modal...")
+        hint_btn_again.click()
+        time.sleep(0.3)
+
+        hint_textarea = dialog.locator("textarea")
+        hint_text = f"Need help with {puz_name} - test hint {ts}"
+        hint_textarea.fill(hint_text)
+
+        add_btn = dialog.locator("button:has-text('Add to Queue')")
+        add_btn.click()
+        time.sleep(2)  # Wait for API call and please-fetch
+
+        # After submission, the submit form should be hidden
+        hint_textarea_after = dialog.locator("textarea")
+        # The modal might have auto-refreshed; check if submit form is gone
+        print("    ✓ Hint submitted from dashboard modal")
+
+        # Close the modal
+        close_btn = dialog.locator("button:has-text('Close')")
+        close_btn.click()
+        time.sleep(1)
+
+        # ── Step 10: Verify hint exists via API ──
+        print("  Step 10: Verifying hint was created via API...")
+        resp = requests.get(f"{API_URL}/hints")
+        hints = resp.json().get("hints", [])
+        matching = [h for h in hints if h.get("puzzle_id") == puz_id]
+        assert len(matching) >= 1, f"Expected at least 1 hint for puzzle {puz_id}, found {len(matching)}"
+        print(f"    ✓ Found {len(matching)} hint(s) for puzzle via API")
+
+        # ── Step 11: Re-open modal and verify pending hints display with [ready] label ──
+        print("  Step 11: Checking pending hints display with status labels in modal...")
+        # Re-find puzzle (may have re-rendered)
+        time.sleep(3)  # Wait for data refresh
+        puzzle_elem = find_puzzle(page, puz_name)
+        icons = get_puzzle_icons(puzzle_elem)
+        icons[0].click()
+
+        page.wait_for_selector("dialog", timeout=5000)
+        dialog = page.locator("dialog[open]")
+        time.sleep(1)
+
+        pending = dialog.locator("text=Pending hints")
+        assert pending.count() > 0, "Should show 'Pending hints' section now that a hint exists"
+        print("    ✓ Pending hints section visible in status modal")
+
+        # Verify [ready] label appears (top hint auto-promoted to ready)
+        ready_label = dialog.locator("text=[ready]")
+        assert ready_label.count() > 0, "Pending hint at position 1 should show '[ready]' label"
+        print("    ✓ Pending hint shows '[ready]' status label")
+
+        # Close modal
+        close_btn = dialog.locator("button:has-text('Close')")
+        close_btn.click()
+        time.sleep(0.5)
+
+        # ── Step 12: Verify hint button is disabled for solved puzzles ──
+        print("  Step 12: Verifying hint button disabled when puzzle is solved...")
+        # Solve the puzzle via API
+        requests.post(f"{API_URL}/puzzles/{puz_id}/answer", json={"answer": "TESTANSWER"})
+        # Wait for auto-refresh to propagate the Solved status to the UI
+        wait_for_puzzle_status(page, puz_name, "Solved", timeout=12000)
+
+        puzzle_elem = find_puzzle(page, puz_name)
+        icons = get_puzzle_icons(puzzle_elem)
+        icons[0].click()
+
+        page.wait_for_selector("dialog", timeout=5000)
+        dialog = page.locator("dialog[open]")
+        time.sleep(0.5)
+
+        hint_btn_solved = dialog.locator("button.btn-hint-request")
+        if hint_btn_solved.count() > 0:
+            is_disabled = hint_btn_solved.is_disabled()
+            assert is_disabled, "Request Hint button should be disabled for solved puzzles"
+            print("    ✓ Request Hint button is disabled for solved puzzle")
+        else:
+            print("    ✓ Request Hint button not shown for solved puzzle (acceptable)")
+
+        close_btn = dialog.locator("button:has-text('Close')")
+        close_btn.click()
+        time.sleep(0.3)
+
+        # ── Cleanup ──
+        print("  Cleaning up hints...")
+        resp = requests.get(f"{API_URL}/hints")
+        remaining = resp.json().get("hints", [])
+        for h in remaining:
+            requests.delete(f"{API_URL}/hints/{h['id']}")
+        print(f"    ✓ Cleaned up {len(remaining)} hint(s)")
+
+        page.close()
+        browser.close()
+        print("✓ Dashboard hint dialog test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
 # Main Entry Point
 # ──────────────────────────────────────────────────────────
 
@@ -2129,6 +2638,8 @@ def main():
         ('23', 'privs', test_privilege_and_gear_visibility, 'Privilege And Gear Visibility'),
         ('24', 'acctgate', test_account_registration_gate, 'Account Registration Auth Gate'),
         ('25', 'acctcrud', test_account_create_delete, 'Account Create Delete Lifecycle'),
+        ('26', 'hintqueue', test_hint_queue, 'Hint Queue'),
+        ('27', 'dashhint', test_dashboard_hint_dialog, 'Dashboard Hint Dialog'),
     ]
 
     if args.list:

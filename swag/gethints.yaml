@@ -30,8 +30,10 @@ responses:
                 type: string
               status:
                 type: string
-                enum: [queued, answered]
+                enum: [queued, ready, submitted, answered]
               created_at:
                 type: string
               answered_at:
+                type: string
+              submitted_at:
                 type: string

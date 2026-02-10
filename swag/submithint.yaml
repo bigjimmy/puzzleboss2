@@ -1,0 +1,24 @@
+tags:
+  - Hints
+summary: Submit a hint to HQ
+description: Marks a ready hint as submitted to HQ. Only works on hints with status 'ready'.
+parameters:
+  - name: id
+    in: path
+    type: integer
+    required: true
+    description: The hint ID to submit to HQ
+responses:
+  200:
+    description: Hint submitted to HQ successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
+          example: "Hint 1 submitted to HQ"
+  404:
+    description: Hint not found or not in ready state

@@ -87,10 +87,11 @@ $solver = getauthenticatedsolver();
                         <th>Actions</th>
                     </tr>
                     <tr v-for="hint in hints" :key="hint.id"
-                        :class="{ 'hint-top': hint.queue_position === 1 }">
+                        :class="{ 'hint-ready': hint.status === 'ready', 'hint-submitted': hint.status === 'submitted' }">
                         <td>{{ hint.queue_position }}</td>
                         <td>
-                            <span v-if="hint.queue_position === 1">📨 Submitted</span>
+                            <span v-if="hint.status === 'submitted'" class="hint-status-submitted">📨 Submitted</span>
+                            <span v-else-if="hint.status === 'ready'" class="hint-status-ready">🔔 Ready</span>
                             <span v-else>⏳ Queued</span>
                         </td>
                         <td>
@@ -102,19 +103,20 @@ $solver = getauthenticatedsolver();
                         </td>
                         <td>{{ hint.solver }}</td>
                         <td class="hint-text-cell">
-                            <span class="hint-preview" @click="showHintDetail(hint)">
-                                {{ hint.request_text.length > 80 ? hint.request_text.substring(0, 80) + '...' : hint.request_text }}
-                            </span>
+                            <span class="hint-preview" @click="showHintDetail(hint)">{{ hint.request_text }}</span>
                         </td>
                         <td>{{ formatHintTime(hint.created_at) }}</td>
                         <td class="hint-actions">
-                            <button v-if="hint.queue_position === 1"
-                                    class="btn-hint-answer" @click="answerHint(hint.id)"
+                            <button v-if="hint.status === 'ready'"
+                                    class="btn-secondary" @click="submitHintToHQ(hint.id)"
+                                    title="Submit this hint to HQ">📨 Submit to HQ</button>
+                            <button v-if="hint.status === 'ready' || hint.status === 'submitted'"
+                                    class="btn-success" @click="answerHint(hint.id)"
                                     title="Mark as answered">✅ Answered</button>
-                            <button v-if="hint.queue_position === 1 && hints.length > 1"
-                                    class="btn-hint-demote" @click="demoteHint(hint.id)"
+                            <button v-if="hint.status === 'ready' && hints.length > 1"
+                                    class="btn-secondary" @click="demoteHint(hint.id)"
                                     title="Move down in queue">⬇ Demote</button>
-                            <button class="btn-hint-delete" @click="deleteHint(hint.id)"
+                            <button v-if="hint.status !== 'submitted'" class="btn-danger-light" @click="deleteHint(hint.id)"
                                     title="Remove from queue">✕</button>
                         </td>
                     </tr>
@@ -138,18 +140,15 @@ $solver = getauthenticatedsolver();
         </dialog>
 
         <!-- Hint submit dialog (new hint from puzzle row) -->
-        <dialog ref="hintSubmitDialog" class="hint-submit-dialog" @click.self="closeHintModal()">
-            <div v-if="hintModalPuzzle">
-                <h3>Request Hint for {{ hintModalPuzzle.name }}</h3>
-                <p class="hint-modal-info">This will add a hint request to the queue. Describe what you've tried and where you're stuck.</p>
-                <textarea v-model="newHintText" ref="hintTextarea"
-                          placeholder="We have tried... and are stuck on..."
-                          rows="4" class="hint-textarea"></textarea>
-                <div class="modal-actions">
-                    <button class="btn-secondary" @click="closeHintModal()">Cancel</button>
-                    <button class="btn-hint-submit" @click="submitHintFromModal()" :disabled="!newHintText.trim()">Add to Queue</button>
-                </div>
-            </div>
+        <dialog ref="hintSubmitDialog" class="hint-submit-dialog" @click.self="closeHintSubmit()">
+            <hint-submit v-if="hintDialogPuzzle"
+                :puzzle-name="hintDialogPuzzle.name"
+                :puzzle-id="hintDialogPuzzle.id"
+                :username="currentUsername"
+                :queue-size="hints.length"
+                @submitted="closeHintSubmit(); fetchData()"
+                @cancelled="closeHintSubmit()">
+            </hint-submit>
         </dialog>
 
         <div class="info-box column-visibility">
@@ -248,7 +247,7 @@ $solver = getauthenticatedsolver();
                             </button>
                         </div>
                     </td>
-                    <td><button class="btn-hint-inline" @click="openHintModal(puzzle)" data-tooltip="Request hint">💡</button></td>
+                    <td><button class="btn-secondary btn-hint-request" @click="openHintSubmit(puzzle)" data-tooltip="Request hint">💡</button></td>
                 </tr>
             </table>
         </div>
@@ -325,7 +324,7 @@ $solver = getauthenticatedsolver();
                             </button>
                         </div>
                     </td>
-                    <td><button class="btn-hint-inline" @click="openHintModal(puzzle)" data-tooltip="Request hint">💡</button></td>
+                    <td><button class="btn-secondary btn-hint-request" @click="openHintSubmit(puzzle)" data-tooltip="Request hint">💡</button></td>
                 </tr>
             </table>
         </div>
@@ -402,7 +401,7 @@ $solver = getauthenticatedsolver();
                             </button>
                         </div>
                     </td>
-                    <td><button class="btn-hint-inline" @click="openHintModal(puzzle)" data-tooltip="Request hint">💡</button></td>
+                    <td><button class="btn-secondary btn-hint-request" @click="openHintSubmit(puzzle)" data-tooltip="Request hint">💡</button></td>
                 </tr>
             </table>
         </div>
@@ -416,13 +415,18 @@ $solver = getauthenticatedsolver();
         import { createApp, ref, computed, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
         import Consts from './consts.js'
         import { onFetchSuccess, onFetchFailure } from './pb-utils.js'
+        import HintSubmit from './hint-submit.js'
 
         <?php
             echo "const currentUid = " . json_encode($uid) . ";";
             echo "const currentUsername = " . json_encode($solver->name) . ";";
         ?>
 
+        // Wait for status metadata (emoji, names) to load before mounting.
+        await Consts.ready;
+
         createApp({
+            components: { HintSubmit },
             setup() {
                 const data = ref({ rounds: [] })
                 const statuses = ref([])
@@ -440,12 +444,10 @@ $solver = getauthenticatedsolver();
                 // Hint queue state
                 const hints = ref([])
                 const showHintQueue = ref(true)
-                const newHintText = ref('')
                 const selectedHint = ref(null)
                 const hintDialog = ref(null)
-                const hintModalPuzzle = ref(null)
+                const hintDialogPuzzle = ref(null)
                 const hintSubmitDialog = ref(null)
-                const hintTextarea = ref(null)
 
                 const commentEdits = ref({})
                 const locationEdits = ref({})
@@ -707,37 +709,25 @@ $solver = getauthenticatedsolver();
                     hintDialog.value?.showModal()
                 }
 
-                function openHintModal(puzzle) {
-                    hintModalPuzzle.value = puzzle
-                    newHintText.value = ''
+                function openHintSubmit(puzzle) {
+                    hintDialogPuzzle.value = puzzle
                     hintSubmitDialog.value?.showModal()
-                    // Focus textarea after dialog opens
-                    setTimeout(() => hintTextarea.value?.focus(), 50)
                 }
 
-                function closeHintModal() {
+                function closeHintSubmit() {
                     hintSubmitDialog.value?.close()
-                    hintModalPuzzle.value = null
-                    newHintText.value = ''
+                    hintDialogPuzzle.value = null
                 }
 
-                async function submitHintFromModal() {
-                    if (!hintModalPuzzle.value || !newHintText.value.trim()) return
+                async function submitHintToHQ(hintId) {
                     try {
-                        await fetch('./apicall.php?apicall=hints', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                puzzle_id: hintModalPuzzle.value.id,
-                                solver: currentUsername,
-                                request_text: newHintText.value.trim()
-                            })
+                        await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=submit`, {
+                            method: 'POST'
                         })
-                        closeHintModal()
                         await fetchData()
                     } catch (e) {
-                        console.error('Failed to submit hint:', e)
-                        alert('Failed to submit hint request')
+                        console.error('Failed to submit hint to HQ:', e)
+                        alert('Failed to submit hint to HQ')
                     }
                 }
 
@@ -745,9 +735,7 @@ $solver = getauthenticatedsolver();
                     if (!confirm('Mark this hint as answered? It will be removed from the queue.')) return
                     try {
                         await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=answer`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({})
+                            method: 'POST'
                         })
                         await fetchData()
                     } catch (e) {
@@ -759,9 +747,7 @@ $solver = getauthenticatedsolver();
                 async function demoteHint(hintId) {
                     try {
                         await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=demote`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({})
+                            method: 'POST'
                         })
                         await fetchData()
                     } catch (e) {
@@ -1002,18 +988,17 @@ $solver = getauthenticatedsolver();
                     // Hint queue
                     hints,
                     showHintQueue,
-                    newHintText,
                     selectedHint,
                     hintDialog,
-                    hintModalPuzzle,
+                    hintDialogPuzzle,
                     hintSubmitDialog,
-                    hintTextarea,
+                    currentUsername,
                     getPuzzleUri,
                     formatHintTime,
                     showHintDetail,
-                    openHintModal,
-                    closeHintModal,
-                    submitHintFromModal,
+                    openHintSubmit,
+                    closeHintSubmit,
+                    submitHintToHQ,
                     answerHint,
                     demoteHint,
                     deleteHint

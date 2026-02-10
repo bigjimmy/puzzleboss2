@@ -1639,6 +1639,237 @@ class TestRunner:
 
         result.set_success("Puzzle deletion test completed successfully")
 
+    # ------------------------------------------------------------------
+    # Test 28: Hint Queue
+    # ------------------------------------------------------------------
+    def test_hint_queue(self, result: TestResult):
+        ts = str(int(time.time()))
+        rd = self.create_round(f"HintRound {ts}")
+        puz1 = self.create_puzzle(f"HintPuzzle1 {ts}", rd["id"])
+        puz2 = self.create_puzzle(f"HintPuzzle2 {ts}", rd["id"])
+
+        # ── 1. Initially empty ──
+        data = self.api_get("/hints")
+        hints = data.get("hints", [])
+        if not isinstance(hints, list):
+            result.fail(f"GET /hints did not return a list: {data}")
+            return
+        self.logger.log_operation(f"  ✓ GET /hints returned {len(hints)} hints initially")
+
+        count_data = self.api_get("/hints/count")
+        initial_count = count_data.get("count", -1)
+        self.logger.log_operation(f"  ✓ GET /hints/count returned {initial_count}")
+
+        # ── 2. Create three hints ──
+        hint_ids = []
+        for i, (puz, text) in enumerate([
+            (puz1, f"Need help with clue A {ts}"),
+            (puz2, f"Stuck on extraction {ts}"),
+            (puz1, f"Second hint for puzzle 1 {ts}"),
+        ]):
+            resp = self.api_post("/hints", {
+                "puzzle_id": puz["id"],
+                "solver": "testuser",
+                "request_text": text
+            })
+            if resp.get("status") != "ok":
+                result.fail(f"POST /hints failed for hint {i+1}: {resp}")
+                return
+            hid = resp.get("id") or resp.get("hint", {}).get("id")
+            if not hid:
+                result.fail(f"POST /hints did not return id for hint {i+1}: {resp}")
+                return
+            hint_ids.append(hid)
+            self.logger.log_operation(f"  ✓ Created hint {i+1} (id={hid})")
+
+        # ── 3. Verify list and count ──
+        data = self.api_get("/hints")
+        hints = data.get("hints", [])
+        if len(hints) < 3:
+            result.fail(f"Expected at least 3 hints, got {len(hints)}: {hints}")
+            return
+        self.logger.log_operation(f"  ✓ GET /hints now has {len(hints)} hints")
+
+        count_data = self.api_get("/hints/count")
+        new_count = count_data.get("count", -1)
+        if new_count < initial_count + 3:
+            result.fail(f"Expected count >= {initial_count + 3}, got {new_count}")
+            return
+        self.logger.log_operation(f"  ✓ Hint count = {new_count}")
+
+        # Verify queue positions are 1, 2, 3
+        positions = sorted([h["queue_position"] for h in hints if h["id"] in hint_ids])
+        if positions != [1, 2, 3]:
+            result.fail(f"Expected positions [1,2,3], got {positions}")
+            return
+        self.logger.log_operation(f"  ✓ Queue positions correct: {positions}")
+
+        # Verify hints include puzzle_name
+        for h in hints:
+            if h["id"] == hint_ids[0]:
+                if not h.get("puzzle_name"):
+                    result.fail(f"Hint missing puzzle_name: {h}")
+                    return
+                break
+        self.logger.log_operation(f"  ✓ Hints include puzzle_name field")
+
+        # ── 3b. Verify auto-promotion: hint at position 1 should be 'ready' ──
+        top_hint = [h for h in hints if h["queue_position"] == 1][0]
+        if top_hint["status"] != "ready":
+            result.fail(f"Top hint should be 'ready', got '{top_hint['status']}'")
+            return
+        self.logger.log_operation(f"  ✓ Top hint auto-promoted to 'ready'")
+
+        non_top = [h for h in hints if h["queue_position"] > 1 and h["id"] in hint_ids]
+        for h in non_top:
+            if h["status"] != "queued":
+                result.fail(f"Hint at position {h['queue_position']} should be 'queued', got '{h['status']}'")
+                return
+        self.logger.log_operation(f"  ✓ Non-top hints remain 'queued'")
+
+        # ── 3c. Test submit endpoint ──
+        resp = self.api_post(f"/hints/{top_hint['id']}/submit", {})
+        if resp.get("status") != "ok":
+            result.fail(f"POST /hints/{top_hint['id']}/submit failed: {resp}")
+            return
+        data = self.api_get("/hints")
+        submitted_hint = [h for h in data["hints"] if h["id"] == top_hint["id"]][0]
+        if submitted_hint["status"] != "submitted":
+            result.fail(f"Hint should be 'submitted', got '{submitted_hint['status']}'")
+            return
+        self.logger.log_operation(f"  ✓ Submit endpoint changed status to 'submitted'")
+
+        # ── 3d. Submit on non-ready hint should fail ──
+        r = self.api_post_raw(f"/hints/{hint_ids[1]}/submit", {})
+        if r.status_code < 400:
+            self.logger.log_warning(f"  Submit of non-ready hint returned {r.status_code} (expected 404)")
+        else:
+            self.logger.log_operation(f"  ✓ Submit of non-ready hint correctly returned {r.status_code}")
+
+        # ── 3e. Answer a submitted hint directly ──
+        resp = self.api_post(f"/hints/{top_hint['id']}/answer", {})
+        if resp.get("status") != "ok":
+            result.fail(f"Answer of submitted hint failed: {resp}")
+            return
+        self.logger.log_operation(f"  ✓ Answered submitted hint directly")
+
+        # Verify auto-promotion of new top hint
+        data = self.api_get("/hints")
+        hints = data.get("hints", [])
+        if hints:
+            new_top = [h for h in hints if h["queue_position"] == 1]
+            if new_top and new_top[0]["status"] != "ready":
+                result.fail(f"New top hint should be 'ready' after answer, got '{new_top[0]['status']}'")
+                return
+            self.logger.log_operation(f"  ✓ New top hint auto-promoted to 'ready' after answering")
+
+        # After step 3e: hint_ids[0] answered, hint_ids[1] at pos 1 (ready), hint_ids[2] at pos 2 (queued)
+
+        # ── 4. Demote ready hint at position 1 — should reset to queued ──
+        resp = self.api_post(f"/hints/{hint_ids[1]}/demote", {})
+        if resp.get("status") != "ok":
+            result.fail(f"POST /hints/{hint_ids[1]}/demote failed: {resp}")
+            return
+        data = self.api_get("/hints")
+        hints = data.get("hints", [])
+        status_map = {h["id"]: h["status"] for h in hints}
+        pos_map = {h["id"]: h["queue_position"] for h in hints}
+        # hint_ids[1] demoted to pos 2, hint_ids[2] promoted to pos 1
+        if pos_map.get(hint_ids[1]) != 2 or pos_map.get(hint_ids[2]) != 1:
+            result.fail(f"Demote did not swap correctly: {pos_map}")
+            return
+        # Demoted hint should be 'queued' (was ready), new top should be 'ready'
+        if status_map.get(hint_ids[1]) != "queued":
+            result.fail(f"Demoted hint should be 'queued', got '{status_map.get(hint_ids[1])}'")
+            return
+        if status_map.get(hint_ids[2]) != "ready":
+            result.fail(f"New top hint should be 'ready', got '{status_map.get(hint_ids[2])}'")
+            return
+        self.logger.log_operation(f"  ✓ Demote swapped positions and reset statuses correctly")
+
+        # ── 5. Answer the ready hint at position 1 ──
+        resp = self.api_post(f"/hints/{hint_ids[2]}/answer", {})
+        if resp.get("status") != "ok":
+            result.fail(f"POST /hints/{hint_ids[2]}/answer failed: {resp}")
+            return
+        data = self.api_get("/hints")
+        hints = data.get("hints", [])
+        active_ids = [h["id"] for h in hints]
+        if hint_ids[2] in active_ids:
+            result.fail(f"Answered hint {hint_ids[2]} still in active list")
+            return
+        # hint_ids[1] should now be at position 1 and auto-promoted to 'ready'
+        remaining = [h for h in hints if h["id"] == hint_ids[1]]
+        if not remaining:
+            result.fail(f"hint_ids[1] not found after answering hint_ids[2]")
+            return
+        if remaining[0]["queue_position"] != 1:
+            result.fail(f"Expected position 1, got {remaining[0]['queue_position']}")
+            return
+        if remaining[0]["status"] != "ready":
+            result.fail(f"Auto-promoted hint should be 'ready', got '{remaining[0]['status']}'")
+            return
+        self.logger.log_operation(f"  ✓ Answer removed hint, remaining hint promoted to pos 1 as 'ready'")
+
+        # ── 6. Delete a hint and verify auto-promotion ──
+        # Create a new hint so we have 2 to test delete + promotion
+        resp = self.api_post("/hints", {
+            "puzzle_id": puz2["id"],
+            "solver": "testuser",
+            "request_text": f"Extra hint for delete test {ts}"
+        })
+        extra_id = resp.get("hint", {}).get("id")
+        # hint_ids[1] at pos 1 (ready), extra_id at pos 2 (queued)
+        resp = self.api_delete(f"/hints/{hint_ids[1]}")
+        if resp.get("status") != "ok":
+            result.fail(f"DELETE /hints/{hint_ids[1]} failed: {resp}")
+            return
+        data = self.api_get("/hints")
+        hints = data.get("hints", [])
+        if any(h["id"] == hint_ids[1] for h in hints):
+            result.fail(f"Deleted hint {hint_ids[1]} still in list")
+            return
+        # extra_id should now be at pos 1 and 'ready'
+        extra = [h for h in hints if h["id"] == extra_id]
+        if extra and extra[0]["status"] != "ready":
+            result.fail(f"After delete, new top hint should be 'ready', got '{extra[0]['status']}'")
+            return
+        self.logger.log_operation(f"  ✓ Delete removed hint, new top auto-promoted to 'ready'")
+
+        # ── 7. Verify /all includes hints ──
+        all_data = self.api_get("/all")
+        if "hints" not in all_data:
+            result.fail("/all response does not include hints key")
+            return
+        self.logger.log_operation(f"  ✓ /all response includes hints ({len(all_data['hints'])} hints)")
+
+        # ── 8. Error cases ──
+        # Demote the last hint (should fail — already at bottom)
+        r = self.api_post_raw(f"/hints/{extra_id}/demote", {})
+        if r.status_code < 400:
+            self.logger.log_warning(f"  Demote of last hint returned {r.status_code} (expected 400)")
+        else:
+            self.logger.log_operation(f"  ✓ Demote of last hint correctly returned {r.status_code}")
+
+        # Delete non-existent hint
+        r = self.api_delete_raw("/hints/999999")
+        self.logger.log_operation(f"  Delete non-existent hint: {r.status_code}")
+
+        # Create hint with missing fields
+        r = self.api_post_raw("/hints", {"puzzle_id": puz1["id"]})
+        if r.ok:
+            self.logger.log_warning(f"  POST /hints with missing fields unexpectedly succeeded")
+        else:
+            self.logger.log_operation(f"  ✓ POST /hints with missing fields returned {r.status_code}")
+
+        # Clean up remaining hints
+        data = self.api_get("/hints")
+        for h in data.get("hints", []):
+            self.api_delete(f"/hints/{h['id']}")
+        self.logger.log_operation(f"  ✓ Cleaned up remaining test hints")
+
+        result.set_success("Hint queue test completed successfully")
+
     # ======================================================================
     # Test suite runner
     # ======================================================================
@@ -1672,6 +1903,7 @@ class TestRunner:
             ("Solver CRUD", self.test_solver_crud),
             ("RBAC Privilege Management", self.test_rbac_privileges),
             ("Puzzle Deletion", self.test_puzzle_deletion),
+            ("Hint Queue", self.test_hint_queue),
         ]
 
         if selected_tests:
@@ -1749,7 +1981,7 @@ def main():
     parser.add_argument("--allow-destructive", action="store_true",
                         help="Allow destructive database operations (required)")
     parser.add_argument("--tests", nargs="+", type=int,
-                        help="Run specific test numbers (1-27)")
+                        help="Run specific test numbers (1-28)")
     parser.add_argument("--list", action="store_true",
                         help="List all tests")
     parser.add_argument("--base-url", default=BASE_URL,
@@ -1768,6 +2000,7 @@ def main():
             "Sheetcount", "Tagging", "API Endpoints", "API Documentation",
             "Bot Statistics", "Cache Invalidation",
             "Solver CRUD", "RBAC Privilege Management", "Puzzle Deletion",
+            "Hint Queue",
         ]
         for i, name in enumerate(tests, 1):
             print(f"  {i:2d}. {name}")

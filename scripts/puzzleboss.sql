@@ -136,9 +136,10 @@ CREATE TABLE `hint` (
   `solver` varchar(255) NOT NULL,
   `queue_position` int(11) NOT NULL,
   `request_text` text NOT NULL,
-  `status` enum('queued','answered') NOT NULL DEFAULT 'queued',
+  `status` enum('queued','ready','submitted','answered') NOT NULL DEFAULT 'queued',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `answered_at` timestamp NULL DEFAULT NULL,
+  `submitted_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `fk_hint_puzzle_idx` (`puzzle_id`),
   KEY `idx_hint_status_position` (`status`, `queue_position`)

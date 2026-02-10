@@ -29,6 +29,7 @@
     --success-bg: lightgreen;        /* Success background */
     --success-bg-light: #d4f4dd;     /* Light success background */
     --success-green: #66FF99;        /* Active/success green */
+    --success-border: #66cc66;       /* Success border green */
 
     /* State Colors - Error/Danger */
     --error-bg: lightpink;           /* Error background */
@@ -1112,7 +1113,6 @@ body.status-page footer {
 
 .comment-col {
     max-width: 250px;
-    vertical-align: top;
 }
 
 .comment-col input[type="text"] {
@@ -1336,6 +1336,27 @@ body button.btn-danger:hover {
     background: var(--danger-color-dark);
 }
 
+body button.btn-danger-light {
+    background: var(--danger-bg-light);
+    border: 1px solid var(--error-border);
+    color: var(--danger-color);
+}
+
+body button.btn-danger-light:hover {
+    background: var(--error-bg);
+}
+
+body button.btn-success {
+    background: var(--success-bg-light);
+    border: 1px solid var(--success-border);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+body button.btn-success:hover {
+    background: var(--success-bg);
+}
+
 body.status-page button:disabled,
 body.status-page input[type="submit"]:disabled {
     opacity: 0.4;
@@ -1427,13 +1448,23 @@ body.status-page input[type="submit"]:disabled {
     border-bottom: 1px solid var(--border-light);
 }
 
-.hint-table th {
-    background: var(--bg-light-blue);
+.hint-ready {
+    background: var(--warning-bg);
     font-weight: 600;
 }
 
-.hint-top {
-    background: var(--warning-bg);
+.hint-submitted {
+    background: #e8f5e9;
+    font-weight: 600;
+}
+
+.hint-status-ready {
+    color: #e65100;
+    font-weight: 600;
+}
+
+.hint-status-submitted {
+    color: #2e7d32;
     font-weight: 600;
 }
 
@@ -1444,6 +1475,10 @@ body.status-page input[type="submit"]:disabled {
 .hint-preview {
     cursor: pointer;
     text-decoration: underline dotted;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .hint-preview:hover {
@@ -1456,59 +1491,17 @@ body.status-page input[type="submit"]:disabled {
     white-space: nowrap;
 }
 
-.btn-hint-answer {
-    background: var(--success-bg-light);
-    border: 1px solid #66cc66;
-    border-radius: 4px;
-    padding: 2px 8px;
-    cursor: pointer;
-    font-size: 0.85em;
-    color: var(--text-primary);
-    font-weight: 600;
-}
-
-.btn-hint-answer:hover {
-    background: var(--success-bg);
-}
-
-.btn-hint-demote {
-    background: var(--bg-light-gray);
-    border: 1px solid var(--border-medium);
-    border-radius: 4px;
-    padding: 2px 8px;
-    cursor: pointer;
-    font-size: 0.85em;
-}
-
-.btn-hint-demote:hover {
-    background: var(--gray-hover);
-}
-
-.btn-hint-delete {
-    background: var(--danger-bg-light);
-    border: 1px solid var(--error-border);
-    border-radius: 4px;
-    padding: 2px 8px;
-    cursor: pointer;
-    font-size: 0.85em;
-    color: var(--danger-color);
-}
-
-.btn-hint-delete:hover {
-    background: var(--error-bg);
-}
-
-.btn-hint-inline {
-    background: none;
-    border: 1px solid var(--border-medium);
-    border-radius: 4px;
+/* Compact buttons inside hint table rows and puzzle hint columns */
+.hint-table button,
+.hint-actions button,
+td > .btn-hint-request {
     padding: 2px 6px;
-    cursor: pointer;
     font-size: 0.85em;
-    transition: all 0.15s;
+    min-width: auto;
 }
 
-.btn-hint-inline:hover {
+/* Inline hint request button in puzzle tables — warning hover for visibility */
+.btn-hint-request:hover {
     background: var(--warning-bg);
     border-color: var(--warning-border);
 }
@@ -1531,7 +1524,6 @@ body.status-page input[type="submit"]:disabled {
     border-radius: 4px;
     font-family: inherit;
     font-size: 0.9em;
-    resize: vertical;
     box-sizing: border-box;
 }
 
@@ -1539,26 +1531,6 @@ body.status-page input[type="submit"]:disabled {
     outline: none;
     border-color: var(--primary-blue);
     box-shadow: 0 0 3px rgba(0, 102, 204, 0.3);
-}
-
-.btn-hint-submit {
-    background: var(--primary-blue);
-    color: var(--bg-white);
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.9em;
-}
-
-.btn-hint-submit:hover {
-    background: var(--primary-blue-hover);
-}
-
-.btn-hint-submit:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 .hint-full-text {
@@ -1576,7 +1548,6 @@ body.status-page input[type="submit"]:disabled {
 }
 
 .hint-detail-dialog .modal-actions {
-    margin-top: 16px;
-    text-align: right;
+    justify-content: flex-end;
 }
 
