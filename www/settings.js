@@ -66,8 +66,8 @@ export default {
                 </div>
             </div>
             <div class="toggle-row">
-                <button @click="applyShowFilter(false)">Hide All</button>
-                <button @click="applyShowFilter(true)">Show All</button>
+                <button class="btn-secondary" @click="applyShowFilter(false)">Hide All</button>
+                <button class="btn-secondary" @click="applyShowFilter(true)">Show All</button>
             </div>
             <hr class="controls-divider" />
             <div class="toggle-row pills">

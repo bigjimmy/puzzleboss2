@@ -107,7 +107,7 @@ require_once('puzzlebosslib.php');
         import Round from './round.js';
         import solvesound from './solve-sound.js';
         import Consts from './consts.js';
-        import { onFetchSuccess, onFetchFailure } from './auth-reload.js';
+        import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
         import tagselect from './tag-select.js';
         import Settings from './settings.js';
 

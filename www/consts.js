@@ -1,4 +1,4 @@
-import { onFetchSuccess, onFetchFailure } from './auth-reload.js';
+import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
 
 // Status data - must be loaded from huntinfo, no fallback
 let statusData = [];

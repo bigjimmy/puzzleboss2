@@ -5,78 +5,19 @@
   <title>Configuration Management</title>
   <link rel="stylesheet" href="./pb-ui.css">
   <style>
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .filter-input {
-      padding: 6px 12px;
-      border: 1px solid var(--border-medium);
-      border-radius: 4px;
-      font-size: 14px;
-      width: 300px;
-    }
-    .filter-input:focus {
-      outline: none;
-      border-color: var(--primary-blue);
-      box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.15);
-    }
-    body.status-page .refresh-btn {
-      background: var(--bg-white);
-      color: var(--text-primary);
-      border: 1px solid var(--border-medium);
-      border-radius: 4px;
-      padding: 6px 16px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: normal;
-      text-align: center;
-      min-width: 0;
-    }
-    body.status-page .refresh-btn:hover {
-      background: var(--bg-light-gray);
-    }
+    .filter-input { width: 300px; }
     .config-count {
       color: var(--text-secondary);
       font-size: 14px;
     }
 
-    /* Category sections */
-    .config-category {
-      background: var(--bg-white);
-      border: 1px solid var(--border-medium);
-      border-radius: 8px;
-      margin-bottom: 15px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
+    /* Category sections (extends .info-box + .info-box-header from pb-ui.css) */
+    .config-category { padding: 0; }
     .category-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
       padding: 12px 15px;
-      cursor: pointer;
-      user-select: none;
       border-bottom: 1px solid var(--border-light);
     }
-    .category-header:hover {
-      background: var(--bg-light-gray);
-      border-radius: 8px 8px 0 0;
-    }
-    .category-header h3 {
-      margin: 0;
-      font-size: 1em;
-      flex: 1;
-    }
-    .collapse-icon {
-      display: inline-block;
-      transition: transform 0.2s;
-      font-size: 12px;
-    }
-    .collapse-icon.collapsed {
-      transform: rotate(-90deg);
-    }
+    .collapse-icon { font-size: 12px; }
     .category-body {
       padding: 0;
     }
@@ -96,7 +37,7 @@
       border-bottom: none;
     }
     .config-row:hover {
-      background: #fafafa;
+      background: var(--bg-light-gray);
     }
     .config-row.just-saved {
       background: var(--success-bg-light);
@@ -112,7 +53,7 @@
       color: var(--text-primary);
     }
     .config-key .key-description {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: inherit;
       font-weight: normal;
       font-size: 11px;
       color: var(--text-tertiary);
@@ -144,7 +85,8 @@
       min-height: 60px;
     }
     .config-value input:focus,
-    .config-value textarea:focus {
+    .config-value textarea:focus,
+    .config-value select:focus {
       outline: none;
       border-color: var(--primary-blue);
       box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.15);
@@ -168,43 +110,8 @@
       gap: 4px;
       min-width: 70px;
     }
-    body.status-page .save-btn {
-      background: var(--primary-blue);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 5px 14px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      min-width: 60px;
-      text-align: center;
-    }
-    body.status-page .save-btn:hover {
-      background: var(--primary-blue-hover);
-    }
-    body.status-page .save-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-    body.status-page .save-btn.saved {
-      background: green;
-    }
-    body.status-page .revert-btn {
-      background: var(--bg-white);
-      color: var(--text-secondary);
-      border: 1px solid var(--border-medium);
-      border-radius: 4px;
-      padding: 3px 10px;
-      cursor: pointer;
-      font-size: 11px;
-      min-width: 0;
-      font-weight: normal;
-      text-align: center;
-    }
-    body.status-page .revert-btn:hover {
-      background: var(--bg-light-gray);
-    }
+    .save-btn { min-width: 60px; }
+    .save-btn.saved { background: green; }
 
     /* Boolean toggle styling */
     .bool-toggle {
@@ -226,13 +133,13 @@
       border-right: none;
     }
     .bool-toggle span.active-true {
-      background: #d4f4dd;
+      background: var(--success-bg-light);
       color: green;
       font-weight: 600;
     }
     .bool-toggle span.active-false {
-      background: #fee;
-      color: #c00;
+      background: var(--danger-bg-light);
+      color: var(--danger-color);
       font-weight: 600;
     }
     .bool-toggle span:not(.active-true):not(.active-false) {
@@ -251,11 +158,6 @@
       border-radius: 4px;
       font-family: var(--font-mono);
       font-size: 13px;
-    }
-    .config-value input[type="number"]:focus {
-      outline: none;
-      border-color: var(--primary-blue);
-      box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.15);
     }
 
     /* Add new config */
@@ -283,82 +185,15 @@
     }
 
     /* Status messages */
-    #status-area {
-      margin-bottom: 10px;
-    }
-    .status-msg {
-      padding: 10px;
-      margin: 5px 0;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    .status-msg.success { background: var(--success-bg); }
-    .status-msg.error { background: var(--error-bg); }
+    #status-area { margin-bottom: 10px; }
 
-    /* Warning modal */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    }
-    .modal-overlay.active {
-      display: flex;
-    }
-    .modal {
-      background: white;
-      border-radius: 8px;
-      padding: 30px;
-      max-width: 520px;
-      width: 90%;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    }
-    .modal h3 {
-      margin-top: 0;
-      color: #b45309;
-    }
+    /* Warning modal overrides (base in pb-ui.css) */
+    .modal h3 { color: var(--warning-color); }
     .modal .warning {
-      background: #fff8f0;
-      border: 1px solid #fed7aa;
-      border-radius: 4px;
-      padding: 12px;
-      margin: 15px 0;
-      font-size: 14px;
-      line-height: 1.6;
+      background: var(--warning-bg);
+      border: 1px solid var(--warning-border);
     }
-    .modal-buttons {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      margin-top: 20px;
-    }
-    body.status-page .modal-buttons button {
-      padding: 8px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: normal;
-      min-width: 0;
-    }
-    body.status-page .btn-cancel {
-      background: var(--bg-white);
-      color: var(--text-primary);
-      border: 1px solid var(--border-medium);
-    }
-    body.status-page .btn-cancel:hover {
-      background: var(--bg-light-gray);
-    }
-    body.status-page .btn-ok {
-      background: var(--primary-blue);
-      color: white;
-      border: 1px solid var(--primary-blue);
-    }
-    body.status-page .btn-ok:hover {
-      background: var(--primary-blue-hover);
-    }
+
 
     /* Status select dropdown */
     .config-value select.status-select {
@@ -367,11 +202,6 @@
       border-radius: 4px;
       font-size: 14px;
       min-width: 200px;
-    }
-    .config-value select.status-select:focus {
-      outline: none;
-      border-color: var(--primary-blue);
-      box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.15);
     }
 
     /* Structured metadata editors */
@@ -493,7 +323,7 @@
       line-height: 1;
     }
     body.status-page .meta-editor .remove-row-btn:hover {
-      color: #c00;
+      color: var(--danger-color);
       background: none;
     }
     body.status-page .meta-editor .add-row-btn {
@@ -530,7 +360,7 @@
       flex-direction: row;
     }
   </style>
-  <script type="module" src="./auth-reload.js"></script>
+  <script type="module" src="./pb-utils.js"></script>
 </head>
 <body class="status-page">
 
@@ -722,7 +552,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       If you are unsure about a setting, <strong>ask puzztech first</strong>.
     </div>
     <div class="modal-buttons">
-      <button class="btn-cancel" onclick="window.history.back()">Go Back</button>
+      <button class="btn-cancel btn-secondary" onclick="window.history.back()">Go Back</button>
       <button class="btn-ok" onclick="dismissWarning()">I understand, continue</button>
     </div>
   </div>
@@ -741,8 +571,8 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
 <?php foreach ($grouped as $catKey => $items):
   $catInfo = $categories[$catKey];
 ?>
-<div class="config-category" data-category="<?= $catKey ?>">
-  <div class="category-header" onclick="toggleCategory('<?= $catKey ?>')">
+<div class="info-box config-category" data-category="<?= $catKey ?>">
+  <div class="info-box-header category-header" onclick="toggleCategory('<?= $catKey ?>')">
     <span class="collapse-icon" id="icon-<?= $catKey ?>">▼</span>
     <h3><?= htmlspecialchars($catInfo[0]) ?></h3>
   </div>
@@ -772,7 +602,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       </div>
       <div class="config-actions">
         <button class="save-btn" onclick="saveConfig(this, '<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Save</button>
-        <button class="revert-btn" onclick="revertConfig('<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Revert</button>
+        <button class="revert-btn btn-secondary" onclick="revertConfig('<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Revert</button>
       </div>
     </div>
 
@@ -818,7 +648,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       </div>
       <div class="config-actions">
         <button class="save-btn" onclick="serializeStatusEditor(); saveConfig(this, 'STATUS_METADATA')">Save</button>
-        <button class="revert-btn" onclick="revertStatusEditor()">Revert</button>
+        <button class="revert-btn btn-secondary" onclick="revertStatusEditor()">Revert</button>
       </div>
     </div>
 
@@ -870,7 +700,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       </div>
       <div class="config-actions">
         <button class="save-btn" onclick="serializeMetricsEditor(); saveConfig(this, 'METRICS_METADATA')">Save</button>
-        <button class="revert-btn" onclick="revertMetricsEditor()">Revert</button>
+        <button class="revert-btn btn-secondary" onclick="revertMetricsEditor()">Revert</button>
       </div>
     </div>
 
@@ -902,7 +732,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       </div>
       <div class="config-actions">
         <button class="save-btn" onclick="saveConfig(this, '<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Save</button>
-        <button class="revert-btn" onclick="revertConfig('<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Revert</button>
+        <button class="revert-btn btn-secondary" onclick="revertConfig('<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Revert</button>
       </div>
     </div>
     <?php endif; ?>
@@ -913,8 +743,8 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
 <?php endforeach; ?>
 
 <!-- Add new config key -->
-<div class="config-category">
-  <div class="category-header" onclick="toggleCategory('addnew')">
+<div class="info-box config-category">
+  <div class="info-box-header category-header" onclick="toggleCategory('addnew')">
     <span class="collapse-icon collapsed" id="icon-addnew">▼</span>
     <h3>Add New Config Key</h3>
   </div>
@@ -930,7 +760,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
 </div><!-- end #config-content -->
 
 <script>
-const apiProxy = './apicall.php';
+const { API_PROXY: apiProxy, escapeHtml, escapeAttr, showStatus } = window.pbUtils;
 
 function dismissWarning() {
   document.getElementById('warn-modal').classList.remove('active');
@@ -1005,13 +835,12 @@ async function saveConfig(btn, key) {
       row.classList.remove('just-saved');
     }, 1500);
 
-    statusArea.innerHTML = '<div class="status-msg success">Updated <strong>' + escapeHtml(key) + '</strong> successfully.</div>';
-    setTimeout(() => { statusArea.innerHTML = ''; }, 4000);
+    showStatus(statusArea, 'success', 'Updated <strong>' + escapeHtml(key) + '</strong> successfully.', 4000);
   } catch (err) {
     if (window.onFetchFailure?.()) return;
     btn.textContent = 'Save';
     btn.disabled = false;
-    statusArea.innerHTML = '<div class="status-msg error">Failed to update <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message) + '</div>';
+    showStatus(statusArea, 'error', 'Failed to update <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message));
   }
 }
 
@@ -1045,13 +874,13 @@ async function addNewConfig() {
   const statusArea = document.getElementById('status-area');
 
   if (!key) {
-    statusArea.innerHTML = '<div class="status-msg error">Please enter a config key.</div>';
+    showStatus(statusArea, 'error', 'Please enter a config key.');
     return;
   }
 
   // Check if key already exists
   if (document.querySelector('.config-input[data-key="' + CSS.escape(key) + '"]')) {
-    statusArea.innerHTML = '<div class="status-msg error">Key <strong>' + escapeHtml(key) + '</strong> already exists. Edit it above instead.</div>';
+    showStatus(statusArea, 'error', 'Key <strong>' + escapeHtml(key) + '</strong> already exists. Edit it above instead.');
     return;
   }
 
@@ -1067,7 +896,7 @@ async function addNewConfig() {
     if (data.status !== 'ok') throw new Error('Unexpected response');
     window.onFetchSuccess?.();
 
-    statusArea.innerHTML = '<div class="status-msg success">Added <strong>' + escapeHtml(key) + '</strong>. Refreshing page…</div>';
+    showStatus(statusArea, 'success', 'Added <strong>' + escapeHtml(key) + '</strong>. Refreshing page…');
     keyInput.value = '';
     valInput.value = '';
 
@@ -1075,7 +904,7 @@ async function addNewConfig() {
     setTimeout(() => location.reload(), 1000);
   } catch (err) {
     if (window.onFetchFailure?.()) return;
-    statusArea.innerHTML = '<div class="status-msg error">Failed to add <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message) + '</div>';
+    showStatus(statusArea, 'error', 'Failed to add <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message));
   }
 }
 
@@ -1090,12 +919,6 @@ function filterConfig() {
     const visibleRows = cat.querySelectorAll('.config-row:not([style*="display: none"])');
     cat.style.display = visibleRows.length > 0 ? '' : 'none';
   });
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 // --- STATUS_METADATA structured editor ---
@@ -1209,10 +1032,6 @@ function revertMetricsEditor() {
   });
 }
 
-// Escape for use in HTML attributes within template literals
-function escapeAttr(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 </script>
 
 </body>

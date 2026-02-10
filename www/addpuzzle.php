@@ -8,7 +8,7 @@ require('puzzlebosslib.php');
   <title>Add Puzzle</title>
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <script type="module" src="./auth-reload.js"></script>
+  <script type="module" src="./pb-utils.js"></script>
   <script>
   let formSubmitted = false;
   function handleSubmit(event) {

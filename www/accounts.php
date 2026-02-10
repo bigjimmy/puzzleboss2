@@ -46,7 +46,7 @@
       text-align: right;
     }
     #accounts-table .col-username {
-      font-family: monospace;
+      font-family: var(--font-mono);
       font-weight: 600;
     }
     #accounts-table .col-discord {
@@ -60,13 +60,13 @@
       color: var(--text-tertiary);
     }
     #accounts-table tr.no-google {
-      background: #fff8f0;
+      background: var(--warning-bg);
     }
     #accounts-table tr.no-google:hover {
       background: #fff0e0;
     }
     #accounts-table tr.no-solver {
-      background: #f0f8ff;
+      background: var(--bg-page);
     }
     #accounts-table tr.no-solver:hover {
       background: #e0f0ff;
@@ -80,7 +80,7 @@
     }
     .mismatch-badge.no-google {
       background: #fff0e0;
-      color: #b45309;
+      color: var(--warning-color);
     }
     .mismatch-badge.no-solver {
       background: #e0f0ff;
@@ -113,185 +113,58 @@
     .col-actions {
       white-space: nowrap;
     }
-    body.status-page .update-btn {
-      background: var(--bg-white);
-      border: 1px solid var(--primary-blue);
-      border-radius: 4px;
-      padding: 3px 10px;
-      cursor: pointer;
-      color: var(--primary-blue);
-      font-size: 12px;
-      margin-right: 4px;
-    }
-    body.status-page .update-btn:hover {
-      background: var(--bg-light-blue);
-    }
-    body.status-page .update-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-    body.status-page .delete-btn {
-      background: #c00;
-      border: 1px solid #900;
-      border-radius: 4px;
-      padding: 3px 10px;
-      cursor: pointer;
-      color: white;
-      font-size: 12px;
-    }
-    body.status-page .delete-btn:hover {
-      background: #900;
-    }
-    body.status-page .delete-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-    body.status-page .refresh-btn {
-      background: var(--bg-white);
-      color: var(--text-primary);
-      border: 1px solid var(--border-medium);
-      border-radius: 4px;
-      padding: 6px 16px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: normal;
-      text-align: center;
-      min-width: 0;
-    }
-    body.status-page .refresh-btn:hover {
-      background: var(--bg-light-gray);
-    }
+    .update-btn { margin-right: 4px; }
     .account-count {
       color: var(--text-secondary);
       font-size: 14px;
       font-weight: normal;
-    }
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
     }
     .google-note {
       color: var(--text-tertiary);
       font-size: 12px;
       font-style: italic;
     }
-    .filter-input {
-      padding: 6px 12px;
-      border: 1px solid var(--border-medium);
-      border-radius: 4px;
-      font-size: 14px;
-      width: 250px;
-    }
-    .filter-input:focus {
-      outline: none;
-      border-color: var(--primary-blue);
-      box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.15);
-    }
+    .filter-input { width: 250px; }
     .suspended-badge {
-      background: #fee;
-      color: #c00;
+      background: var(--danger-bg-light);
+      color: var(--danger-color);
       padding: 1px 6px;
       border-radius: 3px;
       font-size: 11px;
       font-weight: 600;
     }
     .admin-badge {
-      background: #e8f0fe;
-      color: #1a73e8;
+      background: var(--bg-light-blue);
+      color: var(--primary-blue);
       padding: 1px 6px;
       border-radius: 3px;
       font-size: 11px;
       font-weight: 600;
     }
 
-    /* Delete confirmation modal */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    }
-    .modal-overlay.active {
-      display: flex;
-    }
-    .modal {
-      background: white;
-      border-radius: 8px;
-      padding: 30px;
-      max-width: 480px;
-      width: 90%;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    }
-    .modal h3 {
-      margin-top: 0;
-      color: #c00;
-    }
+    /* Delete confirmation modal overrides (base in pb-ui.css) */
+    .modal { max-width: 480px; }
+    .modal h3 { color: var(--danger-color); }
     .modal .warning {
       background: #fff3f3;
       border: 1px solid #fcc;
-      border-radius: 4px;
-      padding: 12px;
-      margin: 15px 0;
-      font-size: 14px;
     }
     .modal .confirm-input {
       width: 100%;
       padding: 8px;
       border: 2px solid var(--border-medium);
       border-radius: 4px;
-      font-family: monospace;
+      font-family: var(--font-mono);
       font-size: 16px;
       margin: 10px 0;
       box-sizing: border-box;
     }
     .modal .confirm-input.matched {
-      border-color: #c00;
+      border-color: var(--danger-color);
     }
-    .modal-buttons {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-end;
-      margin-top: 20px;
-    }
-    .modal-buttons button {
-      padding: 8px 20px;
-      border-radius: 4px;
-      border: 1px solid var(--border-medium);
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .btn-cancel {
-      background: var(--bg-white);
-    }
-    .btn-cancel:hover {
-      background: var(--bg-light-gray);
-    }
-    .btn-delete {
-      background: #c00;
-      color: white;
-      border-color: #900;
-    }
-    .btn-delete:hover:not(:disabled) {
-      background: #900;
-    }
-    .btn-delete:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-    .status-msg {
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 4px;
-    }
-    .status-msg.success { background: var(--success-bg); }
-    .status-msg.error { background: var(--error-bg); }
+    .status-msg { margin: 10px 0; }
   </style>
-  <script type="module" src="./auth-reload.js"></script>
+  <script type="module" src="./pb-utils.js"></script>
 </head>
 <body class="status-page">
 
@@ -473,8 +346,8 @@ if ($hasGoogle) {
       <td class="col-puzzleboss col-priv <?= $isPuzzleboss === 'YES' ? 'priv-yes' : 'priv-no' ?>"
           onclick="togglePriv(this, 'puzzleboss')"><?= $isPuzzleboss ?></td>
       <td class="col-actions">
-        <button class="update-btn" onclick="savePrivs(this)">Update</button>
-        <button class="delete-btn" onclick="confirmDelete('<?= htmlspecialchars($solverName, ENT_QUOTES) ?>')">Delete</button>
+        <button class="update-btn btn-secondary" onclick="savePrivs(this)">Update</button>
+        <button class="delete-btn btn-danger" onclick="confirmDelete('<?= htmlspecialchars($solverName, ENT_QUOTES) ?>')">Delete</button>
       </td>
     </tr>
     <?php endforeach; ?>
@@ -529,14 +402,14 @@ if ($hasGoogle) {
     <p>Type the username to confirm:</p>
     <input type="text" class="confirm-input" id="confirm-input" autocomplete="off" oninput="checkConfirmInput()">
     <div class="modal-buttons">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-delete" id="btn-confirm-delete" disabled onclick="executeDelete()">Delete Account</button>
+      <button class="btn-cancel btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-delete btn-danger" id="btn-confirm-delete" disabled onclick="executeDelete()">Delete Account</button>
     </div>
   </div>
 </div>
 
 <script>
-const apiProxy = './apicall.php';
+const { API_PROXY: apiProxy, escapeHtml, showStatus } = window.pbUtils;
 let deleteTarget = '';
 let sortCol = 'id';
 let sortAsc = true;
@@ -624,10 +497,10 @@ async function savePrivs(btn) {
     ptCell.classList.remove('pending');
     pbCell.classList.remove('pending');
 
-    statusArea.innerHTML = '<div class="status-msg success">Privileges updated for <strong>' + username + '</strong>.</div>';
+    showStatus(statusArea, 'success', 'Privileges updated for <strong>' + escapeHtml(username) + '</strong>.');
   } catch (err) {
     if (window.onFetchFailure?.()) return;
-    statusArea.innerHTML = '<div class="status-msg error">Failed to update privileges for <strong>' + username + '</strong>: ' + err.message + '</div>';
+    showStatus(statusArea, 'error', 'Failed to update privileges for <strong>' + escapeHtml(username) + '</strong>: ' + escapeHtml(err.message));
   } finally {
     btn.disabled = false;
     btn.textContent = 'Update';
@@ -662,7 +535,7 @@ async function executeDelete() {
   closeModal();
 
   const statusArea = document.getElementById('status-area');
-  statusArea.innerHTML = '<div class="status-msg">Deleting account <strong>' + username + '</strong>...</div>';
+  showStatus(statusArea, '', 'Deleting account <strong>' + escapeHtml(username) + '</strong>...');
 
   try {
     const resp = await fetch(apiProxy + '?apicall=deleteuser&apiparam1=' + encodeURIComponent(username));
@@ -685,10 +558,10 @@ async function executeDelete() {
     const count = document.querySelectorAll('#accounts-table tbody tr').length;
     document.querySelector('.account-count').textContent = '(' + count + ' accounts)';
 
-    statusArea.innerHTML = '<div class="status-msg success">Account <strong>' + username + '</strong> deleted successfully.</div>';
+    showStatus(statusArea, 'success', 'Account <strong>' + escapeHtml(username) + '</strong> deleted successfully.');
   } catch (err) {
     if (window.onFetchFailure?.()) return;
-    statusArea.innerHTML = '<div class="status-msg error">Failed to delete <strong>' + username + '</strong>: ' + err.message + '</div>';
+    showStatus(statusArea, 'error', 'Failed to delete <strong>' + escapeHtml(username) + '</strong>: ' + escapeHtml(err.message));
   }
 }
 

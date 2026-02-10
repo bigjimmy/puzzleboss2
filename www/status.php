@@ -73,18 +73,20 @@ $uid = getauthenticateduser();
                 <h3>Column Visibility</h3>
             </div>
             <div class="info-box-content" v-show="showColumnVisibility">
-                <div class="column-checkboxes">
-                    <label><input type="checkbox" v-model="visibleColumns.round"> Round</label>
-                    <label><input type="checkbox" v-model="visibleColumns.status"> Status</label>
-                    <label><input type="checkbox" v-model="visibleColumns.doc"> Doc (📊)</label>
-                    <label><input type="checkbox" v-model="visibleColumns.sheetcount"> Sheet #</label>
-                    <label><input type="checkbox" v-model="visibleColumns.chat"> Chat (🗣️)</label>
-                    <label><input type="checkbox" v-model="visibleColumns.cursolvers"> Solvers (cur)</label>
-                    <label><input type="checkbox" v-model="visibleColumns.solvers"> Solvers (all)</label>
-                    <label><input type="checkbox" v-model="visibleColumns.location"> Location</label>
-                    <label><input type="checkbox" v-model="visibleColumns.tags"> Tags</label>
-                    <label><input type="checkbox" v-model="visibleColumns.comment"> Comment</label>
-                    <button @click="showAllColumns">Show All</button>
+                <div class="controls-section" style="flex-wrap: wrap;">
+                    <div class="filter" :class="{ active: visibleColumns.round }" @click="visibleColumns.round = !visibleColumns.round">Round <input type="checkbox" :checked="visibleColumns.round" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.status }" @click="visibleColumns.status = !visibleColumns.status">Status <input type="checkbox" :checked="visibleColumns.status" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.doc }" @click="visibleColumns.doc = !visibleColumns.doc">Doc (📊) <input type="checkbox" :checked="visibleColumns.doc" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.sheetcount }" @click="visibleColumns.sheetcount = !visibleColumns.sheetcount">Sheet # <input type="checkbox" :checked="visibleColumns.sheetcount" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.chat }" @click="visibleColumns.chat = !visibleColumns.chat">Chat (🗣️) <input type="checkbox" :checked="visibleColumns.chat" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.cursolvers }" @click="visibleColumns.cursolvers = !visibleColumns.cursolvers">Solvers (cur) <input type="checkbox" :checked="visibleColumns.cursolvers" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.solvers }" @click="visibleColumns.solvers = !visibleColumns.solvers">Solvers (all) <input type="checkbox" :checked="visibleColumns.solvers" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.location }" @click="visibleColumns.location = !visibleColumns.location">Location <input type="checkbox" :checked="visibleColumns.location" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.tags }" @click="visibleColumns.tags = !visibleColumns.tags">Tags <input type="checkbox" :checked="visibleColumns.tags" @click.stop /></div>
+                    <div class="filter" :class="{ active: visibleColumns.comment }" @click="visibleColumns.comment = !visibleColumns.comment">Comment <input type="checkbox" :checked="visibleColumns.comment" @click.stop /></div>
+                    <div class="toggle-row">
+                        <button class="btn-secondary" @click="showAllColumns">Show All</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -322,7 +324,7 @@ $uid = getauthenticateduser();
     <script type="module">
         import { createApp, ref, computed, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
         import Consts from './consts.js'
-        import { onFetchSuccess, onFetchFailure } from './auth-reload.js'
+        import { onFetchSuccess, onFetchFailure } from './pb-utils.js'
 
         <?php
             echo "const currentUid = " . json_encode($uid) . ";";

@@ -1,7 +1,7 @@
 import { ref, useTemplateRef, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
 import TagSelect from './tag-select.js';
 import Consts from './consts.js';
-import { onFetchSuccess, onFetchFailure } from './auth-reload.js';
+import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
 
 //
 // This component represents one of three update icons on each puzzle. Much of

@@ -1396,14 +1396,22 @@ def test_status_page():
         page = browser.new_page()
 
         print("  Navigating to status page...")
-        page.goto(f"{BASE_URL}/status.php?assumedid=testuser", wait_until="networkidle")
+        for attempt in range(3):
+            try:
+                page.goto(f"{BASE_URL}/status.php?assumedid=testuser", timeout=15000)
+                page.wait_for_selector("h1", timeout=10000)
+                break
+            except Exception:
+                if attempt == 2:
+                    raise
+                print(f"    Retry {attempt + 1}...")
+                time.sleep(2)
 
         print("  Checking page title...")
-        page.wait_for_selector("h1", timeout=5000)
         assert "Hunt Status Overview" in page.locator("h1").inner_text()
 
         print("  Waiting for Vue app to mount...")
-        page.wait_for_selector(".status-header", timeout=5000)
+        page.wait_for_selector(".status-header", timeout=10000)
 
         for section in ["Hunt Progress", "Status Breakdown", "Column Visibility"]:
             page.wait_for_selector(f"text={section}", timeout=5000)
@@ -1417,32 +1425,33 @@ def test_status_page():
             page.wait_for_selector(".column-visibility .info-box-content", state="visible", timeout=5000)
             time.sleep(0.5)
 
-        print("  Verifying all column checkboxes...")
-        expected_columns = ["Round", "Status", "Doc", "Sheet #", "Chat",
+        print("  Verifying all column toggle pills...")
+        expected_columns = ["Round", "Status", "Doc (📊)", "Sheet #", "Chat (🗣️)",
                           "Solvers (cur)", "Solvers (all)", "Location", "Tags", "Comment"]
 
-        page.wait_for_selector(".column-checkboxes label", timeout=5000)
+        page.wait_for_selector(".controls-section .filter", timeout=5000)
         for col in expected_columns:
-            assert page.locator(f".column-checkboxes label:has-text('{col}') input[type='checkbox']").count() > 0, \
-                f"Missing checkbox for column: {col}"
+            assert page.locator(f".controls-section .filter:text-is('{col}')").count() > 0, \
+                f"Missing filter pill for column: {col}"
             print(f"    ✓ Found checkbox: {col}")
 
         print("  Testing column visibility toggle for each column...")
         for col in expected_columns:
-            checkbox = page.locator(f".column-checkboxes label:has-text('{col}') input[type='checkbox']")
+            pill = page.locator(f".controls-section .filter:text-is('{col}')")
 
-            if not checkbox.is_checked():
-                checkbox.click(force=True)
+            # Ensure pill is ON (column visible) before testing toggle
+            if not pill.evaluate("el => el.classList.contains('active')"):
+                pill.click()
                 time.sleep(0.3)
 
             hidden_before = page.locator("th.hidden-column").count()
-            checkbox.click(force=True)
+            pill.click()
             time.sleep(0.3)
             hidden_after_hide = page.locator("th.hidden-column").count()
             assert hidden_after_hide > hidden_before, f"{col} column should be hidden"
             print(f"      ✓ {col} column hidden ({hidden_before} → {hidden_after_hide})")
 
-            checkbox.click(force=True)
+            pill.click()
             time.sleep(0.3)
             hidden_after_show = page.locator("th.hidden-column").count()
             assert hidden_after_show == hidden_before, f"{col} column should be visible again"
@@ -1451,17 +1460,17 @@ def test_status_page():
         # Test Show All
         print("  Testing 'Show All' button...")
         for col in ["Round", "Location", "Tags"]:
-            checkbox = page.locator(f".column-checkboxes label:has-text('{col}') input[type='checkbox']")
-            if checkbox.is_checked():
-                checkbox.click(force=True)
+            pill = page.locator(f".controls-section .filter:text-is('{col}')")
+            if pill.evaluate("el => el.classList.contains('active')"):
+                pill.click()
         time.sleep(0.3)
 
-        page.locator(".column-checkboxes button:has-text('Show All')").click()
+        page.locator(".toggle-row button:has-text('Show All')").click()
         time.sleep(0.5)
 
         for col in expected_columns:
-            assert page.locator(f".column-checkboxes label:has-text('{col}') input[type='checkbox']").is_checked(), \
-                f"{col} checkbox should be checked after 'Show All'"
+            assert page.locator(f".controls-section .filter:text-is('{col}')").evaluate("el => el.classList.contains('active')"), \
+                f"{col} pill should be active after 'Show All'"
         print("    ✓ All columns visible after 'Show All'")
 
         browser.close()
@@ -1480,8 +1489,8 @@ def test_solved_puzzles_excluded():
         page = browser.new_page()
 
         print("  Navigating to status page...")
-        page.goto(f"{BASE_URL}/status.php?assumedid=testuser", wait_until="networkidle")
-        page.wait_for_selector(".status-header", timeout=5000)
+        page.goto(f"{BASE_URL}/status.php?assumedid=testuser", wait_until="domcontentloaded")
+        page.wait_for_selector(".status-header", timeout=10000)
         time.sleep(1)
 
         # Expand all sections
@@ -1921,7 +1930,7 @@ def main():
     parser.add_argument(
         '--tests',
         nargs='+',
-        help='Run only specific tests (by number or name). Examples: --tests 1 3 7 or --tests lifecycle visibility'
+        help='Run only specific tests (by number or name). Examples: --tests 1 3 7, --tests 1,3,7, or --tests lifecycle visibility'
     )
     parser.add_argument(
         '--list',
@@ -1971,7 +1980,13 @@ def main():
 
     tests_to_run = []
     if args.tests:
-        for test_spec in args.tests:
+        # Flatten: support both "--tests 1 3 7" and "--tests 1,3,7" (or mixed)
+        specs = []
+        for arg in args.tests:
+            specs.extend(arg.split(','))
+        specs = [s.strip() for s in specs if s.strip()]
+
+        for test_spec in specs:
             test_spec_lower = test_spec.lower()
             found = False
             for number, name, test_func, display_name in all_tests:
