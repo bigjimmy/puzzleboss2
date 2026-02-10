@@ -223,6 +223,7 @@ dialog .confirm-banner .confirm-buttons {
     padding: 0 12px;
     height: 28px;
     line-height: 28px;
+    font-size: 13.6px;
     border-radius: 4px;
     border: 1px solid var(--border-medium);
     background: var(--bg-light-gray);
@@ -240,10 +241,6 @@ dialog .confirm-banner .confirm-buttons {
     border-color: var(--primary-blue);
     color: var(--primary-blue);
     font-weight: 600;
-}
-
-.toggle-row.pills input[type="checkbox"] {
-    display: none;
 }
 
 .toggle-row.pills input[type="number"] {
@@ -298,7 +295,7 @@ dialog .confirm-banner .confirm-buttons {
     cursor: pointer;
     user-select: none;
     transition: all 0.15s;
-    font-size: 0.9em;
+    font-size: 12px;
 }
 
 .filter:hover {
