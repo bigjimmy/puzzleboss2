@@ -12,7 +12,7 @@ Usage:
 
 Requires:
     - python-ldap (pip install python-ldap)
-    - Google Admin SDK credentials (admintoken.json)
+    - Google service account with Admin SDK access (service-account.json)
     - LDAP config values in the config table (LDAP_HOST, LDAP_DOMAIN, etc.)
     - puzzleboss.yaml for DB connection
 

@@ -13,7 +13,7 @@ Puzzleboss 2000 is a puzzle hunt management system developed by ATTORNEY for mys
 **Backend (Python)**
 - `pbrest.py` - Flask REST API server with MySQL database. Main entry point for API operations. Uses Flasgger for Swagger/OpenAPI documentation.
 - `pblib.py` - Core library with configuration management, logging utilities, and email functions. Loads config from both `puzzleboss.yaml` (static) and database `config` table (dynamic). Config auto-refreshes every 30 seconds via `maybe_refresh_config()`.
-- `pbgooglelib.py` - Google Drive/Sheets integration. Manages OAuth credentials (`token.json`), creates puzzle sheets, tracks sheet revisions. Supports hybrid metadata approach for sheet activity tracking.
+- `pbgooglelib.py` - Google Drive/Sheets integration. Uses service account credentials (`service-account.json`) with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Supports hybrid metadata approach for sheet activity tracking.
 - `pbdiscordlib.py` - Discord integration via socket connection to puzzcord daemon. Creates channels, announces solves/rounds.
 - `pbllmlib.py` - LLM-powered natural language queries via Google Gemini. Includes function calling for hunt data and RAG support for wiki content via ChromaDB.
 - `bigjimmybot.py` - Multi-threaded bot that polls Google Sheets for activity and updates puzzle metadata (sheetcount, lastsheetact). Uses hybrid approach: legacy Revisions API for old sheets, DeveloperMetadata API for sheets with `sheetenabled=1`.
@@ -102,14 +102,18 @@ cp puzzleboss-SAMPLE.yaml puzzleboss.yaml
 # Edit puzzleboss.yaml with database credentials and API endpoints
 ```
 
-### Google Sheets Setup (Optional)
+### Google Service Account Setup (Optional)
 ```bash
-# 1. Get credentials.json from Google Cloud Console
-# 2. Generate token.json
-python gdriveinit.py
-
-# 3. For admin features (user provisioning)
-python googleadmininit.py
+# 1. Create a service account with Domain-Wide Delegation in Google Cloud Console
+# 2. Download the JSON key file and place it in the app directory as service-account.json
+# 3. Authorize the service account's client ID in Google Workspace Admin Console
+#    (Security → API controls → Domain-wide delegation) with these scopes:
+#    https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.file,
+#    https://www.googleapis.com/auth/drive.appdata,https://www.googleapis.com/auth/drive.metadata.readonly,
+#    https://www.googleapis.com/auth/spreadsheets,https://www.googleapis.com/auth/admin.directory.user
+# 4. Set config values in the database:
+#    SERVICE_ACCOUNT_FILE = service-account.json
+#    SERVICE_ACCOUNT_SUBJECT = admin@yourdomain.org  (domain admin email to impersonate)
 ```
 
 ### Running Services
@@ -276,7 +280,7 @@ Key config variables:
 
 ## Security Notes
 
-- Never commit `puzzleboss.yaml`, `credentials.json`, `token.json`, `admintoken.json`
+- Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf`
 - Use environment variables or secrets management for production credentials
 - Apache should restrict access to parent directory (only www/ should be web-accessible)
 - Database user should only have access to puzzleboss database

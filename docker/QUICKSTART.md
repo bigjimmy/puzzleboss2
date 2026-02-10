@@ -205,11 +205,16 @@ docker exec puzzleboss-app tail -100 /var/log/gunicorn/error.log
 
 ## Optional: Enable Features
 
-### Enable BigJimmy Bot (requires Google credentials -- TODO: NOT WORKING YET):
-1. Get credentials.json from Google Cloud Console
-2. Place in project root
-3. Generate token: `docker exec -it puzzleboss-app python gdriveinit.py`
-4. Update config in database: `UPDATE config SET val='false' WHERE key='SKIP_GOOGLE_API';`
+### Enable BigJimmy Bot (requires Google service account):
+1. Create a service account with Domain-Wide Delegation in Google Cloud Console
+2. Download the JSON key file and place it in the project root as `service-account.json`
+3. Authorize the service account in Google Workspace Admin (Security → API controls → Domain-wide delegation)
+4. Update config in database:
+   ```sql
+   UPDATE config SET val='service-account.json' WHERE `key`='SERVICE_ACCOUNT_FILE';
+   UPDATE config SET val='admin@yourdomain.org' WHERE `key`='SERVICE_ACCOUNT_SUBJECT';
+   UPDATE config SET val='false' WHERE `key`='SKIP_GOOGLE_API';
+   ```
 5. Edit `docker/supervisord.conf`: set `autostart=true` for bigjimmybot
 6. Restart: `docker-compose restart app`
 
