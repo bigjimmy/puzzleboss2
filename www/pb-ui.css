@@ -311,6 +311,19 @@ dialog .confirm-banner .confirm-buttons {
     font-weight: 600;
 }
 
+/* Action pills (Hide All / Show All) without checkboxes — match height of checkbox-containing filter pills */
+.filter.filter-action {
+    min-height: 29px;
+    box-sizing: border-box;
+    font-weight: 600;
+}
+
+/* Keep Hide All / Show All together as one unit when flex-wrapping */
+.filter-action-group {
+    display: inline-flex;
+    gap: 6px;
+}
+
 /* Settings bar: tag search + pill toggles on one row */
 #settings-bar {
     display: flex;

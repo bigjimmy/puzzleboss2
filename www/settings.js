@@ -64,10 +64,10 @@ export default {
                     >
                     {{key}} <input type="checkbox" :checked="s.puzzleFilter[key]" @change="toggleKey(key)" @click.stop/>
                 </div>
-            </div>
-            <div class="toggle-row">
-                <button class="btn-secondary" @click="applyShowFilter(false)">Hide All</button>
-                <button class="btn-secondary" @click="applyShowFilter(true)">Show All</button>
+                <span class="filter-action-group">
+                    <div class="filter filter-action" @click="applyShowFilter(false)">Hide All</div>
+                    <div class="filter filter-action" @click="applyShowFilter(true)">Show All</div>
+                </span>
             </div>
             <hr class="controls-divider" />
             <div class="toggle-row pills">

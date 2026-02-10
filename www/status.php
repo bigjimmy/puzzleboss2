@@ -168,9 +168,8 @@ $solver = getauthenticatedsolver();
                     <div class="filter" :class="{ active: visibleColumns.location }" @click="visibleColumns.location = !visibleColumns.location">Location <input type="checkbox" :checked="visibleColumns.location" @change="visibleColumns.location = !visibleColumns.location" @click.stop /></div>
                     <div class="filter" :class="{ active: visibleColumns.tags }" @click="visibleColumns.tags = !visibleColumns.tags">Tags <input type="checkbox" :checked="visibleColumns.tags" @change="visibleColumns.tags = !visibleColumns.tags" @click.stop /></div>
                     <div class="filter" :class="{ active: visibleColumns.comment }" @click="visibleColumns.comment = !visibleColumns.comment">Comment <input type="checkbox" :checked="visibleColumns.comment" @change="visibleColumns.comment = !visibleColumns.comment" @click.stop /></div>
-                    <div class="toggle-row">
-                        <button class="btn-secondary" @click="showAllColumns">Show All</button>
-                    </div>
+                    <div class="filter filter-action" @click="hideAllColumns">Hide All</div>
+                    <div class="filter filter-action" @click="showAllColumns">Show All</div>
                 </div>
             </div>
         </div>
@@ -582,6 +581,12 @@ $solver = getauthenticatedsolver();
                         visibleColumns.value[key] = true
                     })
                 }
+
+                function hideAllColumns() {
+                    Object.keys(visibleColumns.value).forEach(key => {
+                        visibleColumns.value[key] = false
+                    })
+                }
                 
                 const allPuzzles = computed(() => {
                     const puzzles = []
@@ -982,6 +987,7 @@ $solver = getauthenticatedsolver();
                     toggleSort,
                     getSortIcon,
                     showAllColumns,
+                    hideAllColumns,
                     updateComment,
                     updateLocation,
                     updateStatus,

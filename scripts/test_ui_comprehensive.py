@@ -1459,14 +1459,14 @@ def test_status_page():
             print(f"      ✓ {col} column shown ({hidden_after_hide} → {hidden_after_show})")
 
         # Test Show All
-        print("  Testing 'Show All' button...")
+        print("  Testing 'Show All' pill...")
         for col in ["Round", "Location", "Tags"]:
             pill = page.locator(f".controls-section .filter:text-is('{col}')")
             if pill.evaluate("el => el.classList.contains('active')"):
                 pill.click()
         time.sleep(0.3)
 
-        page.locator(".toggle-row button:has-text('Show All')").click()
+        page.locator(".controls-section .filter:text-is('Show All')").click()
         time.sleep(0.5)
 
         for col in expected_columns:
