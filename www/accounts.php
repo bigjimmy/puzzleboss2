@@ -199,6 +199,9 @@ $googleUsers = $googleResp->users ?? [];
 $googleDisabled = isset($googleResp->google_disabled) && $googleResp->google_disabled;
 $googleError = isset($googleResp->error) ? $googleResp->error : '';
 
+$newusersResp = readapi('/newusers');
+$pendingUsers = $newusersResp->newusers ?? [];
+
 // Index privs by uid for fast lookup
 $privsByUid = [];
 foreach ($privsRows as $p) {
@@ -246,6 +249,43 @@ if ($hasGoogle) {
 <?= render_navbar() ?>
 
 <div id="status-area"></div>
+
+<?php if (count($pendingUsers) > 0): ?>
+<div class="info-box" id="pending-box">
+  <div class="info-box-header" onclick="togglePending()" style="cursor: pointer;">
+    <span class="collapse-icon" id="pending-icon">▼</span>
+    <h3>Pending Registrations <span class="account-count">(<?= count($pendingUsers) ?>)</span></h3>
+  </div>
+  <div class="info-box-content" id="pending-body">
+    <table id="pending-table" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <thead>
+        <tr>
+          <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Username</th>
+          <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Full Name</th>
+          <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Email</th>
+          <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Code</th>
+          <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Created</th>
+          <th style="padding: 6px; border-bottom: 2px solid var(--border-medium);"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($pendingUsers as $pu): ?>
+        <tr id="pending-<?= htmlspecialchars($pu->code) ?>">
+          <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); font-family: var(--font-mono); font-weight: 600;"><?= htmlspecialchars($pu->username) ?></td>
+          <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light);"><?= htmlspecialchars($pu->fullname) ?></td>
+          <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light);"><?= htmlspecialchars($pu->email) ?></td>
+          <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); font-family: var(--font-mono); color: var(--text-secondary);"><?= htmlspecialchars($pu->code) ?></td>
+          <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary);"><?= htmlspecialchars(substr($pu->created_at, 0, 16)) ?></td>
+          <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); white-space: nowrap;">
+            <button class="btn-danger" onclick="deletePending('<?= htmlspecialchars($pu->code, ENT_QUOTES) ?>', '<?= htmlspecialchars($pu->username, ENT_QUOTES) ?>')">Delete</button>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="toolbar">
   <input type="text" class="filter-input" id="filter" placeholder="Filter by username or name..." oninput="filterTable()">
@@ -629,9 +669,52 @@ document.getElementById('delete-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
 
+// --- Pending registrations ---
+function togglePending() {
+  const body = document.getElementById('pending-body');
+  const icon = document.getElementById('pending-icon');
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  icon.textContent = hidden ? '▼' : '▶';
+}
+
+async function deletePending(code, username) {
+  if (!confirm('Delete pending registration for "' + username + '"?')) return;
+
+  const statusArea = document.getElementById('status-area');
+  try {
+    const resp = await fetch(apiProxy + '?apicall=newusers&apiparam1=' + encodeURIComponent(code), {
+      method: 'DELETE'
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    window.onFetchSuccess?.();
+
+    // Remove the row (getElementById takes a plain string, not a CSS selector)
+    const row = document.getElementById('pending-' + code);
+    if (row) row.remove();
+
+    // Hide box if no more pending rows
+    const remaining = document.querySelectorAll('#pending-table tbody tr');
+    if (remaining.length === 0) {
+      document.getElementById('pending-box').remove();
+    } else {
+      // Update count in header
+      document.querySelector('#pending-box .account-count').textContent = '(' + remaining.length + ')';
+    }
+
+    showStatus(statusArea, 'success', 'Pending registration for <strong>' + escapeHtml(username) + '</strong> deleted.');
+  } catch (err) {
+    if (window.onFetchFailure?.()) return;
+    showStatus(statusArea, 'error', 'Failed to delete pending registration: ' + escapeHtml(err.message));
+  }
+}
+
 // Expose to inline onclick handlers (module scope is not global)
 Object.assign(window, { togglePriv, savePrivs, confirmDelete, closeModal,
-  checkConfirmInput, executeDelete, filterTable, sortTable });
+  checkConfirmInput, executeDelete, filterTable, sortTable,
+  togglePending, deletePending });
 </script>
 
 </body>

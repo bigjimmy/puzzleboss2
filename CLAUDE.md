@@ -170,6 +170,27 @@ cp scripts/loadtest_config-EXAMPLE.yaml scripts/loadtest_config.yaml
 python scripts/loadtest.py
 ```
 
+**UI Tests (Playwright)**
+- Playwright and its browser dependencies are installed **inside the Docker container only**. Always run Playwright tests via `docker exec`, never from the host.
+```bash
+# Run all comprehensive UI tests
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py
+
+# Run a specific test by number
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py 25
+
+# Run ad-hoc Playwright scripts
+docker exec puzzleboss-app python -c "
+from playwright.sync_api import sync_playwright
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    page.goto('http://localhost/index.php?assumedid=testuser')
+    print(page.title())
+    browser.close()
+"
+```
+
 ## Common Operations
 
 ### Reset Hunt for New Event

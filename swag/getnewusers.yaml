@@ -1,0 +1,6 @@
+tags:
+  - Accounts
+summary: List pending account registrations
+responses:
+    200:
+        description: List of pending accounts from newuser table

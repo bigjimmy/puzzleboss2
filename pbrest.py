@@ -2515,7 +2515,34 @@ def delete_account(username):
     return {"status": "ok"}
 
 
+@app.route("/newusers", endpoint="get_new_users", methods=["GET"])
+@swag_from("swag/getnewusers.yaml", endpoint="get_new_users", methods=["GET"])
+def get_new_users():
+    """Return all pending account registrations from the newuser table."""
+    debug_log(4, "start")
+    conn, cursor = _cursor()
+    cursor.execute("SELECT username, fullname, email, code, created_at FROM newuser ORDER BY created_at DESC")
+    rows = cursor.fetchall()
+    return {"status": "ok", "newusers": rows}
+
+
+@app.route("/newusers/<code>", endpoint="delete_new_user", methods=["DELETE"])
+@swag_from("swag/deletenewuser.yaml", endpoint="delete_new_user", methods=["DELETE"])
+def delete_new_user(code):
+    """Delete a pending account registration by verification code."""
+    debug_log(4, "start. code %s" % code)
+    conn, cursor = _cursor()
+    cursor.execute("DELETE FROM newuser WHERE code = %s", (code,))
+    conn.commit()
+    deleted = cursor.rowcount
+    if deleted == 0:
+        raise Exception("No pending account found with code %s" % code)
+    debug_log(3, "pending account with code %s deleted" % code)
+    return {"status": "ok"}
+
+
 @app.route("/privs", endpoint="get_all_privs", methods=["GET"])
+@swag_from("swag/getprivs.yaml", endpoint="get_all_privs", methods=["GET"])
 def get_all_privs():
     """Return all privilege records from the privs table."""
     debug_log(4, "start")
@@ -2531,6 +2558,7 @@ def get_all_privs():
 
 
 @app.route("/google/users", endpoint="get_google_users", methods=["GET"])
+@swag_from("swag/getgoogleusers.yaml", endpoint="get_google_users", methods=["GET"])
 def get_google_users():
     """Return all Google Workspace user information. Gracefully empty if Google API is disabled."""
     debug_log(4, "start")

@@ -15,7 +15,7 @@ if (!isset($_GET['apicall']) || empty($_GET['apicall'])) {
 $apicall = $_GET['apicall'];
 
 // Operations that require puzztech privilege
-$puzztech_required = ['deleteuser', 'googleusers', 'privs'];
+$puzztech_required = ['deleteuser', 'googleusers', 'privs', 'newusers'];
 $puzztech_required_post = ['rbac', 'config'];
 
 $needs_puzztech = in_array($apicall, $puzztech_required)
@@ -83,6 +83,9 @@ else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
       break;
     case "deletepuzzle":
       echo json_encode(deleteapi('/deletepuzzle/' . $apiparam1));
+      break;
+    case "newusers":
+      echo json_encode(deleteapi('/newusers/' . $apiparam1));
       break;
     default:
       http_response_code(500);
@@ -154,6 +157,9 @@ else {
       break;
     case "config":
       echo json_encode(readapi('/config'));
+      break;
+    case "newusers":
+      echo json_encode(readapi('/newusers'));
       break;
     default:
       http_response_code(500);

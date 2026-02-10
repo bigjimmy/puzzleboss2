@@ -1,0 +1,6 @@
+tags:
+  - Accounts
+summary: List all privilege records
+responses:
+    200:
+        description: All privilege records from the privs table

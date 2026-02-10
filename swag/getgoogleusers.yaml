@@ -1,0 +1,7 @@
+tags:
+  - Accounts
+summary: List Google Workspace users
+description: Returns all Google Workspace user accounts. Returns empty list if Google API is disabled.
+responses:
+    200:
+        description: List of Google Workspace users with account details

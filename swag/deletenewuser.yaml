@@ -1,0 +1,12 @@
+tags:
+  - Accounts
+summary: Delete a pending account registration
+parameters:
+  - name: code
+    in: path
+    type: string
+    required: true
+    description: The verification code of the pending account
+responses:
+    200:
+        description: Pending account deleted
