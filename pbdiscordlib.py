@@ -10,12 +10,12 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
         % (puzname, roundname, puzuri, puzdocuri),
     )
 
-    topic = "\nPuzzle: %s \nRound: %s\n" % (puzname, roundname)
-    topic += "Puzzle URL: %s \nSheet: %s\n" % (puzuri, puzdocuri)
+    topic = f"\nPuzzle: {puzname} \nRound: {roundname}\n"
+    topic += f"Puzzle URL: {puzuri} \nSheet: {puzdocuri}\n"
 
     # Pass the full puzzle name with emojis directly to Discord
     debug_log(4, "Creating Discord channel with name: %s" % puzname)
-    retval = call_puzzcord("create_json %s %s" % (puzname, topic))
+    retval = call_puzzcord(f"create_json {puzname} {topic}")
     debug_log(4, "retval from call_puzzcord is %s" % retval)
 
     if configstruct["SKIP_PUZZCORD"] == "true":
@@ -28,34 +28,34 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
 
 def chat_announce_round(roundname):
     debug_log(4, "start, called with (roundname): %s" % (roundname))
-    return call_puzzcord("%s %s" % ("_round", roundname))
+    return call_puzzcord(f"_round {roundname}")
 
 
 def chat_announce_new(puzname):
     debug_log(4, "start, called with (puzname): %s" % (puzname))
-    return call_puzzcord("%s %s" % ("_new", puzname))
+    return call_puzzcord(f"_new {puzname}")
 
 
 def chat_say_something(channel_id, message):
     debug_log(
         4, "start, called with (channel_id, message): %s, %s" % (channel_id, message)
     )
-    return call_puzzcord("%s %s %s" % ("message", channel_id, message))
+    return call_puzzcord(f"message {channel_id} {message}")
 
 
 def chat_announce_attention(puzzlename):
     debug_log(4, "start, called with (puzzlename): %s" % puzzlename)
-    return call_puzzcord("%s %s" % ("_attention", puzzlename))
+    return call_puzzcord(f"_attention {puzzlename}")
 
 
 def chat_announce_solved(puzzlename):
     debug_log(4, "start, called with (puzzlename): %s" % puzzlename)
-    return call_puzzcord("%s %s" % ("_solve", puzzlename))
+    return call_puzzcord(f"_solve {puzzlename}")
 
 
 def chat_announce_move(puzzlename):
     debug_log(4, "start, called with (puzzlename): %s" % puzzlename)
-    return call_puzzcord("%s %s" % ("_move", puzzlename))
+    return call_puzzcord(f"_move {puzzlename}")
 
 
 def call_puzzcord(command):

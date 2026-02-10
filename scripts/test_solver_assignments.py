@@ -80,7 +80,7 @@ def assign_solver_to_puzzle(puzzle_id: str, solver_id: str) -> bool:
 
         return True
 
-    except Exception as e:
+    except (requests.RequestException, KeyError, ValueError) as e:
         print(f"Exception during solver assignment: {str(e)}")
         print(f"  Puzzle ID: {puzzle_id}")
         print(f"  Solver ID: {solver_id}")

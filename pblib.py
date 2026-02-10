@@ -177,44 +177,36 @@ def sanitize_puzzle_name(mystring):
 def email_user_verification(email, code, fullname, username):
     debug_log(4, "start for email: %s" % email)
 
-    verification_url = "%s/index.php?code=%s" % (configstruct["ACCT_URI"], code)
+    verification_url = f"{configstruct['ACCT_URI']}/index.php?code={code}"
     team_name = configstruct["TEAMNAME"]
 
-    messagecontent = """Hi %s,
+    messagecontent = f"""Hi {fullname},
 
-Welcome to %s! To complete your account setup, please visit the link below:
+Welcome to {team_name}! To complete your account setup, please visit the link below:
 
-%s
+{verification_url}
 
 Account details:
-- Username: %s
-- Display name: %s
+- Username: {username}
+- Display name: {fullname}
 
 This link will finish creating your account so you can access our puzzle-solving tools.
 
 If you did not request this account, you can safely ignore this email.
 
 Thanks,
-The %s Puzzletech Team
+The {team_name} Puzzletech Team
 
 ---
-This is an automated message from %s registration system.
-""" % (
-        fullname,
-        team_name,
-        verification_url,
-        username,
-        fullname,
-        team_name,
-        team_name,
-    )
+This is an automated message from {team_name} registration system.
+"""
 
     debug_log(4, "Email to be sent: %s" % messagecontent)
 
     try:
         msg = EmailMessage()
-        msg["Subject"] = "%s - Complete your account registration" % team_name
-        msg["From"] = "%s" % configstruct["REGEMAIL"]
+        msg["Subject"] = f"{team_name} - Complete your account registration"
+        msg["From"] = configstruct["REGEMAIL"]
         msg["To"] = email
         msg.set_content(messagecontent)
         s = smtplib.SMTP(configstruct["MAILRELAY"])

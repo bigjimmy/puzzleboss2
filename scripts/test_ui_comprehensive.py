@@ -17,7 +17,7 @@ Requirements:
     - --allow-destructive flag (safety check)
 """
 
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout, expect
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 import sys
 import time
 import requests
@@ -116,7 +116,7 @@ def ensure_test_solvers():
                         "fullname": f"Test Solver {i}"
                     })
                     created += 1
-                except:
+                except Exception:
                     pass  # May already exist
 
         if created:
@@ -178,16 +178,16 @@ def goto_main(page):
 # ──────────────────────────────────────────────────────────
 
 def find_puzzle(page, name):
-    """Find a puzzle element by name text. Returns the element or raises AssertionError."""
-    for puzzle in page.query_selector_all(".puzzle"):
+    """Find a puzzle element by name text. Returns the Locator or raises AssertionError."""
+    for puzzle in page.locator(".puzzle").all():
         if name in puzzle.inner_text():
             return puzzle
     raise AssertionError(f"Puzzle '{name}' not found in UI")
 
 
 def find_round_header(page, name):
-    """Find a round header element by name text. Returns the element or raises AssertionError."""
-    for header in page.query_selector_all(".round-header"):
+    """Find a round header element by name text. Returns the Locator or raises AssertionError."""
+    for header in page.locator(".round-header").all():
         if name in header.inner_text():
             return header
     raise AssertionError(f"Round header '{name}' not found in UI")
@@ -195,7 +195,7 @@ def find_round_header(page, name):
 
 def get_puzzle_icons(puzzle_elem):
     """Get all .puzzle-icon elements from a puzzle. Icon order: 0=status, 1=workstate, 2=📊, 3=🗣️, 4=note-tags, 5=settings."""
-    return puzzle_elem.query_selector_all(".puzzle-icon")
+    return puzzle_elem.locator(".puzzle-icon").all()
 
 
 # ──────────────────────────────────────────────────────────
@@ -217,8 +217,8 @@ def solve_puzzle(page, puzzle_elem, answer):
     change_puzzle_status(page, puzzle_elem, "Solved")
     time.sleep(0.5)
 
-    answer_input = page.query_selector("dialog p:has-text('Answer:') input")
-    assert answer_input is not None, "Answer input not found in dialog"
+    answer_input = page.locator("dialog p:has-text('Answer:') input")
+    assert answer_input.count() > 0, "Answer input not found in dialog"
     answer_input.fill(answer)
 
     save_and_close_dialog(page)
@@ -254,13 +254,13 @@ def claim_puzzle(page, puzzle_elem):
     page.wait_for_selector("dialog", timeout=5000)
     time.sleep(0.5)
 
-    yes_button = page.query_selector("dialog button:has-text('Yes')")
-    if yes_button:
+    yes_button = page.locator("dialog button:has-text('Yes')")
+    if yes_button.count() > 0:
         yes_button.click()
     else:
         # Already assigned or no Yes button - try Save or Close
-        save = page.query_selector("dialog button:has-text('Save')")
-        if save:
+        save = page.locator("dialog button:has-text('Save')")
+        if save.count() > 0:
             save.click()
         else:
             page.click("dialog button:has-text('Close')")
@@ -275,12 +275,12 @@ def add_tag_to_puzzle(page, puzzle_elem, tag_name):
     icons[4].click()
 
     page.wait_for_selector("dialog", timeout=5000)
-    tag_input = page.query_selector("dialog input[list='taglist']")
-    assert tag_input is not None, "Tag input not found in dialog"
+    tag_input = page.locator("dialog input[list='taglist']")
+    assert tag_input.count() > 0, "Tag input not found in dialog"
     tag_input.fill(tag_name)
 
-    add_button = page.query_selector("dialog span.puzzle-icon:has-text('➕')")
-    assert add_button is not None, "Add tag button (➕) not found"
+    add_button = page.locator("dialog span.puzzle-icon:has-text('➕')")
+    assert add_button.count() > 0, "Add tag button (➕) not found"
     add_button.click()
     time.sleep(0.5)
 
@@ -387,8 +387,8 @@ def test_puzzle_lifecycle():
         page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
 
         # Verify initial "New" status
-        puzzle_elem = page.query_selector(".puzzle")
-        assert puzzle_elem.query_selector('.puzzle-icon[title*="New"]') is not None, "Initial 'New' status not found"
+        puzzle_elem = page.locator(".puzzle").first
+        assert puzzle_elem.locator('.puzzle-icon[title*="New"]').count() > 0, "Initial 'New' status not found"
 
         # Claim puzzle
         print("  Assigning solver via UI...")
@@ -405,19 +405,19 @@ def test_puzzle_lifecycle():
 
         # Change to "Being worked"
         print("  Changing status to 'Being worked' via UI...")
-        puzzle_elem = page.query_selector(".puzzle")
+        puzzle_elem = page.locator(".puzzle").first
         change_puzzle_status(page, puzzle_elem, "Being worked")
         save_and_close_dialog(page)
 
         print("  Waiting for auto-refresh to show status change...")
         wait_for_puzzle_status(page, puzzle_name, "Being worked")
 
-        puzzle_elem = page.query_selector(".puzzle")
-        assert puzzle_elem.query_selector('.puzzle-icon[title*="Being worked"]') is not None, "Being worked status not found"
+        puzzle_elem = page.locator(".puzzle").first
+        assert puzzle_elem.locator('.puzzle-icon[title*="Being worked"]').count() > 0, "Being worked status not found"
 
         # Solve the puzzle
         print("  Solving puzzle via UI...")
-        puzzle_elem = page.query_selector(".puzzle")
+        puzzle_elem = page.locator(".puzzle").first
         solve_puzzle(page, puzzle_elem, "TEST ANSWER")
 
         print("  Waiting for auto-refresh to show answer and solved status...")
@@ -430,10 +430,10 @@ def test_puzzle_lifecycle():
         """, timeout=7000)
 
         # Verify answer and solved status
-        puzzle_elem = page.query_selector(".puzzle")
-        answer_text = puzzle_elem.query_selector(".answer").inner_text().strip()
+        puzzle_elem = page.locator(".puzzle").first
+        answer_text = puzzle_elem.locator(".answer").inner_text().strip()
         assert "TEST ANSWER" in answer_text, f"Answer 'TEST ANSWER' not in UI (found: {answer_text})"
-        assert puzzle_elem.query_selector('.puzzle-icon[title*="Solved"]') is not None, "Solved status not found"
+        assert puzzle_elem.locator('.puzzle-icon[title*="Solved"]').count() > 0, "Solved status not found"
 
         browser.close()
         print("✓ Puzzle lifecycle completed successfully")
@@ -463,7 +463,7 @@ def test_speculative_puzzle_promotion():
         wait_for_puzzle_status(page2, puzzle_name, "Speculative")
 
         puzzle = find_puzzle(page2, puzzle_name)
-        status_title = puzzle.query_selector(".puzzle-icon").get_attribute("title")
+        status_title = puzzle.locator(".puzzle-icon").first.get_attribute("title")
         assert "Speculative" in status_title, f"Status not 'Speculative' (found: {status_title})"
         print(f"  [Browser 2] ✓ Verified Speculative status: {status_title}")
 
@@ -487,7 +487,7 @@ def test_speculative_puzzle_promotion():
         wait_for_puzzle_status(page2, puzzle_name, "New")
 
         puzzle = find_puzzle(page2, puzzle_name)
-        status_title = puzzle.query_selector(".puzzle-icon").get_attribute("title")
+        status_title = puzzle.locator(".puzzle-icon").first.get_attribute("title")
         assert "New" in status_title, f"Status not 'New' after promotion (found: {status_title})"
         print(f"  [Browser 2] ✓ Verified promotion to New status via auto-refresh: {status_title}")
 
@@ -517,12 +517,12 @@ def test_round_completion_meta():
         page.wait_for_selector(".puzzle.meta", timeout=10000)
 
         # Verify round not yet solved
-        round_header = page.query_selector(".round-header")
+        round_header = page.locator(".round-header").first
         assert "solved" not in round_header.get_attribute("class"), "Round marked solved before metas solved"
 
         # Solve first meta
         print("  Solving first meta puzzle...")
-        meta1 = page.query_selector(".puzzle.meta")
+        meta1 = page.locator(".puzzle.meta").first
         solve_puzzle(page, meta1, "META1")
 
         print("  Waiting for auto-refresh...")
@@ -532,11 +532,11 @@ def test_round_completion_meta():
         enable_all_puzzle_filters(page)
         page.wait_for_selector(f"text={round_name}", timeout=10000)
 
-        assert "solved" not in page.query_selector(".round-header").get_attribute("class"), \
+        assert "solved" not in page.locator(".round-header").first.get_attribute("class"), \
             "Round marked solved with only 1/2 metas solved"
 
         # Expand round if collapsed
-        header = page.query_selector(".round-header")
+        header = page.locator(".round-header").first
         if "▶" in header.inner_text():
             header.click()
             time.sleep(0.5)
@@ -769,14 +769,14 @@ def test_round_visibility_and_collapse():
         time.sleep(6)  # Wait for auto-refresh
 
         # Find both rounds
-        unsolved_round_elem = find_round_header(page, unsolved_round_name).evaluate_handle("el => el.parentElement")
-        solved_round_elem = find_round_header(page, solved_round_name).evaluate_handle("el => el.parentElement")
+        unsolved_round_elem = find_round_header(page, unsolved_round_name).locator("xpath=..")
+        solved_round_elem = find_round_header(page, solved_round_name).locator("xpath=..")
 
-        unsolved_body = unsolved_round_elem.as_element().query_selector(".round-body")
+        unsolved_body = unsolved_round_elem.locator(".round-body")
         assert "hiding" not in unsolved_body.get_attribute("class"), "Unsolved round should be expanded by default"
         print(f"  ✓ Unsolved round is expanded by default")
 
-        solved_body = solved_round_elem.as_element().query_selector(".round-body")
+        solved_body = solved_round_elem.locator(".round-body")
         assert "hiding" in solved_body.get_attribute("class"), "Solved round should be collapsed by default"
         print(f"  ✓ Solved round is collapsed by default")
 
@@ -808,11 +808,11 @@ def test_round_visibility_and_collapse():
         """, timeout=3000)
 
         # Verify collapsed
-        for round_elem in page.query_selector_all(".round"):
-            header = round_elem.query_selector(".round-header")
-            if header and unsolved_round_name in header.inner_text():
-                assert "hiding" in round_elem.query_selector(".round-body").get_attribute("class")
-                assert "collapsed" in header.query_selector(".collapse-icon").get_attribute("class")
+        for round_elem in page.locator(".round").all():
+            header = round_elem.locator(".round-header")
+            if header.count() > 0 and unsolved_round_name in header.inner_text():
+                assert "hiding" in round_elem.locator(".round-body").get_attribute("class")
+                assert "collapsed" in header.locator(".collapse-icon").get_attribute("class")
                 break
         print(f"  ✓ Clicking header collapsed unsolved round")
 
@@ -829,18 +829,18 @@ def test_round_visibility_and_collapse():
         """)
         time.sleep(0.5)
 
-        for round_elem in page.query_selector_all(".round"):
-            header = round_elem.query_selector(".round-header")
-            if header and unsolved_round_name in header.inner_text():
-                assert "hiding" not in round_elem.query_selector(".round-body").get_attribute("class")
-                assert "collapsed" not in header.query_selector(".collapse-icon").get_attribute("class")
+        for round_elem in page.locator(".round").all():
+            header = round_elem.locator(".round-header")
+            if header.count() > 0 and unsolved_round_name in header.inner_text():
+                assert "hiding" not in round_elem.locator(".round-body").get_attribute("class")
+                assert "collapsed" not in header.locator(".collapse-icon").get_attribute("class")
                 break
         print(f"  ✓ Clicking header again expanded unsolved round")
 
         # Test 7c: Solved rounds pill toggle
         print("\nTest 7c: Show solved rounds pill toggle")
-        solved_rounds_label = page.query_selector(".toggle-row.pills label:has-text('Solved rounds')")
-        assert solved_rounds_label is not None, "Could not find 'Solved rounds' pill toggle"
+        solved_rounds_label = page.locator(".toggle-row.pills label:has-text('Solved rounds')")
+        assert solved_rounds_label.count() > 0, "Could not find 'Solved rounds' pill toggle"
 
         label_classes = solved_rounds_label.get_attribute("class") or ""
         assert "on" not in label_classes, "Solved rounds toggle should be off by default"
@@ -863,15 +863,15 @@ def test_round_visibility_and_collapse():
             }}
         """, timeout=3000)
 
-        for round_elem in page.query_selector_all(".round"):
-            header = round_elem.query_selector(".round-header")
-            if header and solved_round_name in header.inner_text():
-                assert "hiding" not in round_elem.query_selector(".round-body").get_attribute("class")
+        for round_elem in page.locator(".round").all():
+            header = round_elem.locator(".round-header")
+            if header.count() > 0 and solved_round_name in header.inner_text():
+                assert "hiding" not in round_elem.locator(".round-body").get_attribute("class")
                 break
         print(f"  ✓ Enabling 'Solved rounds' expanded the solved round")
 
         # Disable
-        page.query_selector(".toggle-row.pills label:has-text('Solved rounds')").click()
+        page.locator(".toggle-row.pills label:has-text('Solved rounds')").click()
 
         page.wait_for_function(f"""
             () => {{
@@ -887,10 +887,10 @@ def test_round_visibility_and_collapse():
             }}
         """, timeout=3000)
 
-        for round_elem in page.query_selector_all(".round"):
-            header = round_elem.query_selector(".round-header")
-            if header and solved_round_name in header.inner_text():
-                assert "hiding" in round_elem.query_selector(".round-body").get_attribute("class")
+        for round_elem in page.locator(".round").all():
+            header = round_elem.locator(".round-header")
+            if header.count() > 0 and solved_round_name in header.inner_text():
+                assert "hiding" in round_elem.locator(".round-body").get_attribute("class")
                 break
         print(f"  ✓ Disabling 'Solved rounds' collapsed the solved round")
 
@@ -1051,7 +1051,7 @@ def test_rename_puzzle():
 
         page1.wait_for_selector("dialog", timeout=5000)
         time.sleep(0.5)
-        page1.query_selector("dialog input#puzzle-name").fill(new_name)
+        page1.locator("dialog input#puzzle-name").fill(new_name)
         save_settings_dialog(page1)
         print("  [Browser 1] ✓ Puzzle renamed")
 
@@ -1107,16 +1107,16 @@ def test_tag_filtering():
 
         # Filter by crypto tag
         print(f"  Filtering by tag '{crypto_tag}'...")
-        tag_select_input = page.query_selector("input[list='taglist']")
-        if tag_select_input is None:
-            tag_select_input = page.query_selector("#links input[type='text']")
-        assert tag_select_input is not None, "Tag select input not found"
+        tag_select_input = page.locator("input[list='taglist']")
+        if tag_select_input.count() == 0:
+            tag_select_input = page.locator("#links input[type='text']")
+        assert tag_select_input.count() > 0, "Tag select input not found"
         tag_select_input.fill(crypto_tag)
         tag_select_input.press("Enter")
         time.sleep(0.5)
 
         # Verify only CryptoPuzzle is visible
-        puzzles = page.query_selector_all(".puzzle")
+        puzzles = page.locator(".puzzle").all()
         has_crypto = any("CryptoPuzzle" in p.inner_text() for p in puzzles)
         assert has_crypto, "CryptoPuzzle not visible when filtering by its tag"
         print(f"  ✓ Tag filtering working correctly")
@@ -1161,7 +1161,7 @@ def test_status_filtering():
         time.sleep(1)
 
         # Verify solved puzzle is still visible
-        found_solved = any("NewPuzzleOne" in p.inner_text() for p in page.query_selector_all(".puzzle"))
+        found_solved = any("NewPuzzleOne" in p.inner_text() for p in page.locator(".puzzle").all())
         assert found_solved, "Solved puzzle (NewPuzzleOne) should be visible"
         print("  ✓ Status filtering working correctly")
 
@@ -1204,7 +1204,7 @@ def test_status_change_last_activity():
         page2.wait_for_selector("dialog", timeout=5000)
         time.sleep(0.5)
 
-        modal_content = page2.query_selector("dialog").inner_text()
+        modal_content = page2.locator("dialog").inner_text()
         assert "Last activity:" in modal_content or "Being worked" in modal_content, \
             f"Last activity not shown in modal: {modal_content}"
         print(f"  [Browser 2] ✓ Last activity displayed in status modal")
@@ -1263,7 +1263,7 @@ def test_unassign_solver_historic():
         page2.wait_for_selector("dialog", timeout=5000)
         time.sleep(0.5)
 
-        modal_content = page2.query_selector("dialog").inner_text()
+        modal_content = page2.locator("dialog").inner_text()
         assert "All solvers:" in modal_content and solver_name in modal_content, \
             f"Solver not in historic solvers list: {modal_content}"
         print(f"  [Browser 2] ✓ Verified solver in historic solvers")

@@ -6,11 +6,8 @@ import time
 import datetime
 import threading
 import queue
-from queue import *
-from threading import *
 from pblib import *
 from pbgooglelib import *
-from pbgooglelib import check_developer_metadata_exists, get_puzzle_sheet_info_legacy
 from pbdiscordlib import *
 
 exitFlag = 0
@@ -85,8 +82,7 @@ def check_puzzle_from_queue(threadname, q):
                     )
                     try:
                         requests.post(
-                            "%s/puzzles/%s/sheetenabled"
-                            % (config["API"]["APIURI"], mypuzzle["id"]),
+                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetenabled",
                             json={"sheetenabled": 1},
                         )
                     except Exception as e:
@@ -132,8 +128,7 @@ def check_puzzle_from_queue(threadname, q):
                 )
                 try:
                     requests.post(
-                        "%s/puzzles/%s/sheetcount"
-                        % (config["API"]["APIURI"], mypuzzle["id"]),
+                        f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetcount",
                         json={"sheetcount": sheet_info["sheetcount"]},
                     )
                 except Exception as e:
@@ -143,10 +138,7 @@ def check_puzzle_from_queue(threadname, q):
                     )
 
             # Fetch last sheet activity for this puzzle to compare against editor timestamps
-            myreq = "%s/puzzles/%s/lastsheetact" % (
-                config["API"]["APIURI"],
-                mypuzzle["id"],
-            )
+            myreq = f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastsheetact"
             try:
                 responsestring = requests.get(myreq).text
             except Exception as e:
@@ -235,21 +227,20 @@ def check_puzzle_from_queue(threadname, q):
                         # Fetch last activity (actually all info) for this solver PRIOR to this one
                         solverinfo = json.loads(
                             requests.get(
-                                "%s/solvers/%s" % (config["API"]["APIURI"], mysolverid)
+                                f"{config['API']['APIURI']}/solvers/{mysolverid}"
                             ).text
                         )["solver"]
 
                         # Always record activity, even if solver is already on puzzle
                         databody = {
                             "lastact": {
-                                "solver_id": "%s" % mysolverid,
+                                "solver_id": str(mysolverid),
                                 "source": "bigjimmybot",
                                 "type": "revise",
                             }
                         }
                         actupresponse = requests.post(
-                            "%s/puzzles/%s/lastact"
-                            % (config["API"]["APIURI"], mypuzzle["id"]),
+                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastact",
                             json=databody,
                         )
 
@@ -289,11 +280,10 @@ def check_puzzle_from_queue(threadname, q):
                                         % (threadname, mysolverid, mypuzzle["id"]),
                                     )
 
-                                    databody = {"puzz": "%s" % mypuzzle["id"]}
+                                    databody = {"puzz": str(mypuzzle["id"])}
 
                                     assignmentresponse = requests.post(
-                                        "%s/solvers/%s/puzz"
-                                        % (config["API"]["APIURI"], mysolverid),
+                                        f"{config['API']['APIURI']}/solvers/{mysolverid}/puzz",
                                         json=databody,
                                     )
                                     debug_log(
@@ -352,21 +342,20 @@ def check_puzzle_from_queue(threadname, q):
                         # Fetch last activity (actually all info) for this solver
                         solverinfo = json.loads(
                             requests.get(
-                                "%s/solvers/%s" % (config["API"]["APIURI"], mysolverid)
+                                f"{config['API']['APIURI']}/solvers/{mysolverid}"
                             ).text
                         )["solver"]
 
                         # Always record activity, even if solver is already on puzzle
                         databody = {
                             "lastact": {
-                                "solver_id": "%s" % mysolverid,
+                                "solver_id": str(mysolverid),
                                 "source": "bigjimmybot",
                                 "type": "revise",
                             }
                         }
                         actupresponse = requests.post(
-                            "%s/puzzles/%s/lastact"
-                            % (config["API"]["APIURI"], mypuzzle["id"]),
+                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastact",
                             json=databody,
                         )
 
@@ -406,11 +395,10 @@ def check_puzzle_from_queue(threadname, q):
                                         % (threadname, mysolverid, mypuzzle["id"]),
                                     )
 
-                                    databody = {"puzz": "%s" % mypuzzle["id"]}
+                                    databody = {"puzz": str(mypuzzle["id"])}
 
                                     assignmentresponse = requests.post(
-                                        "%s/solvers/%s/puzz"
-                                        % (config["API"]["APIURI"], mysolverid),
+                                        f"{config['API']['APIURI']}/solvers/{mysolverid}/puzz",
                                         json=databody,
                                     )
                                     debug_log(
@@ -443,8 +431,7 @@ def check_puzzle_from_queue(threadname, q):
                     lastact = None
                     try:
                         lastact_response = requests.get(
-                            "%s/puzzles/%s/lastact"
-                            % (config["API"]["APIURI"], mypuzzle["id"])
+                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastact"
                         )
                         lastact_data = json.loads(lastact_response.text)
                         lastact = lastact_data.get("lastact")
@@ -495,8 +482,7 @@ def check_puzzle_from_queue(threadname, q):
                     if is_abandoned:
                         try:
                             requests.post(
-                                "%s/puzzles/%s/status"
-                                % (config["API"]["APIURI"], mypuzzle["id"]),
+                                f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/status",
                                 json={"status": abandoned_status},
                             )
                             debug_log(
@@ -526,7 +512,7 @@ def check_puzzle_from_queue(threadname, q):
 def solver_from_email(email):
     """Look up solver ID by email address (extracts username from email)."""
     debug_log(4, "start. called with %s" % email)
-    solverslist = json.loads(requests.get("%s/solvers" % config["API"]["APIURI"]).text)[
+    solverslist = json.loads(requests.get(f"{config['API']['APIURI']}/solvers").text)[
         "solvers"
     ]
     for solver in solverslist:
@@ -539,7 +525,7 @@ def solver_from_email(email):
 def solver_from_name(name):
     """Look up solver ID by solver name directly."""
     debug_log(4, "start. called with %s" % name)
-    solverslist = json.loads(requests.get("%s/solvers" % config["API"]["APIURI"]).text)[
+    solverslist = json.loads(requests.get(f"{config['API']['APIURI']}/solvers").text)[
         "solvers"
     ]
     for solver in solverslist:
@@ -569,7 +555,7 @@ if __name__ == "__main__":
         loop_iterations_total += 1
         try:
             requests.post(
-                "%s/botstats/loop_iterations_total" % config["API"]["APIURI"],
+                f"{config['API']['APIURI']}/botstats/loop_iterations_total",
                 json={"val": str(loop_iterations_total)},
             )
         except Exception as e:
@@ -585,7 +571,7 @@ if __name__ == "__main__":
         setup_start_time = time.time()
 
         try:
-            r = json.loads(requests.get("%s/all" % config["API"]["APIURI"]).text)
+            r = json.loads(requests.get(f"{config['API']['APIURI']}/all").text)
         except Exception as e:
             debug_log(
                 1,
@@ -598,10 +584,10 @@ if __name__ == "__main__":
         rounds = r["rounds"]
         debug_log(4, "loaded round list")
         puzzles = []
-        for round in rounds:
-            puzzlesinround = round["puzzles"]
+        for rnd in rounds:
+            puzzlesinround = rnd["puzzles"]
             debug_log(
-                4, "appending puzzles from round %s: %s" % (round["id"], puzzlesinround)
+                4, "appending puzzles from round %s: %s" % (rnd["id"], puzzlesinround)
             )
             for puzzle in puzzlesinround:
                 if puzzle["status"] != "Solved":
@@ -664,30 +650,30 @@ if __name__ == "__main__":
         # Post timing stats to API for Prometheus metrics
         try:
             requests.post(
-                "%s/botstats/loop_time_seconds" % config["API"]["APIURI"],
-                json={"val": "%.2f" % loop_elapsed},
+                f"{config['API']['APIURI']}/botstats/loop_time_seconds",
+                json={"val": f"{loop_elapsed:.2f}"},
             )
             requests.post(
-                "%s/botstats/loop_setup_seconds" % config["API"]["APIURI"],
-                json={"val": "%.2f" % setup_elapsed},
+                f"{config['API']['APIURI']}/botstats/loop_setup_seconds",
+                json={"val": f"{setup_elapsed:.2f}"},
             )
             requests.post(
-                "%s/botstats/loop_processing_seconds" % config["API"]["APIURI"],
-                json={"val": "%.2f" % processing_elapsed},
+                f"{config['API']['APIURI']}/botstats/loop_processing_seconds",
+                json={"val": f"{processing_elapsed:.2f}"},
             )
             requests.post(
-                "%s/botstats/loop_puzzle_count" % config["API"]["APIURI"],
+                f"{config['API']['APIURI']}/botstats/loop_puzzle_count",
                 json={"val": str(len(puzzles))},
             )
             if puzzles:
                 requests.post(
-                    "%s/botstats/loop_avg_seconds_per_puzzle" % config["API"]["APIURI"],
-                    json={"val": "%.2f" % (processing_elapsed / len(puzzles))},
+                    f"{config['API']['APIURI']}/botstats/loop_avg_seconds_per_puzzle",
+                    json={"val": f"{processing_elapsed / len(puzzles):.2f}"},
                 )
             # Post quota failure count (cumulative counter, not reset)
             quota_failures = get_quota_failure_count()
             requests.post(
-                "%s/botstats/quota_failures" % config["API"]["APIURI"],
+                f"{config['API']['APIURI']}/botstats/quota_failures",
                 json={"val": str(quota_failures)},
             )
         except Exception as e:

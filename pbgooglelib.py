@@ -12,7 +12,7 @@ import pblib
 import datetime
 import json
 from pblib import *
-from builtins import Exception
+
 
 service = None
 sheetsservice = None
@@ -118,7 +118,7 @@ def initdrive():
     huntfoldercheck = (
         service.files()
         .list(
-            fields="files(name), files(id)", spaces="drive", q="name='%s'" % foldername
+            fields="files(name), files(id)", spaces="drive", q=f"name='{foldername}'"
         )
         .execute()
     )
@@ -133,17 +133,17 @@ def initdrive():
             "name": foldername,
             "mimeType": "application/vnd.google-apps.folder",
         }
-        file = service.files().create(body=file_metadata, fields="id").execute()
+        folder_file = service.files().create(body=file_metadata, fields="id").execute()
 
         # Set global variable
-        pblib.huntfolderid = file.get("id")
+        pblib.huntfolderid = folder_file.get("id")
         debug_log(
             3,
             "New hunt root folder %s created with id %s"
             % (foldername, pblib.huntfolderid),
         )
     elif len(matchingfolders) > 1:
-        errmsg = "Multiple folders found matching name %s! Fix this." % foldername
+        errmsg = f"Multiple folders found matching name {foldername}! Fix this."
         debug_log(0, errmsg)
         sys.exit(255)
     else:
@@ -513,11 +513,11 @@ def create_round_folder(foldername):
     max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
 
-    file = None
+    folder_file = None
     for attempt in range(max_retries):
         try:
-            file = service.files().create(body=file_metadata, fields="id").execute()
-            debug_log(4, "folder id returned: %s" % file.get("id"))
+            folder_file = service.files().create(body=file_metadata, fields="id").execute()
+            debug_log(4, "folder id returned: %s" % folder_file.get("id"))
             break  # Success
         except Exception as e:
             if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
@@ -531,14 +531,14 @@ def create_round_folder(foldername):
                 debug_log(0, "Error creating round folder: %s" % e)
                 sys.exit(255)
 
-    if file is None:
+    if folder_file is None:
         debug_log(
             0,
             "EXHAUSTED all %d retries creating round folder - giving up" % max_retries,
         )
         sys.exit(255)
 
-    return file.get("id")
+    return folder_file.get("id")
 
 
 def delete_puzzle_sheet(sheetid):
@@ -580,14 +580,14 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
 
     # Create/copy file with retry logic
-    file = None
+    sheet_file = None
     for attempt in range(max_retries):
         try:
             if configstruct["SHEETS_TEMPLATE_ID"] == "none":
-                file = service.files().create(body=file_metadata, fields="id").execute()
-                debug_log(4, "file ID returned from creation: %s" % file.get("id"))
+                sheet_file = service.files().create(body=file_metadata, fields="id").execute()
+                debug_log(4, "file ID returned from creation: %s" % sheet_file.get("id"))
             else:
-                file = (
+                sheet_file = (
                     service.files()
                     .copy(
                         body=file_metadata,
@@ -596,7 +596,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                     )
                     .execute()
                 )
-                debug_log(4, "file ID returned from copy: %s" % file.get("id"))
+                debug_log(4, "file ID returned from copy: %s" % sheet_file.get("id"))
             break  # Success
         except Exception as e:
             if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
@@ -610,7 +610,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                 debug_log(0, "Error creating puzzle sheet file: %s" % e)
                 sys.exit(255)
 
-    if file is None:
+    if sheet_file is None:
         debug_log(
             0,
             "EXHAUSTED all %d retries creating puzzle sheet - giving up" % max_retries,
@@ -821,7 +821,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     body = {"requests": requests}
 
     debug_log(
-        4, "Sheets api batchupdate request id: %s body %s" % (file.get("id"), body)
+        4, "Sheets api batchupdate request id: %s body %s" % (sheet_file.get("id"), body)
     )
 
     # Batch update with retry logic
@@ -830,7 +830,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         try:
             response = (
                 sheetsservice.spreadsheets()
-                .batchUpdate(spreadsheetId=file.get("id"), body=body)
+                .batchUpdate(spreadsheetId=sheet_file.get("id"), body=body)
                 .execute()
             )
             debug_log(
@@ -867,7 +867,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         try:
             permresp = (
                 service.permissions()
-                .create(fileId=file.get("id"), body=permission)
+                .create(fileId=sheet_file.get("id"), body=permission)
                 .execute()
             )
             debug_log(5, "Response from service.permissions.create: %s" % permresp)
@@ -890,7 +890,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         )
         sys.exit(255)
 
-    return file.get("id")
+    return sheet_file.get("id")
 
 
 def _color_palette_cell_value():
@@ -956,7 +956,7 @@ def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
 
     datarange = "A7"
     datainputoption = "USER_ENTERED"
-    data = {"values": [["last bigjimmybot probe: %s" % mytimestamp]]}
+    data = {"values": [[f"last bigjimmybot probe: {mytimestamp}"]]}
     response = (
         sheetsservice.spreadsheets()
         .values()
@@ -986,7 +986,7 @@ def add_user_to_google(username, firstname, lastname, password, recovery_email=N
     userbody = {
         "name": {"familyName": lastname, "givenName": firstname},
         "password": password,
-        "primaryEmail": "%s@%s" % (username, configstruct["DOMAINNAME"]),
+        "primaryEmail": f"{username}@{configstruct['DOMAINNAME']}",
     }
     if recovery_email:
         userbody["recoveryEmail"] = recovery_email
@@ -1018,7 +1018,7 @@ def delete_google_user(username):
     initadmin()
 
     userservice = build("admin", "directory_v1", credentials=admincreds)
-    email = "%s@%s" % (username, configstruct["DOMAINNAME"])
+    email = f"{username}@{configstruct['DOMAINNAME']}"
 
     try:
         userservice.users().delete(userKey=email).execute()
@@ -1027,7 +1027,7 @@ def delete_google_user(username):
             debug_log(3, "Google user %s not found, nothing to delete" % username)
             return "OK"
         msg = json.loads(e.content)["error"]["message"]
-        errmsg = "Error deleting Google user: %s" % msg
+        errmsg = f"Error deleting Google user: {msg}"
         debug_log(1, errmsg)
         return errmsg
 
@@ -1040,7 +1040,7 @@ def change_google_user_password(username, password):
     initadmin()
 
     userservice = build("admin", "directory_v1", credentials=admincreds)
-    email = "%s@%s" % (username, configstruct["DOMAINNAME"])
+    email = f"{username}@{configstruct['DOMAINNAME']}"
     userbody = {"password": password, "primaryEmail": email}
 
     debug_log(
@@ -1055,7 +1055,7 @@ def change_google_user_password(username, password):
         changeresponse = None
 
     if not changeresponse:
-        errmsg = "Error in changing password: %s" % msg
+        errmsg = f"Error in changing password: {msg}"
         debug_log(1, errmsg)
         return errmsg
 

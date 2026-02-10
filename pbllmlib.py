@@ -210,8 +210,6 @@ def _init_wiki_search(chromadb_path, api_key):
         return _wiki_collection
 
     try:
-        import os
-
         if not chromadb_path:
             debug_log(3, "WIKI_CHROMADB_PATH not configured")
             return None
@@ -264,14 +262,15 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
     - Recency (more recently modified pages rank higher)
     """
     if not CHROMADB_AVAILABLE:
-        return {"error": "Wiki search not available - chromadb not installed"}
+        return {"status": "error", "error": "Wiki search not available - chromadb not installed"}
 
     if not GEMINI_AVAILABLE:
-        return {"error": "Wiki search not available - google-genai not installed"}
+        return {"status": "error", "error": "Wiki search not available - google-genai not installed"}
 
     collection = _init_wiki_search(chromadb_path, api_key)
     if collection is None:
         return {
+            "status": "error",
             "error": "Wiki search not available - wiki has not been indexed yet",
             "results": [],
         }
@@ -355,7 +354,7 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
 
     except Exception as e:
         debug_log(2, f"Wiki search error: {e}")
-        return {"error": str(e), "results": []}
+        return {"status": "error", "error": str(e), "results": []}
 
 
 def get_hunt_summary(get_all_data_fn):
@@ -371,12 +370,12 @@ def get_hunt_summary(get_all_data_fn):
     puzzles_by_status = {}
     rounds_summary = []
 
-    for round in rounds:
+    for rnd in rounds:
         round_total = 0
         round_solved = 0
         round_open = 0
 
-        for puzzle in round.get("puzzles", []):
+        for puzzle in rnd.get("puzzles", []):
             total_puzzles += 1
             round_total += 1
             status = puzzle.get("status", "Unknown")
@@ -396,7 +395,7 @@ def get_hunt_summary(get_all_data_fn):
 
         rounds_summary.append(
             {
-                "name": round.get("name"),
+                "name": rnd.get("name"),
                 "total_puzzles": round_total,
                 "solved_puzzles": round_solved,
                 "open_puzzles": round_open,
@@ -419,10 +418,10 @@ def get_round_status(round_name, get_all_data_fn):
     """Get status of puzzles in a specific round."""
     data = get_all_data_fn()
 
-    for round in data.get("rounds", []):
-        if round.get("name", "").lower() == round_name.lower():
+    for rnd in data.get("rounds", []):
+        if rnd.get("name", "").lower() == round_name.lower():
             puzzles = []
-            for puzzle in round.get("puzzles", []):
+            for puzzle in rnd.get("puzzles", []):
                 puzzles.append(
                     {
                         "name": puzzle.get("name"),
@@ -438,13 +437,13 @@ def get_round_status(round_name, get_all_data_fn):
                     }
                 )
             return {
-                "round_name": round.get("name"),
-                "round_status": round.get("status"),
+                "round_name": rnd.get("name"),
+                "round_status": rnd.get("status"),
                 "puzzle_count": len(puzzles),
                 "puzzles": puzzles,
             }
 
-    return {"error": f"Round '{round_name}' not found"}
+    return {"status": "error", "error": f"Round '{round_name}' not found"}
 
 
 def get_open_puzzles_in_round(round_name, get_all_data_fn):
@@ -471,7 +470,7 @@ def get_puzzles_by_tag(tag_name, get_tag_id_by_name_fn, get_puzzles_by_tag_id_fn
     # Find tag ID
     tag_id = get_tag_id_by_name_fn(tag_name)
     if tag_id is None:
-        return {"error": f"Tag '{tag_name}' not found", "puzzles": []}
+        return {"status": "error", "error": f"Tag '{tag_name}' not found", "puzzles": []}
 
     # Get puzzles with this tag
     puzzles = get_puzzles_by_tag_id_fn(tag_id)
@@ -520,7 +519,7 @@ def get_solver_activity(solver_name, cursor):
     )
     solver = cursor.fetchone()
     if not solver:
-        return {"error": f"Solver '{solver_name}' not found"}
+        return {"status": "error", "error": f"Solver '{solver_name}' not found"}
 
     return _format_solver_result(solver)
 
@@ -531,10 +530,10 @@ def get_solver_by_id(solver_id, get_one_solver_fn):
         result = get_one_solver_fn(solver_id)
         solver = result.get("solver")
         if not solver:
-            return {"error": f"Solver with ID {solver_id} not found"}
+            return {"status": "error", "error": f"Solver with ID {solver_id} not found"}
         return _format_solver_result(solver)
     except Exception:
-        return {"error": f"Solver with ID {solver_id} not found"}
+        return {"status": "error", "error": f"Solver with ID {solver_id} not found"}
 
 
 def search_puzzles(query, cursor):
@@ -555,7 +554,7 @@ def get_puzzle_activity(
     # Find puzzle ID by name
     puzzle_id = get_puzzle_id_by_name_fn(puzzle_name)
     if not puzzle_id:
-        return {"error": f"Puzzle '{puzzle_name}' not found"}
+        return {"status": "error", "error": f"Puzzle '{puzzle_name}' not found"}
 
     # Get full puzzle info (includes lastact)
     puzzle_data = get_one_puzzle_fn(puzzle_id)
@@ -623,7 +622,7 @@ def execute_tool(
     elif tool_name == "search_wiki":
         return search_wiki(tool_args.get("query", ""), wiki_chromadb_path, api_key)
     else:
-        return {"error": f"Unknown tool: {tool_name}"}
+        return {"status": "error", "error": f"Unknown tool: {tool_name}"}
 
 
 # ============================================================================

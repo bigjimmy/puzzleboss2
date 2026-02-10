@@ -12,7 +12,6 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import random
 import string
@@ -142,21 +141,24 @@ class TestRunner:
         try:
             data = self.api_get(f"/puzzles/{puzzle_id}")
             return data.get("puzzle", data)
-        except Exception:
+        except Exception as e:
+            self.logger.log_error(f"Failed to get puzzle details for {puzzle_id}: {e}")
             return None
 
     def get_solver_details(self, solver_id):
         try:
             data = self.api_get(f"/solvers/{solver_id}")
             return data.get("solver", data)
-        except Exception:
+        except Exception as e:
+            self.logger.log_error(f"Failed to get solver details for {solver_id}: {e}")
             return None
 
     def get_round(self, round_id):
         try:
             data = self.api_get(f"/rounds/{round_id}")
             return data.get("round", data)
-        except Exception:
+        except Exception as e:
+            self.logger.log_error(f"Failed to get round details for {round_id}: {e}")
             return None
 
     def create_solver(self, name, fullname=None):
@@ -315,7 +317,8 @@ class TestRunner:
         existing = set()
         try:
             existing = {t["name"] for t in self.api_get("/tags").get("tags", [])}
-        except Exception:
+        except Exception as e:
+            self.logger.log_error(f"Failed to fetch existing tags: {e}")
             pass
         while True:
             tag = f"test-{int(time.time() * 1000)}-{''.join(random.choices(string.ascii_lowercase + string.digits, k=6))}"

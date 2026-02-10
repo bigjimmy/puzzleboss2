@@ -5,7 +5,6 @@ This module provides memcache functionality for caching API responses.
 Uses pymemcache with fail-safe operations (silently fails if cache unavailable).
 """
 
-import MySQLdb
 from pblib import debug_log
 
 # Optional memcache support
