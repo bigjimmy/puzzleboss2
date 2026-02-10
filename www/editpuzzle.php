@@ -174,6 +174,20 @@ $username = $userobj->name;
 $puzzleobj = readapi('/puzzles/' . $puzzid);
 $puzname = $puzzleobj->puzzle->name;
 
+// Fetch pending hints for this puzzle
+$allhints = array();
+$puzzleHints = array();
+try {
+    $hintsobj = readapi('/hints');
+    $allhints = isset($hintsobj->hints) ? $hintsobj->hints : array();
+    $puzzleHints = array_filter($allhints, function($h) use ($puzzid) {
+        return $h->puzzle_id == $puzzid;
+    });
+    $puzzleHints = array_values($puzzleHints); // re-index
+} catch (Exception $e) {
+    // Hints fetch failed silently — section will show "no pending hints"
+}
+
 // Calculate time since last activity (now included in puzzle response)
 $lastActDisplay = 'N/A';
 if (isset($puzzleobj->lastact->time)) {
@@ -509,6 +523,51 @@ if (isset($puzzleobj->lastact->time)) {
   </div>
 </div>
 
+<!-- Box 4: Hints -->
+<div class="info-box">
+  <div class="info-box-header" @click="showHints = !showHints">
+    <span class="collapse-icon" :class="{ collapsed: !showHints }">▼</span>
+    <h3>Hints<?php if (count($puzzleHints) > 0): ?> <span class="badge"><?= count($puzzleHints) ?> pending</span><?php endif; ?></h3>
+  </div>
+  <div class="info-box-content" v-show="showHints">
+    <?php if (count($puzzleHints) > 0): ?>
+      <div style="margin-bottom: 12px;">
+        <?php foreach ($puzzleHints as $hint): ?>
+          <div style="margin: 4px 0;">
+            <strong>#<?= $hint->queue_position ?></strong>
+            (<?= htmlentities($hint->solver) ?>)
+            <?php if ($hint->status === 'ready'): ?>
+              <small class="hint-status-ready">[ready]</small>
+            <?php elseif ($hint->status === 'submitted'): ?>
+              <small class="hint-status-submitted">[submitted]</small>
+            <?php endif; ?>
+            — <?= htmlentities(mb_strimwidth($hint->request_text, 0, 80, '...')) ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php else: ?>
+      <p><em>No pending hints for this puzzle.</em></p>
+    <?php endif; ?>
+
+    <div v-if="!showHintForm">
+      <button class="btn-secondary btn-hint-request" @click="showHintForm = true"
+              <?= ($puzzleobj->puzzle->status === 'Solved') ? 'disabled title="Puzzle is solved"' : '' ?>>💡 Request Hint</button>
+    </div>
+    <div v-if="showHintForm">
+      <p class="hint-modal-info">
+        This will be hint #<?= count($allhints) + 1 ?> in the queue.
+        Describe what you've tried and where you're stuck.
+      </p>
+      <textarea v-model="hintText" class="hint-textarea" rows="4"
+                placeholder="We have tried... and are stuck on..."></textarea>
+      <div class="modal-actions">
+        <button class="btn-secondary" @click="showHintForm = false; hintText = ''">Cancel</button>
+        <button @click="submitHint()" :disabled="!hintText.trim()">Add to Queue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </div>
 
 <script>
@@ -519,7 +578,30 @@ createApp({
     return {
       showInfo: true,
       showEdit: true,
-      showTags: true
+      showTags: true,
+      showHints: true,
+      showHintForm: false,
+      hintText: ''
+    }
+  },
+  methods: {
+    async submitHint() {
+      if (!this.hintText.trim()) return;
+      try {
+        await fetch('./apicall.php?apicall=hints', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            puzzle_id: <?= $puzzid ?>,
+            solver: '<?= addslashes($username) ?>',
+            request_text: this.hintText.trim()
+          })
+        });
+        location.reload();
+      } catch (e) {
+        console.error('Failed to submit hint:', e);
+        alert('Failed to submit hint request');
+      }
     }
   }
 }).mount('#app');
