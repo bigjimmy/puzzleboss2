@@ -11,11 +11,13 @@ set -euo pipefail
 #   --restart-apache     Restart Apache (apache2)
 #   --restart-bigjimmy   Restart the BigJimmy bot (bigjimmybot)
 #   --restart-all        Restart all three services
+#   --branch BRANCH      Deploy from BRANCH instead of master
 #   -y, --yes            Skip confirmation prompt
 #   -h, --help           Show this help message
 #
 
-REPO_URL="https://github.com/bigjimmy/puzzleboss2/tarball/master"
+REPO_BASE="https://github.com/bigjimmy/puzzleboss2/tarball"
+BRANCH="master"
 TMPDIR=""
 
 # Colors (disabled if not a terminal)
@@ -63,6 +65,14 @@ while [ $# -gt 0 ]; do
             restart_apache=true
             restart_bigjimmy=true
             ;;
+        --branch)
+            shift
+            if [ $# -eq 0 ]; then
+                error "--branch requires a value"
+                exit 1
+            fi
+            BRANCH="$1"
+            ;;
         -y|--yes) skip_confirm=true ;;
         -h|--help) usage ;;
         *)
@@ -78,7 +88,7 @@ done
 
 echo ""
 info "Deploy plan:"
-info "  - Download latest code from GitHub master"
+info "  - Download latest code from GitHub ($BRANCH)"
 info "  - Extract and copy into $(pwd)"
 $restart_gunicorn && info "  - Restart gunicorn (puzzleboss2)"
 $restart_apache   && info "  - Restart Apache (apache2)"
@@ -103,7 +113,8 @@ fi
 TMPDIR=$(mktemp -d)
 tarball="$TMPDIR/puzzleboss2.tar.gz"
 
-info "Downloading latest code from GitHub..."
+REPO_URL="$REPO_BASE/$BRANCH"
+info "Downloading latest code from GitHub ($BRANCH)..."
 if ! curl -fSL "$REPO_URL" -o "$tarball"; then
     error "Failed to download tarball from $REPO_URL"
     exit 1
