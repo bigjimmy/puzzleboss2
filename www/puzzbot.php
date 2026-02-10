@@ -28,15 +28,6 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             --chat-warning-text: #856404;    /* Warning text */
         }
 
-        /* Fix whitespace between inline-block navbar elements */
-        .nav-links {
-            font-size: 0;
-        }
-
-        .nav-links a {
-            font-size: 1rem;
-        }
-
         .user-info {
             color: #666;
             font-size: 0.9em;
