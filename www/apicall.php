@@ -71,6 +71,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     case "config":
       echo json_encode(postapi('/config', $post));
       break;
+    case "hint":
+      echo json_encode(postapi(('/hints/' . $apiparam1 . '/' . $apiparam2), $post));
+      break;
+    case "hints":
+      echo json_encode(postapi('/hints', $post));
+      break;
     default:
       http_response_code(500);
       die('Error: improper apicall specified.');
@@ -86,6 +92,9 @@ else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
       break;
     case "newusers":
       echo json_encode(deleteapi('/newusers/' . $apiparam1));
+      break;
+    case "hint":
+      echo json_encode(deleteapi('/hints/' . $apiparam1));
       break;
     default:
       http_response_code(500);
@@ -160,6 +169,12 @@ else {
       break;
     case "newusers":
       echo json_encode(readapi('/newusers'));
+      break;
+    case "hints":
+      echo json_encode(readapi('/hints'));
+      break;
+    case "hintcount":
+      echo json_encode(readapi('/hints/count'));
       break;
     default:
       http_response_code(500);

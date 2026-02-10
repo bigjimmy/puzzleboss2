@@ -1,0 +1,49 @@
+tags:
+  - Hints
+summary: Submit a new hint request
+description: Creates a new hint request and adds it to the end of the queue
+consumes:
+  - application/json
+parameters:
+  - name: body
+    in: body
+    required: true
+    schema:
+      type: object
+      required:
+        - puzzle_id
+        - solver
+        - request_text
+      properties:
+        puzzle_id:
+          type: integer
+          description: ID of the puzzle this hint is for
+          example: 1
+        solver:
+          type: string
+          description: Username of the person submitting the hint
+          example: "testuser"
+        request_text:
+          type: string
+          description: The hint request text
+          example: "We are stuck on the extraction step"
+responses:
+  200:
+    description: Hint created successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        hint:
+          type: object
+          properties:
+            id:
+              type: integer
+            queue_position:
+              type: integer
+  400:
+    description: Missing or invalid fields
+  404:
+    description: Puzzle not found

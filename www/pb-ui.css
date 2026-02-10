@@ -1406,3 +1406,177 @@ body.status-page input[type="submit"]:disabled {
     min-width: 0;
 }
 
+/* ========================================
+   HINT QUEUE
+   ======================================== */
+
+.hint-queue-section {
+    border-left: 4px solid var(--warning-color);
+}
+
+.hint-table {
+    width: 100%;
+    font-size: 0.9em;
+    border-collapse: collapse;
+}
+
+.hint-table th,
+.hint-table td {
+    padding: 6px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.hint-table th {
+    background: var(--bg-light-blue);
+    font-weight: 600;
+}
+
+.hint-top {
+    background: var(--warning-bg);
+    font-weight: 600;
+}
+
+.hint-text-cell {
+    max-width: 300px;
+}
+
+.hint-preview {
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+
+.hint-preview:hover {
+    color: var(--primary-blue);
+}
+
+.hint-actions {
+    display: flex;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.btn-hint-answer {
+    background: var(--success-bg-light);
+    border: 1px solid #66cc66;
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.btn-hint-answer:hover {
+    background: var(--success-bg);
+}
+
+.btn-hint-demote {
+    background: var(--bg-light-gray);
+    border: 1px solid var(--border-medium);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.btn-hint-demote:hover {
+    background: var(--gray-hover);
+}
+
+.btn-hint-delete {
+    background: var(--danger-bg-light);
+    border: 1px solid var(--error-border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: var(--danger-color);
+}
+
+.btn-hint-delete:hover {
+    background: var(--error-bg);
+}
+
+.btn-hint-inline {
+    background: none;
+    border: 1px solid var(--border-medium);
+    border-radius: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.15s;
+}
+
+.btn-hint-inline:hover {
+    background: var(--warning-bg);
+    border-color: var(--warning-border);
+}
+
+.hint-submit-dialog {
+    max-width: 500px;
+    width: 90vw;
+}
+
+.hint-modal-info {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    margin-bottom: 12px;
+}
+
+.hint-textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-medium);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.9em;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.hint-textarea:focus {
+    outline: none;
+    border-color: var(--primary-blue);
+    box-shadow: 0 0 3px rgba(0, 102, 204, 0.3);
+}
+
+.btn-hint-submit {
+    background: var(--primary-blue);
+    color: var(--bg-white);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.btn-hint-submit:hover {
+    background: var(--primary-blue-hover);
+}
+
+.btn-hint-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.hint-full-text {
+    white-space: pre-wrap;
+    background: var(--bg-light-gray);
+    padding: 12px;
+    border-radius: 6px;
+    margin-top: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.hint-detail-dialog {
+    max-width: 600px;
+}
+
+.hint-detail-dialog .modal-actions {
+    margin-top: 16px;
+    text-align: right;
+}
+

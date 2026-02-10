@@ -1,0 +1,16 @@
+tags:
+  - Hints
+summary: Get count of active hints
+description: Returns the number of queued hint requests
+responses:
+  200:
+    description: Count of active hints
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        count:
+          type: integer
+          example: 3

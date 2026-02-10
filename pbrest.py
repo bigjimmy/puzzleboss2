@@ -186,6 +186,21 @@ def handle_error(e):
 # GET/READ Operations
 
 
+def _format_hint_row(row):
+    """Format a hint database row into a JSON-safe dict."""
+    return {
+        "id": row["id"],
+        "puzzle_id": row["puzzle_id"],
+        "puzzle_name": row.get("puzzle_name"),
+        "solver": row["solver"],
+        "queue_position": row["queue_position"],
+        "request_text": row["request_text"],
+        "status": row["status"],
+        "created_at": row["created_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["created_at"] else None,
+        "answered_at": row["answered_at"].strftime("%Y-%m-%dT%H:%M:%SZ") if row["answered_at"] else None,
+    }
+
+
 def _get_all_from_db():
     """Internal function to fetch all rounds/puzzles from database."""
     debug_log(4, "fetching all from database")
@@ -226,7 +241,25 @@ def _get_all_from_db():
             round["puzzles"] = []
         rounds.append(round)
 
-    return {"rounds": rounds}
+    # Fetch active hints for inclusion in /all response
+    try:
+        conn, cursor = _read_cursor()
+        cursor.execute(
+            """SELECT h.id, h.puzzle_id, h.solver, h.queue_position,
+                      h.request_text, h.status, h.created_at, h.answered_at,
+                      p.name AS puzzle_name
+               FROM hint h
+               LEFT JOIN puzzle p ON h.puzzle_id = p.id
+               WHERE h.status = 'queued'
+               ORDER BY h.queue_position ASC"""
+        )
+        hint_rows = cursor.fetchall()
+        hints = [_format_hint_row(row) for row in hint_rows]
+    except Exception as e:
+        debug_log(2, "Could not fetch hints for /all: %s" % e)
+        hints = []
+
+    return {"rounds": rounds, "hints": hints}
 
 
 def _get_all_with_cache():
@@ -3033,6 +3066,207 @@ def llm_query():
         return jsonify(result), 500
 
     return jsonify(result)
+
+
+# ==========================================
+# HINT QUEUE ENDPOINTS
+# ==========================================
+
+
+@app.route("/hints", endpoint="gethints", methods=["GET"])
+@swag_from("swag/gethints.yaml", endpoint="gethints", methods=["GET"])
+def get_hints():
+    """Get all active (queued) hint requests, ordered by queue position"""
+    debug_log(4, "start")
+    try:
+        conn, cursor = _read_cursor()
+        cursor.execute(
+            """SELECT h.id, h.puzzle_id, h.solver, h.queue_position,
+                      h.request_text, h.status, h.created_at, h.answered_at,
+                      p.name AS puzzle_name
+               FROM hint h
+               LEFT JOIN puzzle p ON h.puzzle_id = p.id
+               WHERE h.status = 'queued'
+               ORDER BY h.queue_position ASC"""
+        )
+        rows = cursor.fetchall()
+        hints = [_format_hint_row(row) for row in rows]
+    except Exception as e:
+        raise Exception("Exception fetching hints from database: %s" % e)
+
+    debug_log(4, "fetched %d active hints" % len(hints))
+    return {"status": "ok", "hints": hints}
+
+
+@app.route("/hints", endpoint="posthint", methods=["POST"])
+@swag_from("swag/posthint.yaml", endpoint="posthint", methods=["POST"])
+def create_hint():
+    """Submit a new hint request, adds to end of queue"""
+    debug_log(4, "start")
+    try:
+        data = request.get_json()
+        puzzle_id = data["puzzle_id"]
+        solver = data["solver"]
+        request_text = data["request_text"]
+    except (TypeError, KeyError) as e:
+        return jsonify({"error": "Missing required fields: puzzle_id, solver, request_text"}), 400
+
+    if not request_text or not request_text.strip():
+        return jsonify({"error": "request_text must be non-empty"}), 400
+
+    try:
+        conn, cursor = _cursor()
+        cursor.execute("SELECT id FROM puzzle WHERE id = %s", (puzzle_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Puzzle %s not found" % puzzle_id}), 404
+    except Exception as e:
+        raise Exception("Exception verifying puzzle: %s" % e)
+
+    try:
+        cursor.execute(
+            "SELECT COALESCE(MAX(queue_position), 0) + 1 AS next_pos FROM hint WHERE status = 'queued'"
+        )
+        next_pos = cursor.fetchone()["next_pos"]
+
+        cursor.execute(
+            """INSERT INTO hint (puzzle_id, solver, queue_position, request_text, status)
+               VALUES (%s, %s, %s, %s, 'queued')""",
+            (puzzle_id, solver, next_pos, request_text.strip()),
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+    except Exception as e:
+        raise Exception("Exception creating hint: %s" % e)
+
+    invalidate_cache_with_stats()
+    debug_log(3, "Created hint %d for puzzle %s at position %d" % (new_id, puzzle_id, next_pos))
+    return {"status": "ok", "hint": {"id": new_id, "queue_position": next_pos}}
+
+
+@app.route("/hints/count", endpoint="gethintcount", methods=["GET"])
+@swag_from("swag/gethintcount.yaml", endpoint="gethintcount", methods=["GET"])
+def get_hint_count():
+    """Return the count of active (queued) hints"""
+    debug_log(5, "start")
+    try:
+        conn, cursor = _read_cursor()
+        cursor.execute("SELECT COUNT(*) AS count FROM hint WHERE status = 'queued'")
+        row = cursor.fetchone()
+    except Exception as e:
+        raise Exception("Exception counting hints: %s" % e)
+
+    return {"status": "ok", "count": row["count"]}
+
+
+@app.route("/hints/<int:id>/answer", endpoint="answerhint", methods=["POST"])
+@swag_from("swag/answerhint.yaml", endpoint="answerhint", methods=["POST"])
+def answer_hint(id):
+    """Mark a hint as answered and promote remaining queued hints"""
+    debug_log(4, "start with hint id: %d" % id)
+    try:
+        conn, cursor = _cursor()
+        cursor.execute(
+            "SELECT id, queue_position FROM hint WHERE id = %s AND status = 'queued'",
+            (id,),
+        )
+        hint = cursor.fetchone()
+        if not hint:
+            return jsonify({"error": "Hint %d not found or already answered" % id}), 404
+
+        answered_pos = hint["queue_position"]
+
+        cursor.execute(
+            "UPDATE hint SET status = 'answered', answered_at = NOW(), queue_position = 0 WHERE id = %s",
+            (id,),
+        )
+
+        cursor.execute(
+            "UPDATE hint SET queue_position = queue_position - 1 WHERE status = 'queued' AND queue_position > %s",
+            (answered_pos,),
+        )
+        conn.commit()
+    except Exception as e:
+        raise Exception("Exception answering hint %d: %s" % (id, e))
+
+    invalidate_cache_with_stats()
+    debug_log(3, "Hint %d answered, remaining hints promoted" % id)
+    return {"status": "ok", "message": "Hint %d answered" % id}
+
+
+@app.route("/hints/<int:id>/demote", endpoint="demotehint", methods=["POST"])
+@swag_from("swag/demotehint.yaml", endpoint="demotehint", methods=["POST"])
+def demote_hint(id):
+    """Swap a hint with the one below it in the queue"""
+    debug_log(4, "start with hint id: %d" % id)
+    try:
+        conn, cursor = _cursor()
+        cursor.execute(
+            "SELECT id, queue_position FROM hint WHERE id = %s AND status = 'queued'",
+            (id,),
+        )
+        hint = cursor.fetchone()
+        if not hint:
+            return jsonify({"error": "Hint %d not found or already answered" % id}), 404
+
+        current_pos = hint["queue_position"]
+
+        cursor.execute(
+            "SELECT id FROM hint WHERE status = 'queued' AND queue_position = %s",
+            (current_pos + 1,),
+        )
+        below = cursor.fetchone()
+        if not below:
+            return jsonify({"error": "Hint %d is already at the bottom of the queue" % id}), 400
+
+        cursor.execute(
+            "UPDATE hint SET queue_position = %s WHERE id = %s",
+            (current_pos + 1, id),
+        )
+        cursor.execute(
+            "UPDATE hint SET queue_position = %s WHERE id = %s",
+            (current_pos, below["id"]),
+        )
+        conn.commit()
+    except Exception as e:
+        raise Exception("Exception demoting hint %d: %s" % (id, e))
+
+    invalidate_cache_with_stats()
+    debug_log(3, "Hint %d demoted from position %d to %d" % (id, current_pos, current_pos + 1))
+    return {"status": "ok", "message": "Hint %d demoted" % id}
+
+
+@app.route("/hints/<int:id>", endpoint="deletehint", methods=["DELETE"])
+@swag_from("swag/deletehint.yaml", endpoint="deletehint", methods=["DELETE"])
+def delete_hint(id):
+    """Remove a hint request from the queue and reorder remaining"""
+    debug_log(4, "start with hint id: %d" % id)
+    try:
+        conn, cursor = _cursor()
+        cursor.execute(
+            "SELECT id, queue_position, status FROM hint WHERE id = %s",
+            (id,),
+        )
+        hint = cursor.fetchone()
+        if not hint:
+            return jsonify({"error": "Hint %d not found" % id}), 404
+
+        deleted_pos = hint["queue_position"]
+        was_queued = hint["status"] == "queued"
+
+        cursor.execute("DELETE FROM hint WHERE id = %s", (id,))
+
+        if was_queued and deleted_pos > 0:
+            cursor.execute(
+                "UPDATE hint SET queue_position = queue_position - 1 WHERE status = 'queued' AND queue_position > %s",
+                (deleted_pos,),
+            )
+        conn.commit()
+    except Exception as e:
+        raise Exception("Exception deleting hint %d: %s" % (id, e))
+
+    invalidate_cache_with_stats()
+    debug_log(3, "Hint %d deleted" % id)
+    return {"status": "ok", "message": "Hint %d deleted" % id}
 
 
 if __name__ == "__main__":

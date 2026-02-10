@@ -1,0 +1,37 @@
+tags:
+  - Hints
+summary: Get all active hint requests
+description: Returns all queued hint requests ordered by queue position
+responses:
+  200:
+    description: List of active hints
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        hints:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              puzzle_id:
+                type: integer
+              puzzle_name:
+                type: string
+              solver:
+                type: string
+              queue_position:
+                type: integer
+              request_text:
+                type: string
+              status:
+                type: string
+                enum: [queued, answered]
+              created_at:
+                type: string
+              answered_at:
+                type: string

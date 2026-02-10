@@ -124,6 +124,28 @@ CREATE TABLE `tag` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `hint`
+--
+
+DROP TABLE IF EXISTS `hint`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `hint` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `puzzle_id` int(11) NOT NULL,
+  `solver` varchar(255) NOT NULL,
+  `queue_position` int(11) NOT NULL,
+  `request_text` text NOT NULL,
+  `status` enum('queued','answered') NOT NULL DEFAULT 'queued',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `answered_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_hint_puzzle_idx` (`puzzle_id`),
+  KEY `idx_hint_status_position` (`status`, `queue_position`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `config`
 --
 

@@ -1,0 +1,24 @@
+tags:
+  - Hints
+summary: Mark a hint as answered
+description: Sets hint status to answered, records timestamp, and promotes remaining queue
+parameters:
+  - name: id
+    in: path
+    type: integer
+    required: true
+    description: The hint ID to mark as answered
+responses:
+  200:
+    description: Hint answered successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
+          example: "Hint 1 answered"
+  404:
+    description: Hint not found or already answered

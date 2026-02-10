@@ -1,6 +1,7 @@
 <?php
 require('puzzlebosslib.php');
 $uid = getauthenticateduser();
+$solver = getauthenticatedsolver();
 ?>
 <!DOCTYPE html>
 <html>
@@ -67,6 +68,90 @@ $uid = getauthenticateduser();
             </div>
         </div>
 
+        <!-- Hint Queue Section -->
+        <div class="info-box hint-queue-section" v-if="hints.length > 0">
+            <div class="info-box-header" @click="showHintQueue = !showHintQueue">
+                <span class="collapse-icon" :class="{ collapsed: !showHintQueue }">▼</span>
+                <h3>Hint Queue</h3>
+                <span class="badge">{{ hints.length }} pending</span>
+            </div>
+            <div class="info-box-content" v-show="showHintQueue">
+                <table class="hint-table">
+                    <tr>
+                        <th>#</th>
+                        <th>Status</th>
+                        <th>Puzzle</th>
+                        <th>Requested By</th>
+                        <th>Request</th>
+                        <th>Submitted</th>
+                        <th>Actions</th>
+                    </tr>
+                    <tr v-for="hint in hints" :key="hint.id"
+                        :class="{ 'hint-top': hint.queue_position === 1 }">
+                        <td>{{ hint.queue_position }}</td>
+                        <td>
+                            <span v-if="hint.queue_position === 1">📨 Submitted</span>
+                            <span v-else>⏳ Queued</span>
+                        </td>
+                        <td>
+                            <a v-if="getPuzzleUri(hint.puzzle_id)"
+                               :href="getPuzzleUri(hint.puzzle_id)" target="_blank">
+                                {{ hint.puzzle_name || 'Puzzle #' + hint.puzzle_id }}
+                            </a>
+                            <span v-else>{{ hint.puzzle_name || 'Puzzle #' + hint.puzzle_id }}</span>
+                        </td>
+                        <td>{{ hint.solver }}</td>
+                        <td class="hint-text-cell">
+                            <span class="hint-preview" @click="showHintDetail(hint)">
+                                {{ hint.request_text.length > 80 ? hint.request_text.substring(0, 80) + '...' : hint.request_text }}
+                            </span>
+                        </td>
+                        <td>{{ formatHintTime(hint.created_at) }}</td>
+                        <td class="hint-actions">
+                            <button v-if="hint.queue_position === 1"
+                                    class="btn-hint-answer" @click="answerHint(hint.id)"
+                                    title="Mark as answered">✅ Answered</button>
+                            <button v-if="hint.queue_position === 1 && hints.length > 1"
+                                    class="btn-hint-demote" @click="demoteHint(hint.id)"
+                                    title="Move down in queue">⬇ Demote</button>
+                            <button class="btn-hint-delete" @click="deleteHint(hint.id)"
+                                    title="Remove from queue">✕</button>
+                        </td>
+                    </tr>
+                </table>
+
+            </div>
+        </div>
+
+        <!-- Hint detail dialog (view existing hint) -->
+        <dialog ref="hintDialog" class="hint-detail-dialog" @click.self="$refs.hintDialog.close()">
+            <div v-if="selectedHint">
+                <h3>Hint Request Details</h3>
+                <p><strong>Puzzle:</strong> {{ selectedHint.puzzle_name }}</p>
+                <p><strong>Requested by:</strong> {{ selectedHint.solver }}</p>
+                <p><strong>Submitted:</strong> {{ formatHintTime(selectedHint.created_at) }}</p>
+                <div class="hint-full-text">{{ selectedHint.request_text }}</div>
+                <div class="modal-actions">
+                    <button class="btn-secondary" @click="$refs.hintDialog.close()">Close</button>
+                </div>
+            </div>
+        </dialog>
+
+        <!-- Hint submit dialog (new hint from puzzle row) -->
+        <dialog ref="hintSubmitDialog" class="hint-submit-dialog" @click.self="closeHintModal()">
+            <div v-if="hintModalPuzzle">
+                <h3>Request Hint for {{ hintModalPuzzle.name }}</h3>
+                <p class="hint-modal-info">This will add a hint request to the queue. Describe what you've tried and where you're stuck.</p>
+                <textarea v-model="newHintText" ref="hintTextarea"
+                          placeholder="We have tried... and are stuck on..."
+                          rows="4" class="hint-textarea"></textarea>
+                <div class="modal-actions">
+                    <button class="btn-secondary" @click="closeHintModal()">Cancel</button>
+                    <button class="btn-hint-submit" @click="submitHintFromModal()" :disabled="!newHintText.trim()">Add to Queue</button>
+                </div>
+            </div>
+        </dialog>
+
         <div class="info-box column-visibility">
             <div class="info-box-header" @click="showColumnVisibility = !showColumnVisibility">
                 <span class="collapse-icon" :class="{ collapsed: !showColumnVisibility }">▼</span>
@@ -111,6 +196,7 @@ $uid = getauthenticateduser();
                     <th @click="toggleSort('noLoc', 'location')" :class="{ 'hidden-column': !visibleColumns.location }">Location <span class="sort-icon">{{ getSortIcon('noLoc', 'location') }}</span></th>
                     <th @click="toggleSort('noLoc', 'tags')" :class="{ 'hidden-column': !visibleColumns.tags }">Tags <span class="sort-icon">{{ getSortIcon('noLoc', 'tags') }}</span></th>
                     <th @click="toggleSort('noLoc', 'comment')" :class="{ 'hidden-column': !visibleColumns.comment }">Comment <span class="sort-icon">{{ getSortIcon('noLoc', 'comment') }}</span></th>
+                    <th data-tooltip="Request hint">Hint</th>
                 </tr>
                 <tr v-for="puzzle in noLocPuzzles"
                     :key="puzzle.id"
@@ -162,6 +248,7 @@ $uid = getauthenticateduser();
                             </button>
                         </div>
                     </td>
+                    <td><button class="btn-hint-inline" @click="openHintModal(puzzle)" data-tooltip="Request hint">💡</button></td>
                 </tr>
             </table>
         </div>
@@ -186,6 +273,7 @@ $uid = getauthenticateduser();
                     <th @click="toggleSort('sheetDisabled', 'location')" :class="{ 'hidden-column': !visibleColumns.location }">Location <span class="sort-icon">{{ getSortIcon('sheetDisabled', 'location') }}</span></th>
                     <th @click="toggleSort('sheetDisabled', 'tags')" :class="{ 'hidden-column': !visibleColumns.tags }">Tags <span class="sort-icon">{{ getSortIcon('sheetDisabled', 'tags') }}</span></th>
                     <th @click="toggleSort('sheetDisabled', 'comment')" :class="{ 'hidden-column': !visibleColumns.comment }">Comment <span class="sort-icon">{{ getSortIcon('sheetDisabled', 'comment') }}</span></th>
+                    <th data-tooltip="Request hint">Hint</th>
                 </tr>
                 <tr v-for="puzzle in sheetDisabledPuzzles"
                     :key="puzzle.id"
@@ -237,6 +325,7 @@ $uid = getauthenticateduser();
                             </button>
                         </div>
                     </td>
+                    <td><button class="btn-hint-inline" @click="openHintModal(puzzle)" data-tooltip="Request hint">💡</button></td>
                 </tr>
             </table>
         </div>
@@ -261,6 +350,7 @@ $uid = getauthenticateduser();
                     <th @click="toggleSort('overview', 'location')" :class="{ 'hidden-column': !visibleColumns.location }">Location <span class="sort-icon">{{ getSortIcon('overview', 'location') }}</span></th>
                     <th @click="toggleSort('overview', 'tags')" :class="{ 'hidden-column': !visibleColumns.tags }">Tags <span class="sort-icon">{{ getSortIcon('overview', 'tags') }}</span></th>
                     <th @click="toggleSort('overview', 'comment')" :class="{ 'hidden-column': !visibleColumns.comment }">Comment <span class="sort-icon">{{ getSortIcon('overview', 'comment') }}</span></th>
+                    <th data-tooltip="Request hint">Hint</th>
                 </tr>
                 <tr v-for="puzzle in workOnPuzzles"
                     :key="puzzle.id"
@@ -312,10 +402,11 @@ $uid = getauthenticateduser();
                             </button>
                         </div>
                     </td>
+                    <td><button class="btn-hint-inline" @click="openHintModal(puzzle)" data-tooltip="Request hint">💡</button></td>
                 </tr>
             </table>
         </div>
-        
+
         <footer>
             Last updated: {{ lastUpdate }}
         </footer>
@@ -328,6 +419,7 @@ $uid = getauthenticateduser();
 
         <?php
             echo "const currentUid = " . json_encode($uid) . ";";
+            echo "const currentUsername = " . json_encode($solver->name) . ";";
         ?>
 
         createApp({
@@ -344,6 +436,16 @@ $uid = getauthenticateduser();
                 const showHuntProgress = ref(true)
                 const showStatusBreakdown = ref(true)
                 const showColumnVisibility = ref(true)
+
+                // Hint queue state
+                const hints = ref([])
+                const showHintQueue = ref(true)
+                const newHintText = ref('')
+                const selectedHint = ref(null)
+                const hintDialog = ref(null)
+                const hintModalPuzzle = ref(null)
+                const hintSubmitDialog = ref(null)
+                const hintTextarea = ref(null)
 
                 const commentEdits = ref({})
                 const locationEdits = ref({})
@@ -581,6 +683,106 @@ $uid = getauthenticateduser();
                     return sortPuzzles(filtered, 'sheetDisabled')
                 })
                 
+                // Hint queue helpers
+                function getPuzzleUri(puzzleId) {
+                    for (const round of data.value.rounds) {
+                        for (const puzzle of round.puzzles) {
+                            if (puzzle.id === puzzleId) return puzzle.puzzle_uri
+                        }
+                    }
+                    return null
+                }
+
+                function formatHintTime(isoStr) {
+                    if (!isoStr) return ''
+                    return new Date(isoStr).toLocaleTimeString('en-US', {
+                        timeZone: 'America/New_York',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })
+                }
+
+                function showHintDetail(hint) {
+                    selectedHint.value = hint
+                    hintDialog.value?.showModal()
+                }
+
+                function openHintModal(puzzle) {
+                    hintModalPuzzle.value = puzzle
+                    newHintText.value = ''
+                    hintSubmitDialog.value?.showModal()
+                    // Focus textarea after dialog opens
+                    setTimeout(() => hintTextarea.value?.focus(), 50)
+                }
+
+                function closeHintModal() {
+                    hintSubmitDialog.value?.close()
+                    hintModalPuzzle.value = null
+                    newHintText.value = ''
+                }
+
+                async function submitHintFromModal() {
+                    if (!hintModalPuzzle.value || !newHintText.value.trim()) return
+                    try {
+                        await fetch('./apicall.php?apicall=hints', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                puzzle_id: hintModalPuzzle.value.id,
+                                solver: currentUsername,
+                                request_text: newHintText.value.trim()
+                            })
+                        })
+                        closeHintModal()
+                        await fetchData()
+                    } catch (e) {
+                        console.error('Failed to submit hint:', e)
+                        alert('Failed to submit hint request')
+                    }
+                }
+
+                async function answerHint(hintId) {
+                    if (!confirm('Mark this hint as answered? It will be removed from the queue.')) return
+                    try {
+                        await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=answer`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({})
+                        })
+                        await fetchData()
+                    } catch (e) {
+                        console.error('Failed to answer hint:', e)
+                        alert('Failed to mark hint as answered')
+                    }
+                }
+
+                async function demoteHint(hintId) {
+                    try {
+                        await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=demote`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({})
+                        })
+                        await fetchData()
+                    } catch (e) {
+                        console.error('Failed to demote hint:', e)
+                        alert('Failed to demote hint')
+                    }
+                }
+
+                async function deleteHint(hintId) {
+                    if (!confirm('Remove this hint from the queue?')) return
+                    try {
+                        await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}`, {
+                            method: 'DELETE'
+                        })
+                        await fetchData()
+                    } catch (e) {
+                        console.error('Failed to delete hint:', e)
+                        alert('Failed to delete hint')
+                    }
+                }
+
                 function getRoundName(puzzleId) {
                     for (const round of data.value.rounds) {
                         for (const puzzle of round.puzzles) {
@@ -614,7 +816,8 @@ $uid = getauthenticateduser();
                         const response = await fetch('./apicall.php?apicall=all', { cache: 'no-store' })
                         const newData = await response.json()
                         data.value = newData
-                        
+                        hints.value = newData.hints || []
+
                         // Initialize status edits for new puzzles
                         newData.rounds.forEach(round => {
                             round.puzzles.forEach(puzzle => {
@@ -795,7 +998,25 @@ $uid = getauthenticateduser();
                     showAllColumns,
                     updateComment,
                     updateLocation,
-                    updateStatus
+                    updateStatus,
+                    // Hint queue
+                    hints,
+                    showHintQueue,
+                    newHintText,
+                    selectedHint,
+                    hintDialog,
+                    hintModalPuzzle,
+                    hintSubmitDialog,
+                    hintTextarea,
+                    getPuzzleUri,
+                    formatHintTime,
+                    showHintDetail,
+                    openHintModal,
+                    closeHintModal,
+                    submitHintFromModal,
+                    answerHint,
+                    demoteHint,
+                    deleteHint
                 }
             }
         }).mount('#app')

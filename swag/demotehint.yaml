@@ -1,0 +1,26 @@
+tags:
+  - Hints
+summary: Demote a hint in the queue
+description: Swaps the hint with the one below it in queue position
+parameters:
+  - name: id
+    in: path
+    type: integer
+    required: true
+    description: The hint ID to demote
+responses:
+  200:
+    description: Hint demoted successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
+          example: "Hint 1 demoted"
+  400:
+    description: Hint is already at the bottom of the queue
+  404:
+    description: Hint not found or already answered
