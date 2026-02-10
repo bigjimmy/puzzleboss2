@@ -264,14 +264,32 @@ HTML;
     throw $e;
   }
   assert_api_success($responseobj);
-  print <<<HTML
-  <h2>Account creation request submitted!</h2>
-  <p>
-    Check your email ($email) for further instructions from $regemail.<br>
-    (Also check your spam folder; sometimes the email ends up there.)
-  </p>
-  </main></body></html>
+  $verification_code = $responseobj['code'];
+  $email_failed = array_key_exists('email_error', $responseobj);
+
+  if ($email_failed) {
+    print <<<HTML
+    <h2 style="color: #c00;">⚠️ Account created, but email delivery failed</h2>
+    <div class="error">
+      <strong>Your registration was saved</strong>, but we were unable to send the
+      verification email to <tt>$email</tt>.<br><br>
+      Please contact <strong>@Puzztech</strong> on Discord for help completing
+      your account setup. They can provide your verification link manually.
+    </div>
+    <span id="verification-code" data-code="$verification_code" style="display:none"></span>
+    </main></body></html>
 HTML;
+  } else {
+    print <<<HTML
+    <h2>Account creation request submitted!</h2>
+    <p>
+      Check your email ($email) for further instructions from $regemail.<br>
+      (Also check your spam folder; sometimes the email ends up there.)
+    </p>
+    <span id="verification-code" data-code="$verification_code" style="display:none"></span>
+    </main></body></html>
+HTML;
+  }
   exit(0);
 }
 

@@ -2314,7 +2314,8 @@ def new_account():
             % username
         )
 
-    if email_user_verification(email, code, fullname, username) == "OK":
+    email_result = email_user_verification(email, code, fullname, username)
+    if email_result == "OK":
         debug_log(
             3,
             "unverified new user %s added to database with verification code %s. email sent."
@@ -2322,7 +2323,12 @@ def new_account():
         )
         return {"status": "ok", "code": code}
 
-    raise Exception("some error emailing code to user")
+    debug_log(
+        2,
+        "unverified new user %s added but email failed: %s"
+        % (username, email_result),
+    )
+    return {"status": "ok", "code": code, "email_error": email_result}
 
 
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
@@ -2420,6 +2426,9 @@ def finish_account(code):
 
     # Step 2: Create Google Workspace account
     if step == "2":
+        if configstruct.get("SKIP_GOOGLE_API") == "true":
+            debug_log(3, "User %s: Step 2 - Skipping Google account (SKIP_GOOGLE_API enabled)" % username)
+            return {"status": "ok", "step": 2, "message": "Google account creation skipped", "skipped": True}
         debug_log(
             4, "User %s: Step 2 - Creating new Google Workspace account" % username
         )

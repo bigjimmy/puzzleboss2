@@ -1912,6 +1912,170 @@ def test_account_registration_gate():
 
 
 # ──────────────────────────────────────────────────────────
+# Test 25: Account Create and Delete Lifecycle
+# ──────────────────────────────────────────────────────────
+
+def test_account_create_delete():
+    """Test creating an account via registration UI and deleting it via accounts.php."""
+
+    # Read gate credentials from config
+    config = requests.get(f"{API_URL}/config").json().get("config", {})
+    acct_username = config.get("ACCT_USERNAME", "")
+    acct_password = config.get("ACCT_PASSWORD", "")
+
+    if not acct_username or not acct_password:
+        print("  ⚠ ACCT_USERNAME and/or ACCT_PASSWORD not set — skipping test")
+        print("✓ Account create/delete test skipped (no credentials configured)")
+        return
+
+    # Use a unique username with timestamp to avoid collisions
+    test_username = f"uitest{int(time.time()) % 100000}"
+    test_fullname = "Ui Testuser"
+    test_email = "uitest@example.com"
+    test_password = "testpass1"
+
+    print(f"  Test account: {test_username}")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+
+        # ── Step 1: Navigate to registration and pass gate ──
+        print("  Step 1: Passing auth gate...")
+        page = browser.new_page()
+        page.goto(f"{BASE_URL}/account/", wait_until="load")
+        page.wait_for_selector("input[name='gate_username']", timeout=5000)
+        page.fill("input[name='gate_username']", acct_username)
+        page.fill("input[name='gate_password']", acct_password)
+        page.click("input[type='submit']")
+        page.wait_for_load_state("load")
+        assert "Account Registration" in page.locator("body").inner_text(), \
+            "Failed to pass auth gate"
+        print("    ✓ Auth gate passed")
+
+        # ── Step 2: Fill registration form ──
+        print("  Step 2: Filling registration form...")
+        page.fill("input[name='username']", test_username)
+        page.fill("input[name='fullname']", test_fullname)
+        page.fill("input[name='email']", test_email)
+        page.fill("input[name='password']", test_password)
+        page.fill("input[name='password2']", test_password)
+        page.click("input[type='submit']")
+        page.wait_for_load_state("load")
+
+        # Should see confirmation page
+        body_text = page.locator("body").inner_text()
+        assert "Confirm account creation" in body_text, \
+            f"Expected confirmation page, got: {body_text[:200]}"
+        assert test_username in body_text, "Username not shown on confirmation page"
+        print("    ✓ Confirmation page displayed")
+
+        # ── Step 3: Confirm and capture verification code ──
+        print("  Step 3: Confirming and capturing verification code...")
+        page.click("input[value='Confirm']")
+        page.wait_for_load_state("load")
+
+        # Check outcome — email may or may not work depending on environment
+        body_text = page.locator("body").inner_text()
+        if "email delivery failed" in body_text:
+            print("    ⚠ Email delivery failed (expected in environments without SMTP)")
+        else:
+            assert "Check your email" in body_text, \
+                f"Unexpected post-confirm page: {body_text[:200]}"
+            print("    ✓ Email sent successfully")
+
+        # Read the hidden verification code embedded in the page (present in both cases)
+        code_el = page.locator("#verification-code")
+        assert code_el.count() > 0, "Verification code element not found in page"
+        verification_code = code_el.get_attribute("data-code")
+        assert verification_code and len(verification_code) == 8, \
+            f"Invalid verification code: {verification_code}"
+        print(f"    ✓ Captured verification code: {verification_code}")
+
+        # ── Step 4: Complete verification via code URL ──
+        print("  Step 4: Completing account verification...")
+        page.goto(f"{BASE_URL}/account/?code={verification_code}", wait_until="load")
+
+        # Wait for all steps to complete (each step makes an API call)
+        # The success container appears when all 4 steps finish
+        try:
+            page.wait_for_selector("#success-container:not([style*='display: none'])", timeout=15000)
+            print("    ✓ All verification steps completed")
+        except PlaywrightTimeout:
+            # Check which step failed
+            for i in range(1, 5):
+                step_el = page.locator(f"#step{i}")
+                classes = step_el.get_attribute("class") or ""
+                label = step_el.locator(".label").inner_text()
+                status = step_el.locator(".status").inner_text()
+                print(f"    Step {i}: {status} {label} ({classes})")
+            error_el = page.locator("#error-container")
+            if error_el.is_visible():
+                error_msg = page.locator("#error-message").inner_text()
+                assert False, f"Verification failed: {error_msg}"
+            assert False, "Verification timed out without success or error"
+
+        # Check for skipped steps (e.g. Google account when SKIP_GOOGLE_API=true)
+        for i in range(1, 5):
+            step_el = page.locator(f"#step{i}")
+            classes = step_el.get_attribute("class") or ""
+            if "skipped" in classes:
+                label = step_el.locator(".label").inner_text()
+                print(f"    ⏭ Step {i} skipped: {label}")
+
+        # ── Step 5: Verify solver was created ──
+        print("  Step 5: Verifying solver exists in database...")
+        resp = requests.get(f"{API_URL}/solvers/byname/{test_username}")
+        data = resp.json()
+        assert "solver" in data, f"Solver not found after registration: {data}"
+        assert data["solver"]["name"] == test_username
+        assert data["solver"]["fullname"] == test_fullname
+        print(f"    ✓ Solver '{test_username}' exists (id={data['solver']['id']})")
+
+        # ── Step 6: Delete via accounts.php UI ──
+        print("  Step 6: Deleting account via accounts.php...")
+        page.goto(f"{BASE_URL}/accounts.php?assumedid=testuser", wait_until="load")
+        page.wait_for_selector("#accounts-table", timeout=5000)
+
+        # Find the row for our test user
+        row = page.locator(f"tr[data-username='{test_username}']")
+        assert row.count() > 0, f"Test user '{test_username}' not found in accounts table"
+        print(f"    ✓ Found '{test_username}' in accounts table")
+
+        # Click Delete button on that row
+        row.locator(".delete-btn").click()
+
+        # Wait for delete modal
+        page.wait_for_selector("#delete-modal.active", timeout=3000)
+        print("    ✓ Delete confirmation modal opened")
+
+        # Type username to confirm
+        page.fill("#confirm-input", test_username)
+        page.wait_for_selector("#btn-confirm-delete:not([disabled])", timeout=2000)
+        print("    ✓ Username confirmed, delete button enabled")
+
+        # Click delete
+        page.click("#btn-confirm-delete")
+        time.sleep(2)  # Wait for API call and DOM update
+
+        # Verify the row was removed from the table
+        remaining = page.locator(f"tr[data-username='{test_username}']").count()
+        assert remaining == 0, f"Row for '{test_username}' still present after deletion"
+        print(f"    ✓ Row removed from accounts table")
+
+        # ── Step 7: Verify solver was deleted from database ──
+        print("  Step 7: Verifying solver deleted from database...")
+        resp = requests.get(f"{API_URL}/solvers/byname/{test_username}")
+        data = resp.json()
+        assert "error" in data or "solver" not in data, \
+            f"Solver should not exist after deletion: {data}"
+        print(f"    ✓ Solver '{test_username}' no longer exists")
+
+        page.close()
+        browser.close()
+        print("✓ Account create and delete lifecycle test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
 # Main Entry Point
 # ──────────────────────────────────────────────────────────
 
@@ -1964,6 +2128,7 @@ def main():
         ('22', 'config', test_config_page, 'Config Page'),
         ('23', 'privs', test_privilege_and_gear_visibility, 'Privilege And Gear Visibility'),
         ('24', 'acctgate', test_account_registration_gate, 'Account Registration Auth Gate'),
+        ('25', 'acctcrud', test_account_create_delete, 'Account Create Delete Lifecycle'),
     ]
 
     if args.list:

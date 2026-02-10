@@ -759,7 +759,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
 
 </div><!-- end #config-content -->
 
-<script>
+<script type="module">
 const { API_PROXY: apiProxy, escapeHtml, escapeAttr, showStatus } = window.pbUtils;
 
 function dismissWarning() {
@@ -1031,6 +1031,11 @@ function revertMetricsEditor() {
     tbody.appendChild(tr);
   });
 }
+
+// Expose to inline onclick handlers (module scope is not global)
+Object.assign(window, { dismissWarning, toggleCategory, setBool, saveConfig,
+  revertConfig, addNewConfig, filterConfig, addStatusRow, serializeStatusEditor,
+  revertStatusEditor, addMetricRow, serializeMetricsEditor, revertMetricsEditor });
 
 </script>
 

@@ -408,7 +408,7 @@ if ($hasGoogle) {
   </div>
 </div>
 
-<script>
+<script type="module">
 const { API_PROXY: apiProxy, escapeHtml, showStatus } = window.pbUtils;
 let deleteTarget = '';
 let sortCol = 'id';
@@ -628,6 +628,10 @@ document.addEventListener('keydown', e => {
 document.getElementById('delete-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
+
+// Expose to inline onclick handlers (module scope is not global)
+Object.assign(window, { togglePriv, savePrivs, confirmDelete, closeModal,
+  checkConfirmInput, executeDelete, filterTable, sortTable });
 </script>
 
 </body>
