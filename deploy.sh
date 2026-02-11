@@ -149,25 +149,59 @@ ok "Permissions set"
 
 # ── Restart services ─────────────────────────────────────────────
 
+restart_service() {
+    local service=$1
+    local display_name=$2
+
+    info "Restarting $display_name ($service)..."
+
+    # Attempt restart (don't exit on failure due to set -e)
+    if sudo systemctl restart "$service" 2>&1; then
+        # Verify service is actually running
+        sleep 1  # Give service a moment to start
+        if sudo systemctl is-active --quiet "$service"; then
+            ok "$display_name restarted and running"
+            return 0
+        else
+            error "$display_name restarted but failed to start!"
+            warn "Check logs: sudo journalctl -u $service -n 50 --no-pager"
+            return 1
+        fi
+    else
+        error "$display_name restart command FAILED"
+        warn "Check status: sudo systemctl status $service"
+        return 1
+    fi
+}
+
+failed_restarts=()
+
 if $restart_gunicorn; then
-    info "Restarting gunicorn (puzzleboss2)..."
-    sudo systemctl restart puzzleboss2
-    ok "Gunicorn restarted"
+    restart_service puzzleboss2 "gunicorn" || failed_restarts+=("puzzleboss2")
 fi
 
 if $restart_apache; then
-    info "Restarting Apache (apache2)..."
-    sudo systemctl restart apache2
-    ok "Apache restarted"
+    restart_service apache2 "Apache" || failed_restarts+=("apache2")
 fi
 
 if $restart_bigjimmy; then
-    info "Restarting BigJimmy (bigjimmybot)..."
-    sudo systemctl restart bigjimmybot
-    ok "BigJimmy restarted"
+    restart_service bigjimmybot "BigJimmy" || failed_restarts+=("bigjimmybot")
 fi
 
 # ── Done ─────────────────────────────────────────────────────────
 
 echo ""
-ok "Deploy complete!"
+
+# Report final status
+if [ ${#failed_restarts[@]} -gt 0 ]; then
+    error "Deploy completed but ${#failed_restarts[@]} service(s) failed to restart:"
+    for service in "${failed_restarts[@]}"; do
+        error "  - $service"
+    done
+    echo ""
+    warn "Code has been deployed but some services may be down!"
+    warn "Investigate failed services immediately."
+    exit 1
+else
+    ok "Deploy complete! All services restarted successfully."
+fi

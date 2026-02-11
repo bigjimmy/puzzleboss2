@@ -16,7 +16,7 @@ Puzzleboss 2000 is a puzzle hunt management system developed by ATTORNEY for mys
 - `pbgooglelib.py` - Google Drive/Sheets integration. Uses service account credentials (`service-account.json`) with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Supports hybrid metadata approach for sheet activity tracking.
 - `pbdiscordlib.py` - Discord integration via socket connection to puzzcord daemon. Creates channels, announces solves/rounds.
 - `pbllmlib.py` - LLM-powered natural language queries via Google Gemini. Includes function calling for hunt data and RAG support for wiki content via ChromaDB.
-- `bigjimmybot.py` - Multi-threaded bot that polls Google Sheets for activity and updates puzzle metadata (sheetcount, lastsheetact). Uses hybrid approach: legacy Revisions API for old sheets, DeveloperMetadata API for sheets with `sheetenabled=1`.
+- `bigjimmybot.py` - Multi-threaded bot that polls Google Sheets for activity and updates puzzle metadata (sheetcount, lastsheetact). Uses hybrid approach: reads hidden `_pb_activity` sheet for sheets with add-on, falls back to legacy Revisions API for old sheets.
 
 **Frontend (PHP + JavaScript)**
 - `www/puzzlebosslib.php` - Shared PHP library for API calls (`readapi`, `postapi`, `deleteapi`), authentication via `REMOTE_USER` header, and error handling.
@@ -28,15 +28,15 @@ Puzzleboss 2000 is a puzzle hunt management system developed by ATTORNEY for mys
 - Schema defined in `scripts/puzzleboss.sql`
 - Key tables: `puzzle`, `round`, `solver`, `activity`, `tag`, `puzzle_tag`, `config`, `botstats`, `newuser`, `privs`
 - `config` table stores runtime configuration that can be modified via admin UI
-- `puzzle.sheetenabled` column indicates if sheet has DeveloperMetadata enabled (hybrid approach)
+- `puzzle.sheetenabled` column indicates if sheet has add-on deployed (hybrid approach)
 
 ### Key Integration Points
 
 **Google Sheets Activity Tracking (Hybrid Approach)**
 - Old approach: `get_puzzle_sheet_info_legacy()` in pbgooglelib.py uses Revisions API (quota-heavy)
-- New approach: `get_puzzle_sheet_info()` uses DeveloperMetadata API (quota-light)
+- New approach: `get_puzzle_sheet_info_activity()` reads hidden `_pb_activity` sheet (quota-light)
 - bigjimmybot.py checks `puzzle.sheetenabled` column to decide which method to use
-- When DeveloperMetadata is detected on a sheet with `sheetenabled=0`, bigjimmybot automatically enables it via POST to `/puzzles/{id}/sheetenabled`
+- Sheets with Apps Script add-on deployed automatically write activity to hidden `_pb_activity` sheet
 
 **Configuration System**
 - Static config: `puzzleboss.yaml` (database credentials, API endpoints, feature flags)
@@ -152,32 +152,33 @@ php -S localhost:8080
 
 ## Testing
 
+**IMPORTANT:** All test suites should be run inside the Docker container to ensure consistent dependencies (PyYAML, Playwright, etc.) and clean database state. Local test runs may fail due to missing dependencies or leftover test data.
+
 **API Integration Tests**
 ```bash
-# Comprehensive test suite covering all endpoints
-python scripts/test_api_coverage.py
+# Run comprehensive test suite covering all endpoints (ALWAYS USE DOCKER)
+docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive
+
+# Run specific API tests by number
+docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive --tests 1 5 10
+
+# List available API tests
+docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --list
 
 # Test solver assignment logic
-python scripts/test_solver_assignments.py
-```
-
-**Load Testing**
-```bash
-# Configure test parameters
-cp scripts/loadtest_config-EXAMPLE.yaml scripts/loadtest_config.yaml
-
-# Run load tests
-python scripts/loadtest.py
+docker exec puzzleboss-app python /app/scripts/test_solver_assignments.py
 ```
 
 **UI Tests (Playwright)**
-- Playwright and its browser dependencies are installed **inside the Docker container only**. Always run Playwright tests via `docker exec`, never from the host.
 ```bash
-# Run all comprehensive UI tests
-docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py
+# Run all comprehensive UI tests (ALWAYS USE DOCKER)
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive
 
-# Run a specific test by number
-docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py 25
+# Run specific UI tests by number
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive --tests 1 5 10
+
+# List available UI tests
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --list
 
 # Run ad-hoc Playwright scripts
 docker exec puzzleboss-app python -c "
@@ -189,6 +190,15 @@ with sync_playwright() as p:
     print(page.title())
     browser.close()
 "
+```
+
+**Load Testing**
+```bash
+# Configure test parameters
+cp scripts/loadtest_config-EXAMPLE.yaml scripts/loadtest_config.yaml
+
+# Run load tests (can run locally or in Docker)
+python scripts/loadtest.py
 ```
 
 ## Common Operations

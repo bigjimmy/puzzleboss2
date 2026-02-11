@@ -1673,7 +1673,9 @@ def test_config_page():
 
         # Known hidden keys (deprecated, intentionally not shown)
         hidden_keys = {'SLACK_EMAIL_WEBHOOK', 'LDAP_ADMINDN', 'LDAP_ADMINPW',
-                       'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0'}
+                       'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0',
+                       'SHEETS_ADDON_REFRESH_HEADERS', 'SHEETS_ADDON_COOKIES',
+                       'SHEETS_ADDON_INVOKE_PARAMS'}
 
         missing_from_page = api_keys - rendered_keys - hidden_keys
         extra_on_page = rendered_keys - api_keys

@@ -3,10 +3,12 @@
 Test whether the Apps Script API works with our DWD service account.
 
 Tests:
-1. Create a temp spreadsheet via Sheets API
-2. projects.create — create a container-bound script on it
-3. projects.updateContent — push a simple onEdit trigger
-4. Verify by reading back the project
+0. Create a temp spreadsheet via Sheets API
+1. projects.create — create a container-bound script on it
+2. projects.updateContent — push a simple onEdit trigger
+3. Verify by reading back the project
+4. Pre-create _pb_activity sheet, hide it, add warning protection
+5. Share with domain users (writer access)
 
 Run in Docker:
   docker exec puzzleboss-app python3 /app/scripts/test_apps_script_api.py
@@ -90,13 +92,19 @@ print("=" * 60)
 print("Step 2: projects.updateContent (push simple onEdit trigger)")
 print("=" * 60)
 
-# Simple onEdit trigger that writes activity to a hidden sheet.
+# Simple onEdit trigger that writes activity to a pre-created hidden sheet.
 # Simple triggers need NO authorization — they fire automatically.
+# The _pb_activity sheet is pre-created, hidden, and warning-protected
+# by the service account via the Sheets API (see Step 4).
 apps_script_code = r"""
 /**
  * PB Activity Tracker — simple onEdit trigger.
- * Writes editor activity to a hidden '_pb_activity' sheet.
+ * Writes editor activity to a '_pb_activity' sheet.
  * No authorization required (runs as simple trigger).
+ *
+ * The _pb_activity sheet is pre-created, hidden, and warning-protected
+ * by the Puzzleboss service account. If somehow missing, the trigger
+ * will create it (but it won't be hidden in that case).
  */
 
 var ACTIVITY_SHEET_NAME = '_pb_activity';
@@ -104,16 +112,17 @@ var ACTIVITY_SHEET_NAME = '_pb_activity';
 /**
  * Simple trigger — fires on every manual edit.
  * Records the editor's email and Unix timestamp.
+ * One row per editor, updated in place on subsequent edits.
  */
 function onEdit(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var actSheet = ss.getSheetByName(ACTIVITY_SHEET_NAME);
 
-    // Create the activity sheet if it doesn't exist
+    // Fallback: create the sheet if it doesn't exist (shouldn't happen
+    // in normal flow — the service account pre-creates it)
     if (!actSheet) {
       actSheet = ss.insertSheet(ACTIVITY_SHEET_NAME);
-      actSheet.hideSheet();
       actSheet.getRange('A1').setValue('editor');
       actSheet.getRange('B1').setValue('timestamp');
       actSheet.getRange('C1').setValue('num_sheets');
@@ -133,13 +142,14 @@ function onEdit(e) {
     }
 
     var now = Math.floor(Date.now() / 1000);
-    var numSheets = ss.getSheets().length;
+    // Count sheets, excluding the activity sheet itself
+    var numSheets = ss.getSheets().length - 1;
 
-    // Update or insert editor row
+    // Update or insert editor row (use toString for safe comparison)
     var data = actSheet.getDataRange().getValues();
     var found = false;
     for (var i = 1; i < data.length; i++) {
-      if (data[i][0] === editor) {
+      if (String(data[i][0]).trim() === String(editor).trim()) {
         actSheet.getRange(i + 1, 2).setValue(now);
         actSheet.getRange(i + 1, 3).setValue(numSheets);
         found = true;
@@ -220,6 +230,103 @@ try:
 except Exception as e:
     print(f"  ❌ FAILED: {type(e).__name__}: {e}")
 
+# ── Step 4: Pre-create _pb_activity sheet, hide it, protect it ─────
+print()
+print("=" * 60)
+print("Step 4: Pre-create _pb_activity sheet (hidden + warning-protected)")
+print("=" * 60)
+
+ACTIVITY_SHEET_NAME = "_pb_activity"
+
+try:
+    # 4a: Add the _pb_activity sheet with headers, hide it, and protect it
+    #     all in a single batchUpdate call.
+    batch_requests = [
+        # Add the _pb_activity sheet (hidden from the start)
+        {
+            "addSheet": {
+                "properties": {
+                    "title": ACTIVITY_SHEET_NAME,
+                    "hidden": True,
+                }
+            }
+        },
+    ]
+
+    # Execute addSheet first to get the new sheet's ID
+    add_result = sheets_service.spreadsheets().batchUpdate(
+        spreadsheetId=sheet_id,
+        body={"requests": batch_requests}
+    ).execute()
+
+    # Extract the new sheet's numeric ID from the response
+    activity_sheet_id = add_result["replies"][0]["addSheet"]["properties"]["sheetId"]
+    print(f"  ✅ Created hidden sheet '{ACTIVITY_SHEET_NAME}' (sheetId={activity_sheet_id})")
+
+    # 4b: Write headers to the activity sheet
+    sheets_service.spreadsheets().values().update(
+        spreadsheetId=sheet_id,
+        range=f"{ACTIVITY_SHEET_NAME}!A1:C1",
+        valueInputOption="RAW",
+        body={"values": [["editor", "timestamp", "num_sheets"]]}
+    ).execute()
+    print(f"  ✅ Wrote headers to '{ACTIVITY_SHEET_NAME}'")
+
+    # 4c: Add warning-only protection to the activity sheet.
+    #     warningOnly=true means:
+    #       - Users see a "this is protected" warning if they try to manually edit
+    #       - The simple onEdit trigger can still write (warnings don't block scripts)
+    #       - The service account can still read via the Sheets API
+    protect_result = sheets_service.spreadsheets().batchUpdate(
+        spreadsheetId=sheet_id,
+        body={
+            "requests": [
+                {
+                    "addProtectedRange": {
+                        "protectedRange": {
+                            "range": {"sheetId": activity_sheet_id},
+                            "description": "Managed by Puzzleboss — do not edit manually.",
+                            "warningOnly": True,
+                        }
+                    }
+                }
+            ]
+        }
+    ).execute()
+    print(f"  ✅ Added warning-only protection to '{ACTIVITY_SHEET_NAME}'")
+    print(f"     (Users see a warning dialog if they try to edit manually)")
+
+except Exception as e:
+    print(f"  ❌ FAILED: {type(e).__name__}: {e}")
+    if hasattr(e, "content"):
+        print(f"  Response: {e.content.decode('utf-8', errors='replace')[:500]}")
+
+# ── Step 5: Share with domain users ───────────────────────────────
+print()
+print("=" * 60)
+print("Step 5: Share spreadsheet with domain users (writer access)")
+print("=" * 60)
+
+try:
+    drive_service = build("drive", "v3", credentials=creds)
+    domain = SUBJECT.split("@")[1]
+
+    drive_service.permissions().create(
+        fileId=sheet_id,
+        body={
+            "type": "domain",
+            "role": "writer",
+            "domain": domain,
+        },
+        sendNotificationEmail=False,
+    ).execute()
+    print(f"  ✅ Shared with domain '{domain}' as writer")
+
+except Exception as e:
+    print(f"  ❌ FAILED: {type(e).__name__}: {e}")
+    if hasattr(e, "content"):
+        print(f"  Response: {e.content.decode('utf-8', errors='replace')[:500]}")
+
 # ── Summary ────────────────────────────────────────────────────────
 print()
 print("=" * 60)
@@ -228,15 +335,17 @@ print("=" * 60)
 print(f"  Sheet: https://docs.google.com/spreadsheets/d/{sheet_id}/edit")
 print(f"  Script ID: {script_id}")
 print()
+print("  Setup complete! The sheet has:")
+print("  - A container-bound Apps Script with a simple onEdit trigger")
+print(f"  - A hidden '{ACTIVITY_SHEET_NAME}' sheet with warning-only protection")
+print(f"  - Writer access for all users in the '{SUBJECT.split('@')[1]}' domain")
+print()
 print("  To test the simple trigger:")
 print("  1. Open the sheet URL above in your browser")
 print("  2. Edit any cell (type something and press Enter)")
-print("  3. Check for the hidden '_pb_activity' sheet:")
-print("     - Right-click any sheet tab → 'Show hidden sheets'")
-print("     - Or check via the Sheets API (see below)")
+print("  3. Check '_pb_activity' via the Sheets API (it's hidden from the UI):")
 print()
-print("  To check '_pb_activity' via Sheets API, run:")
-print(f"  docker exec puzzleboss-app python3 -c \"")
+print(f"  python3 -c \"")
 print(f"from googleapiclient.discovery import build")
 print(f"from google.oauth2 import service_account")
 print(f"from google.auth.transport.requests import Request")
@@ -246,11 +355,11 @@ print(f"    subject='{SUBJECT}')")
 print(f"c.refresh(Request())")
 print(f"s = build('sheets', 'v4', credentials=c)")
 print(f"r = s.spreadsheets().values().get(spreadsheetId='{sheet_id}',")
-print(f"    range='_pb_activity!A:C').execute()")
+print(f"    range='{ACTIVITY_SHEET_NAME}!A:C').execute()")
 print(f"print(r.get('values', []))\"")
 print()
 print("  To clean up (delete the test sheet):")
-print(f"  docker exec puzzleboss-app python3 -c \"")
+print(f"  python3 -c \"")
 print(f"from googleapiclient.discovery import build")
 print(f"from google.oauth2 import service_account")
 print(f"from google.auth.transport.requests import Request")
