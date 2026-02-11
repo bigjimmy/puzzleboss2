@@ -2,6 +2,9 @@ import os.path
 import sys
 import time
 import threading
+import urllib.request
+import urllib.parse
+import urllib.error
 import googleapiclient
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
@@ -891,6 +894,215 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         sys.exit(255)
 
     return sheet_file.get("id")
+
+
+def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
+    """
+    Activate the PB tracking add-on on a puzzle sheet by invoking its
+    populateMenus function via the Google Sheets internal scripts/invoke
+    endpoint. This replicates the activation previously done by puzzcord.
+
+    Requires SHEETS_ADDON_COOKIES (JSON object) and SHEETS_ADDON_INVOKE_PARAMS
+    (JSON object) to be set in the config table.
+
+    Returns True on success, False on failure. Failures are non-fatal;
+    bigjimmybot will fall back to the legacy Revisions API for tracking.
+
+    Args:
+        sheet_id: Google Sheets file ID (drive_id)
+        puzzlename: Optional puzzle name for logging
+    """
+    puzz_label = puzzlename if puzzlename else sheet_id
+    debug_log(4, "activate_puzzle_sheet_extension start for %s (sheet_id: %s)"
+              % (puzz_label, sheet_id))
+
+    if configstruct.get("SKIP_GOOGLE_API") == "true":
+        debug_log(3, "[%s] Skipping extension activation (SKIP_GOOGLE_API)" % puzz_label)
+        return False
+
+    # Load add-on config from the config table
+    cookies_json = configstruct.get("SHEETS_ADDON_COOKIES", "")
+    invoke_params_json = configstruct.get("SHEETS_ADDON_INVOKE_PARAMS", "")
+
+    if not cookies_json or not invoke_params_json:
+        debug_log(3, "[%s] Skipping extension activation (SHEETS_ADDON config not set)"
+                  % puzz_label)
+        return False
+
+    try:
+        cookies = json.loads(cookies_json)
+        invoke_params = json.loads(invoke_params_json)
+    except json.JSONDecodeError as e:
+        debug_log(1, "[%s] Error parsing SHEETS_ADDON config: %s" % (puzz_label, e))
+        return False
+
+    sid = invoke_params.get("sid", "")
+    token = invoke_params.get("token", "")
+    rest = invoke_params.get("_rest", "")
+
+    if not sid or not token:
+        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing sid or token" % puzz_label)
+        return False
+
+    # Build the invoke URL
+    url = (
+        f"https://docs.google.com/spreadsheets/u/0/d/{sheet_id}/scripts/invoke"
+        f"?id={sheet_id}&sid={sid}&token={token}{rest}"
+    )
+
+    # Build cookie header from the cookies dict
+    cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+
+    # Build request headers
+    headers = {
+        "Cookie": cookie_str,
+        "x-same-domain": "1",
+        "Content-Length": "0",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+    }
+
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+
+    for attempt in range(max_retries):
+        try:
+            req = urllib.request.Request(url, data=b"", headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=30) as response:
+                status = response.status
+                text = response.read().decode("utf-8", errors="replace")
+                # Response typically has a leading line to skip
+                text = "\n".join(text.split("\n")[1:]).strip()
+
+            debug_log(3, "[%s] Extension activated (status=%d, response=%s)"
+                      % (puzz_label, status, text[:200]))
+            return True
+
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                debug_log(1, "[%s] Extension activation auth failed (401) — "
+                          "SHEETS_ADDON_COOKIES may need refreshing" % puzz_label)
+                return False
+            elif e.code == 429:
+                debug_log(3, "[%s] Rate limit on extension activation, waiting %ds "
+                          "(attempt %d/%d)" % (puzz_label, retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Extension activation HTTP error %d: %s"
+                          % (puzz_label, e.code, e.reason))
+                return False
+        except Exception as e:
+            debug_log(1, "[%s] Extension activation error: %s" % (puzz_label, e))
+            return False
+
+    debug_log(1, "[%s] EXHAUSTED all %d retries activating extension"
+              % (puzz_label, max_retries))
+    return False
+
+
+def rotate_addon_cookies(api_uri):
+    """
+    Rotate the __Secure-1PSIDTS cookie by calling Google's RotateCookies
+    endpoint. If a new value is returned, update both the in-memory config
+    and the database via the API so it persists across restarts.
+
+    This replicates the rotation previously done by puzzcord's
+    rotate_1psidts task.
+
+    Args:
+        api_uri: The base URI for the puzzleboss REST API (e.g. http://localhost:5000)
+
+    Returns:
+        True if the cookie was rotated, False if unchanged or on error.
+    """
+    if configstruct.get("SKIP_GOOGLE_API") == "true":
+        return False
+
+    cookies_json = configstruct.get("SHEETS_ADDON_COOKIES", "")
+    if not cookies_json:
+        return False
+
+    try:
+        cookies = json.loads(cookies_json)
+    except json.JSONDecodeError as e:
+        debug_log(1, "rotate_addon_cookies: Error parsing SHEETS_ADDON_COOKIES: %s" % e)
+        return False
+
+    old_1psidts = cookies.get("__Secure-1PSIDTS", "")
+    if not old_1psidts:
+        debug_log(3, "rotate_addon_cookies: No __Secure-1PSIDTS in cookies, skipping")
+        return False
+
+    # Build cookie header from the cookies dict
+    cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+
+    # Load optional refresh headers from config
+    refresh_headers = {}
+    refresh_headers_json = configstruct.get("SHEETS_ADDON_REFRESH_HEADERS", "")
+    if refresh_headers_json:
+        try:
+            refresh_headers = json.loads(refresh_headers_json)
+        except json.JSONDecodeError:
+            pass
+
+    headers = {**refresh_headers, "Cookie": cookie_str}
+
+    try:
+        data = b'[283,"1575614563079730632"]'
+        req = urllib.request.Request(
+            "https://accounts.google.com/RotateCookies",
+            data=data,
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as response:
+            # Extract __Secure-1PSIDTS from Set-Cookie headers
+            new_1psidts = None
+            for header in response.headers.get_all("Set-Cookie") or []:
+                if header.startswith("__Secure-1PSIDTS="):
+                    # Parse "name=value; ..." format
+                    new_1psidts = header.split("=", 1)[1].split(";")[0]
+                    break
+
+            if not new_1psidts:
+                debug_log(5, "rotate_addon_cookies: No __Secure-1PSIDTS in response")
+                return False
+
+            if new_1psidts == old_1psidts:
+                debug_log(5, "rotate_addon_cookies: __Secure-1PSIDTS unchanged")
+                return False
+
+            # Update in-memory cookie dict and persist to DB
+            cookies["__Secure-1PSIDTS"] = new_1psidts
+            new_cookies_json = json.dumps(cookies)
+
+            # Update in-memory config immediately
+            configstruct["SHEETS_ADDON_COOKIES"] = new_cookies_json
+
+            # Persist to database via API
+            import requests as req_lib
+            resp = req_lib.post(
+                f"{api_uri}/config",
+                json={"cfgkey": "SHEETS_ADDON_COOKIES", "cfgval": new_cookies_json},
+            )
+            if resp.status_code == 200:
+                debug_log(3, "rotate_addon_cookies: Rotated __Secure-1PSIDTS and saved to DB")
+            else:
+                debug_log(1, "rotate_addon_cookies: Rotated cookie but failed to save to DB: %s"
+                          % resp.text)
+
+            return True
+
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            debug_log(1, "rotate_addon_cookies: Auth lost (401) — cookies need manual refresh")
+        elif e.code == 429:
+            debug_log(3, "rotate_addon_cookies: Rate limited (429), will retry next loop")
+        else:
+            debug_log(1, "rotate_addon_cookies: HTTP error %d: %s" % (e.code, e.reason))
+        return False
+    except Exception as e:
+        debug_log(1, "rotate_addon_cookies: Error: %s" % e)
+        return False
 
 
 def _color_palette_cell_value():

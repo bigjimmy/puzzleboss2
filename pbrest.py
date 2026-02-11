@@ -1324,6 +1324,12 @@ def create_puzzle():
     )
     drive_uri = f"https://docs.google.com/spreadsheets/d/{drive_id}/edit#gid=1"
 
+    # Activate the PB tracking add-on (non-fatal)
+    try:
+        activate_puzzle_sheet_extension(drive_id, name)
+    except Exception as ae:
+        debug_log(2, f"Extension activation failed for {name}, bigjimmy will fall back: {ae}")
+
     # Actually insert into the database
     try:
         conn, cursor = _cursor()
@@ -1632,12 +1638,26 @@ def finish_puzzle_creation(code):
 
             debug_log(3, f"Step 3: Created Google Sheet for {name}")
 
+            # Activate the PB tracking add-on (non-fatal if it fails;
+            # bigjimmybot will fall back to the legacy Revisions API)
+            addon_activated = False
+            try:
+                addon_activated = activate_puzzle_sheet_extension(drive_id, name)
+            except Exception as ae:
+                debug_log(2, f"Step 3: Extension activation failed for {name}, "
+                          f"bigjimmy will fall back: {ae}")
+
+            msg = f"Created Google Sheet for {name}"
+            if addon_activated:
+                msg += " (add-on activated)"
+
             return {
                 "status": "ok",
                 "step": 3,
-                "message": f"Created Google Sheet for {name}",
+                "message": msg,
                 "drive_id": drive_id,
-                "drive_uri": drive_uri
+                "drive_uri": drive_uri,
+                "addon_activated": addon_activated
             }
         except Exception as e:
             debug_log(1, f"Step 3 error: {e}")
@@ -1752,6 +1772,70 @@ def finish_puzzle_creation(code):
 
     else:
         return {"status": "error", "error": f"Invalid step: {step}. Must be 1-5"}, 400
+
+
+@app.route("/puzzles/activate_all", endpoint="post_activate_all", methods=["POST"])
+def activate_all_sheets():
+    """
+    Batch-activate the PB tracking add-on on all unsolved puzzles where
+    sheetenabled=0. Equivalent to the former puzzcord !activate_all command.
+    """
+    debug_log(3, "activate_all_sheets called")
+
+    maybe_refresh_config()
+
+    try:
+        conn, cursor = _cursor()
+        cursor.execute(
+            """
+            SELECT id, name, drive_id FROM puzzle
+            WHERE sheetenabled = 0
+              AND status <> 'Solved'
+              AND drive_id IS NOT NULL
+              AND drive_id <> ''
+            """
+        )
+        puzzles = cursor.fetchall()
+    except Exception as e:
+        debug_log(1, f"activate_all_sheets error: {e}")
+        return {"status": "error", "error": f"Database error: {e}"}, 500
+
+    if not puzzles:
+        return {
+            "status": "ok",
+            "message": "No puzzles need activation",
+            "activated": 0,
+            "failed": 0
+        }
+
+    activated = 0
+    failed = 0
+    results = []
+
+    for puzzle in puzzles:
+        try:
+            success = activate_puzzle_sheet_extension(puzzle["drive_id"], puzzle["name"])
+            if success:
+                activated += 1
+                results.append({"name": puzzle["name"], "status": "activated"})
+            else:
+                failed += 1
+                results.append({"name": puzzle["name"], "status": "failed"})
+        except Exception as e:
+            failed += 1
+            results.append({"name": puzzle["name"], "status": "error", "error": str(e)})
+            debug_log(2, f"activate_all: error activating {puzzle['name']}: {e}")
+
+    debug_log(3, f"activate_all_sheets: {activated} activated, {failed} failed "
+              f"out of {len(puzzles)} total")
+
+    return {
+        "status": "ok",
+        "message": f"Activated {activated}/{len(puzzles)} sheets",
+        "activated": activated,
+        "failed": failed,
+        "results": results
+    }
 
 
 @app.route("/rounds", endpoint="post_rounds", methods=["POST"])

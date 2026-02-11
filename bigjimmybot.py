@@ -550,6 +550,12 @@ if __name__ == "__main__":
         except Exception as e:
             debug_log(1, "Error refreshing config: %s" % e)
 
+        # Rotate __Secure-1PSIDTS cookie for add-on activation (non-fatal)
+        try:
+            rotate_addon_cookies(config["API"]["APIURI"])
+        except Exception as e:
+            debug_log(2, "Error rotating addon cookies: %s" % e)
+
         # Increment and post loop iteration counter early (before SKIP_GOOGLE_API check)
         # This ensures the counter increments even when Google API is disabled
         loop_iterations_total += 1
