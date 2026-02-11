@@ -161,223 +161,6 @@ def initdrive():
     return 0
 
 
-def get_puzzle_sheet_info(myfileid, puzzlename=None):
-    """
-    Get editor activity metadata and sheet count for a puzzle spreadsheet.
-    Returns dict with 'editors' (list of {solvername, timestamp}) and 'sheetcount' (int or None).
-
-    All data is read from DeveloperMetadata in a single API call:
-    - PB_ACTIVITY:<solvername> keys with values like '{"t": 1766277287}' (Unix timestamp)
-    - PB_SPREADSHEET key with the sheet count value
-
-    THREAD SAFE.
-    Includes retry logic for rate limit (429) errors.
-
-    Args:
-        myfileid: Google Sheets file ID
-        puzzlename: Optional puzzle name for logging
-    """
-    puzz_label = puzzlename if puzzlename else myfileid
-    debug_log(5, "start for puzzle %s (fileid: %s)" % (puzz_label, myfileid))
-
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
-
-    result = {"editors": [], "sheetcount": None}
-
-    if configstruct["SKIP_GOOGLE_API"] == "true":
-        debug_log(3, "google API skipped by config.")
-        return result
-
-    # Create single threadsafe HTTP object for API calls
-    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
-
-    # Get all metadata (editor activity + sheet count) in a single API call
-    for attempt in range(max_retries):
-        try:
-            sheetsservice = build("sheets", "v4", credentials=creds)
-
-            # Search for all spreadsheet-level metadata
-            search_request = {
-                "dataFilters": [
-                    {"developerMetadataLookup": {"locationType": "SPREADSHEET"}}
-                ]
-            }
-
-            response = (
-                sheetsservice.spreadsheets()
-                .developerMetadata()
-                .search(spreadsheetId=myfileid, body=search_request)
-                .execute(http=threadsafe_http)
-            )
-
-            matched_metadata = response.get("matchedDeveloperMetadata", [])
-            debug_log(
-                4,
-                "[%s] DeveloperMetadata search returned %d items"
-                % (puzz_label, len(matched_metadata)),
-            )
-
-            for item in matched_metadata:
-                metadata = item.get("developerMetadata", {})
-                key = metadata.get("metadataKey", "")
-                value = metadata.get("metadataValue", "")
-                debug_log(
-                    4, "[%s] Metadata: key=%s value=%s" % (puzz_label, key, value)
-                )
-
-                # Look for PB_ACTIVITY:<solvername> keys
-                if key.startswith("PB_ACTIVITY:"):
-                    solvername = key[len("PB_ACTIVITY:") :]
-                    try:
-                        value_data = json.loads(value)
-                        timestamp = value_data.get("t")
-                        if timestamp:
-                            result["editors"].append(
-                                {
-                                    "solvername": solvername,
-                                    "timestamp": timestamp,  # Unix timestamp
-                                }
-                            )
-                            debug_log(
-                                4,
-                                "[%s] Parsed editor activity: solver=%s timestamp=%s"
-                                % (puzz_label, solvername, timestamp),
-                            )
-                    except json.JSONDecodeError as e:
-                        debug_log(
-                            2,
-                            "[%s] Failed to parse metadata value for %s: %s"
-                            % (puzz_label, key, e),
-                        )
-
-                # Look for PB_SPREADSHEET key for sheet count (value is JSON like {"num_sheets": 5})
-                elif key == "PB_SPREADSHEET":
-                    try:
-                        value_data = json.loads(value)
-                        result["sheetcount"] = int(value_data.get("num_sheets", 0))
-                        debug_log(
-                            4,
-                            "[%s] Sheet count from metadata: %s"
-                            % (puzz_label, result["sheetcount"]),
-                        )
-                    except (json.JSONDecodeError, ValueError, TypeError) as e:
-                        debug_log(
-                            2,
-                            "[%s] Failed to parse sheet count from PB_SPREADSHEET: %s"
-                            % (puzz_label, e),
-                        )
-
-            debug_log(
-                5,
-                "[%s] Found %d editors with activity, sheetcount=%s"
-                % (puzz_label, len(result["editors"]), result["sheetcount"]),
-            )
-            break  # Success, exit retry loop
-
-        except Exception as e:
-            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
-                _increment_quota_failure()
-                debug_log(
-                    3,
-                    "[%s] Rate limit hit fetching metadata, waiting %d seconds (attempt %d/%d)"
-                    % (puzz_label, retry_delay, attempt + 1, max_retries),
-                )
-                time.sleep(retry_delay)
-            else:
-                debug_log(1, "[%s] Error fetching metadata: %s" % (puzz_label, e))
-                break  # Non-rate-limit error, don't retry
-    else:
-        # Only reached if we exhausted all retries without breaking
-        if max_retries > 0:
-            debug_log(
-                1,
-                "[%s] EXHAUSTED all %d retries fetching metadata - giving up"
-                % (puzz_label, max_retries),
-            )
-
-    return result
-
-
-def check_developer_metadata_exists(myfileid, puzzlename=None):
-    """
-    Quick check to see if PuzzleBoss developer metadata exists on a sheet.
-    Returns True if PB_ACTIVITY or PB_SPREADSHEET metadata is found, False otherwise.
-
-    This is used to determine if the Chrome extension has been enabled for this sheet.
-
-    THREAD SAFE.
-    """
-    puzz_label = puzzlename if puzzlename else myfileid
-    debug_log(
-        5,
-        "Checking developer metadata existence for %s (fileid: %s)"
-        % (puzz_label, myfileid),
-    )
-
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
-
-    if configstruct["SKIP_GOOGLE_API"] == "true":
-        debug_log(3, "google API skipped by config.")
-        return False
-
-    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
-
-    for attempt in range(max_retries):
-        try:
-            sheetsservice = build("sheets", "v4", credentials=creds)
-
-            # Search for spreadsheet-level metadata
-            search_request = {
-                "dataFilters": [
-                    {"developerMetadataLookup": {"locationType": "SPREADSHEET"}}
-                ]
-            }
-
-            response = (
-                sheetsservice.spreadsheets()
-                .developerMetadata()
-                .search(spreadsheetId=myfileid, body=search_request)
-                .execute(http=threadsafe_http)
-            )
-
-            matched_metadata = response.get("matchedDeveloperMetadata", [])
-
-            # Check if any PB_ keys exist
-            for item in matched_metadata:
-                metadata = item.get("developerMetadata", {})
-                key = metadata.get("metadataKey", "")
-                if key.startswith("PB_ACTIVITY:") or key == "PB_SPREADSHEET":
-                    debug_log(
-                        4, "[%s] Developer metadata found (key: %s)" % (puzz_label, key)
-                    )
-                    return True
-
-            debug_log(4, "[%s] No PuzzleBoss developer metadata found" % puzz_label)
-            return False
-
-        except Exception as e:
-            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
-                _increment_quota_failure()
-                debug_log(
-                    3,
-                    "[%s] Rate limit hit checking metadata, waiting %d seconds (attempt %d/%d)"
-                    % (puzz_label, retry_delay, attempt + 1, max_retries),
-                )
-                time.sleep(retry_delay)
-            else:
-                debug_log(
-                    1, "[%s] Error checking metadata existence: %s" % (puzz_label, e)
-                )
-                return False
-
-    debug_log(
-        1,
-        "[%s] EXHAUSTED all %d retries checking metadata - giving up"
-        % (puzz_label, max_retries),
-    )
-    return False
 
 
 def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
@@ -388,9 +171,6 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
     This is the Apps Script API approach: a simple onEdit trigger writes editor
     email, unix timestamp, and sheet count to a pre-created hidden sheet named
     '_pb_activity'. This function reads that data via the Sheets values API.
-
-    The return format matches get_puzzle_sheet_info() so bigjimmybot can use
-    either function interchangeably.
 
     Email-to-username conversion: strips the @domain portion from the email
     address to produce the puzzleboss username (e.g. 'alice@example.org' → 'alice').
@@ -1046,11 +826,10 @@ def create_puzzle_sheet(parentfolder, puzzledict):
 # hidden '_pb_activity' sheet. It's pushed to each puzzle sheet when
 # activate_puzzle_sheet_via_api() is called with no custom code configured.
 #
-# Why hidden sheet instead of DeveloperMetadata?
-# Simple triggers can write to sheets without authorization, but
-# DeveloperMetadata operations require authorized access. The hidden
-# sheet approach allows activity tracking to work without any user
-# authorization prompts.
+# Why use a hidden sheet for tracking?
+# Simple triggers can write to sheets without requiring user authorization.
+# The hidden sheet approach allows activity tracking to work immediately
+# without any user authorization prompts.
 _APPS_SCRIPT_ONEDIT_CODE = r"""
 /**
  * PB Activity Tracker — simple onEdit trigger.
@@ -1268,8 +1047,6 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
         return False
 
     # ── Step 3: Pre-create _pb_activity sheet (hidden + protected) ─
-    # Only needed for the default tracker (not the full puzzle tools).
-    # The full puzzle tools use DeveloperMetadata and don't need this sheet.
     try:
         sheets_service = build("sheets", "v4", credentials=api_creds)
 

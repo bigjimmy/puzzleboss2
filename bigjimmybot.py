@@ -54,60 +54,25 @@ def check_puzzle_from_queue(threadname, q):
 
             # HYBRID APPROACH: Check sheetenabled to determine which method to use
             sheetenabled = mypuzzle.get("sheetenabled", 0)
-            use_developer_metadata = False
-
-            if sheetenabled == 1:
-                # Sheet has developer metadata enabled, use the new approach
-                debug_log(
-                    4,
-                    "[Thread: %s] Using developer metadata for %s (sheetenabled=1)"
-                    % (threadname, mypuzzle["name"]),
-                )
-                use_developer_metadata = True
-            else:
-                # Check if developer metadata has been populated yet
-                debug_log(
-                    4,
-                    "[Thread: %s] Checking for developer metadata on %s (sheetenabled=0)"
-                    % (threadname, mypuzzle["name"]),
-                )
-                if check_developer_metadata_exists(
-                    mypuzzle["drive_id"], mypuzzle["name"]
-                ):
-                    # Developer metadata found! Enable sheetenabled and skip this cycle
-                    debug_log(
-                        3,
-                        "[Thread: %s] Developer metadata found on %s, enabling sheetenabled"
-                        % (threadname, mypuzzle["name"]),
-                    )
-                    try:
-                        requests.post(
-                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetenabled",
-                            json={"sheetenabled": 1},
-                        )
-                    except Exception as e:
-                        debug_log(
-                            1,
-                            "[Thread: %s] Error enabling sheetenabled: %s"
-                            % (threadname, e),
-                        )
-                    # Skip to next puzzle - will be processed with developer metadata on next loop
-                    continue
-                else:
-                    # No developer metadata, use legacy approach
-                    debug_log(
-                        4,
-                        "[Thread: %s] No developer metadata on %s, using legacy Revisions API"
-                        % (threadname, mypuzzle["name"]),
-                    )
-                    use_developer_metadata = False
 
             # Get sheet info using appropriate method
-            if use_developer_metadata:
-                sheet_info = get_puzzle_sheet_info(
+            if sheetenabled == 1:
+                # Sheet has add-on enabled, use the hidden sheet approach
+                debug_log(
+                    4,
+                    "[Thread: %s] Using hidden sheet tracking for %s (sheetenabled=1)"
+                    % (threadname, mypuzzle["name"]),
+                )
+                sheet_info = get_puzzle_sheet_info_activity(
                     mypuzzle["drive_id"], mypuzzle["name"]
                 )
             else:
+                # No add-on deployed, use legacy Revisions API
+                debug_log(
+                    4,
+                    "[Thread: %s] No add-on on %s, using legacy Revisions API (sheetenabled=0)"
+                    % (threadname, mypuzzle["name"]),
+                )
                 sheet_info = get_puzzle_sheet_info_legacy(
                     mypuzzle["drive_id"], mypuzzle["name"]
                 )
@@ -175,8 +140,8 @@ def check_puzzle_from_queue(threadname, q):
                 % (mypuzzle["id"], str(mypuzzlelastsheetact)),
             )
 
-            if use_developer_metadata:
-                # DEVELOPER METADATA APPROACH: Compare unix timestamps
+            if sheetenabled == 1:
+                # HIDDEN SHEET APPROACH: Compare unix timestamps
                 lastsheetact_ts = 0
                 if mypuzzlelastsheetact:
                     lastsheetacttime = datetime.datetime.strptime(
@@ -184,7 +149,7 @@ def check_puzzle_from_queue(threadname, q):
                     )
                     lastsheetact_ts = lastsheetacttime.timestamp()
 
-                # Go through all editors from DeveloperMetadata and see if any are newer than lastsheetact
+                # Go through all editors from hidden sheet and see if any are newer than lastsheetact
                 for editor in sheet_info["editors"]:
                     solvername = editor["solvername"]
                     edit_ts = editor["timestamp"]  # Unix timestamp

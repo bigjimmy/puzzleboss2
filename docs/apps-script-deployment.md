@@ -5,8 +5,8 @@
 Puzzleboss deploys a customizable Apps Script add-on to puzzle sheets using the **Google Apps Script API**. This replaces the previous cookie-based `/scripts/invoke` method with a more maintainable, API-driven approach.
 
 The deployed add-on provides:
-- **Activity Tracking**: Records solver activity for bigjimmybot (via hidden sheet or DeveloperMetadata)
-- **Puzzle Tools** (optional): Grid manipulation (symmetry, crossword formatting, hex grids, etc.)
+- **Activity Tracking**: Records solver activity for bigjimmybot via hidden `_pb_activity` sheet
+- **Puzzle Tools**: Grid manipulation (symmetry, crossword formatting, hex grids, tab creation)
 
 ## Architecture
 
@@ -15,17 +15,12 @@ Puzzle Creation Flow:
   addpuzzle.php (UI)  →  pbrest.py  →  pbgooglelib.activate_puzzle_sheet_via_api()
                                         ├── Creates container-bound Apps Script project
                                         ├── Deploys code from APPS_SCRIPT_ADDON_CODE config
-                                        └── (Optional) Creates hidden _pb_activity sheet
+                                        └── Creates hidden _pb_activity sheet
 
-Activity Tracking Flow (Default Minimal Tracker):
+Activity Tracking Flow:
   User edits cell  →  Apps Script onEdit trigger  →  Writes to hidden _pb_activity sheet
                                                       (email, timestamp, num_sheets)
   bigjimmybot.py   →  get_puzzle_sheet_info_activity()  →  Reads via Sheets API
-
-Activity Tracking Flow (Full Puzzle Tools):
-  User edits cell  →  Apps Script onEdit trigger  →  Writes DeveloperMetadata
-                                                      (PB_ACTIVITY:username, PB_SHEET)
-  bigjimmybot.py   →  get_puzzle_sheet_info()  →  Reads via DeveloperMetadata API
 ```
 
 ## Configuration
@@ -37,21 +32,17 @@ Activity Tracking Flow (Full Puzzle Tools):
 | `APPS_SCRIPT_ADDON_CODE` | The Apps Script code to deploy (JavaScript) | Falls back to simple onEdit tracker |
 | `APPS_SCRIPT_ADDON_MANIFEST` | The appsscript.json manifest | Default V8 runtime config |
 
-### Add-on Code Options
+### Add-on Code
 
-**Option 1: Default Minimal Tracker** (if `APPS_SCRIPT_ADDON_CODE` is empty)
-- Simple `onEdit` trigger that writes to hidden `_pb_activity` sheet
-- ~85 lines of JavaScript
-- No UI, no puzzle tools — just activity tracking
-- No user authorization required (simple triggers can write to sheets)
+The add-on code is stored in the `APPS_SCRIPT_ADDON_CODE` database config value:
 
-**Option 2: Full Puzzle Tools** (set `APPS_SCRIPT_ADDON_CODE` to content of `scripts/puzzle_tools_addon_latest.gs`)
-- From **dannybd/sheets-puzzleboss-tools**
-- Puzzle-solving utilities (symmetry, formatting, tab creation, hex grids)
-- DeveloperMetadata-based activity tracking
+**Current Implementation** (based on **dannybd/sheets-puzzleboss-tools**)
+- Puzzle-solving utilities (symmetry, formatting, tab creation, hex grids, delete blank rows)
+- Hidden sheet-based activity tracking (writes to `_pb_activity` sheet)
 - Admin debug tools
 - ~400 lines of JavaScript
-- Requires menu authorization (for DeveloperMetadata operations)
+- No user authorization required (simple triggers can write to sheets)
+- Reference source: `scripts/puzzle_tools_addon_latest.gs`
 
 ## Deployment
 
@@ -167,44 +158,33 @@ script_service.projects().updateContent(
 ```
 
 The code includes:
-- `onInstall(e)`: Runs when the add-on is first bound to the sheet (full tools only)
-- `onOpen(e)`: Creates the "Puzzle Tools" menu (full tools only)
-- `onEdit(e)`: Tracks editor activity (hidden sheet or DeveloperMetadata depending on version)
-- Tool functions: Grid manipulation, formatting, etc. (full tools only)
+- `onInstall(e)`: Runs when the add-on is first bound to the sheet
+- `onOpen(e)`: Creates the "Puzzle Tools" menu
+- `onEdit(e)`: Tracks editor activity by writing to hidden `_pb_activity` sheet
+- Tool functions: Grid manipulation, formatting, tab creation, hex grids, etc.
 
 ### Step 3: Initialize Activity Tracking
 
-**Default Minimal Tracker**: Pre-creates a hidden `_pb_activity` sheet via Sheets API:
+Pre-creates a hidden `_pb_activity` sheet via Sheets API:
 - Hidden from the UI
 - Warning-protected (users see a warning if they try to manually edit)
 - Contains headers: `editor`, `timestamp`, `num_sheets`
-- The `onEdit` trigger writes one row per editor, updated in place
-
-**Full Puzzle Tools**: Uses DeveloperMetadata instead:
-- `updateSpreadsheetStats()` (called from `onOpen`) creates `PB_SPREADSHEET` metadata
-- `onEdit` creates `PB_ACTIVITY:<username>` and `PB_SHEET` metadata
-- No hidden sheet needed
+- The `onEdit` trigger writes one row per editor, updated in place on each edit
 
 ## Monitoring
 
 ### Bigjimmybot Integration
 
-Bigjimmybot automatically selects the appropriate tracking method:
+Bigjimmybot reads activity from the hidden `_pb_activity` sheet:
 
 ```python
-# Three tracking methods available:
-
-# 1. Hidden sheet (default minimal tracker)
+# Read activity from hidden sheet
 info = get_puzzle_sheet_info_activity(sheet_id)
-# Reads from _pb_activity sheet via Sheets values API
+# Returns: {"editors": [{solvername, timestamp}, ...], "sheetcount": N}
 
-# 2. DeveloperMetadata (full puzzle tools)
-info = get_puzzle_sheet_info(sheet_id)
-# Reads metadata via DeveloperMetadata.search() API
-
-# 3. Legacy Revisions API (old sheets without add-on)
+# Falls back to legacy Revisions API for old sheets without add-on
 info = get_puzzle_sheet_info_legacy(sheet_id)
-# Slow, high quota usage, fallback only
+# Slow, high quota usage, fallback only for pre-add-on sheets
 ```
 
 ### Metrics
@@ -240,18 +220,15 @@ curl -X POST "http://localhost:5000/puzzles/{puzzle_id}/activate-addon"
 **Symptoms**: Puzzle sheet has add-on but bigjimmybot doesn't detect activity
 
 **Causes**:
-1. **Default minimal tracker**: `_pb_activity` sheet not being written to
-2. **Full puzzle tools**: DeveloperMetadata not being written (check with admin debug menu)
-3. User email not extractable (runs as "unknown")
-4. Bigjimmybot using wrong tracking method
+1. `_pb_activity` sheet not being written to (check with admin if they have access)
+2. User email not extractable (runs as "unknown")
+3. Bigjimmybot using wrong tracking method (legacy Revisions API instead of hidden sheet)
 
 **Fix**:
 ```bash
-# Check if hidden _pb_activity sheet exists
-# (Should be present for sheets with minimal tracker)
-
-# For full puzzle tools, test metadata:
-check_developer_metadata_exists(sheet_id)  # Should return True
+# Check if hidden _pb_activity sheet exists and has data
+# Use service account to read the sheet:
+# Sheets API: spreadsheets.values.get(spreadsheetId, range="_pb_activity!A:C")
 ```
 
 ### Deployment Fails with 429 Rate Limit
@@ -319,11 +296,11 @@ The pbtools.php form for cookie/invoke URL capture is still present but can be r
 
 | File | Purpose |
 |------|---------|
-| `pbgooglelib.py` | Core library with `activate_puzzle_sheet_via_api()`, `get_puzzle_sheet_info_activity()`, `get_puzzle_sheet_info()` |
+| `pbgooglelib.py` | Core library with `activate_puzzle_sheet_via_api()` and `get_puzzle_sheet_info_activity()` |
 | `pbrest.py` | REST API endpoints, calls activation during puzzle creation |
-| `scripts/puzzle_tools_addon_latest.gs` | Reference copy of full puzzle tools code |
+| `scripts/puzzle_tools_addon_latest.gs` | Reference copy of puzzle tools add-on code |
 | `scripts/test_apps_script_api.py` | Test script for end-to-end Apps Script API deployment |
-| `PRODUCTION_MIGRATION.sql` | DB migration to support large code + insert full puzzle tools |
+| `PRODUCTION_MIGRATION.sql` | DB migration to support large code + insert puzzle tools |
 
 ### API Endpoints
 

@@ -27,7 +27,7 @@ INSERT INTO `config` (`key`, val) VALUES ('APPS_SCRIPT_ADDON_CODE', '/** @OnlyCu
  *
  * Features:
  * - Puzzle grid tools (symmetry, crossword formatting, hex grids)
- * - DeveloperMetadata-based activity tracking for Puzzleboss integration
+ * - Hidden sheet-based activity tracking for Puzzleboss integration
  * - Quick tab creation from puzzle lists
  *
  * This version should be deployed to puzzle sheets via Apps Script API.
@@ -66,9 +66,7 @@ function populateMenus() {
     .addItem(''📰 Format as Crossword Grid (/ = ◼️)'', ''doCrosswordFormatting'')
     .addItem(''🐝 Add Hexagonal Grid Sheet'', ''addHexGridSheet'')
     .addItem(''🫥 Delete Blank Rows In Selection'', ''deleteBlankRows'')
-  menu = _maybeAddDebug(menu);
   menu.addToUi();
-  updateSpreadsheetStats();
 }
 
 /**
@@ -323,85 +321,64 @@ function _shouldContinueFromDialog(dialogResult) {
   return true;
 }
 
-function showMetadataAsNote() {
-  SpreadsheetApp.getActiveRange()?.setNote(_getMetadataNote());
-  populateMenus();
-}
+/**
+ * Activity tracking via hidden _pb_activity sheet.
+ * Simple trigger — fires on every manual edit.
+ * Records the editor''s email and Unix timestamp.
+ */
+
+const ACTIVITY_SHEET_NAME = ''_pb_activity'';
 
 function onEdit(e) {
-  const user = _getUser();
-  if (user == null) {
-    return;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let actSheet = ss.getSheetByName(ACTIVITY_SHEET_NAME);
+
+    // Fallback: create the sheet if it doesn''t exist
+    if (!actSheet) {
+      actSheet = ss.insertSheet(ACTIVITY_SHEET_NAME);
+      actSheet.getRange(''A1'').setValue(''editor'');
+      actSheet.getRange(''B1'').setValue(''timestamp'');
+      actSheet.getRange(''C1'').setValue(''num_sheets'');
+    }
+
+    // Get editor info
+    let editor = '''';
+    if (e && e.user) {
+      editor = e.user.getEmail();
+    }
+    if (!editor) {
+      try {
+        editor = Session.getActiveUser().getEmail();
+      } catch(ex) {
+        editor = ''unknown'';
+      }
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    // Count sheets, excluding the activity sheet itself
+    const numSheets = ss.getSheets().length - 1;
+
+    // Update or insert editor row
+    const data = actSheet.getDataRange().getValues();
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(editor).trim()) {
+        actSheet.getRange(i + 1, 2).setValue(now);
+        actSheet.getRange(i + 1, 3).setValue(numSheets);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      const lastRow = actSheet.getLastRow() + 1;
+      actSheet.getRange(lastRow, 1).setValue(editor);
+      actSheet.getRange(lastRow, 2).setValue(now);
+      actSheet.getRange(lastRow, 3).setValue(numSheets);
+    }
+  } catch(err) {
+    // Simple triggers can''t easily log errors — silently fail
   }
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const time_value = JSON.stringify({''t'': _unixtime()});
-  _upsertMetadata(spreadsheet, `PB_ACTIVITY:${user}`, time_value);
-  _upsertMetadata(SpreadsheetApp.getActiveSheet(), `PB_SHEET`, time_value);
-  if (_isAdmin() && spreadsheet.getName().includes(''[DEBUG]'')) {
-    e?.range?.setNote(_getMetadataNote());
-  }
-}
-
-function _upsertMetadata(target, key, value) {
-  if (!target) {
-    return;
-  }
-  const metadata = target.getDeveloperMetadata().find(m => m.getKey() === key);
-  if (metadata) {
-    metadata.setValue(value);
-  } else {
-    target.addDeveloperMetadata(key, value);
-  }
-}
-
-/**
- * Triggers
- * * From spreadsheet - On change
- * * Time-based: every minute
- */
-function updateSpreadsheetStats() {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const value = JSON.stringify({
-    ''t'': _unixtime(),
-    ''num_sheets'': spreadsheet.getNumSheets(),
-  });
-  _upsertMetadata(spreadsheet, `PB_SPREADSHEET`, value);
-}
-
-function _getUser() {
-  return Session.getActiveUser().getEmail().split(''@'')?.[0] || null;
-}
-
-function _isAdmin() {
-  return [''dannybd'', ''bigjimmy'', ''benoc'', ''juang''].includes(_getUser());
-}
-
-function _unixtime() {
-  return Math.floor(Date.now() / 1000);
-}
-
-function _getMetadataNote() {
-  let note = `Last modified: ${new Date()}\n` +
-    `Timestamp = ${_unixtime()}\n` +
-    `user = ${_getUser()}\n\n` +
-    `Spreadsheet metadata:\n`;
-  note += SpreadsheetApp.getActiveSpreadsheet().getDeveloperMetadata()
-    .map((m, i) => ` #${i}: ${m.getKey()} => ${m.getValue()}`)
-    .join(''\n'');
-  note += `\n\nSheet metadata:\n`;
-  note += SpreadsheetApp.getActiveSheet()?.getDeveloperMetadata()
-    ?.map((m, i) => ` #${i}: ${m.getKey()} => ${m.getValue()}`)
-    ?.join(''\n'') || ''[none]'';
-  return note;
-}
-
-function _maybeAddDebug(menu) {
-  if (!_isAdmin()) {
-    return menu;
-  }
-  return menu
-    .addSeparator()
-    .addItem(''🐞 [DEBUG] Show metadata'', ''showMetadataAsNote'');
 }
 ')
 ON DUPLICATE KEY UPDATE val = VALUES(val);
