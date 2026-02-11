@@ -288,7 +288,6 @@ The following config values are now obsolete and can be removed from the databas
 - ⚠️ `SHEETS_ADDON_COOKIES`
 - ⚠️ `SHEETS_ADDON_INVOKE_PARAMS`
 
-The pbtools.php form for cookie/invoke URL capture is still present but can be removed in a future cleanup.
 
 ## Reference
 

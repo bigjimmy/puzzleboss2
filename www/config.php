@@ -425,8 +425,6 @@ $keyCategoryMap = [
   'SERVICE_ACCOUNT_FILE' => 'google',
   'SERVICE_ACCOUNT_SUBJECT' => 'google',
   'SHEETS_TEMPLATE_ID' => 'google',
-  'SHEETS_ADDON_COOKIES' => 'google',
-  'SHEETS_ADDON_INVOKE_PARAMS' => 'google',
   'SKIP_PUZZCORD' => 'discord',
   'PUZZCORD_HOST' => 'discord',
   'PUZZCORD_PORT' => 'discord',
@@ -476,8 +474,6 @@ $keyDescriptions = [
   'SERVICE_ACCOUNT_FILE' => 'Path to Google service account JSON key file',
   'SERVICE_ACCOUNT_SUBJECT' => 'Domain admin email for service account impersonation (e.g. admin@yourdomain.org)',
   'SHEETS_TEMPLATE_ID' => 'Google Sheet ID used as template for new puzzles',
-  'SHEETS_ADDON_COOKIES' => 'JSON object with Google session cookies from docs.google.com (minimum: SID, OSID, __Secure-1PSID, __Secure-1PSIDTS)',
-  'SHEETS_ADDON_INVOKE_PARAMS' => 'JSON with full query string from a /scripts/invoke browser request. Update via pbtools.php (paste the full invoke URL from DevTools).',
   'SKIP_PUZZCORD' => 'Disable Discord integration',
   'PUZZCORD_HOST' => 'Hostname of the puzzcord daemon',
   'PUZZCORD_PORT' => 'Port of the puzzcord daemon',
@@ -511,14 +507,14 @@ $numericKeys = ['LOGLEVEL', 'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', 'BIGJIMMY_PUZZ
                 'PUZZCORD_PORT', 'MEMCACHE_PORT'];
 
 // Keys with long/JSON values that need textareas
-$textareaKeys = ['GEMINI_SYSTEM_INSTRUCTION', 'bookmarklet_js', 'debugging_usernames',
-                 'SHEETS_ADDON_COOKIES', 'SHEETS_ADDON_INVOKE_PARAMS'];
+$textareaKeys = ['GEMINI_SYSTEM_INSTRUCTION', 'bookmarklet_js', 'debugging_usernames'];
 
 // Keys with custom structured editors (handled separately in the rendering loop)
 $specialKeys = ['STATUS_METADATA', 'METRICS_METADATA', 'BIGJIMMY_ABANDONED_STATUS'];
 
 // Deprecated keys to hide (removed from system, may linger in DB)
-$hiddenKeys = ['SLACK_EMAIL_WEBHOOK', 'LDAP_ADMINDN', 'LDAP_ADMINPW', 'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0', 'SHEETS_ADDON_REFRESH_HEADERS'];
+$hiddenKeys = ['SLACK_EMAIL_WEBHOOK', 'LDAP_ADMINDN', 'LDAP_ADMINPW', 'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0',
+               'SHEETS_ADDON_REFRESH_HEADERS', 'SHEETS_ADDON_COOKIES', 'SHEETS_ADDON_INVOKE_PARAMS'];
 
 // Group config by category
 $grouped = [];
