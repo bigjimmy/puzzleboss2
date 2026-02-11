@@ -1044,7 +1044,7 @@ def rotate_addon_cookies(api_uri):
         except json.JSONDecodeError:
             pass
 
-    headers = {**refresh_headers, "Cookie": cookie_str}
+    headers = {"Content-Type": "application/json", **refresh_headers, "Cookie": cookie_str}
 
     try:
         data = b'[283,"1575614563079730632"]'
