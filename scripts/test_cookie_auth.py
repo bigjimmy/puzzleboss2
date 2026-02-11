@@ -35,17 +35,20 @@ def parse_raw_cookies(raw):
 
 
 def parse_invoke_url(url):
-    """Extract sid, token, lib, did, ouid from an invoke URL."""
+    """Parse an invoke URL into the query_string format."""
     from urllib.parse import urlparse, parse_qs
     parsed = urlparse(url)
-    qs = parse_qs(parsed.query)
+    full_query = parsed.query
+    qs = parse_qs(full_query)
 
     return {
-        "sid": qs.get("sid", [""])[0],
-        "token": qs.get("token", [""])[0],
-        "lib": qs.get("lib", [""])[0],
-        "did": qs.get("did", [""])[0],
-        "ouid": qs.get("ouid", [""])[0],
+        "query_string": full_query,
+        # Also extract individual params for display/validation
+        "_sid": qs.get("sid", [""])[0],
+        "_token": qs.get("token", [""])[0],
+        "_lib": qs.get("lib", [""])[0],
+        "_did": qs.get("did", [""])[0],
+        "_ouid": qs.get("ouid", [""])[0],
     }
 
 
@@ -79,8 +82,8 @@ def main():
 
     if args.invoke_url:
         invoke_params = parse_invoke_url(args.invoke_url)
-        print(f"Parsed invoke params from URL: sid={invoke_params['sid'][:15]}... "
-              f"token={invoke_params['token'][:20]}...")
+        print(f"Parsed invoke params from URL: sid={invoke_params['_sid'][:15]}... "
+              f"token={invoke_params['_token'][:20]}...")
 
     if not cookies:
         print("ERROR: No cookies provided (use --raw-cookies or set SHEETS_ADDON_COOKIES)")
@@ -154,28 +157,43 @@ def main():
         print("  No test sheet found. Use --sheet-id or ensure API is running.")
         sys.exit(0)
 
-    sid = invoke_params.get("sid", "")
-    token = invoke_params.get("token", "")
-    lib = invoke_params.get("lib", "")
-    did = invoke_params.get("did", "")
-    ouid = invoke_params.get("ouid", "")
+    # Build URL from invoke_params (supports both query_string and legacy format)
+    import re
+    if "query_string" in invoke_params:
+        qs = invoke_params["query_string"]
+        # Replace id= params with target sheet
+        qs = qs.lstrip("?")
+        qs = re.sub(r'(^|(?<=&))id=[^&]*', f'id={test_sheet_id}', qs)
+        url = f"https://docs.google.com/spreadsheets/u/0/d/{test_sheet_id}/scripts/invoke?{qs}"
+        # Extract display values from query string
+        from urllib.parse import parse_qs
+        qs_parsed = parse_qs(qs)
+        sid = qs_parsed.get("sid", [""])[0]
+        token = qs_parsed.get("token", [""])[0]
+    else:
+        # Legacy format
+        sid = invoke_params.get("sid", "")
+        token = invoke_params.get("token", "")
+        lib = invoke_params.get("lib", "")
+        did = invoke_params.get("did", "")
+        ouid = invoke_params.get("ouid", "")
 
-    if not sid or not token:
-        print("  No invoke params (sid/token). Use --invoke-url or set SHEETS_ADDON_INVOKE_PARAMS")
-        sys.exit(0)
+        if not sid or not token:
+            print("  No invoke params (sid/token). Use --invoke-url or set SHEETS_ADDON_INVOKE_PARAMS")
+            sys.exit(0)
 
-    if not lib or not did:
-        print("  WARNING: Missing lib/did params — invoke will likely fail (400)")
+        if not lib or not did:
+            print("  WARNING: Missing lib/did params — invoke will likely fail (400)")
 
-    from urllib.parse import quote
-    token_encoded = quote(token, safe="")
-    url = (
-        f"https://docs.google.com/spreadsheets/u/0/d/{test_sheet_id}/scripts/invoke"
-        f"?id={test_sheet_id}&sid={sid}&token={token_encoded}"
-        f"&lib={lib}&did={did}&func=populateMenus"
-    )
-    if ouid:
-        url += f"&ouid={ouid}"
+        from urllib.parse import quote
+        token_encoded = quote(token, safe="")
+        url = (
+            f"https://docs.google.com/spreadsheets/u/0/d/{test_sheet_id}/scripts/invoke"
+            f"?id={test_sheet_id}&sid={sid}&token={token_encoded}"
+            f"&lib={lib}&did={did}&func=populateMenus"
+        )
+        if ouid:
+            url += f"&ouid={ouid}"
 
     print(f"  URL: ...invoke?id=...&sid={sid[:10]}...&token={token[:20]}...")
 

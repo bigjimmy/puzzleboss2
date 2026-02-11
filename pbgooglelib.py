@@ -896,6 +896,57 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     return sheet_file.get("id")
 
 
+def _build_invoke_url(invoke_params, sheet_id, puzz_label=""):
+    """Build the /scripts/invoke URL for a given sheet.
+
+    Supports two formats for invoke_params:
+    - New format: {"query_string": "id=...&sid=...&token=...&lib=...&..."}
+      The full query string from a browser request. The "id" param is replaced
+      with the target sheet_id.
+    - Legacy format: {"sid": "...", "token": "...", "lib": "...", "did": "...", "ouid": "..."}
+      Individual parameters reconstructed into a minimal URL.
+
+    Returns the full URL string, or None if params are invalid.
+    """
+    base = f"https://docs.google.com/spreadsheets/u/0/d/{sheet_id}/scripts/invoke"
+
+    if "query_string" in invoke_params:
+        # New format: full query string with all browser parameters
+        qs = invoke_params["query_string"]
+        # Strip leading ? if present (we add it below)
+        qs = qs.lstrip("?")
+        # Replace all id= parameter occurrences with the target sheet_id
+        import re
+        qs = re.sub(r'(^|(?<=&))id=[^&]*', f'id={sheet_id}', qs)
+        return f"{base}?{qs}"
+
+    # Legacy format: individual params
+    sid = invoke_params.get("sid", "")
+    token = invoke_params.get("token", "")
+    lib = invoke_params.get("lib", "")
+    did = invoke_params.get("did", "")
+    ouid = invoke_params.get("ouid", "")
+
+    if not sid or not token:
+        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing sid or token" % puzz_label)
+        return None
+    if not lib or not did:
+        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing lib or did" % puzz_label)
+        return None
+
+    token_encoded = urllib.parse.quote(token, safe='')
+    url = (
+        f"{base}"
+        f"?id={sheet_id}&sid={sid}&token={token_encoded}"
+        f"&lib={lib}&did={did}&func=populateMenus"
+    )
+    if ouid:
+        url += f"&ouid={ouid}"
+    debug_log(2, "[%s] Using legacy invoke params format — consider updating to "
+              "query_string format via pbtools.php for full activation" % puzz_label)
+    return url
+
+
 def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
     """
     Activate the PB tracking add-on on a puzzle sheet by invoking its
@@ -903,8 +954,15 @@ def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
     endpoint. This replicates the activation previously done by puzzcord.
 
     Requires SHEETS_ADDON_COOKIES (JSON object) and SHEETS_ADDON_INVOKE_PARAMS
-    (JSON object with sid, token, lib, did, and optionally ouid) to be set
-    in the config table.
+    (JSON object) to be set in the config table.
+
+    SHEETS_ADDON_INVOKE_PARAMS must contain a "query_string" key with the full
+    query string captured from a browser /scripts/invoke request. The "id"
+    parameter will be replaced with the target sheet_id at invocation time.
+
+    For backward compatibility, the legacy format with individual keys
+    (sid, token, lib, did, ouid) is also supported but may not fully activate
+    the extension — the full query string is preferred.
 
     Returns True on success, False on failure. Failures are non-fatal;
     bigjimmybot will fall back to the legacy Revisions API for tracking.
@@ -937,32 +995,9 @@ def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
         debug_log(1, "[%s] Error parsing SHEETS_ADDON config: %s" % (puzz_label, e))
         return False
 
-    sid = invoke_params.get("sid", "")
-    token = invoke_params.get("token", "")
-    lib = invoke_params.get("lib", "")
-    did = invoke_params.get("did", "")
-    ouid = invoke_params.get("ouid", "")
-
-    if not sid or not token:
-        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing sid or token" % puzz_label)
+    url = _build_invoke_url(invoke_params, sheet_id, puzz_label)
+    if not url:
         return False
-    if not lib or not did:
-        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing lib or did" % puzz_label)
-        return False
-
-    # Build the invoke URL with required params:
-    # id, sid, token — session-tied (change when cookies refresh)
-    # lib, did — add-on deployment IDs (stable)
-    # func — the function to call (populateMenus for activation)
-    # ouid — Google account ID (stable per account)
-    token_encoded = urllib.parse.quote(token, safe='')
-    url = (
-        f"https://docs.google.com/spreadsheets/u/0/d/{sheet_id}/scripts/invoke"
-        f"?id={sheet_id}&sid={sid}&token={token_encoded}"
-        f"&lib={lib}&did={did}&func=populateMenus"
-    )
-    if ouid:
-        url += f"&ouid={ouid}"
 
     # Build cookie header from the cookies dict
     cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
@@ -1039,23 +1074,9 @@ def check_addon_invoke_health(sheet_id):
     except json.JSONDecodeError:
         return 0
 
-    sid = invoke_params.get("sid", "")
-    token = invoke_params.get("token", "")
-    lib = invoke_params.get("lib", "")
-    did = invoke_params.get("did", "")
-    ouid = invoke_params.get("ouid", "")
-
-    if not sid or not token or not lib or not did:
+    url = _build_invoke_url(invoke_params, sheet_id, "health_check")
+    if not url:
         return 0
-
-    token_encoded = urllib.parse.quote(token, safe='')
-    url = (
-        f"https://docs.google.com/spreadsheets/u/0/d/{sheet_id}/scripts/invoke"
-        f"?id={sheet_id}&sid={sid}&token={token_encoded}"
-        f"&lib={lib}&did={did}&func=populateMenus"
-    )
-    if ouid:
-        url += f"&ouid={ouid}"
 
     cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
     headers = {

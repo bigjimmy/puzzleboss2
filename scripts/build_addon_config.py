@@ -44,9 +44,10 @@ def main():
         val = cookies[name]
         print(f"  {name} = {val[:30]}{'...' if len(val) > 30 else ''}")
 
-    # Parse invoke URL
+    # Parse invoke URL — store full query string to preserve all browser params
     parsed = urlparse(args.invoke_url)
-    qs = parse_qs(parsed.query)
+    full_query = parsed.query
+    qs = parse_qs(full_query)
 
     sid = qs.get("sid", [""])[0]
     token = qs.get("token", [""])[0]
@@ -58,14 +59,15 @@ def main():
         print("\n⚠️  WARNING: invoke URL missing 'lib' or 'did' params.")
         print("  Make sure you captured a /scripts/invoke URL (not a regular sheet URL).")
 
-    invoke_params = {"sid": sid, "token": token, "lib": lib, "did": did, "ouid": ouid}
+    invoke_params = {"query_string": full_query}
 
-    print(f"\nInvoke params:")
+    print(f"\nInvoke params (full query string preserved):")
     print(f"  sid   = {sid[:20]}{'...' if len(sid) > 20 else ''}")
     print(f"  token = {token[:30]}{'...' if len(token) > 30 else ''}")
     print(f"  lib   = {lib[:30]}{'...' if len(lib) > 30 else ''}")
     print(f"  did   = {did[:30]}{'...' if len(did) > 30 else ''}")
     print(f"  ouid  = {ouid or '(empty)'}")
+    print(f"  total query params: {len(qs)}")
 
     # Output JSON config values
     cookies_json = json.dumps(cookies)

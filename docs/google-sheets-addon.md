@@ -65,7 +65,18 @@ Example:
 
 ### `SHEETS_ADDON_INVOKE_PARAMS`
 
-JSON object with the add-on's invoke endpoint parameters. These are extracted from a `/scripts/invoke` request in browser DevTools.
+JSON object containing the full query string from a `/scripts/invoke` request captured in browser DevTools. The full query string is stored (not individual parameters) because Google's add-on framework uses many undocumented parameters (`includes_info_params`, `ctx`, `eei`, `ruid`, etc.) that are required for the add-on to fully activate and create installable triggers.
+
+At invocation time, the `id=` parameter is replaced with the target sheet ID.
+
+Example:
+```json
+{
+  "query_string": "id=SHEET_ID&sid=1f48544a74c53eaf&vc=1&c=1&w=1&flr=0&smv=2147483647&smb=%5B2147483647%2C%20APwL%5D&ruid=52&lib=MGbbKKh6PzO7n4XKLGDRZxVVT43b8S2kx&func=populateMenus&ctx=...&eei=...&did=AKfycbw2OFUmjSGozHe6i_G0_biODAk6NOzIfHkwoaKKzSGORZ0&token=AC4w5Vg-...&ouid=112391333398687811083&includes_info_params=true&cros_files=false&nded=false"
+}
+```
+
+Key parameters within the query string:
 
 | Param | Description | Stability |
 |-------|-------------|-----------|
@@ -74,19 +85,10 @@ JSON object with the add-on's invoke endpoint parameters. These are extracted fr
 | `lib` | Apps Script library/project ID | Stable (tied to the add-on) |
 | `did` | Deployment ID | Stable (tied to the add-on deployment) |
 | `ouid` | Google account numeric ID | Stable (tied to the Google account) |
+| `includes_info_params` | Required for full activation | Always `true` |
+| `ruid`, `vc`, `c`, `w`, `flr`, `smv`, `smb` | Internal Google params | Varies |
 
-Example:
-```json
-{
-  "sid": "ed0f05770250b94",
-  "token": "AC4w5ViTp7_gBXpw7zLouQwnr62prensKA:1770783553818",
-  "lib": "MGbbKKh6PzO7n4XKLGDRZxVVT43b8S2kx",
-  "did": "AKfycbw2OFUmjSGozHe6i_G0_biODAk6NOzIfHkwoaKKzSGORZ0",
-  "ouid": "110474241656041852907"
-}
-```
-
-**Note:** `lib`, `did`, and `ouid` are stable — they don't change when credentials are refreshed. Only `sid` and `token` need to be updated.
+**Note:** A legacy format with individual keys (`sid`, `token`, `lib`, `did`, `ouid`) is still supported for backward compatibility but may not fully activate the extension. The `query_string` format is strongly preferred.
 
 ## Credential Refresh
 
