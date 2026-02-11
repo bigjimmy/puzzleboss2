@@ -463,6 +463,10 @@ HTML;
     assert_api_success($responseobj);
     $code = $responseobj->code;
 
+    // Escape variables for safe embedding in JavaScript string literals
+    $code_js = addslashes($code);
+    $name_js = addslashes($name);
+
     echo <<<HTML
 <div id="progress-container">
   <div class="step" id="step1">
@@ -504,7 +508,7 @@ HTML;
 </div>
 <script>
   // Start the step-by-step process
-  runAllSteps('$code', '$name');
+  runAllSteps('$code_js', '$name_js');
 </script>
 HTML;
   } catch (Exception $e) {
