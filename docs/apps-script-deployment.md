@@ -86,14 +86,9 @@ EOF
 
 # Method 2: Via pbtools.php UI
 # Go to pbtools.php → Config Editor → Edit APPS_SCRIPT_ADDON_CODE
-
-# Method 3: Via production migration SQL (for initial setup)
-mysql -u puzzleboss -p puzzleboss < PRODUCTION_MIGRATION.sql
 ```
 
 **Important**: Updating the config only affects **new puzzle sheets**. Existing sheets retain their deployed version unless manually re-deployed.
-
-See `docs/google-sheets-addon.md` for detailed instructions.
 
 ## Requirements
 
@@ -249,12 +244,14 @@ INSERT INTO config (`key`, val) VALUES ('BIGJIMMY_QUOTAFAIL_DELAY', '10');
 
 **Symptoms**: Import fails with "Data too long for column 'val'"
 
-**Solution**: The `PRODUCTION_MIGRATION.sql` script expands the `config.val` column to MEDIUMTEXT (16MB). If already run and still failing, the script may exceed 16MB (unlikely for reasonable add-on code).
+**Solution**: Expand the `config.val` column to MEDIUMTEXT (16MB) if needed:
 
 ```sql
--- Check column size
-SHOW CREATE TABLE config;
+-- Expand column to support large add-on code
+ALTER TABLE config MODIFY COLUMN val MEDIUMTEXT DEFAULT NULL;
 
+-- Verify column size
+SHOW CREATE TABLE config;
 -- Should show: `val` MEDIUMTEXT DEFAULT NULL
 ```
 
@@ -282,7 +279,7 @@ The following have been deleted from the codebase:
 - ❌ `scripts/test_cookie_auth.py`
 - ❌ `scripts/extract_addon_code.py`
 - ❌ `scripts/import_puzzle_tools.py`
-- ❌ `scripts/migrate_expand_config_val.sql` (consolidated into PRODUCTION_MIGRATION.sql)
+- ❌ `scripts/migrate_expand_config_val.sql`
 
 The following config values are now obsolete and can be removed from the database:
 - ⚠️ `SHEETS_ADDON_COOKIES`
@@ -299,7 +296,6 @@ The following config values are now obsolete and can be removed from the databas
 | `pbrest.py` | REST API endpoints, calls activation during puzzle creation |
 | `scripts/puzzle_tools_addon_latest.gs` | Reference copy of puzzle tools add-on code |
 | `scripts/test_apps_script_api.py` | Test script for end-to-end Apps Script API deployment |
-| `PRODUCTION_MIGRATION.sql` | DB migration to support large code + insert puzzle tools |
 
 ### API Endpoints
 
