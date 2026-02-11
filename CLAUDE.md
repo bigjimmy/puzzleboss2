@@ -227,6 +227,34 @@ python scripts/pbmail_inbox.py
 python scripts/wiki_indexer.py
 ```
 
+## Git Workflow
+
+### Committing Changes
+- Create commits with clear, descriptive messages
+- Use co-authorship footer: `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
+- Commit frequently with logical groupings of changes
+- Push to remote after each commit or set of related commits
+
+### Critical Rules
+**NEVER use `git reset` or `git rebase` unless absolutely necessary and with explicit user confirmation.**
+
+These operations rewrite git history and can cause:
+- Loss of work if not used carefully
+- Confusion in collaboration with other developers
+- Complications with remote branches that have already been pushed
+
+**If you believe reset/rebase is necessary:**
+1. Explain in detail WHY it's needed
+2. Explain WHAT will happen
+3. Provide alternative approaches if available
+4. Wait for explicit user confirmation before proceeding
+
+**Preferred alternatives:**
+- New commits to fix mistakes (don't rewrite history)
+- `git revert` to undo specific commits
+- Create new branches instead of rebasing
+- Use `git commit --amend` ONLY for the most recent unpushed commit
+
 ## Important Implementation Notes
 
 ### Authentication
