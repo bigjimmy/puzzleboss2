@@ -20,6 +20,59 @@ threads = []
 loop_iterations_total = 0
 
 
+def api_request_with_retry(method, url, max_retries=3, timeout=10, **kwargs):
+    """
+    Wrapper for requests.get/post with timeout and exponential backoff retry.
+
+    Args:
+        method: 'get' or 'post'
+        url: API endpoint URL
+        max_retries: Number of retry attempts (default 3)
+        timeout: Request timeout in seconds (default 10)
+        **kwargs: Additional arguments passed to requests (json, headers, etc.)
+
+    Returns:
+        requests.Response object on success, None on total failure
+    """
+    for attempt in range(max_retries):
+        try:
+            if method.lower() == 'get':
+                response = requests.get(url, timeout=timeout, **kwargs)
+            elif method.lower() == 'post':
+                response = requests.post(url, timeout=timeout, **kwargs)
+            else:
+                raise ValueError(f"Unsupported method: {method}")
+
+            # Success - return response
+            return response
+
+        except requests.exceptions.Timeout:
+            delay = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+            debug_log(
+                2,
+                f"API timeout (attempt {attempt + 1}/{max_retries}): {url} - retrying in {delay}s"
+            )
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+            else:
+                debug_log(1, f"API timeout after {max_retries} attempts: {url}")
+                return None
+
+        except requests.exceptions.RequestException as e:
+            delay = 2 ** attempt
+            debug_log(
+                2,
+                f"API request error (attempt {attempt + 1}/{max_retries}): {url} - {e}"
+            )
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+            else:
+                debug_log(1, f"API request failed after {max_retries} attempts: {url} - {e}")
+                return None
+
+    return None
+
+
 class puzzThread(threading.Thread):
     def __init__(self, threadID, name, q):
         threading.Thread.__init__(self)
@@ -66,51 +119,15 @@ def check_puzzle_from_queue(threadname, q):
                     mypuzzle["drive_id"], mypuzzle["name"]
                 )
             else:
-                # Check if hidden _pb_activity sheet exists (add-on deployed but not marked)
+                # No add-on deployed, use legacy Revisions API
                 debug_log(
                     4,
-                    "[Thread: %s] Checking for hidden activity sheet on %s (sheetenabled=0)"
+                    "[Thread: %s] No add-on on %s, using legacy Revisions API (sheetenabled=0)"
                     % (threadname, mypuzzle["name"]),
                 )
-                # Try to read hidden sheet - if it exists and has data, enable sheetenabled
-                test_info = get_puzzle_sheet_info_activity(
+                sheet_info = get_puzzle_sheet_info_legacy(
                     mypuzzle["drive_id"], mypuzzle["name"]
                 )
-                if test_info.get("editors"):
-                    # Hidden sheet found with activity! Enable sheetenabled and use the data
-                    debug_log(
-                        3,
-                        "[Thread: %s] Hidden activity sheet found on %s, enabling sheetenabled"
-                        % (threadname, mypuzzle["name"]),
-                    )
-                    try:
-                        requests.post(
-                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetenabled",
-                            json={"sheetenabled": 1},
-                        )
-                        # Use the data we just fetched and update local flag
-                        sheet_info = test_info
-                        sheetenabled = 1  # Update local variable so later processing uses correct path
-                    except Exception as e:
-                        debug_log(
-                            1,
-                            "[Thread: %s] Error enabling sheetenabled: %s"
-                            % (threadname, e),
-                        )
-                        # Fall back to legacy if update failed
-                        sheet_info = get_puzzle_sheet_info_legacy(
-                            mypuzzle["drive_id"], mypuzzle["name"]
-                        )
-                else:
-                    # No hidden sheet found, use legacy approach
-                    debug_log(
-                        4,
-                        "[Thread: %s] No add-on on %s, using legacy Revisions API"
-                        % (threadname, mypuzzle["name"]),
-                    )
-                    sheet_info = get_puzzle_sheet_info_legacy(
-                        mypuzzle["drive_id"], mypuzzle["name"]
-                    )
 
             # Update sheet count only if changed
             if sheet_info["sheetcount"] is not None and sheet_info[
@@ -126,32 +143,30 @@ def check_puzzle_from_queue(threadname, q):
                         sheet_info["sheetcount"],
                     ),
                 )
-                try:
-                    requests.post(
-                        f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetcount",
-                        json={"sheetcount": sheet_info["sheetcount"]},
-                    )
-                except Exception as e:
+                response = api_request_with_retry(
+                    'post',
+                    f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetcount",
+                    json={"sheetcount": sheet_info["sheetcount"]},
+                )
+                if not response:
                     debug_log(
                         1,
-                        "[Thread: %s] Error updating sheetcount: %s" % (threadname, e),
+                        "[Thread: %s] Failed to update sheetcount after retries" % threadname,
                     )
 
             # Fetch last sheet activity for this puzzle to compare against editor timestamps
             myreq = f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastsheetact"
-            try:
-                responsestring = requests.get(myreq).text
-            except Exception as e:
+            response = api_request_with_retry('get', myreq)
+            if not response:
                 debug_log(
                     1,
-                    "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s"
-                    % e,
+                    "Error fetching puzzle info from puzzleboss after retries. Puzzleboss down?",
                 )
                 time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
                 continue
 
             try:
-                response_json = json.loads(responsestring)
+                response_json = json.loads(response.text)
                 if "error" in response_json:
                     debug_log(
                         2,
@@ -164,7 +179,7 @@ def check_puzzle_from_queue(threadname, q):
                 debug_log(
                     1,
                     "Error interpreting puzzle info from puzzleboss. Response: %s, Error: %s"
-                    % (responsestring[:200], e),
+                    % (response.text[:200], e),
                 )
                 time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
                 continue
@@ -225,11 +240,19 @@ def check_puzzle_from_queue(threadname, q):
                             continue
 
                         # Fetch last activity (actually all info) for this solver PRIOR to this one
-                        solverinfo = json.loads(
-                            requests.get(
-                                f"{config['API']['APIURI']}/solvers/{mysolverid}"
-                            ).text
-                        )["solver"]
+                        solver_response = api_request_with_retry(
+                            'get',
+                            f"{config['API']['APIURI']}/solvers/{mysolverid}",
+                        )
+                        if not solver_response:
+                            debug_log(
+                                2,
+                                "[Thread: %s] Failed to fetch solver info for %s after retries"
+                                % (threadname, mysolverid),
+                            )
+                            continue
+
+                        solverinfo = json.loads(solver_response.text)["solver"]
 
                         # Always record activity, even if solver is already on puzzle
                         databody = {
@@ -239,16 +262,24 @@ def check_puzzle_from_queue(threadname, q):
                                 "type": "revise",
                             }
                         }
-                        actupresponse = requests.post(
+                        actupresponse = api_request_with_retry(
+                            'post',
                             f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastact",
                             json=databody,
                         )
 
-                        debug_log(
-                            4,
-                            "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
-                            % (threadname, databody, actupresponse.text),
-                        )
+                        if actupresponse:
+                            debug_log(
+                                4,
+                                "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
+                                % (threadname, databody, actupresponse.text),
+                            )
+                        else:
+                            debug_log(
+                                2,
+                                "[Thread: %s] Failed to post activity update after retries"
+                                % threadname,
+                            )
 
                         # Only auto-assign if solver is not already on this puzzle
                         if solverinfo["puzz"] != mypuzzle["name"]:
@@ -282,20 +313,28 @@ def check_puzzle_from_queue(threadname, q):
 
                                     databody = {"puzz": str(mypuzzle["id"])}
 
-                                    assignmentresponse = requests.post(
+                                    assignmentresponse = api_request_with_retry(
+                                        'post',
                                         f"{config['API']['APIURI']}/solvers/{mysolverid}/puzz",
                                         json=databody,
                                     )
-                                    debug_log(
-                                        4,
-                                        "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
-                                        % (
-                                            threadname,
-                                            databody,
-                                            mysolverid,
-                                            assignmentresponse.text,
-                                        ),
-                                    )
+                                    if assignmentresponse:
+                                        debug_log(
+                                            4,
+                                            "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
+                                            % (
+                                                threadname,
+                                                databody,
+                                                mysolverid,
+                                                assignmentresponse.text,
+                                            ),
+                                        )
+                                    else:
+                                        debug_log(
+                                            2,
+                                            "[Thread: %s] Failed to assign solver after retries"
+                                            % threadname,
+                                        )
             else:
                 # LEGACY REVISIONS API APPROACH: Compare datetime objects
                 lastsheetacttime = datetime.datetime.fromordinal(1)
@@ -340,11 +379,19 @@ def check_puzzle_from_queue(threadname, q):
                             continue
 
                         # Fetch last activity (actually all info) for this solver
-                        solverinfo = json.loads(
-                            requests.get(
-                                f"{config['API']['APIURI']}/solvers/{mysolverid}"
-                            ).text
-                        )["solver"]
+                        solver_response = api_request_with_retry(
+                            'get',
+                            f"{config['API']['APIURI']}/solvers/{mysolverid}",
+                        )
+                        if not solver_response:
+                            debug_log(
+                                2,
+                                "[Thread: %s] Failed to fetch solver info for %s after retries"
+                                % (threadname, mysolverid),
+                            )
+                            continue
+
+                        solverinfo = json.loads(solver_response.text)["solver"]
 
                         # Always record activity, even if solver is already on puzzle
                         databody = {
@@ -354,16 +401,24 @@ def check_puzzle_from_queue(threadname, q):
                                 "type": "revise",
                             }
                         }
-                        actupresponse = requests.post(
+                        actupresponse = api_request_with_retry(
+                            'post',
                             f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastact",
                             json=databody,
                         )
 
-                        debug_log(
-                            4,
-                            "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
-                            % (threadname, databody, actupresponse.text),
-                        )
+                        if actupresponse:
+                            debug_log(
+                                4,
+                                "[Thread: %s] Posted update %s to last activity for puzzle.  Response: %s"
+                                % (threadname, databody, actupresponse.text),
+                            )
+                        else:
+                            debug_log(
+                                2,
+                                "[Thread: %s] Failed to post activity update after retries"
+                                % threadname,
+                            )
 
                         # Only auto-assign if solver is not already on this puzzle
                         if solverinfo["puzz"] != mypuzzle["name"]:
@@ -397,20 +452,28 @@ def check_puzzle_from_queue(threadname, q):
 
                                     databody = {"puzz": str(mypuzzle["id"])}
 
-                                    assignmentresponse = requests.post(
+                                    assignmentresponse = api_request_with_retry(
+                                        'post',
                                         f"{config['API']['APIURI']}/solvers/{mysolverid}/puzz",
                                         json=databody,
                                     )
-                                    debug_log(
-                                        4,
-                                        "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
-                                        % (
-                                            threadname,
-                                            databody,
-                                            mysolverid,
-                                            assignmentresponse.text,
-                                        ),
-                                    )
+                                    if assignmentresponse:
+                                        debug_log(
+                                            4,
+                                            "[Thread: %s] Posted %s to update current puzzle for solver %s.  Response: %s"
+                                            % (
+                                                threadname,
+                                                databody,
+                                                mysolverid,
+                                                assignmentresponse.text,
+                                            ),
+                                        )
+                                    else:
+                                        debug_log(
+                                            2,
+                                            "[Thread: %s] Failed to assign solver after retries"
+                                            % threadname,
+                                        )
 
             # Check for abandoned puzzles: "Being worked" with no solvers and no recent activity
             # This check happens AFTER sheet activity detection to ensure new activity is recorded first
@@ -429,17 +492,25 @@ def check_puzzle_from_queue(threadname, q):
 
                     # Fetch lastact (any activity type - superset of lastsheetact)
                     lastact = None
-                    try:
-                        lastact_response = requests.get(
-                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastact"
-                        )
-                        lastact_data = json.loads(lastact_response.text)
-                        lastact = lastact_data.get("lastact")
-                    except Exception as e:
+                    lastact_response = api_request_with_retry(
+                        'get',
+                        f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/lastact",
+                    )
+                    if lastact_response:
+                        try:
+                            lastact_data = json.loads(lastact_response.text)
+                            lastact = lastact_data.get("lastact")
+                        except Exception as e:
+                            debug_log(
+                                2,
+                                "[Thread: %s] Error parsing lastact for %s: %s"
+                                % (threadname, mypuzzle["name"], e),
+                            )
+                    else:
                         debug_log(
                             2,
-                            "[Thread: %s] Error fetching lastact for %s: %s"
-                            % (threadname, mypuzzle["name"], e),
+                            "[Thread: %s] Failed to fetch lastact for %s after retries"
+                            % (threadname, mypuzzle["name"]),
                         )
 
                     is_abandoned = False
@@ -480,21 +551,22 @@ def check_puzzle_from_queue(threadname, q):
                             )
 
                     if is_abandoned:
-                        try:
-                            requests.post(
-                                f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/status",
-                                json={"status": abandoned_status},
-                            )
+                        response = api_request_with_retry(
+                            'post',
+                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/status",
+                            json={"status": abandoned_status},
+                        )
+                        if response:
                             debug_log(
                                 3,
                                 "[Thread: %s] Set puzzle %s status to '%s'"
                                 % (threadname, mypuzzle["name"], abandoned_status),
                             )
-                        except Exception as e:
+                        else:
                             debug_log(
                                 1,
-                                "[Thread: %s] Error updating status for %s: %s"
-                                % (threadname, mypuzzle["name"], e),
+                                "[Thread: %s] Failed to update status for %s after retries"
+                                % (threadname, mypuzzle["name"]),
                             )
 
             # Log per-puzzle timing
@@ -512,9 +584,12 @@ def check_puzzle_from_queue(threadname, q):
 def solver_from_email(email):
     """Look up solver ID by email address (extracts username from email)."""
     debug_log(4, "start. called with %s" % email)
-    solverslist = json.loads(requests.get(f"{config['API']['APIURI']}/solvers").text)[
-        "solvers"
-    ]
+    response = api_request_with_retry('get', f"{config['API']['APIURI']}/solvers")
+    if not response:
+        debug_log(2, "Failed to fetch solvers list after retries")
+        return 0
+
+    solverslist = json.loads(response.text)["solvers"]
     for solver in solverslist:
         if solver["name"].lower() == email.split("@")[0].lower():
             debug_log(4, "Solver %s is id: %s" % (email, solver["id"]))
@@ -525,9 +600,12 @@ def solver_from_email(email):
 def solver_from_name(name):
     """Look up solver ID by solver name directly."""
     debug_log(4, "start. called with %s" % name)
-    solverslist = json.loads(requests.get(f"{config['API']['APIURI']}/solvers").text)[
-        "solvers"
-    ]
+    response = api_request_with_retry('get', f"{config['API']['APIURI']}/solvers")
+    if not response:
+        debug_log(2, "Failed to fetch solvers list after retries")
+        return 0
+
+    solverslist = json.loads(response.text)["solvers"]
     for solver in solverslist:
         if solver["name"].lower() == name.lower():
             debug_log(4, "Solver %s is id: %s" % (name, solver["id"]))
@@ -553,13 +631,13 @@ if __name__ == "__main__":
         # Increment and post loop iteration counter early (before SKIP_GOOGLE_API check)
         # This ensures the counter increments even when Google API is disabled
         loop_iterations_total += 1
-        try:
-            requests.post(
-                f"{config['API']['APIURI']}/botstats/loop_iterations_total",
-                json={"val": str(loop_iterations_total)},
-            )
-        except Exception as e:
-            debug_log(2, "Error posting loop iteration counter: %s" % e)
+        response = api_request_with_retry(
+            'post',
+            f"{config['API']['APIURI']}/botstats/loop_iterations_total",
+            json={"val": str(loop_iterations_total)},
+        )
+        if not response:
+            debug_log(2, "Failed to post loop iteration counter after retries")
 
         # If Google API is disabled, just sleep and loop
         if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
@@ -570,12 +648,21 @@ if __name__ == "__main__":
         # Start timing setup phase
         setup_start_time = time.time()
 
+        response = api_request_with_retry('get', f"{config['API']['APIURI']}/all")
+        if not response:
+            debug_log(
+                1,
+                "Error fetching puzzle info from puzzleboss after retries. Puzzleboss down?",
+            )
+            time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
+            continue
+
         try:
-            r = json.loads(requests.get(f"{config['API']['APIURI']}/all").text)
+            r = json.loads(response.text)
         except Exception as e:
             debug_log(
                 1,
-                "Error fetching puzzle info from puzzleboss. Puzzleboss down?: %s" % e,
+                "Error parsing JSON from /all endpoint: %s" % e,
             )
             time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
             continue
@@ -647,36 +734,39 @@ if __name__ == "__main__":
             ),
         )
 
-        # Post timing stats to API for Prometheus metrics
-        try:
-            requests.post(
-                f"{config['API']['APIURI']}/botstats/loop_time_seconds",
-                json={"val": f"{loop_elapsed:.2f}"},
+        # Post timing stats to API for Prometheus metrics (non-critical, no need to block on failures)
+        api_request_with_retry(
+            'post',
+            f"{config['API']['APIURI']}/botstats/loop_time_seconds",
+            json={"val": f"{loop_elapsed:.2f}"},
+        )
+        api_request_with_retry(
+            'post',
+            f"{config['API']['APIURI']}/botstats/loop_setup_seconds",
+            json={"val": f"{setup_elapsed:.2f}"},
+        )
+        api_request_with_retry(
+            'post',
+            f"{config['API']['APIURI']}/botstats/loop_processing_seconds",
+            json={"val": f"{processing_elapsed:.2f}"},
+        )
+        api_request_with_retry(
+            'post',
+            f"{config['API']['APIURI']}/botstats/loop_puzzle_count",
+            json={"val": str(len(puzzles))},
+        )
+        if puzzles:
+            api_request_with_retry(
+                'post',
+                f"{config['API']['APIURI']}/botstats/loop_avg_seconds_per_puzzle",
+                json={"val": f"{processing_elapsed / len(puzzles):.2f}"},
             )
-            requests.post(
-                f"{config['API']['APIURI']}/botstats/loop_setup_seconds",
-                json={"val": f"{setup_elapsed:.2f}"},
-            )
-            requests.post(
-                f"{config['API']['APIURI']}/botstats/loop_processing_seconds",
-                json={"val": f"{processing_elapsed:.2f}"},
-            )
-            requests.post(
-                f"{config['API']['APIURI']}/botstats/loop_puzzle_count",
-                json={"val": str(len(puzzles))},
-            )
-            if puzzles:
-                requests.post(
-                    f"{config['API']['APIURI']}/botstats/loop_avg_seconds_per_puzzle",
-                    json={"val": f"{processing_elapsed / len(puzzles):.2f}"},
-                )
-            # Post quota failure count (cumulative counter, not reset)
-            quota_failures = get_quota_failure_count()
-            requests.post(
-                f"{config['API']['APIURI']}/botstats/quota_failures",
-                json={"val": str(quota_failures)},
-            )
-        except Exception as e:
-            debug_log(1, "Error posting botstats: %s" % e)
+        # Post quota failure count (cumulative counter, not reset)
+        quota_failures = get_quota_failure_count()
+        api_request_with_retry(
+            'post',
+            f"{config['API']['APIURI']}/botstats/quota_failures",
+            json={"val": str(quota_failures)},
+        )
 
         exitFlag = 0
