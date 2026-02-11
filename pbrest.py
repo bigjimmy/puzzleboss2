@@ -1324,11 +1324,11 @@ def create_puzzle():
     )
     drive_uri = f"https://docs.google.com/spreadsheets/d/{drive_id}/edit#gid=1"
 
-    # Activate the PB tracking add-on (non-fatal)
+    # Activate the Puzzle Tools add-on via Apps Script API (non-fatal)
     try:
-        activate_puzzle_sheet_extension(drive_id, name)
+        activate_puzzle_sheet_via_api(drive_id, name)
     except Exception as ae:
-        debug_log(2, f"Extension activation failed for {name}, bigjimmy will fall back: {ae}")
+        debug_log(2, f"Apps Script activation failed for {name}, bigjimmy will fall back: {ae}")
 
     # Actually insert into the database
     try:
@@ -1638,13 +1638,13 @@ def finish_puzzle_creation(code):
 
             debug_log(3, f"Step 3: Created Google Sheet for {name}")
 
-            # Activate the PB tracking add-on (non-fatal if it fails;
+            # Activate the Puzzle Tools add-on via Apps Script API (non-fatal if it fails;
             # bigjimmybot will fall back to the legacy Revisions API)
             addon_activated = False
             try:
-                addon_activated = activate_puzzle_sheet_extension(drive_id, name)
+                addon_activated = activate_puzzle_sheet_via_api(drive_id, name)
             except Exception as ae:
-                debug_log(2, f"Step 3: Extension activation failed for {name}, "
+                debug_log(2, f"Step 3: Apps Script activation failed for {name}, "
                           f"bigjimmy will fall back: {ae}")
 
             msg = f"Created Google Sheet for {name}"
@@ -1814,7 +1814,7 @@ def activate_all_sheets():
 
     for puzzle in puzzles:
         try:
-            success = activate_puzzle_sheet_extension(puzzle["drive_id"], puzzle["name"])
+            success = activate_puzzle_sheet_via_api(puzzle["drive_id"], puzzle["name"])
             if success:
                 activated += 1
                 results.append({"name": puzzle["name"], "status": "activated"})

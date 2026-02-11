@@ -1279,12 +1279,15 @@ _ACTIVITY_SHEET_NAME = "_pb_activity"
 
 def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
     """
-    Activate puzzle activity tracking via the official Apps Script API.
+    Activate puzzle tools/tracking via the official Apps Script API.
 
-    Creates a container-bound Apps Script project on the spreadsheet,
-    pushes a simple onEdit trigger that writes editor activity to a
-    hidden '_pb_activity' sheet, then pre-creates that sheet (hidden
-    and warning-protected).
+    Creates a container-bound Apps Script project on the spreadsheet and
+    pushes configurable Apps Script code. The code can be customized via
+    config values:
+      - APPS_SCRIPT_ADDON_CODE: The Apps Script code to deploy (falls back to
+        default onEdit activity tracker if not set)
+      - APPS_SCRIPT_ADDON_MANIFEST: The appsscript.json manifest (falls back
+        to default if not set)
 
     Uses the existing service account with Domain-Wide Delegation.
     Requires the 'https://www.googleapis.com/auth/script.projects'
@@ -1308,6 +1311,20 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
 
     max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+
+    # Get the Apps Script code to deploy (configurable or default)
+    addon_code = configstruct.get("APPS_SCRIPT_ADDON_CODE", "").strip()
+    addon_manifest = configstruct.get("APPS_SCRIPT_ADDON_MANIFEST", "").strip()
+
+    if not addon_code:
+        addon_code = _APPS_SCRIPT_ONEDIT_CODE
+        debug_log(4, "[%s] Using default onEdit activity tracker" % puzz_label)
+    else:
+        debug_log(3, "[%s] Using custom Apps Script code from config (APPS_SCRIPT_ADDON_CODE)"
+                  % puzz_label)
+
+    if not addon_manifest:
+        addon_manifest = _APPS_SCRIPT_MANIFEST
 
     # Need script.projects scope — create new credentials with it
     sa_file = _get_service_account_file()
@@ -1338,7 +1355,7 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
         try:
             script_service = build("script", "v1", credentials=api_creds)
             project = script_service.projects().create(body={
-                "title": "PB Activity Tracker",
+                "title": "Puzzle Tools",
                 "parentId": sheet_id,
             }).execute()
             script_id = project["scriptId"]
@@ -1357,7 +1374,7 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
         debug_log(1, "[%s] EXHAUSTED retries creating script project" % puzz_label)
         return False
 
-    # ── Step 2: Push onEdit trigger code ───────────────────────────
+    # ── Step 2: Push Apps Script code ───────────────────────────────
     for attempt in range(max_retries):
         try:
             script_service.projects().updateContent(
@@ -1365,13 +1382,14 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
                 body={
                     "files": [
                         {"name": "Code", "type": "SERVER_JS",
-                         "source": _APPS_SCRIPT_ONEDIT_CODE},
+                         "source": addon_code},
                         {"name": "appsscript", "type": "JSON",
-                         "source": _APPS_SCRIPT_MANIFEST},
+                         "source": addon_manifest},
                     ]
                 }
             ).execute()
-            debug_log(3, "[%s] Pushed onEdit code to script %s" % (puzz_label, script_id))
+            debug_log(3, "[%s] Pushed Apps Script code to script %s (% chars)"
+                      % (puzz_label, script_id, len(addon_code)))
             break
         except Exception as e:
             if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
@@ -1386,53 +1404,58 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
         debug_log(1, "[%s] EXHAUSTED retries pushing script code" % puzz_label)
         return False
 
-    # ── Step 3: Pre-create _pb_activity sheet (hidden + protected) ─
-    try:
-        sheets_service = build("sheets", "v4", credentials=api_creds)
+    # ── Step 3: Pre-create _pb_activity sheet (only for default tracker) ─
+    # Only create the hidden activity sheet if we're using the default onEdit tracker.
+    # Custom add-ons (like Puzzle Tools) don't need this sheet.
+    using_default_tracker = not configstruct.get("APPS_SCRIPT_ADDON_CODE", "").strip()
 
-        # Add the hidden sheet
-        add_result = sheets_service.spreadsheets().batchUpdate(
-            spreadsheetId=sheet_id,
-            body={"requests": [{
-                "addSheet": {
-                    "properties": {
-                        "title": _ACTIVITY_SHEET_NAME,
-                        "hidden": True,
+    if using_default_tracker:
+        try:
+            sheets_service = build("sheets", "v4", credentials=api_creds)
+
+            # Add the hidden sheet
+            add_result = sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=sheet_id,
+                body={"requests": [{
+                    "addSheet": {
+                        "properties": {
+                            "title": _ACTIVITY_SHEET_NAME,
+                            "hidden": True,
+                        }
                     }
-                }
-            }]}
-        ).execute()
+                }]}
+            ).execute()
 
-        activity_sheet_id = add_result["replies"][0]["addSheet"]["properties"]["sheetId"]
+            activity_sheet_id = add_result["replies"][0]["addSheet"]["properties"]["sheetId"]
 
-        # Write headers
-        sheets_service.spreadsheets().values().update(
-            spreadsheetId=sheet_id,
-            range=f"{_ACTIVITY_SHEET_NAME}!A1:C1",
-            valueInputOption="RAW",
-            body={"values": [["editor", "timestamp", "num_sheets"]]}
-        ).execute()
+            # Write headers
+            sheets_service.spreadsheets().values().update(
+                spreadsheetId=sheet_id,
+                range=f"{_ACTIVITY_SHEET_NAME}!A1:C1",
+                valueInputOption="RAW",
+                body={"values": [["editor", "timestamp", "num_sheets"]]}
+            ).execute()
 
-        # Add warning-only protection
-        sheets_service.spreadsheets().batchUpdate(
-            spreadsheetId=sheet_id,
-            body={"requests": [{
-                "addProtectedRange": {
-                    "protectedRange": {
-                        "range": {"sheetId": activity_sheet_id},
-                        "description": "Managed by Puzzleboss — do not edit manually.",
-                        "warningOnly": True,
+            # Add warning-only protection
+            sheets_service.spreadsheets().batchUpdate(
+                spreadsheetId=sheet_id,
+                body={"requests": [{
+                    "addProtectedRange": {
+                        "protectedRange": {
+                            "range": {"sheetId": activity_sheet_id},
+                            "description": "Managed by Puzzleboss — do not edit manually.",
+                            "warningOnly": True,
+                        }
                     }
-                }
-            }]}
-        ).execute()
+                }]}
+            ).execute()
 
-        debug_log(3, "[%s] Created hidden + protected _pb_activity sheet" % puzz_label)
+            debug_log(3, "[%s] Created hidden + protected _pb_activity sheet" % puzz_label)
 
-    except Exception as e:
-        # Non-fatal — the onEdit trigger will create _pb_activity if missing
-        debug_log(2, "[%s] Could not pre-create _pb_activity sheet: %s "
-                  "(trigger will create it on first edit)" % (puzz_label, e))
+        except Exception as e:
+            # Non-fatal — the onEdit trigger will create _pb_activity if missing
+            debug_log(2, "[%s] Could not pre-create _pb_activity sheet: %s "
+                      "(trigger will create it on first edit)" % (puzz_label, e))
 
     debug_log(3, "[%s] Apps Script API activation complete (script_id=%s)"
               % (puzz_label, script_id))
