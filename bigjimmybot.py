@@ -88,8 +88,9 @@ def check_puzzle_from_queue(threadname, q):
                             f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetenabled",
                             json={"sheetenabled": 1},
                         )
-                        # Use the data we just fetched
+                        # Use the data we just fetched and update local flag
                         sheet_info = test_info
+                        sheetenabled = 1  # Update local variable so later processing uses correct path
                     except Exception as e:
                         debug_log(
                             1,
