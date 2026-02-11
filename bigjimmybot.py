@@ -55,7 +55,6 @@ def check_puzzle_from_queue(threadname, q):
             # HYBRID APPROACH: Check sheetenabled to determine which method to use
             sheetenabled = mypuzzle.get("sheetenabled", 0)
 
-            # Get sheet info using appropriate method
             if sheetenabled == 1:
                 # Sheet has add-on enabled, use the hidden sheet approach
                 debug_log(
@@ -67,15 +66,50 @@ def check_puzzle_from_queue(threadname, q):
                     mypuzzle["drive_id"], mypuzzle["name"]
                 )
             else:
-                # No add-on deployed, use legacy Revisions API
+                # Check if hidden _pb_activity sheet exists (add-on deployed but not marked)
                 debug_log(
                     4,
-                    "[Thread: %s] No add-on on %s, using legacy Revisions API (sheetenabled=0)"
+                    "[Thread: %s] Checking for hidden activity sheet on %s (sheetenabled=0)"
                     % (threadname, mypuzzle["name"]),
                 )
-                sheet_info = get_puzzle_sheet_info_legacy(
+                # Try to read hidden sheet - if it exists and has data, enable sheetenabled
+                test_info = get_puzzle_sheet_info_activity(
                     mypuzzle["drive_id"], mypuzzle["name"]
                 )
+                if test_info.get("editors"):
+                    # Hidden sheet found with activity! Enable sheetenabled and use the data
+                    debug_log(
+                        3,
+                        "[Thread: %s] Hidden activity sheet found on %s, enabling sheetenabled"
+                        % (threadname, mypuzzle["name"]),
+                    )
+                    try:
+                        requests.post(
+                            f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetenabled",
+                            json={"sheetenabled": 1},
+                        )
+                        # Use the data we just fetched
+                        sheet_info = test_info
+                    except Exception as e:
+                        debug_log(
+                            1,
+                            "[Thread: %s] Error enabling sheetenabled: %s"
+                            % (threadname, e),
+                        )
+                        # Fall back to legacy if update failed
+                        sheet_info = get_puzzle_sheet_info_legacy(
+                            mypuzzle["drive_id"], mypuzzle["name"]
+                        )
+                else:
+                    # No hidden sheet found, use legacy approach
+                    debug_log(
+                        4,
+                        "[Thread: %s] No add-on on %s, using legacy Revisions API"
+                        % (threadname, mypuzzle["name"]),
+                    )
+                    sheet_info = get_puzzle_sheet_info_legacy(
+                        mypuzzle["drive_id"], mypuzzle["name"]
+                    )
 
             # Update sheet count only if changed
             if sheet_info["sheetcount"] is not None and sheet_info[
