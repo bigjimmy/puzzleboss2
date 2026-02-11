@@ -152,32 +152,33 @@ php -S localhost:8080
 
 ## Testing
 
+**IMPORTANT:** All test suites should be run inside the Docker container to ensure consistent dependencies (PyYAML, Playwright, etc.) and clean database state. Local test runs may fail due to missing dependencies or leftover test data.
+
 **API Integration Tests**
 ```bash
-# Comprehensive test suite covering all endpoints
-python scripts/test_api_coverage.py
+# Run comprehensive test suite covering all endpoints (ALWAYS USE DOCKER)
+docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive
+
+# Run specific API tests by number
+docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive --tests 1 5 10
+
+# List available API tests
+docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --list
 
 # Test solver assignment logic
-python scripts/test_solver_assignments.py
-```
-
-**Load Testing**
-```bash
-# Configure test parameters
-cp scripts/loadtest_config-EXAMPLE.yaml scripts/loadtest_config.yaml
-
-# Run load tests
-python scripts/loadtest.py
+docker exec puzzleboss-app python /app/scripts/test_solver_assignments.py
 ```
 
 **UI Tests (Playwright)**
-- Playwright and its browser dependencies are installed **inside the Docker container only**. Always run Playwright tests via `docker exec`, never from the host.
 ```bash
-# Run all comprehensive UI tests
-docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py
+# Run all comprehensive UI tests (ALWAYS USE DOCKER)
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive
 
-# Run a specific test by number
-docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py 25
+# Run specific UI tests by number
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive --tests 1 5 10
+
+# List available UI tests
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --list
 
 # Run ad-hoc Playwright scripts
 docker exec puzzleboss-app python -c "
@@ -189,6 +190,15 @@ with sync_playwright() as p:
     print(page.title())
     browser.close()
 "
+```
+
+**Load Testing**
+```bash
+# Configure test parameters
+cp scripts/loadtest_config-EXAMPLE.yaml scripts/loadtest_config.yaml
+
+# Run load tests (can run locally or in Docker)
+python scripts/loadtest.py
 ```
 
 ## Common Operations
