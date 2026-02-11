@@ -134,9 +134,12 @@ def refresh_config():
                 old_value = configstruct.get(key)
                 if old_value != value:
                     if old_value is None:
-                        debug_log(3, f"Config added: {key} = {value}")
+                        display_val = value if len(str(value)) <= 80 else f"{str(value)[:77]}..."
+                        debug_log(3, f"Config added: {key} = {display_val}")
                     else:
-                        debug_log(3, f"Config changed: {key}: {old_value} -> {value}")
+                        display_old = str(old_value) if len(str(old_value)) <= 40 else f"{str(old_value)[:37]}..."
+                        display_new = str(value) if len(str(value)) <= 40 else f"{str(value)[:37]}..."
+                        debug_log(3, f"Config changed: {key}: {display_old} -> {display_new}")
                     changes_found = True
 
             # Check for removed keys

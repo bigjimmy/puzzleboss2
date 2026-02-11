@@ -550,11 +550,14 @@ if __name__ == "__main__":
         except Exception as e:
             debug_log(1, "Error refreshing config: %s" % e)
 
-        # Rotate __Secure-1PSIDTS cookie for add-on activation (non-fatal)
-        try:
-            rotate_addon_cookies(config["API"]["APIURI"])
-        except Exception as e:
-            debug_log(2, "Error rotating addon cookies: %s" % e)
+        # Rotate __Secure-1PSIDTS cookie for add-on activation every 50 loops (non-fatal)
+        # Google's RotateCookies returns a new value on every call, so rotating every loop
+        # causes constant DB writes and noisy "Config changed" logs across gunicorn workers.
+        if loop_iterations_total % 50 == 0:
+            try:
+                rotate_addon_cookies(config["API"]["APIURI"])
+            except Exception as e:
+                debug_log(2, "Error rotating addon cookies: %s" % e)
 
         # Check add-on invoke health every 10 loops (~every 10 iterations)
         if loop_iterations_total % 10 == 0:
