@@ -1,215 +1,317 @@
-# Google Sheets Add-on: Activity Tracking Extension
+# Google Sheets Add-on: Activity Tracking and Puzzle Tools
 
 ## Overview
 
-Puzzleboss uses a Google Sheets add-on (Apps Script extension) bound to puzzle spreadsheets to track solver activity. When a solver edits a cell, the extension writes `DeveloperMetadata` to the sheet with:
+Puzzleboss deploys a configurable Apps Script add-on to puzzle spreadsheets via the **Apps Script API**. This add-on provides:
 
-- `PB_ACTIVITY:<username>` — which user edited and when
-- `PB_SPREADSHEET` — marks the sheet as having the extension active
+1. **Activity Tracking**: Records solver edits via `DeveloperMetadata` for bigjimmybot
+2. **Puzzle Tools** (optional): Grid manipulation, crossword formatting, tab creation (from [dannybd/sheets-puzzleboss-tools](https://github.com/dannybd/sheets-puzzleboss-tools))
 
-`bigjimmybot.py` reads this metadata via the Sheets API to update puzzle activity in the database (`lastsheetact`, `sheetcount`). This approach is significantly more quota-efficient than the legacy Revisions API fallback.
+The add-on is deployed automatically when new puzzles are created, using a **service account with Domain-Wide Delegation** — no browser cookies or manual activation required.
 
 ## Architecture
 
 ```
-Puzzle Creation Flow:
+Puzzle Creation Flow (Apps Script API):
   addpuzzle.php (UI)  →  pbrest.py (Step 3)  →  pbgooglelib.py
-                                                    ├── create_puzzle_sheet()
-                                                    └── activate_puzzle_sheet_extension()
-                                                         └── POST /scripts/invoke (Google internal)
+                                                   ├── create_puzzle_sheet()
+                                                   └── activate_puzzle_sheet_via_api()
+                                                        ├── Apps Script API: projects.create
+                                                        ├── Apps Script API: projects.updateContent
+                                                        └── (Optional) Create hidden _pb_activity sheet
 
 Activity Tracking Flow:
   User edits cell  →  Apps Script onEdit trigger  →  Writes DeveloperMetadata
+                                                      (PB_ACTIVITY:username, PB_SPREADSHEET)
   bigjimmybot.py   →  Sheets API DeveloperMetadata.search()  →  Updates puzzle DB
 ```
 
-### Key Functions
+### Key Differences from Legacy Cookie-Based System
 
-| Function | File | Purpose |
-|----------|------|---------|
-| `activate_puzzle_sheet_extension()` | `pbgooglelib.py:899` | Activates add-on on a sheet via `/scripts/invoke` |
-| `check_addon_invoke_health()` | `pbgooglelib.py:1017` | Tests if invoke credentials are still valid (returns 1/0) |
-| `rotate_addon_cookies()` | `pbgooglelib.py:1082` | Auto-rotates `__Secure-1PSIDTS` / `__Secure-3PSIDTS` cookies |
-| `get_puzzle_sheet_info()` | `pbgooglelib.py` | Reads activity via DeveloperMetadata API (new approach) |
-| `get_puzzle_sheet_info_legacy()` | `pbgooglelib.py` | Reads activity via Revisions API (fallback) |
+|  | **Cookie-Based (DEPRECATED)** | **Apps Script API (CURRENT)** |
+|---|---------------------------|---------------------------|
+| **Authentication** | Browser session cookies (SID, __Secure-1PSID, etc.) | Service account with Domain-Wide Delegation |
+| **Activation** | POST to `/scripts/invoke` endpoint | Apps Script API (`projects.create` + `updateContent`) |
+| **Code Source** | External add-on (hardcoded) | Configurable via `APPS_SCRIPT_ADDON_CODE` |
+| **Maintenance** | Cookie rotation every 50 loops, health checks | None — API uses stable service account credentials |
+| **Reliability** | Cookies expire unpredictably (401 errors) | Service account credentials do not expire |
+
+**The cookie-based system has been removed as of this branch.**
+
+## Configuration
+
+### Required: Service Account Setup
+
+The Apps Script API deployment requires:
+
+1. **Service Account** with Domain-Wide Delegation enabled
+2. **Authorized Scopes** in Google Workspace Admin Console:
+   ```
+   https://www.googleapis.com/auth/drive
+   https://www.googleapis.com/auth/spreadsheets
+   https://www.googleapis.com/auth/script.projects
+   ```
+3. **Apps Script API Enabled** in Google Cloud Console:
+   ```
+   https://console.cloud.google.com/apis/api/script.googleapis.com
+   ```
+
+### Config Values
+
+#### Database (`config` table)
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `APPS_SCRIPT_ADDON_CODE` | Apps Script code to deploy (JavaScript) | Falls back to simple onEdit tracker |
+| `APPS_SCRIPT_ADDON_MANIFEST` | The appsscript.json manifest | Default V8 runtime config |
+| `SERVICE_ACCOUNT_FILE` | Path to service account JSON key | `service-account.json` |
+| `SERVICE_ACCOUNT_SUBJECT` | Domain admin email for impersonation | *(must be set)* |
+
+#### Static (`puzzleboss.yaml`)
+
+```yaml
+SERVICE_ACCOUNT_FILE: service-account.json
+```
+
+### Add-on Code Options
+
+**Option 1: Default Activity Tracker (Minimal)**
+- Leave `APPS_SCRIPT_ADDON_CODE` empty or unset
+- Deploys a simple `onEdit` trigger that writes to a hidden `_pb_activity` sheet
+- ~170 lines of JavaScript
+- No UI, no puzzle tools — just activity tracking
+
+**Option 2: Full Puzzle Tools (Recommended)**
+- Set `APPS_SCRIPT_ADDON_CODE` to the content of `scripts/puzzle_tools_addon_latest.gs`
+- Includes activity tracking PLUS:
+  - 🔠 Resize Cells into Squares
+  - 🪞 Symmetrify Grid (rotational/bilateral)
+  - 🗂️ Quick-Add Named Tabs
+  - 📰 Format as Crossword Grid
+  - 🐝 Add Hexagonal Grid Sheet
+  - 🫥 Delete Blank Rows
+- ~400 lines of JavaScript
+- Based on [dannybd/sheets-puzzleboss-tools](https://github.com/dannybd/sheets-puzzleboss-tools)
+
+To deploy the full puzzle tools, run the production migration SQL:
+```bash
+mysql -u puzzleboss -p puzzleboss < PRODUCTION_MIGRATION.sql
+```
+
+## Deployment
+
+### Automatic (New Puzzles)
+
+When a new puzzle is created via `addpuzzle.php` or the API:
+1. Sheet is created via Sheets API
+2. **Apps Script add-on is deployed automatically** via `activate_puzzle_sheet_via_api()`
+3. Puzzle is registered in the database
+
+No manual action required!
+
+### Manual (Existing Puzzles)
+
+To deploy/update the add-on on existing sheets without it:
+
+```bash
+# Deploy to a specific puzzle by ID
+curl -X POST "http://localhost:5000/puzzles/123/activate-addon"
+
+# Deploy to multiple puzzles
+curl -X POST "http://localhost:5000/puzzles/activate-addons" \
+  -H "Content-Type: application/json" \
+  -d '{"puzzle_ids": [123, 456, 789]}'
+
+# Deploy to all unsolved puzzles missing the add-on
+curl -X POST "http://localhost:5000/puzzles/activate-addons" \
+  -H "Content-Type: application/json" \
+  -d '{"filter": "missing_addon"}'
+```
+
+**Note:** Re-deploying the add-on to a sheet that already has one will create a second Apps Script project. This is harmless but creates clutter. The `/activate-addons` endpoint is primarily for migrating old sheets.
+
+## Activity Tracking
+
+### DeveloperMetadata Keys
+
+The add-on writes metadata to the spreadsheet that bigjimmybot reads:
+
+| Key | Value | Purpose |
+|-----|-------|---------|
+| `PB_ACTIVITY:<username>` | `{"t": 1766285432}` | Last edit timestamp for user |
+| `PB_SPREADSHEET` | `{"t": 1766285432, "num_sheets": 5}` | Marks sheet as having tracking enabled |
+| `PB_SHEET` | `{"t": 1766285432}` | Last edit timestamp for each sheet |
 
 ### Hybrid Tracking Approach
 
 The `puzzle.sheetenabled` column controls which tracking method bigjimmybot uses:
 
-- `sheetenabled=1` — Use DeveloperMetadata API (fast, low quota)
-- `sheetenabled=0` — Use legacy Revisions API (slow, high quota), auto-upgrade when metadata detected
+- `sheetenabled=1` — Use DeveloperMetadata API (fast, low quota, preferred)
+- `sheetenabled=0` — Use legacy Revisions API (slow, high quota, fallback)
 
-## Configuration
-
-Two config entries in the database `config` table are required:
-
-### `SHEETS_ADDON_COOKIES`
-
-JSON object containing Google session cookies from `docs.google.com`. These are extracted from a browser session.
-
-**Minimum required cookies:** `SID`, `OSID`, `__Secure-1PSID`, `__Secure-1PSIDTS`
-
-The `__Secure-1PSIDTS` (and `__Secure-3PSIDTS`) cookies rotate automatically via Google's `RotateCookies` endpoint — bigjimmybot handles this every 50 loops. The core session cookies (`SID`, `OSID`, `__Secure-1PSID`) are longer-lived but will eventually expire (typically days to weeks).
-
-Example:
-```json
-{
-  "SID": "g.a000...",
-  "OSID": "g.a000...",
-  "__Secure-1PSID": "g.a000...",
-  "__Secure-1PSIDTS": "sidts-CjIB...",
-  "__Secure-3PSIDTS": "sidts-CjIB..."
-}
+When bigjimmybot detects `PB_SPREADSHEET` metadata on a sheet with `sheetenabled=0`, it automatically upgrades via:
+```
+POST /puzzles/{id}/sheetenabled  →  sets sheetenabled=1
 ```
 
-### `SHEETS_ADDON_INVOKE_PARAMS`
+**New sheets created via the API start with `sheetenabled=1` automatically.**
 
-JSON object containing the full query string from a `/scripts/invoke` request captured in browser DevTools. The full query string is stored (not individual parameters) because Google's add-on framework uses many undocumented parameters (`includes_info_params`, `ctx`, `eei`, `ruid`, etc.) that are required for the add-on to fully activate and create installable triggers.
+## Updating Add-on Code
 
-At invocation time, the `id=` parameter is replaced with the target sheet ID.
+To change the code deployed to **new** sheets during a hunt:
 
-Example:
-```json
-{
-  "query_string": "id=SHEET_ID&sid=1f48544a74c53eaf&vc=1&c=1&w=1&flr=0&smv=2147483647&smb=%5B2147483647%2C%20APwL%5D&ruid=52&lib=MGbbKKh6PzO7n4XKLGDRZxVVT43b8S2kx&func=populateMenus&ctx=...&eei=...&did=AKfycbw2OFUmjSGozHe6i_G0_biODAk6NOzIfHkwoaKKzSGORZ0&token=AC4w5Vg-...&ouid=112391333398687811083&includes_info_params=true&cros_files=false&nded=false"
-}
+### Method 1: Direct Database Update (Quick)
+
+```sql
+-- Update the code
+UPDATE config SET val = '<new_javascript_code>' WHERE `key` = 'APPS_SCRIPT_ADDON_CODE';
 ```
 
-Key parameters within the query string:
-
-| Param | Description | Stability |
-|-------|-------------|-----------|
-| `sid` | Session identifier (hex string) | Changes with browser session |
-| `token` | Auth token (contains embedded timestamp) | Changes with browser session |
-| `lib` | Apps Script library/project ID | Stable (tied to the add-on) |
-| `did` | Deployment ID | Stable (tied to the add-on deployment) |
-| `ouid` | Google account numeric ID | Stable (tied to the Google account) |
-| `includes_info_params` | Required for full activation | Always `true` |
-| `ruid`, `vc`, `c`, `w`, `flr`, `smv`, `smb` | Internal Google params | Varies |
-
-**Note:** A legacy format with individual keys (`sid`, `token`, `lib`, `did`, `ouid`) is still supported for backward compatibility but may not fully activate the extension. The `query_string` format is strongly preferred.
-
-## Credential Refresh
-
-### When to Refresh
-
-Credentials need refreshing when:
-- The `addon_invoke_healthy` botstats metric drops to `0`
-- bigjimmybot logs severity-1: "Add-on invoke health check FAILED"
-- New puzzles fail activation (401 errors in logs)
-- Grafana alerts on the metric (if configured)
-
-### How to Refresh (pbtools UI)
-
-The easiest method is the form on the **Puzzleboss-only Admin Tools** page (`pbtools.php`):
-
-1. Open any puzzle sheet that has the PB add-on active in Chrome
-2. Open DevTools (F12) → **Network** tab
-3. In the filter box, type `scripts/invoke`
-4. Trigger the add-on: click **Extensions → Mystery Hunt Tools → Enable for this spreadsheet**
-5. Click the `invoke` request in the Network tab
-6. From the **Headers** tab:
-   - **Cookie:** Right-click the Cookie header value → "Copy value"
-   - **Request URL:** Right-click the URL → "Copy link address" (the **full** URL with all query params)
-7. Paste both into the form on `pbtools.php` and submit
-
-**Important:** The full invoke URL must be preserved — it contains many undocumented Google parameters (`includes_info_params`, `ctx`, `eei`, `ruid`, etc.) that are required for the add-on to fully activate and create installable triggers. The form stores the entire query string.
-
-### How to Refresh (CLI)
+### Method 2: Import from File
 
 ```bash
-# Parse raw browser data and output config JSON
-python3 scripts/build_addon_config.py \
-  --raw-cookies "COMPASS=...; SID=...; ..." \
-  --invoke-url "https://docs.google.com/.../scripts/invoke?id=...&sid=...&token=..."
+# Create a file with your new code
+cat > /tmp/new_addon.gs << 'EOF'
+function onEdit(e) {
+  // Your new code here
+}
+EOF
 
-# Test credentials against a live sheet
-python3 scripts/test_cookie_auth.py \
-  --raw-cookies "..." \
-  --invoke-url "..."
-
-# Test credentials already saved in config DB (run on server)
-python3 scripts/test_cookie_auth.py
+# Import via SQL
+mysql -u puzzleboss -p puzzleboss << EOF
+UPDATE config SET val = '$(cat /tmp/new_addon.gs | sed "s/'/''/g")'
+WHERE \`key\` = 'APPS_SCRIPT_ADDON_CODE';
+EOF
 ```
+
+### Method 3: Via pbtools.php UI
+
+1. Go to `pbtools.php` → **Config Editor**
+2. Find `APPS_SCRIPT_ADDON_CODE`
+3. Paste new code
+4. Save
+
+**Important:** Updating the config only affects **new** puzzle sheets created after the change. Existing sheets retain their deployed version. To update existing sheets, use the manual deployment endpoint.
 
 ## Monitoring
 
-### bigjimmybot Health Check
+### Key Functions
 
-Every 10 main loops, bigjimmybot:
-1. Picks a puzzle sheet with `sheetenabled=1`
-2. Calls `check_addon_invoke_health(sheet_id)`
-3. Posts the result as `addon_invoke_healthy` (1 or 0) to `/botstats/addon_invoke_healthy`
-4. Logs severity-1 if the health check fails
+| Function | File | Purpose |
+|----------|------|---------|
+| `activate_puzzle_sheet_via_api()` | `pbgooglelib.py` | Deploys add-on via Apps Script API |
+| `get_puzzle_sheet_info()` | `pbgooglelib.py` | Reads activity via DeveloperMetadata API (new) |
+| `get_puzzle_sheet_info_legacy()` | `pbgooglelib.py` | Reads activity via Revisions API (fallback) |
+| `check_developer_metadata_exists()` | `pbgooglelib.py` | Quick check if sheet has PB metadata |
 
-### Grafana / Prometheus
+### Logs
 
-Query the botstats API endpoint to get the metric:
+Search for these patterns in `pbrest.log`:
+
+```bash
+# Successful activations
+grep "Apps Script API activation complete" pbrest.log
+
+# Activation failures
+grep "Apps Script activation failed" pbrest.log | grep -v "non-fatal"
+
+# Quota issues
+grep "Rate limit creating script" pbrest.log
 ```
-GET /botstats  →  { "addon_invoke_healthy": "1", ... }
-```
 
-Set up a Grafana alert when `addon_invoke_healthy` is `0` for more than one check cycle.
+### Prometheus Metrics
+
+If `prometheus_flask_exporter` is installed:
+- **Removed:** `addon_invoke_healthy` metric (was for cookie system)
+- Monitor API failures via general request metrics
 
 ## Troubleshooting
 
-### Activation returns 401
+### Add-on Not Appearing in Menu
 
-Cookies have expired. Refresh via pbtools.php (see above).
+**Symptoms:** New puzzle sheet created but "Puzzle Tools" menu doesn't appear
 
-### Activation returns 400
+**Causes:**
+1. Script deployment failed → Check logs: `grep "activate_puzzle_sheet_via_api" pbrest.log`
+2. Apps Script API not enabled in GCP
+3. Service account lacks `script.projects` scope in Domain-Wide Delegation
+4. User hasn't triggered `onOpen` → Reload the sheet
 
-The invoke URL params are wrong. Usually means `lib` or `did` are missing or incorrect. Re-capture from DevTools.
+**Fix:**
+```bash
+# Manually deploy to the sheet
+curl -X POST "http://localhost:5000/puzzles/{puzzle_id}/activate-addon"
+```
 
-### Activation returns 200 but sheet doesn't track activity
+### Activity Tracking Not Working
 
-The add-on activated (`populateMenus` ran), but the installable `onEdit` trigger may not have been created. This can happen if:
-- The add-on code itself has an issue
-- The sheet doesn't have the right permissions
+**Symptoms:** Puzzle sheet has add-on but bigjimmybot doesn't detect activity
 
-Check bigjimmybot logs — if it detects `PB_SPREADSHEET` metadata, it will auto-set `sheetenabled=1`.
+**Causes:**
+1. DeveloperMetadata not being written → Check with admin debug menu (if admin)
+2. Bigjimmybot using legacy Revisions API → Check `puzzle.sheetenabled` column
+3. User email not extractable → Runs as "unknown"
 
-### Cookies work for invoke but not page loads
+**Fix:**
+```python
+# Test metadata detection
+from pbgooglelib import check_developer_metadata_exists
+check_developer_metadata_exists(sheet_id)  # Should return True
+```
 
-This is expected behavior. The cookies authenticate RPC calls to `/scripts/invoke` but do NOT work for loading regular pages (`/edit`, `/export`, Google homepage). This means we cannot auto-refresh `sid`/`token` by scraping sheet pages.
+### Deployment Fails with 403 Permission Denied
 
-### 2SV (Two-Step Verification) prompt on sheets
+**Symptoms:** `activate_puzzle_sheet_via_api` returns False, logs show "Insufficient Permission"
 
-If users see "To protect your account, you need to turn on 2-Step Verification", this is a Google Workspace admin policy issue — NOT caused by the add-on. Check:
-- Google Workspace Admin Console → Security → Authentication → 2-Step Verification
-- Child organizational unit overrides
-- Configuration group policies
+**Causes:**
+1. Apps Script API not enabled in Google Cloud Console
+2. Service account lacks Domain-Wide Delegation
+3. `script.projects` scope not authorized
+
+**Fix:**
+1. Enable API: https://console.cloud.google.com/apis/api/script.googleapis.com
+2. Verify DWD scopes in Admin Console: Security → API controls → Domain-wide delegation
+3. Ensure `https://www.googleapis.com/auth/script.projects` is included
+
+### Deployment Fails with 429 Rate Limit
+
+**Symptoms:** Many sheets created at once, some fail with rate limit errors
+
+**Solution:** The system has built-in retry logic with exponential backoff. Failed sheets will retry automatically. Configure behavior:
+
+```sql
+-- Increase max retries (default: 10)
+UPDATE config SET val = '20' WHERE `key` = 'BIGJIMMY_QUOTAFAIL_MAX_RETRIES';
+
+-- Increase retry delay (default: 5 seconds)
+UPDATE config SET val = '10' WHERE `key` = 'BIGJIMMY_QUOTAFAIL_DELAY';
+```
 
 ## Scripts Reference
 
-| Script | Purpose |
-|--------|---------|
-| `scripts/build_addon_config.py` | Parse raw browser data → config JSON |
-| `scripts/test_cookie_auth.py` | Test cookie auth + invoke endpoint |
-| `scripts/test_apps_script_api.py` | Test Apps Script API with service account (for future approach) |
+| Script | Purpose | Status |
+|--------|---------|--------|
+| `scripts/test_apps_script_api.py` | Test Apps Script API deployment end-to-end | ✅ Active |
+| `scripts/puzzle_tools_addon_latest.gs` | Reference copy of full puzzle tools code | ✅ Active |
+| `scripts/puzzle_tools_addon.gs` | Earlier version (Jason's original extraction) | ⚠️ Reference only |
 
-## Future Work
+## Related Documentation
 
-### 1. Build a Maintainable Apps Script Add-on
+- **[docs/apps-script-deployment.md](apps-script-deployment.md)** — Comprehensive guide to the deployment system
+- **[dannybd/sheets-puzzleboss-tools](https://github.com/dannybd/sheets-puzzleboss-tools)** — Upstream puzzle tools repository
 
-**Priority: Medium | Effort: Medium**
+## Migration from Cookie-Based System
 
-The current add-on is a third-party extension bound to a template sheet. The long-term plan is to create a new add-on owned by the team's Google Workspace account and defined in this repository. This would:
+**Status:** The cookie-based activation system has been completely removed.
 
-- Eliminate dependency on browser cookie harvesting
-- Use the official Apps Script Execution API with the existing service account
-- Allow code updates without manual sheet editing
-- Be deployable via `clasp` (Apps Script CLI)
+**If you have old documentation or scripts referencing:**
+- `activate_puzzle_sheet_extension()` ❌ Deleted
+- `check_addon_invoke_health()` ❌ Deleted
+- `rotate_addon_cookies()` ❌ Deleted
+- `_build_invoke_url()` ❌ Deleted
+- `SHEETS_ADDON_COOKIES` config ⚠️ Deprecated (can be removed from DB)
+- `SHEETS_ADDON_INVOKE_PARAMS` config ⚠️ Deprecated (can be removed from DB)
+- `scripts/build_addon_config.py` ❌ Deleted
+- `scripts/test_cookie_auth.py` ❌ Deleted
 
-### 2. Remove Duplicate Legacy Puzzle Creation Code
-
-**Priority: Low | Effort: Low**
-
-The old one-step puzzle creation endpoint in `pbrest.py` is still present alongside the new stepwise creation flow. The legacy code should be removed or refactored into a wrapper around the stepwise flow to reduce maintenance burden.
-
-### 3. Fix deploy.sh Error Handling
-
-**Priority: Low | Effort: Low**
-
-`deploy.sh` currently stops if one post-deploy restart fails (e.g., if bigjimmybot isn't running). It should continue with remaining restarts and report all failures at the end.
+**These have all been replaced by `activate_puzzle_sheet_via_api()` and the Apps Script API.**

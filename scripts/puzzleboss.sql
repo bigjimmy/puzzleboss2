@@ -155,7 +155,7 @@ DROP TABLE IF EXISTS `config`;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `config` (
   `key` varchar(100) NOT NULL,
-  `val` varchar(8192) DEFAULT NULL,
+  `val` MEDIUMTEXT DEFAULT NULL,
   PRIMARY KEY (`key`),
   UNIQUE KEY `key_UNIQUE` (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -2,9 +2,7 @@ import os.path
 import sys
 import time
 import threading
-import urllib.request
-import urllib.parse
-import urllib.error
+from typing import Optional
 import googleapiclient
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
@@ -25,6 +23,10 @@ admincreds = None
 # Thread-safe counter for quota failures (read by bigjimmybot for metrics)
 quota_failure_count = 0
 quota_failure_lock = threading.Lock()
+
+# Default retry/delay constants (can be overridden via config)
+_DEFAULT_MAX_RETRIES = 10
+_DEFAULT_RETRY_DELAY_SECONDS = 5
 
 
 def _increment_quota_failure():
@@ -178,8 +180,8 @@ def get_puzzle_sheet_info(myfileid, puzzlename=None):
     puzz_label = puzzlename if puzzlename else myfileid
     debug_log(5, "start for puzzle %s (fileid: %s)" % (puzz_label, myfileid))
 
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
     result = {"editors": [], "sheetcount": None}
 
@@ -297,149 +299,6 @@ def get_puzzle_sheet_info(myfileid, puzzlename=None):
     return result
 
 
-def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
-    """
-    Get editor activity from the hidden '_pb_activity' sheet.
-    Returns dict with 'editors' (list of {solvername, timestamp}) and 'sheetcount' (int or None).
-
-    This is the Apps Script API approach: a simple onEdit trigger writes editor
-    email, unix timestamp, and sheet count to a pre-created hidden sheet named
-    '_pb_activity'. This function reads that data via the Sheets values API.
-
-    The return format matches get_puzzle_sheet_info() so bigjimmybot can use
-    either function interchangeably.
-
-    Email-to-username conversion: strips the @domain portion from the email
-    address to produce the puzzleboss username (e.g. 'alice@example.org' → 'alice').
-
-    THREAD SAFE.
-    Includes retry logic for rate limit (429) errors.
-
-    Args:
-        myfileid: Google Sheets file ID
-        puzzlename: Optional puzzle name for logging
-    """
-    puzz_label = puzzlename if puzzlename else myfileid
-    debug_log(5, "start _pb_activity read for puzzle %s (fileid: %s)" % (puzz_label, myfileid))
-
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
-
-    result = {"editors": [], "sheetcount": None}
-
-    if configstruct["SKIP_GOOGLE_API"] == "true":
-        debug_log(3, "google API skipped by config.")
-        return result
-
-    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
-
-    for attempt in range(max_retries):
-        try:
-            sheetsservice = build("sheets", "v4", credentials=creds)
-
-            response = (
-                sheetsservice.spreadsheets()
-                .values()
-                .get(
-                    spreadsheetId=myfileid,
-                    range="_pb_activity!A:C",
-                )
-                .execute(http=threadsafe_http)
-            )
-
-            rows = response.get("values", [])
-            debug_log(
-                4,
-                "[%s] _pb_activity returned %d rows (including header)"
-                % (puzz_label, len(rows)),
-            )
-
-            # Skip header row (editor, timestamp, num_sheets)
-            for row in rows[1:]:
-                if len(row) < 2:
-                    continue
-
-                email = str(row[0]).strip()
-                try:
-                    timestamp = int(row[1])
-                except (ValueError, TypeError):
-                    debug_log(
-                        2,
-                        "[%s] Invalid timestamp in _pb_activity row: %s"
-                        % (puzz_label, row),
-                    )
-                    continue
-
-                # Convert email to puzzleboss username (strip @domain)
-                solvername = email.split("@")[0] if "@" in email else email
-
-                result["editors"].append({
-                    "solvername": solvername,
-                    "timestamp": timestamp,
-                })
-
-                # Use the most recent num_sheets value as the sheet count
-                if len(row) >= 3:
-                    try:
-                        result["sheetcount"] = int(row[2])
-                    except (ValueError, TypeError):
-                        pass
-
-                debug_log(
-                    4,
-                    "[%s] Parsed editor activity: solver=%s timestamp=%s"
-                    % (puzz_label, solvername, timestamp),
-                )
-
-            debug_log(
-                5,
-                "[%s] Found %d editors with activity, sheetcount=%s"
-                % (puzz_label, len(result["editors"]), result["sheetcount"]),
-            )
-            break  # Success, exit retry loop
-
-        except googleapiclient.errors.HttpError as e:
-            if e.resp.status == 400 and "Unable to parse range" in str(e):
-                # _pb_activity sheet doesn't exist yet (no one has edited)
-                debug_log(
-                    4,
-                    "[%s] _pb_activity sheet not found (no edits yet)" % puzz_label,
-                )
-                break
-            elif e.resp.status == 429 or "RATE_LIMIT_EXCEEDED" in str(e):
-                _increment_quota_failure()
-                debug_log(
-                    3,
-                    "[%s] Rate limit hit reading _pb_activity, waiting %d seconds (attempt %d/%d)"
-                    % (puzz_label, retry_delay, attempt + 1, max_retries),
-                )
-                time.sleep(retry_delay)
-            else:
-                debug_log(1, "[%s] Error reading _pb_activity: %s" % (puzz_label, e))
-                break
-        except Exception as e:
-            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
-                _increment_quota_failure()
-                debug_log(
-                    3,
-                    "[%s] Rate limit hit reading _pb_activity, waiting %d seconds (attempt %d/%d)"
-                    % (puzz_label, retry_delay, attempt + 1, max_retries),
-                )
-                time.sleep(retry_delay)
-            else:
-                debug_log(1, "[%s] Error reading _pb_activity: %s" % (puzz_label, e))
-                break  # Non-rate-limit error, don't retry
-    else:
-        if max_retries > 0:
-            debug_log(
-                1,
-                "[%s] EXHAUSTED all %d retries reading _pb_activity - giving up"
-                % (puzz_label, max_retries),
-            )
-
-    return result
-
-
 def check_developer_metadata_exists(myfileid, puzzlename=None):
     """
     Quick check to see if PuzzleBoss developer metadata exists on a sheet.
@@ -456,8 +315,8 @@ def check_developer_metadata_exists(myfileid, puzzlename=None):
         % (puzz_label, myfileid),
     )
 
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
     if configstruct["SKIP_GOOGLE_API"] == "true":
         debug_log(3, "google API skipped by config.")
@@ -538,8 +397,8 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
     puzz_label = puzzlename if puzzlename else myfileid
     debug_log(5, "start (legacy) for puzzle %s (fileid: %s)" % (puzz_label, myfileid))
 
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
     result = {"revisions": [], "sheetcount": None}
 
@@ -656,8 +515,8 @@ def create_round_folder(foldername):
         "parents": [pblib.huntfolderid],
     }
 
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
     folder_file = None
     for attempt in range(max_retries):
@@ -722,8 +581,8 @@ def create_puzzle_sheet(parentfolder, puzzledict):
         "mimeType": "application/vnd.google-apps.spreadsheet",
     }
 
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
     # Create/copy file with retry logic
     sheet_file = None
@@ -1039,159 +898,6 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     return sheet_file.get("id")
 
 
-def _build_invoke_url(invoke_params, sheet_id, puzz_label=""):
-    """Build the /scripts/invoke URL for a given sheet.
-
-    Supports two formats for invoke_params:
-    - New format: {"query_string": "id=...&sid=...&token=...&lib=...&..."}
-      The full query string from a browser request. The "id" param is replaced
-      with the target sheet_id.
-    - Legacy format: {"sid": "...", "token": "...", "lib": "...", "did": "...", "ouid": "..."}
-      Individual parameters reconstructed into a minimal URL.
-
-    Returns the full URL string, or None if params are invalid.
-    """
-    base = f"https://docs.google.com/spreadsheets/u/0/d/{sheet_id}/scripts/invoke"
-
-    if "query_string" in invoke_params:
-        # New format: full query string with all browser parameters
-        qs = invoke_params["query_string"]
-        # Strip leading ? if present (we add it below)
-        qs = qs.lstrip("?")
-        # Replace all id= parameter occurrences with the target sheet_id
-        import re
-        qs = re.sub(r'(^|(?<=&))id=[^&]*', f'id={sheet_id}', qs)
-        return f"{base}?{qs}"
-
-    # Legacy format: individual params
-    sid = invoke_params.get("sid", "")
-    token = invoke_params.get("token", "")
-    lib = invoke_params.get("lib", "")
-    did = invoke_params.get("did", "")
-    ouid = invoke_params.get("ouid", "")
-
-    if not sid or not token:
-        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing sid or token" % puzz_label)
-        return None
-    if not lib or not did:
-        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing lib or did" % puzz_label)
-        return None
-
-    token_encoded = urllib.parse.quote(token, safe='')
-    url = (
-        f"{base}"
-        f"?id={sheet_id}&sid={sid}&token={token_encoded}"
-        f"&lib={lib}&did={did}&func=populateMenus"
-    )
-    if ouid:
-        url += f"&ouid={ouid}"
-    debug_log(2, "[%s] Using legacy invoke params format — consider updating to "
-              "query_string format via pbtools.php for full activation" % puzz_label)
-    return url
-
-
-def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
-    """
-    Activate the PB tracking add-on on a puzzle sheet by invoking its
-    populateMenus function via the Google Sheets internal scripts/invoke
-    endpoint. This replicates the activation previously done by puzzcord.
-
-    Requires SHEETS_ADDON_COOKIES (JSON object) and SHEETS_ADDON_INVOKE_PARAMS
-    (JSON object) to be set in the config table.
-
-    SHEETS_ADDON_INVOKE_PARAMS must contain a "query_string" key with the full
-    query string captured from a browser /scripts/invoke request. The "id"
-    parameter will be replaced with the target sheet_id at invocation time.
-
-    For backward compatibility, the legacy format with individual keys
-    (sid, token, lib, did, ouid) is also supported but may not fully activate
-    the extension — the full query string is preferred.
-
-    Returns True on success, False on failure. Failures are non-fatal;
-    bigjimmybot will fall back to the legacy Revisions API for tracking.
-
-    Args:
-        sheet_id: Google Sheets file ID (drive_id)
-        puzzlename: Optional puzzle name for logging
-    """
-    puzz_label = puzzlename if puzzlename else sheet_id
-    debug_log(4, "activate_puzzle_sheet_extension start for %s (sheet_id: %s)"
-              % (puzz_label, sheet_id))
-
-    if configstruct.get("SKIP_GOOGLE_API") == "true":
-        debug_log(3, "[%s] Skipping extension activation (SKIP_GOOGLE_API)" % puzz_label)
-        return False
-
-    # Load add-on config from the config table
-    cookies_json = configstruct.get("SHEETS_ADDON_COOKIES", "")
-    invoke_params_json = configstruct.get("SHEETS_ADDON_INVOKE_PARAMS", "")
-
-    if not cookies_json or not invoke_params_json:
-        debug_log(3, "[%s] Skipping extension activation (SHEETS_ADDON config not set)"
-                  % puzz_label)
-        return False
-
-    try:
-        cookies = json.loads(cookies_json)
-        invoke_params = json.loads(invoke_params_json)
-    except json.JSONDecodeError as e:
-        debug_log(1, "[%s] Error parsing SHEETS_ADDON config: %s" % (puzz_label, e))
-        return False
-
-    url = _build_invoke_url(invoke_params, sheet_id, puzz_label)
-    if not url:
-        return False
-
-    # Build cookie header from the cookies dict
-    cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
-
-    # Build request headers (browser-like to satisfy Google's validation)
-    headers = {
-        "Cookie": cookie_str,
-        "x-same-domain": "1",
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "Origin": "https://docs.google.com",
-        "Referer": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit",
-    }
-
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
-
-    for attempt in range(max_retries):
-        try:
-            req = urllib.request.Request(url, data=b"", headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=30) as response:
-                status = response.status
-                text = response.read().decode("utf-8", errors="replace")
-                # Response typically has a leading line to skip
-                text = "\n".join(text.split("\n")[1:]).strip()
-
-            debug_log(3, "[%s] Extension activated (status=%d, response=%s)"
-                      % (puzz_label, status, text[:200]))
-            return True
-
-        except urllib.error.HTTPError as e:
-            if e.code == 401:
-                debug_log(1, "[%s] Extension activation auth failed (401) — "
-                          "SHEETS_ADDON_COOKIES may need refreshing" % puzz_label)
-                return False
-            elif e.code == 429:
-                debug_log(3, "[%s] Rate limit on extension activation, waiting %ds "
-                          "(attempt %d/%d)" % (puzz_label, retry_delay, attempt + 1, max_retries))
-                time.sleep(retry_delay)
-            else:
-                debug_log(1, "[%s] Extension activation HTTP error %d: %s"
-                          % (puzz_label, e.code, e.reason))
-                return False
-        except Exception as e:
-            debug_log(1, "[%s] Extension activation error: %s" % (puzz_label, e))
-            return False
-
-    debug_log(1, "[%s] EXHAUSTED all %d retries activating extension"
-              % (puzz_label, max_retries))
-    return False
-
-
 # ── Apps Script code pushed to container-bound script projects ──────
 # This is the simple onEdit trigger that writes editor activity to
 # the hidden _pb_activity sheet. It's pushed to each puzzle sheet
@@ -1277,7 +983,7 @@ _APPS_SCRIPT_MANIFEST = json.dumps({
 _ACTIVITY_SHEET_NAME = "_pb_activity"
 
 
-def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
+def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = None) -> bool:
     """
     Activate puzzle tools/tracking via the official Apps Script API.
 
@@ -1309,8 +1015,8 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
         debug_log(3, "[%s] Skipping API activation (SKIP_GOOGLE_API)" % puzz_label)
         return False
 
-    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
-    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
     # Get the Apps Script code to deploy (configurable or default)
     addon_code = configstruct.get("APPS_SCRIPT_ADDON_CODE", "").strip()
@@ -1325,6 +1031,14 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
 
     if not addon_manifest:
         addon_manifest = _APPS_SCRIPT_MANIFEST
+    else:
+        # Validate manifest is parseable JSON
+        try:
+            json.loads(addon_manifest)
+        except json.JSONDecodeError as e:
+            debug_log(1, "[%s] APPS_SCRIPT_ADDON_MANIFEST is invalid JSON (%s), using default"
+                      % (puzz_label, e))
+            addon_manifest = _APPS_SCRIPT_MANIFEST
 
     # Need script.projects scope — create new credentials with it
     sa_file = _get_service_account_file()
@@ -1460,166 +1174,6 @@ def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
     debug_log(3, "[%s] Apps Script API activation complete (script_id=%s)"
               % (puzz_label, script_id))
     return True
-
-
-def check_addon_invoke_health(sheet_id):
-    """
-    Test whether the addon invoke endpoint is reachable with current credentials.
-    Sends a no-op request (populateMenus on an already-activated sheet) and checks
-    for a 200 response.
-
-    Args:
-        sheet_id: A Google Sheets file ID to test against
-
-    Returns:
-        1 if healthy (200 response), 0 if failing
-    """
-    cookies_json = configstruct.get("SHEETS_ADDON_COOKIES", "")
-    invoke_params_json = configstruct.get("SHEETS_ADDON_INVOKE_PARAMS", "")
-
-    if not cookies_json or not invoke_params_json:
-        debug_log(4, "check_addon_invoke_health: config not set, reporting unhealthy")
-        return 0
-
-    try:
-        cookies = json.loads(cookies_json)
-        invoke_params = json.loads(invoke_params_json)
-    except json.JSONDecodeError:
-        return 0
-
-    url = _build_invoke_url(invoke_params, sheet_id, "health_check")
-    if not url:
-        return 0
-
-    cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
-    headers = {
-        "Cookie": cookie_str,
-        "x-same-domain": "1",
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "Origin": "https://docs.google.com",
-        "Referer": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit",
-    }
-
-    try:
-        req = urllib.request.Request(url, data=b"", headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=15) as response:
-            debug_log(4, "check_addon_invoke_health: OK (status=%d)" % response.status)
-            return 1
-    except urllib.error.HTTPError as e:
-        debug_log(2, "check_addon_invoke_health: FAILED (HTTP %d)" % e.code)
-        return 0
-    except Exception as e:
-        debug_log(2, "check_addon_invoke_health: FAILED (%s)" % e)
-        return 0
-
-
-def rotate_addon_cookies(api_uri):
-    """
-    Rotate the __Secure-1PSIDTS cookie by calling Google's RotateCookies
-    endpoint. If a new value is returned, update both the in-memory config
-    and the database via the API so it persists across restarts.
-
-    This replicates the rotation previously done by puzzcord's
-    rotate_1psidts task.
-
-    Args:
-        api_uri: The base URI for the puzzleboss REST API (e.g. http://localhost:5000)
-
-    Returns:
-        True if the cookie was rotated, False if unchanged or on error.
-    """
-    if configstruct.get("SKIP_GOOGLE_API") == "true":
-        return False
-
-    cookies_json = configstruct.get("SHEETS_ADDON_COOKIES", "")
-    if not cookies_json:
-        return False
-
-    try:
-        cookies = json.loads(cookies_json)
-    except json.JSONDecodeError as e:
-        debug_log(1, "rotate_addon_cookies: Error parsing SHEETS_ADDON_COOKIES: %s" % e)
-        return False
-
-    old_1psidts = cookies.get("__Secure-1PSIDTS", "")
-    if not old_1psidts:
-        debug_log(3, "rotate_addon_cookies: No __Secure-1PSIDTS in cookies, skipping")
-        return False
-
-    # Build cookie header from the cookies dict
-    cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
-
-    # Load optional refresh headers from config
-    refresh_headers = {}
-    refresh_headers_json = configstruct.get("SHEETS_ADDON_REFRESH_HEADERS", "")
-    if refresh_headers_json:
-        try:
-            refresh_headers = json.loads(refresh_headers_json)
-        except json.JSONDecodeError:
-            pass
-
-    headers = {"Content-Type": "application/json", **refresh_headers, "Cookie": cookie_str}
-
-    try:
-        data = b'[283,"1575614563079730632"]'
-        req = urllib.request.Request(
-            "https://accounts.google.com/RotateCookies",
-            data=data,
-            headers=headers,
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=30) as response:
-            # Extract __Secure-1PSIDTS from Set-Cookie headers
-            new_1psidts = None
-            for header in response.headers.get_all("Set-Cookie") or []:
-                if header.startswith("__Secure-1PSIDTS="):
-                    # Parse "name=value; ..." format
-                    new_1psidts = header.split("=", 1)[1].split(";")[0]
-                    break
-
-            if not new_1psidts:
-                debug_log(5, "rotate_addon_cookies: No __Secure-1PSIDTS in response")
-                return False
-
-            if new_1psidts == old_1psidts:
-                debug_log(5, "rotate_addon_cookies: __Secure-1PSIDTS unchanged")
-                return False
-
-            # Update in-memory cookie dict and persist to DB
-            cookies["__Secure-1PSIDTS"] = new_1psidts
-            # __Secure-3PSIDTS uses the same value
-            if "__Secure-3PSIDTS" in cookies:
-                cookies["__Secure-3PSIDTS"] = new_1psidts
-            new_cookies_json = json.dumps(cookies)
-
-            # Update in-memory config immediately
-            configstruct["SHEETS_ADDON_COOKIES"] = new_cookies_json
-
-            # Persist to database via API
-            import requests as req_lib
-            resp = req_lib.post(
-                f"{api_uri}/config",
-                json={"cfgkey": "SHEETS_ADDON_COOKIES", "cfgval": new_cookies_json},
-            )
-            if resp.status_code == 200:
-                debug_log(3, "rotate_addon_cookies: Rotated __Secure-1PSIDTS and saved to DB")
-            else:
-                debug_log(1, "rotate_addon_cookies: Rotated cookie but failed to save to DB: %s"
-                          % resp.text)
-
-            return True
-
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            debug_log(1, "rotate_addon_cookies: Auth lost (401) — cookies need manual refresh")
-        elif e.code == 429:
-            debug_log(3, "rotate_addon_cookies: Rate limited (429), will retry next loop")
-        else:
-            debug_log(1, "rotate_addon_cookies: HTTP error %d: %s" % (e.code, e.reason))
-        return False
-    except Exception as e:
-        debug_log(1, "rotate_addon_cookies: Error: %s" % e)
-        return False
 
 
 def _color_palette_cell_value():

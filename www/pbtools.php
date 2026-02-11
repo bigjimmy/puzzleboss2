@@ -98,25 +98,29 @@ if (isset($_POST['update_sheets_creds'])) {
     // (includes_info_params, ctx, eei, ruid, etc.) are preserved. At invocation
     // time, the "id" param is swapped to the target sheet ID.
     $parsed = parse_url($invoke_url);
-    $full_query = $parsed['query'] ?? '';
-    parse_str($full_query, $qs);
-    $sid = $qs['sid'] ?? '';
-    $token = $qs['token'] ?? '';
-    $lib = $qs['lib'] ?? '';
-    $did = $qs['did'] ?? '';
-
-    if (empty($sid) || empty($token)) {
-      $errors[] = 'Invoke URL missing sid or token parameters';
-    } elseif (empty($lib) || empty($did)) {
-      $errors[] = 'Invoke URL missing lib or did parameters (is this a scripts/invoke URL?)';
+    if ($parsed === false || !isset($parsed['query'])) {
+      $errors[] = 'Invalid invoke URL format';
     } else {
+      $full_query = $parsed['query'];
+      parse_str($full_query, $qs);
+      $sid = $qs['sid'] ?? '';
+      $token = $qs['token'] ?? '';
+      $lib = $qs['lib'] ?? '';
+      $did = $qs['did'] ?? '';
+
+      if (empty($sid) || empty($token)) {
+        $errors[] = 'Invoke URL missing sid or token parameters';
+      } elseif (empty($lib) || empty($did)) {
+        $errors[] = 'Invoke URL missing lib or did parameters (is this a scripts/invoke URL?)';
+      } else {
       $invoke_params = ['query_string' => $full_query];
       $invoke_json = json_encode($invoke_params);
       $resp = postapi('/config', ['cfgkey' => 'SHEETS_ADDON_INVOKE_PARAMS', 'cfgval' => $invoke_json]);
-      if ($resp && isset($resp->status) && $resp->status == 'ok') {
-        $successes[] = 'Updated SHEETS_ADDON_INVOKE_PARAMS (sid=' . substr($sid, 0, 10) . '... lib=' . substr($lib, 0, 15) . '... full query string preserved)';
-      } else {
-        $errors[] = 'Failed to save invoke params to config';
+        if ($resp && isset($resp->status) && $resp->status == 'ok') {
+          $successes[] = 'Updated SHEETS_ADDON_INVOKE_PARAMS (sid=' . substr($sid, 0, 10) . '... lib=' . substr($lib, 0, 15) . '... full query string preserved)';
+        } else {
+          $errors[] = 'Failed to save invoke params to config';
+        }
       }
     }
   }
