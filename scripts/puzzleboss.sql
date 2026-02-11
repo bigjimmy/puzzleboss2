@@ -196,7 +196,6 @@ INSERT INTO `config` VALUES
   ('SERVICE_ACCOUNT_SUBJECT', ''),
   ('SHEETS_ADDON_COOKIES', ''),
   ('SHEETS_ADDON_INVOKE_PARAMS', ''),
-  ('SHEETS_ADDON_REFRESH_HEADERS', ''),
   ('SHEETS_TEMPLATE_ID', 'xxxxxxxxxxxxxxxxxxxxxxi'),
   ('SKIP_GOOGLE_API', 'true'),
   ('SKIP_PUZZCORD', 'true'),

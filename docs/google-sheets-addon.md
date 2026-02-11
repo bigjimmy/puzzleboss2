@@ -107,14 +107,14 @@ The easiest method is the form on the **Puzzleboss-only Admin Tools** page (`pbt
 1. Open any puzzle sheet that has the PB add-on active in Chrome
 2. Open DevTools (F12) → **Network** tab
 3. In the filter box, type `scripts/invoke`
-4. Trigger the add-on (e.g., right-click a cell → "Show Metadata as Note", or edit a cell and wait)
+4. Trigger the add-on: click **Extensions → Mystery Hunt Tools → Enable for this spreadsheet**
 5. Click the `invoke` request in the Network tab
 6. From the **Headers** tab:
    - **Cookie:** Right-click the Cookie header value → "Copy value"
-   - **Request URL:** Right-click the URL → "Copy link address"
+   - **Request URL:** Right-click the URL → "Copy link address" (the **full** URL with all query params)
 7. Paste both into the form on `pbtools.php` and submit
 
-The form validates the required fields, parses everything, and saves to the config table.
+**Important:** The full invoke URL must be preserved — it contains many undocumented Google parameters (`includes_info_params`, `ctx`, `eei`, `ruid`, etc.) that are required for the add-on to fully activate and create installable triggers. The form stores the entire query string.
 
 ### How to Refresh (CLI)
 
@@ -188,7 +188,6 @@ If users see "To protect your account, you need to turn on 2-Step Verification",
 | `scripts/build_addon_config.py` | Parse raw browser data → config JSON |
 | `scripts/test_cookie_auth.py` | Test cookie auth + invoke endpoint |
 | `scripts/test_apps_script_api.py` | Test Apps Script API with service account (for future approach) |
-| `scripts/test_oauth_cookies.py` | Test OAuth token → cookie exchange (research, didn't work) |
 
 ## Future Work
 
@@ -202,8 +201,6 @@ The current add-on is a third-party extension bound to a template sheet. The lon
 - Use the official Apps Script Execution API with the existing service account
 - Allow code updates without manual sheet editing
 - Be deployable via `clasp` (Apps Script CLI)
-
-See the plan file at `.claude/plans/lucky-tinkering-cosmos.md` for the detailed design using the official Apps Script Execution API approach.
 
 ### 2. Remove Duplicate Legacy Puzzle Creation Code
 
