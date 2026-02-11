@@ -297,6 +297,149 @@ def get_puzzle_sheet_info(myfileid, puzzlename=None):
     return result
 
 
+def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
+    """
+    Get editor activity from the hidden '_pb_activity' sheet.
+    Returns dict with 'editors' (list of {solvername, timestamp}) and 'sheetcount' (int or None).
+
+    This is the Apps Script API approach: a simple onEdit trigger writes editor
+    email, unix timestamp, and sheet count to a pre-created hidden sheet named
+    '_pb_activity'. This function reads that data via the Sheets values API.
+
+    The return format matches get_puzzle_sheet_info() so bigjimmybot can use
+    either function interchangeably.
+
+    Email-to-username conversion: strips the @domain portion from the email
+    address to produce the puzzleboss username (e.g. 'alice@example.org' → 'alice').
+
+    THREAD SAFE.
+    Includes retry logic for rate limit (429) errors.
+
+    Args:
+        myfileid: Google Sheets file ID
+        puzzlename: Optional puzzle name for logging
+    """
+    puzz_label = puzzlename if puzzlename else myfileid
+    debug_log(5, "start _pb_activity read for puzzle %s (fileid: %s)" % (puzz_label, myfileid))
+
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+
+    result = {"editors": [], "sheetcount": None}
+
+    if configstruct["SKIP_GOOGLE_API"] == "true":
+        debug_log(3, "google API skipped by config.")
+        return result
+
+    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+
+    for attempt in range(max_retries):
+        try:
+            sheetsservice = build("sheets", "v4", credentials=creds)
+
+            response = (
+                sheetsservice.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=myfileid,
+                    range="_pb_activity!A:C",
+                )
+                .execute(http=threadsafe_http)
+            )
+
+            rows = response.get("values", [])
+            debug_log(
+                4,
+                "[%s] _pb_activity returned %d rows (including header)"
+                % (puzz_label, len(rows)),
+            )
+
+            # Skip header row (editor, timestamp, num_sheets)
+            for row in rows[1:]:
+                if len(row) < 2:
+                    continue
+
+                email = str(row[0]).strip()
+                try:
+                    timestamp = int(row[1])
+                except (ValueError, TypeError):
+                    debug_log(
+                        2,
+                        "[%s] Invalid timestamp in _pb_activity row: %s"
+                        % (puzz_label, row),
+                    )
+                    continue
+
+                # Convert email to puzzleboss username (strip @domain)
+                solvername = email.split("@")[0] if "@" in email else email
+
+                result["editors"].append({
+                    "solvername": solvername,
+                    "timestamp": timestamp,
+                })
+
+                # Use the most recent num_sheets value as the sheet count
+                if len(row) >= 3:
+                    try:
+                        result["sheetcount"] = int(row[2])
+                    except (ValueError, TypeError):
+                        pass
+
+                debug_log(
+                    4,
+                    "[%s] Parsed editor activity: solver=%s timestamp=%s"
+                    % (puzz_label, solvername, timestamp),
+                )
+
+            debug_log(
+                5,
+                "[%s] Found %d editors with activity, sheetcount=%s"
+                % (puzz_label, len(result["editors"]), result["sheetcount"]),
+            )
+            break  # Success, exit retry loop
+
+        except googleapiclient.errors.HttpError as e:
+            if e.resp.status == 400 and "Unable to parse range" in str(e):
+                # _pb_activity sheet doesn't exist yet (no one has edited)
+                debug_log(
+                    4,
+                    "[%s] _pb_activity sheet not found (no edits yet)" % puzz_label,
+                )
+                break
+            elif e.resp.status == 429 or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(
+                    3,
+                    "[%s] Rate limit hit reading _pb_activity, waiting %d seconds (attempt %d/%d)"
+                    % (puzz_label, retry_delay, attempt + 1, max_retries),
+                )
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Error reading _pb_activity: %s" % (puzz_label, e))
+                break
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(
+                    3,
+                    "[%s] Rate limit hit reading _pb_activity, waiting %d seconds (attempt %d/%d)"
+                    % (puzz_label, retry_delay, attempt + 1, max_retries),
+                )
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Error reading _pb_activity: %s" % (puzz_label, e))
+                break  # Non-rate-limit error, don't retry
+    else:
+        if max_retries > 0:
+            debug_log(
+                1,
+                "[%s] EXHAUSTED all %d retries reading _pb_activity - giving up"
+                % (puzz_label, max_retries),
+            )
+
+    return result
+
+
 def check_developer_metadata_exists(myfileid, puzzlename=None):
     """
     Quick check to see if PuzzleBoss developer metadata exists on a sheet.
@@ -1047,6 +1190,253 @@ def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
     debug_log(1, "[%s] EXHAUSTED all %d retries activating extension"
               % (puzz_label, max_retries))
     return False
+
+
+# ── Apps Script code pushed to container-bound script projects ──────
+# This is the simple onEdit trigger that writes editor activity to
+# the hidden _pb_activity sheet. It's pushed to each puzzle sheet
+# when activate_puzzle_sheet_via_api() is called.
+_APPS_SCRIPT_ONEDIT_CODE = r"""
+/**
+ * PB Activity Tracker — simple onEdit trigger.
+ * Writes editor activity to a '_pb_activity' sheet.
+ * No authorization required (runs as simple trigger).
+ *
+ * The _pb_activity sheet is pre-created, hidden, and warning-protected
+ * by the Puzzleboss service account. If somehow missing, the trigger
+ * will create it (but it won't be hidden in that case).
+ */
+
+var ACTIVITY_SHEET_NAME = '_pb_activity';
+
+/**
+ * Simple trigger — fires on every manual edit.
+ * Records the editor's email and Unix timestamp.
+ * One row per editor, updated in place on subsequent edits.
+ */
+function onEdit(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var actSheet = ss.getSheetByName(ACTIVITY_SHEET_NAME);
+
+    // Fallback: create the sheet if it doesn't exist (shouldn't happen
+    // in normal flow — the service account pre-creates it)
+    if (!actSheet) {
+      actSheet = ss.insertSheet(ACTIVITY_SHEET_NAME);
+      actSheet.getRange('A1').setValue('editor');
+      actSheet.getRange('B1').setValue('timestamp');
+      actSheet.getRange('C1').setValue('num_sheets');
+    }
+
+    // Get editor info — simple triggers can access e.user in Sheets
+    var editor = '';
+    if (e && e.user) {
+      editor = e.user.getEmail();
+    }
+    if (!editor) {
+      try {
+        editor = Session.getActiveUser().getEmail();
+      } catch(ex) {
+        editor = 'unknown';
+      }
+    }
+
+    var now = Math.floor(Date.now() / 1000);
+    // Count sheets, excluding the activity sheet itself
+    var numSheets = ss.getSheets().length - 1;
+
+    // Update or insert editor row (use toString for safe comparison)
+    var data = actSheet.getDataRange().getValues();
+    var found = false;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(editor).trim()) {
+        actSheet.getRange(i + 1, 2).setValue(now);
+        actSheet.getRange(i + 1, 3).setValue(numSheets);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      var lastRow = actSheet.getLastRow() + 1;
+      actSheet.getRange(lastRow, 1).setValue(editor);
+      actSheet.getRange(lastRow, 2).setValue(now);
+      actSheet.getRange(lastRow, 3).setValue(numSheets);
+    }
+  } catch(err) {
+    // Simple triggers can't easily log errors — silently fail
+  }
+}
+"""
+
+_APPS_SCRIPT_MANIFEST = json.dumps({
+    "timeZone": "America/New_York",
+    "exceptionLogging": "STACKDRIVER",
+    "runtimeVersion": "V8",
+})
+
+_ACTIVITY_SHEET_NAME = "_pb_activity"
+
+
+def activate_puzzle_sheet_via_api(sheet_id, puzzlename=None):
+    """
+    Activate puzzle activity tracking via the official Apps Script API.
+
+    Creates a container-bound Apps Script project on the spreadsheet,
+    pushes a simple onEdit trigger that writes editor activity to a
+    hidden '_pb_activity' sheet, then pre-creates that sheet (hidden
+    and warning-protected).
+
+    Uses the existing service account with Domain-Wide Delegation.
+    Requires the 'https://www.googleapis.com/auth/script.projects'
+    scope in the DWD config and the Apps Script API enabled in
+    Google Cloud Console.
+
+    Returns True on success, False on failure. Failures are non-fatal;
+    bigjimmybot will fall back to the legacy Revisions API for tracking.
+
+    Args:
+        sheet_id: Google Sheets file ID (drive_id)
+        puzzlename: Optional puzzle name for logging
+    """
+    puzz_label = puzzlename if puzzlename else sheet_id
+    debug_log(4, "[%s] activate_puzzle_sheet_via_api start (sheet_id: %s)"
+              % (puzz_label, sheet_id))
+
+    if configstruct.get("SKIP_GOOGLE_API") == "true":
+        debug_log(3, "[%s] Skipping API activation (SKIP_GOOGLE_API)" % puzz_label)
+        return False
+
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", 5))
+
+    # Need script.projects scope — create new credentials with it
+    sa_file = _get_service_account_file()
+    subject = _get_impersonation_subject()
+    if not sa_file or not subject:
+        debug_log(1, "[%s] Cannot activate via API — service account not configured"
+                  % puzz_label)
+        return False
+
+    try:
+        api_creds = service_account.Credentials.from_service_account_file(
+            sa_file,
+            scopes=[
+                "https://www.googleapis.com/auth/drive",
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/script.projects",
+            ],
+            subject=subject,
+        )
+        api_creds.refresh(Request())
+    except Exception as e:
+        debug_log(1, "[%s] Failed to create API credentials: %s" % (puzz_label, e))
+        return False
+
+    # ── Step 1: Create container-bound script project ──────────────
+    script_id = None
+    for attempt in range(max_retries):
+        try:
+            script_service = build("script", "v1", credentials=api_creds)
+            project = script_service.projects().create(body={
+                "title": "PB Activity Tracker",
+                "parentId": sheet_id,
+            }).execute()
+            script_id = project["scriptId"]
+            debug_log(3, "[%s] Created script project %s" % (puzz_label, script_id))
+            break
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(3, "[%s] Rate limit creating script, waiting %ds (attempt %d/%d)"
+                          % (puzz_label, retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Failed to create script project: %s" % (puzz_label, e))
+                return False
+    else:
+        debug_log(1, "[%s] EXHAUSTED retries creating script project" % puzz_label)
+        return False
+
+    # ── Step 2: Push onEdit trigger code ───────────────────────────
+    for attempt in range(max_retries):
+        try:
+            script_service.projects().updateContent(
+                scriptId=script_id,
+                body={
+                    "files": [
+                        {"name": "Code", "type": "SERVER_JS",
+                         "source": _APPS_SCRIPT_ONEDIT_CODE},
+                        {"name": "appsscript", "type": "JSON",
+                         "source": _APPS_SCRIPT_MANIFEST},
+                    ]
+                }
+            ).execute()
+            debug_log(3, "[%s] Pushed onEdit code to script %s" % (puzz_label, script_id))
+            break
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(3, "[%s] Rate limit pushing code, waiting %ds (attempt %d/%d)"
+                          % (puzz_label, retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay)
+            else:
+                debug_log(1, "[%s] Failed to push script code: %s" % (puzz_label, e))
+                return False
+    else:
+        debug_log(1, "[%s] EXHAUSTED retries pushing script code" % puzz_label)
+        return False
+
+    # ── Step 3: Pre-create _pb_activity sheet (hidden + protected) ─
+    try:
+        sheets_service = build("sheets", "v4", credentials=api_creds)
+
+        # Add the hidden sheet
+        add_result = sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{
+                "addSheet": {
+                    "properties": {
+                        "title": _ACTIVITY_SHEET_NAME,
+                        "hidden": True,
+                    }
+                }
+            }]}
+        ).execute()
+
+        activity_sheet_id = add_result["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+        # Write headers
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=f"{_ACTIVITY_SHEET_NAME}!A1:C1",
+            valueInputOption="RAW",
+            body={"values": [["editor", "timestamp", "num_sheets"]]}
+        ).execute()
+
+        # Add warning-only protection
+        sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{
+                "addProtectedRange": {
+                    "protectedRange": {
+                        "range": {"sheetId": activity_sheet_id},
+                        "description": "Managed by Puzzleboss — do not edit manually.",
+                        "warningOnly": True,
+                    }
+                }
+            }]}
+        ).execute()
+
+        debug_log(3, "[%s] Created hidden + protected _pb_activity sheet" % puzz_label)
+
+    except Exception as e:
+        # Non-fatal — the onEdit trigger will create _pb_activity if missing
+        debug_log(2, "[%s] Could not pre-create _pb_activity sheet: %s "
+                  "(trigger will create it on first edit)" % (puzz_label, e))
+
+    debug_log(3, "[%s] Apps Script API activation complete (script_id=%s)"
+              % (puzz_label, script_id))
+    return True
 
 
 def check_addon_invoke_health(sheet_id):
