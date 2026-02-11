@@ -903,7 +903,8 @@ def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
     endpoint. This replicates the activation previously done by puzzcord.
 
     Requires SHEETS_ADDON_COOKIES (JSON object) and SHEETS_ADDON_INVOKE_PARAMS
-    (JSON object) to be set in the config table.
+    (JSON object with sid, token, lib, did, and optionally ouid) to be set
+    in the config table.
 
     Returns True on success, False on failure. Failures are non-fatal;
     bigjimmybot will fall back to the legacy Revisions API for tracking.
@@ -938,27 +939,41 @@ def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
 
     sid = invoke_params.get("sid", "")
     token = invoke_params.get("token", "")
-    rest = invoke_params.get("_rest", "")
+    lib = invoke_params.get("lib", "")
+    did = invoke_params.get("did", "")
+    ouid = invoke_params.get("ouid", "")
 
     if not sid or not token:
         debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing sid or token" % puzz_label)
         return False
+    if not lib or not did:
+        debug_log(1, "[%s] SHEETS_ADDON_INVOKE_PARAMS missing lib or did" % puzz_label)
+        return False
 
-    # Build the invoke URL
+    # Build the invoke URL with required params:
+    # id, sid, token — session-tied (change when cookies refresh)
+    # lib, did — add-on deployment IDs (stable)
+    # func — the function to call (populateMenus for activation)
+    # ouid — Google account ID (stable per account)
+    token_encoded = urllib.parse.quote(token, safe='')
     url = (
         f"https://docs.google.com/spreadsheets/u/0/d/{sheet_id}/scripts/invoke"
-        f"?id={sheet_id}&sid={sid}&token={token}{rest}"
+        f"?id={sheet_id}&sid={sid}&token={token_encoded}"
+        f"&lib={lib}&did={did}&func=populateMenus"
     )
+    if ouid:
+        url += f"&ouid={ouid}"
 
     # Build cookie header from the cookies dict
     cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
 
-    # Build request headers
+    # Build request headers (browser-like to satisfy Google's validation)
     headers = {
         "Cookie": cookie_str,
         "x-same-domain": "1",
-        "Content-Length": "0",
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Origin": "https://docs.google.com",
+        "Referer": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit",
     }
 
     max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", 10))
@@ -997,6 +1012,71 @@ def activate_puzzle_sheet_extension(sheet_id, puzzlename=None):
     debug_log(1, "[%s] EXHAUSTED all %d retries activating extension"
               % (puzz_label, max_retries))
     return False
+
+
+def check_addon_invoke_health(sheet_id):
+    """
+    Test whether the addon invoke endpoint is reachable with current credentials.
+    Sends a no-op request (populateMenus on an already-activated sheet) and checks
+    for a 200 response.
+
+    Args:
+        sheet_id: A Google Sheets file ID to test against
+
+    Returns:
+        1 if healthy (200 response), 0 if failing
+    """
+    cookies_json = configstruct.get("SHEETS_ADDON_COOKIES", "")
+    invoke_params_json = configstruct.get("SHEETS_ADDON_INVOKE_PARAMS", "")
+
+    if not cookies_json or not invoke_params_json:
+        debug_log(4, "check_addon_invoke_health: config not set, reporting unhealthy")
+        return 0
+
+    try:
+        cookies = json.loads(cookies_json)
+        invoke_params = json.loads(invoke_params_json)
+    except json.JSONDecodeError:
+        return 0
+
+    sid = invoke_params.get("sid", "")
+    token = invoke_params.get("token", "")
+    lib = invoke_params.get("lib", "")
+    did = invoke_params.get("did", "")
+    ouid = invoke_params.get("ouid", "")
+
+    if not sid or not token or not lib or not did:
+        return 0
+
+    token_encoded = urllib.parse.quote(token, safe='')
+    url = (
+        f"https://docs.google.com/spreadsheets/u/0/d/{sheet_id}/scripts/invoke"
+        f"?id={sheet_id}&sid={sid}&token={token_encoded}"
+        f"&lib={lib}&did={did}&func=populateMenus"
+    )
+    if ouid:
+        url += f"&ouid={ouid}"
+
+    cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+    headers = {
+        "Cookie": cookie_str,
+        "x-same-domain": "1",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Origin": "https://docs.google.com",
+        "Referer": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit",
+    }
+
+    try:
+        req = urllib.request.Request(url, data=b"", headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as response:
+            debug_log(4, "check_addon_invoke_health: OK (status=%d)" % response.status)
+            return 1
+    except urllib.error.HTTPError as e:
+        debug_log(2, "check_addon_invoke_health: FAILED (HTTP %d)" % e.code)
+        return 0
+    except Exception as e:
+        debug_log(2, "check_addon_invoke_health: FAILED (%s)" % e)
+        return 0
 
 
 def rotate_addon_cookies(api_uri):
@@ -1073,6 +1153,9 @@ def rotate_addon_cookies(api_uri):
 
             # Update in-memory cookie dict and persist to DB
             cookies["__Secure-1PSIDTS"] = new_1psidts
+            # __Secure-3PSIDTS uses the same value
+            if "__Secure-3PSIDTS" in cookies:
+                cookies["__Secure-3PSIDTS"] = new_1psidts
             new_cookies_json = json.dumps(cookies)
 
             # Update in-memory config immediately

@@ -556,6 +556,35 @@ if __name__ == "__main__":
         except Exception as e:
             debug_log(2, "Error rotating addon cookies: %s" % e)
 
+        # Check add-on invoke health every 10 loops (~every 10 iterations)
+        if loop_iterations_total % 10 == 0:
+            try:
+                # Find any sheet with a drive_id to test against
+                test_sheet_id = None
+                try:
+                    r = json.loads(requests.get(f"{config['API']['APIURI']}/all", timeout=10).text)
+                    for rnd in r.get("rounds", []):
+                        for puzzle in rnd.get("puzzles", []):
+                            did = puzzle.get("drive_id", "")
+                            if did and did != "xxxskippedbyconfigxxx":
+                                test_sheet_id = did
+                                break
+                        if test_sheet_id:
+                            break
+                except Exception:
+                    pass
+
+                if test_sheet_id:
+                    health = check_addon_invoke_health(test_sheet_id)
+                    requests.post(
+                        f"{config['API']['APIURI']}/botstats/addon_invoke_healthy",
+                        json={"val": str(health)},
+                    )
+                    if health == 0:
+                        debug_log(1, "Add-on invoke health check FAILED — credentials may need refreshing")
+            except Exception as e:
+                debug_log(2, "Error checking addon invoke health: %s" % e)
+
         # Increment and post loop iteration counter early (before SKIP_GOOGLE_API check)
         # This ensures the counter increments even when Google API is disabled
         loop_iterations_total += 1
