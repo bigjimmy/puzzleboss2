@@ -50,21 +50,22 @@ def main():
 
     sid = qs.get("sid", [""])[0]
     token = qs.get("token", [""])[0]
+    lib = qs.get("lib", [""])[0]
+    did = qs.get("did", [""])[0]
+    ouid = qs.get("ouid", [""])[0]
 
-    # Reconstruct _rest from remaining params (excluding id, sid, token)
-    rest_parts = []
-    for key, values in qs.items():
-        if key not in ("id", "sid", "token"):
-            for v in values:
-                rest_parts.append(f"&{key}={v}")
-    _rest = "".join(rest_parts)
+    if not lib or not did:
+        print("\n⚠️  WARNING: invoke URL missing 'lib' or 'did' params.")
+        print("  Make sure you captured a /scripts/invoke URL (not a regular sheet URL).")
 
-    invoke_params = {"sid": sid, "token": token, "_rest": _rest}
+    invoke_params = {"sid": sid, "token": token, "lib": lib, "did": did, "ouid": ouid}
 
     print(f"\nInvoke params:")
-    print(f"  sid = {sid[:20]}...")
-    print(f"  token = {token[:30]}...")
-    print(f"  _rest = {_rest[:60]}...")
+    print(f"  sid   = {sid[:20]}{'...' if len(sid) > 20 else ''}")
+    print(f"  token = {token[:30]}{'...' if len(token) > 30 else ''}")
+    print(f"  lib   = {lib[:30]}{'...' if len(lib) > 30 else ''}")
+    print(f"  did   = {did[:30]}{'...' if len(did) > 30 else ''}")
+    print(f"  ouid  = {ouid or '(empty)'}")
 
     # Output JSON config values
     cookies_json = json.dumps(cookies)

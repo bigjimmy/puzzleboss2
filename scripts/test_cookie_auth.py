@@ -35,23 +35,18 @@ def parse_raw_cookies(raw):
 
 
 def parse_invoke_url(url):
-    """Extract sid, token, and _rest from an invoke URL."""
+    """Extract sid, token, lib, did, ouid from an invoke URL."""
     from urllib.parse import urlparse, parse_qs
     parsed = urlparse(url)
     qs = parse_qs(parsed.query)
 
-    sid = qs.get("sid", [""])[0]
-    token = qs.get("token", [""])[0]
-
-    # Reconstruct _rest from remaining params (excluding id, sid, token)
-    rest_parts = []
-    for key, values in qs.items():
-        if key not in ("id", "sid", "token"):
-            for v in values:
-                rest_parts.append(f"&{key}={v}")
-    _rest = "".join(rest_parts)
-
-    return {"sid": sid, "token": token, "_rest": _rest}
+    return {
+        "sid": qs.get("sid", [""])[0],
+        "token": qs.get("token", [""])[0],
+        "lib": qs.get("lib", [""])[0],
+        "did": qs.get("did", [""])[0],
+        "ouid": qs.get("ouid", [""])[0],
+    }
 
 
 def main():
@@ -161,16 +156,26 @@ def main():
 
     sid = invoke_params.get("sid", "")
     token = invoke_params.get("token", "")
-    rest = invoke_params.get("_rest", "")
+    lib = invoke_params.get("lib", "")
+    did = invoke_params.get("did", "")
+    ouid = invoke_params.get("ouid", "")
 
     if not sid or not token:
         print("  No invoke params (sid/token). Use --invoke-url or set SHEETS_ADDON_INVOKE_PARAMS")
         sys.exit(0)
 
+    if not lib or not did:
+        print("  WARNING: Missing lib/did params — invoke will likely fail (400)")
+
+    from urllib.parse import quote
+    token_encoded = quote(token, safe="")
     url = (
         f"https://docs.google.com/spreadsheets/u/0/d/{test_sheet_id}/scripts/invoke"
-        f"?id={test_sheet_id}&sid={sid}&token={token}{rest}"
+        f"?id={test_sheet_id}&sid={sid}&token={token_encoded}"
+        f"&lib={lib}&did={did}&func=populateMenus"
     )
+    if ouid:
+        url += f"&ouid={ouid}"
 
     print(f"  URL: ...invoke?id=...&sid={sid[:10]}...&token={token[:20]}...")
 
