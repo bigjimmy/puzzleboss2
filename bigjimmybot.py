@@ -119,15 +119,62 @@ def check_puzzle_from_queue(threadname, q):
                     mypuzzle["drive_id"], mypuzzle["name"]
                 )
             else:
-                # No add-on deployed, use legacy Revisions API
+                # No add-on deployed yet - try to activate it
                 debug_log(
-                    4,
-                    "[Thread: %s] No add-on on %s, using legacy Revisions API (sheetenabled=0)"
+                    3,
+                    "[Thread: %s] Attempting to activate add-on on %s (sheetenabled=0)"
                     % (threadname, mypuzzle["name"]),
                 )
-                sheet_info = get_puzzle_sheet_info_legacy(
-                    mypuzzle["drive_id"], mypuzzle["name"]
-                )
+
+                activation_success = False
+                try:
+                    activation_success = activate_puzzle_sheet_via_api(
+                        mypuzzle["drive_id"], mypuzzle["name"]
+                    )
+                except Exception as e:
+                    debug_log(
+                        2,
+                        "[Thread: %s] Add-on activation failed for %s: %s"
+                        % (threadname, mypuzzle["name"], e),
+                    )
+
+                if activation_success:
+                    # Activation succeeded! Set sheetenabled=1 and use hidden sheet approach
+                    debug_log(
+                        3,
+                        "[Thread: %s] Add-on activated successfully on %s, enabling sheetenabled"
+                        % (threadname, mypuzzle["name"]),
+                    )
+                    response = api_request_with_retry(
+                        'post',
+                        f"{config['API']['APIURI']}/puzzles/{mypuzzle['id']}/sheetenabled",
+                        json={"sheetenabled": 1},
+                    )
+                    if response:
+                        sheetenabled = 1  # Update local flag
+                        # Use hidden sheet tracking now
+                        sheet_info = get_puzzle_sheet_info_activity(
+                            mypuzzle["drive_id"], mypuzzle["name"]
+                        )
+                    else:
+                        debug_log(
+                            2,
+                            "[Thread: %s] Failed to update sheetenabled in DB, falling back to legacy"
+                            % threadname,
+                        )
+                        sheet_info = get_puzzle_sheet_info_legacy(
+                            mypuzzle["drive_id"], mypuzzle["name"]
+                        )
+                else:
+                    # Activation failed, fall back to legacy Revisions API
+                    debug_log(
+                        4,
+                        "[Thread: %s] Using legacy Revisions API for %s (activation not available)"
+                        % (threadname, mypuzzle["name"]),
+                    )
+                    sheet_info = get_puzzle_sheet_info_legacy(
+                        mypuzzle["drive_id"], mypuzzle["name"]
+                    )
 
             # Update sheet count only if changed
             if sheet_info["sheetcount"] is not None and sheet_info[
