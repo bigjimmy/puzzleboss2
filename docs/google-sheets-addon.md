@@ -20,9 +20,14 @@ Puzzle Creation Flow (Apps Script API):
                                                         ├── Apps Script API: projects.updateContent
                                                         └── (Optional) Create hidden _pb_activity sheet
 
-Activity Tracking Flow:
+Activity Tracking Flow (Default Minimal Tracker):
+  User edits cell  →  Apps Script onEdit trigger  →  Writes to hidden _pb_activity sheet
+                                                      (email, timestamp, num_sheets)
+  bigjimmybot.py   →  Sheets API values.get()  →  Updates puzzle DB
+
+Activity Tracking Flow (Full Puzzle Tools):
   User edits cell  →  Apps Script onEdit trigger  →  Writes DeveloperMetadata
-                                                      (PB_ACTIVITY:username, PB_SPREADSHEET)
+                                                      (PB_ACTIVITY:username, PB_SPREADSHEET, PB_SHEET)
   bigjimmybot.py   →  Sheets API DeveloperMetadata.search()  →  Updates puzzle DB
 ```
 
@@ -78,8 +83,10 @@ SERVICE_ACCOUNT_FILE: service-account.json
 **Option 1: Default Activity Tracker (Minimal)**
 - Leave `APPS_SCRIPT_ADDON_CODE` empty or unset
 - Deploys a simple `onEdit` trigger that writes to a hidden `_pb_activity` sheet
-- ~170 lines of JavaScript
+- ~85 lines of JavaScript
 - No UI, no puzzle tools — just activity tracking
+- **Tracking method**: Hidden `_pb_activity` sheet (no authorization required)
+- **Why this approach?** Simple triggers can write to sheets without authorization, but DeveloperMetadata operations require authorized access
 
 **Option 2: Full Puzzle Tools (Recommended)**
 - Set `APPS_SCRIPT_ADDON_CODE` to the content of `scripts/puzzle_tools_addon_latest.gs`
@@ -92,6 +99,7 @@ SERVICE_ACCOUNT_FILE: service-account.json
   - 🫥 Delete Blank Rows
 - ~400 lines of JavaScript
 - Based on [dannybd/sheets-puzzleboss-tools](https://github.com/dannybd/sheets-puzzleboss-tools)
+- **Tracking method**: DeveloperMetadata API (requires menu authorization, but faster and cleaner)
 
 To deploy the full puzzle tools, run the production migration SQL:
 ```bash
@@ -132,29 +140,46 @@ curl -X POST "http://localhost:5000/puzzles/activate-addons" \
 
 ## Activity Tracking
 
-### DeveloperMetadata Keys
+### Hidden Sheet Approach
 
-The add-on writes metadata to the spreadsheet that bigjimmybot reads:
+The default add-on writes activity data to a hidden `_pb_activity` sheet that bigjimmybot reads:
 
-| Key | Value | Purpose |
-|-----|-------|---------|
-| `PB_ACTIVITY:<username>` | `{"t": 1766285432}` | Last edit timestamp for user |
-| `PB_SPREADSHEET` | `{"t": 1766285432, "num_sheets": 5}` | Marks sheet as having tracking enabled |
-| `PB_SHEET` | `{"t": 1766285432}` | Last edit timestamp for each sheet |
+| Column | Value | Purpose |
+|--------|-------|---------|
+| `editor` | `alice@example.org` | Full email address of the editor |
+| `timestamp` | `1766285432` | Unix timestamp of last edit |
+| `num_sheets` | `5` | Number of sheets in the spreadsheet (excluding _pb_activity) |
 
-### Hybrid Tracking Approach
+**Why a hidden sheet instead of DeveloperMetadata?**
 
-The `puzzle.sheetenabled` column controls which tracking method bigjimmybot uses:
+Simple triggers (like `onEdit`) can write to sheets without requiring user authorization, but DeveloperMetadata operations require authorized access. Using a hidden sheet allows activity tracking to work without any user authorization prompts.
 
-- `sheetenabled=1` — Use DeveloperMetadata API (fast, low quota, preferred)
-- `sheetenabled=0` — Use legacy Revisions API (slow, high quota, fallback)
+The sheet is:
+- Pre-created by the service account during deployment
+- Hidden from the UI (not visible in the sheet tab list)
+- Warning-protected (users see a warning if they try to manually edit it)
+- One row per editor (updated in-place on each edit)
 
-When bigjimmybot detects `PB_SPREADSHEET` metadata on a sheet with `sheetenabled=0`, it automatically upgrades via:
-```
-POST /puzzles/{id}/sheetenabled  →  sets sheetenabled=1
-```
+### Tracking Method Selection
 
-**New sheets created via the API start with `sheetenabled=1` automatically.**
+Bigjimmybot uses different methods to read activity depending on the sheet:
+
+1. **Hidden Sheet (_pb_activity)** — Default for new sheets with Apps Script add-on
+   - Fast, low quota usage
+   - Reads via `get_puzzle_sheet_info_activity()`
+   - No special configuration needed
+
+2. **DeveloperMetadata** — Used by full puzzle tools add-on only
+   - Fast, low quota usage
+   - Reads via `get_puzzle_sheet_info()`
+   - Only available with the full puzzle tools (not the minimal tracker)
+
+3. **Revisions API (Legacy)** — Fallback for old sheets without add-on
+   - Slow, high quota usage
+   - Reads via `get_puzzle_sheet_info_legacy()`
+   - Used for sheets that don't have the add-on deployed
+
+Bigjimmybot automatically detects which method to use based on sheet configuration.
 
 ## Updating Add-on Code
 
@@ -200,9 +225,10 @@ EOF
 | Function | File | Purpose |
 |----------|------|---------|
 | `activate_puzzle_sheet_via_api()` | `pbgooglelib.py` | Deploys add-on via Apps Script API |
-| `get_puzzle_sheet_info()` | `pbgooglelib.py` | Reads activity via DeveloperMetadata API (new) |
-| `get_puzzle_sheet_info_legacy()` | `pbgooglelib.py` | Reads activity via Revisions API (fallback) |
-| `check_developer_metadata_exists()` | `pbgooglelib.py` | Quick check if sheet has PB metadata |
+| `get_puzzle_sheet_info_activity()` | `pbgooglelib.py` | Reads activity from hidden _pb_activity sheet (default tracker) |
+| `get_puzzle_sheet_info()` | `pbgooglelib.py` | Reads activity via DeveloperMetadata API (full puzzle tools) |
+| `get_puzzle_sheet_info_legacy()` | `pbgooglelib.py` | Reads activity via Revisions API (fallback for old sheets) |
+| `check_developer_metadata_exists()` | `pbgooglelib.py` | Quick check if sheet has PB DeveloperMetadata (full puzzle tools only) |
 
 ### Logs
 
