@@ -829,16 +829,9 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
                 raise Exception(
                     f"Cannot assign solver to puzzle {value} - puzzle is already solved"
                 )
-            # Since we're assigning, the puzzle should automatically transit out of "New" or "Abandoned" state
-            if mypuzz["puzzle"]["status"] in ["New", "Abandoned"]:
-                debug_log(
-                    3,
-                    "Automatically marking puzzle id %s, name %s (status: %s) as being worked on."
-                    % (mypuzz["puzzle"]["id"], mypuzz["puzzle"]["name"], mypuzz["puzzle"]["status"]),
-                )
-                update_puzzle_part_in_db(value, "status", "Being worked")
 
             # Assign the solver to the puzzle using the new JSON-based system
+            # (also handles "New"/"Abandoned" → "Being worked" status transition)
             assign_solver_to_puzzle(value, id, mysql.connection)
         else:
             # Puzz is empty, so this is a de-assignment
@@ -2062,12 +2055,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             # These statuses trigger an attention announcement
             update_puzzle_part_in_db(id, part, value)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
-
-            _log_activity(id, "interact")
         else:
             # All other valid statuses (Being worked, Unnecessary, Under control, Waiting for HQ, Grind, etc.)
+            # Activity logging handled by update_puzzle_field() for all non-Solved status changes
             update_puzzle_part_in_db(id, part, value)
-            _log_activity(id, "interact")
 
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
@@ -2779,9 +2770,9 @@ def get_puzzle_id_by_name(name):
     return rv
 
 
-def update_puzzle_part_in_db(id, part, value):
+def update_puzzle_part_in_db(id, part, value, source="puzzleboss"):
     conn, cursor = _cursor()
-    pblib.update_puzzle_field(id, part, value, conn)
+    pblib.update_puzzle_field(id, part, value, conn, source=source)
     debug_log(4, "puzzle %s %s updated in database" % (id, part))
     return 0
 

@@ -298,7 +298,7 @@ class TestCheckAbandonedPuzzle:
         mock_get_activity.assert_called_once()
         # Verify status update was attempted
         mock_update.assert_called_once_with(
-            123, "status", "Abandoned", mock_conn.return_value
+            123, "status", "Abandoned", mock_conn.return_value, source="bigjimmybot"
         )
 
 

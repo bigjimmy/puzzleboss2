@@ -625,7 +625,7 @@ def _check_abandoned_puzzle(puzzle: Dict[str, Any], threadname: str) -> None:
 
             try:
                 conn = _get_db_connection()
-                update_puzzle_field(puzzle["id"], "status", abandoned_status, conn)
+                update_puzzle_field(puzzle["id"], "status", abandoned_status, conn, source="bigjimmybot")
                 debug_log(
                     3,
                     f"[Thread: {threadname}] Set puzzle {puzzle['name']} status to '{abandoned_status}'",

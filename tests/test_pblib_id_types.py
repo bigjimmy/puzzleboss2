@@ -193,7 +193,7 @@ class TestUpdatePuzzleFieldIdType:
         def mock_fetchone():
             fetchone_count["n"] += 1
             if fetchone_count["n"] == 1:
-                return {"current_solvers": json.dumps({"solvers": []})}
+                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
             elif fetchone_count["n"] == 2:
                 return {"solver_history": json.dumps({"solvers": []})}
             return None

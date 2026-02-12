@@ -68,11 +68,16 @@ pblib.configstruct.setdefault("LOGLEVEL", "0")
 from pblib import assign_solver_to_puzzle, unassign_solver_from_puzzle
 
 
-def _make_mock_conn(current_solvers_json=None, solver_history_json=None):
+def _make_mock_conn(current_solvers_json=None, solver_history_json=None, puzzle_status="Being worked"):
     """Create a mock DB connection that simulates puzzle JSON columns.
 
     The mock cursor returns appropriate values for the SELECT queries
     in assign/unassign functions, and tracks UPDATE calls.
+
+    Args:
+        puzzle_status: The puzzle's current status (default "Being worked").
+            Used by assign_solver_to_puzzle to decide whether to transition
+            "New"/"Abandoned" → "Being worked".
     """
     if current_solvers_json is None:
         current_solvers_json = json.dumps({"solvers": []})
@@ -89,7 +94,7 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None):
 
     # Call sequence in assign_solver_to_puzzle:
     # 1. JSON_TABLE lookup for current puzzle → fetchall (returns [] = not assigned)
-    # 2. SELECT current_solvers → fetchone
+    # 2. SELECT current_solvers, status → fetchone
     # 3. SELECT solver_history → fetchone
     cursor.fetchall.return_value = []  # Not currently assigned to any puzzle
 
@@ -97,7 +102,7 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None):
         fetchone_count["n"] += 1
         n = fetchone_count["n"]
         if n == 1:
-            return {"current_solvers": current_solvers_json}
+            return {"current_solvers": current_solvers_json, "status": puzzle_status}
         elif n == 2:
             return {"solver_history": solver_history_json}
         return None
@@ -259,12 +264,12 @@ class TestAssignUnassignsFromOldPuzzle:
             n = fetchone_count["n"]
             # Calls:
             # 1. unassign_solver_from_puzzle SELECT current_solvers for puzzle 284
-            # 2. assign: SELECT current_solvers for puzzle 287
+            # 2. assign: SELECT current_solvers, status for puzzle 287
             # 3. assign: SELECT solver_history for puzzle 287
             if n == 1:
                 return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
             elif n == 2:
-                return {"current_solvers": json.dumps({"solvers": []})}
+                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
             elif n == 3:
                 return {"solver_history": json.dumps({"solvers": []})}
             return None
@@ -302,7 +307,7 @@ class TestAssignUnassignsFromOldPuzzle:
             if n <= 2:
                 return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
             elif n == 3:
-                return {"current_solvers": json.dumps({"solvers": []})}
+                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
             elif n == 4:
                 return {"solver_history": json.dumps({"solvers": []})}
             return None
@@ -353,3 +358,67 @@ class TestAssignSolverHistoryType:
             if 'SET solver_history' in str(c)
         ]
         assert len(update_calls) == 0, "Should not write to history when solver already present"
+
+
+class TestAssignStatusTransition:
+    """Test that assign_solver_to_puzzle transitions puzzle status.
+
+    When a solver is assigned, puzzles in "New" or "Abandoned" status
+    should automatically transition to "Being worked". This ensures
+    the invariant holds regardless of whether the assignment comes from
+    the web UI (via pbrest.py) or bigjimmybot's auto-assign.
+    """
+
+    @patch('pblib.debug_log')
+    def test_new_puzzle_transitions_to_being_worked(self, mock_log):
+        """Puzzle with status 'New' should become 'Being worked' on assignment."""
+        conn, cursor = _make_mock_conn(puzzle_status="New")
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        status_calls = [
+            c for c in cursor.execute.call_args_list
+            if 'SET status' in str(c)
+        ]
+        assert len(status_calls) == 1, "Expected one status UPDATE"
+        assert status_calls[0][0][1] == ("Being worked", 287)
+
+    @patch('pblib.debug_log')
+    def test_abandoned_puzzle_transitions_to_being_worked(self, mock_log):
+        """Puzzle with status 'Abandoned' should become 'Being worked' on assignment."""
+        conn, cursor = _make_mock_conn(puzzle_status="Abandoned")
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        status_calls = [
+            c for c in cursor.execute.call_args_list
+            if 'SET status' in str(c)
+        ]
+        assert len(status_calls) == 1, "Expected one status UPDATE"
+        assert status_calls[0][0][1] == ("Being worked", 287)
+
+    @patch('pblib.debug_log')
+    def test_being_worked_puzzle_no_status_change(self, mock_log):
+        """Puzzle already 'Being worked' should not get a redundant status UPDATE."""
+        conn, cursor = _make_mock_conn(puzzle_status="Being worked")
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        status_calls = [
+            c for c in cursor.execute.call_args_list
+            if 'SET status' in str(c)
+        ]
+        assert len(status_calls) == 0, "Should not update status when already 'Being worked'"
+
+    @patch('pblib.debug_log')
+    def test_solved_puzzle_no_status_change(self, mock_log):
+        """Puzzle with status 'Solved' should not be changed to 'Being worked'."""
+        conn, cursor = _make_mock_conn(puzzle_status="Solved")
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        status_calls = [
+            c for c in cursor.execute.call_args_list
+            if 'SET status' in str(c)
+        ]
+        assert len(status_calls) == 0, "Should not change status of solved puzzle"

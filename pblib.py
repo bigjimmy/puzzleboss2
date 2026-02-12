@@ -333,13 +333,22 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
 
     # Update current solvers for the new puzzle
     cursor.execute(
-        "SELECT current_solvers FROM puzzle WHERE id = %s",
+        "SELECT current_solvers, status FROM puzzle WHERE id = %s",
         (puzzle_id,),
     )
-    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
+    row = cursor.fetchone()
+    current_solvers_str = row["current_solvers"] or json.dumps(
         {"solvers": []}
     )
     current_solvers = json.loads(current_solvers_str)
+
+    # Transition puzzle out of "New" or "Abandoned" when a solver is assigned
+    if row["status"] in ("New", "Abandoned"):
+        debug_log(3, "Auto-transitioning puzzle %s from '%s' to 'Being worked'" % (puzzle_id, row["status"]))
+        cursor.execute(
+            "UPDATE puzzle SET status = %s WHERE id = %s",
+            ("Being worked", puzzle_id),
+        )
 
     if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
         current_solvers["solvers"].append({"solver_id": solver_id})
@@ -492,7 +501,7 @@ def solver_exists(identifier, conn):
         return False
 
 
-def update_puzzle_field(puzzle_id, field, value, conn):
+def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
     """
     Update a single puzzle field in the database.
 
@@ -501,9 +510,12 @@ def update_puzzle_field(puzzle_id, field, value, conn):
         field: Field name to update
         value: New value for the field
         conn: Database connection
+        source: Caller identity for activity logging (default "system")
 
     Special handling:
         - 'solvers' field: Uses assign_solver_to_puzzle() or clear_puzzle_solvers()
+        - 'status' field: Auto-logs "interact" activity (except for "Solved",
+          which is logged as "solve" by the answer handler in pbrest.py)
         - Other fields: Direct UPDATE query
 
     Raises:
@@ -521,6 +533,12 @@ def update_puzzle_field(puzzle_id, field, value, conn):
         cursor = conn.cursor()
         cursor.execute(f"UPDATE puzzle SET {field} = %s WHERE id = %s", (value, puzzle_id))
         conn.commit()
+
+        # Invariant: all non-Solved status changes are logged as "interact" activity.
+        # "Solved" is excluded because solves are logged as "solve" type via the
+        # answer handler — logging "interact" here would duplicate it.
+        if field == "status" and value != "Solved":
+            log_activity(puzzle_id, "interact", 0, source, conn)
 
 
 def get_solver_by_id_from_db(solver_id, conn):
