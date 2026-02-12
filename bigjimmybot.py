@@ -326,7 +326,11 @@ def _process_activity_records(
 
         # Only auto-assign if solver is not already on this puzzle
         if solver_info["puzz"] == puzzle["name"]:
-            continue  # Solver already assigned to this puzzle
+            debug_log(
+                4,
+                f"[Thread: {threadname}] Solver {solver_info['name']} already assigned to {puzzle['name']}, skipping auto-assign"
+            )
+            continue
 
         # Check if edit is newer than solver's last activity
         if not solver_info["lastact"]:
@@ -336,18 +340,27 @@ def _process_activity_records(
 
         debug_log(
             4,
-            f"[Thread: {threadname}] Last solver activity for {solver_info['name']} was at "
-            f"{datetime.datetime.fromtimestamp(last_solver_act_ts) if last_solver_act_ts else 'never'}",
+            f"[Thread: {threadname}] Edit at {datetime.datetime.fromtimestamp(edit_ts)}, "
+            f"solver {solver_info['name']} last activity at {datetime.datetime.fromtimestamp(last_solver_act_ts) if last_solver_act_ts else 'never'}"
         )
 
         # Auto-assign if enabled and edit is newer than solver's last activity
-        if configstruct["BIGJIMMY_AUTOASSIGN"] == "true":
-            if edit_ts > last_solver_act_ts:
-                debug_log(
-                    3,
-                    f"[Thread: {threadname}] Assigning solver {solver_id} to puzzle {puzzle['id']}.",
-                )
-                _assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
+        if configstruct["BIGJIMMY_AUTOASSIGN"] != "true":
+            debug_log(
+                4,
+                f"[Thread: {threadname}] Auto-assign disabled (BIGJIMMY_AUTOASSIGN={configstruct.get('BIGJIMMY_AUTOASSIGN', 'not set')})"
+            )
+        elif edit_ts <= last_solver_act_ts:
+            debug_log(
+                4,
+                f"[Thread: {threadname}] Edit timestamp {edit_ts} <= solver's last activity {last_solver_act_ts}, not auto-assigning"
+            )
+        else:
+            debug_log(
+                3,
+                f"[Thread: {threadname}] Auto-assigning solver {solver_id} ({solver_info['name']}) to puzzle {puzzle['id']} ({puzzle['name']})"
+            )
+            _assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
 
 
 
