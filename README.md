@@ -72,3 +72,8 @@ See `docker/README.md` for details, or continue reading for production setup.
 - For running without a working puzzcord (discord bot) set `SKIP_PUZZCORD` to `true` in the config table.
 
 - For running without Google Drive/Sheets, set `SKIP_GOOGLE_API` to `true` in the config table.
+
+## Future TODOs
+
+### Testing Infrastructure
+- **Add pytest + mocking for unit tests**: Currently tests are integration tests requiring running API/DB. Future work should add pytest with mocking infrastructure to test business logic in isolation (mocking external dependencies like Google API, REST API calls, etc.). See `tests/test_bigjimmybot.py` for initial bigjimmybot unit tests as a template for expanding to pbrest.py, pbgooglelib.py, pbllmlib.py, etc.

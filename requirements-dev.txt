@@ -1,0 +1,14 @@
+# Development and Testing Dependencies
+# Install with: pip install -r requirements-dev.txt
+
+# Testing framework
+pytest>=7.4.0
+pytest-mock>=3.11.0
+pytest-cov>=4.1.0
+
+# HTTP mocking for requests
+responses>=0.23.0
+
+# Code quality
+flake8>=6.1.0
+black>=23.7.0

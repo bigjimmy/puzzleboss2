@@ -102,7 +102,7 @@ def _api_request_with_retry(
 
 def _get_solver_id(identifier: str, match_type: str = "name") -> int:
     """
-    Look up solver ID by name or email.
+    Look up solver ID by name or email using efficient byname endpoint.
 
     Args:
         identifier: Solver name or email address
@@ -111,24 +111,38 @@ def _get_solver_id(identifier: str, match_type: str = "name") -> int:
     Returns:
         Solver ID on success, 0 if not found
     """
-    debug_log(4, f"Looking up solver by {match_type}: {identifier}")
-    response = _api_request_with_retry("get", f"{config['API']['APIURI']}/solvers")
+    # Extract username from email if needed
+    if match_type == "email":
+        username = identifier.split("@")[0].lower()
+    else:
+        username = identifier.lower()
+
+    debug_log(4, f"Looking up solver by {match_type}: {identifier} (username: {username})")
+
+    # Use efficient byname endpoint (indexed query vs fetching all solvers)
+    response = _api_request_with_retry(
+        "get", f"{config['API']['APIURI']}/solvers/byname/{username}"
+    )
     if not response:
-        debug_log(2, "Failed to fetch solvers list after retries")
+        debug_log(2, f"Failed to fetch solver {username} after retries")
         return 0
 
-    solvers_list = json.loads(response.text)["solvers"]
-    for solver in solvers_list:
-        if match_type == "email":
-            username = identifier.split("@")[0].lower()
-            if solver["name"].lower() == username:
-                debug_log(4, f"Solver {identifier} is id: {solver['id']}")
-                return solver["id"]
-        else:  # name
-            if solver["name"].lower() == identifier.lower():
-                debug_log(4, f"Solver {identifier} is id: {solver['id']}")
-                return solver["id"]
-    return 0
+    # Check for 404 (solver not found)
+    if response.status_code == 404:
+        debug_log(4, f"Solver {username} not found in database")
+        return 0
+
+    try:
+        result = json.loads(response.text)
+        if "error" in result:
+            debug_log(4, f"Solver {username} not found: {result['error']}")
+            return 0
+        solver = result["solver"]
+        debug_log(4, f"Found solver {username} with id: {solver['id']}")
+        return solver["id"]
+    except Exception as e:
+        debug_log(2, f"Error parsing solver response for {username}: {e}")
+        return 0
 
 
 
