@@ -1078,11 +1078,7 @@ def put_botstat(key):
         raise Exception(f"Exception interpreting input data for botstat update: {e}")
 
     conn, cursor = _cursor()
-    cursor.execute(
-        "INSERT INTO botstats (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
-        (key, myval, myval),
-    )
-    conn.commit()
+    pblib.update_botstat(key, myval, conn)
 
     debug_log(4, "Botstat %s updated successfully to %s" % (key, myval))
     return {"status": "ok"}
@@ -2796,45 +2792,21 @@ def get_puzzles_from_list(puzzle_ids):
 
 def get_last_activity_for_puzzle(id):
     debug_log(4, "start, called with: %s" % id)
-    try:
-        conn, cursor = _read_cursor()
-        cursor.execute(
-            """SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1""",
-            (id,),
-        )
-        return cursor.fetchone()
-    except IndexError:
-        debug_log(4, "No Activity for Puzzle %s found in database yet" % id)
-        return None
+    conn = mysql.connection
+    return pblib.get_last_activity_for_puzzle(id, conn)
 
 
 def get_last_sheet_activity_for_puzzle(id):
     """Get the last 'revise' type activity for a puzzle (sheet edits only)."""
     debug_log(4, "start, called with: %s" % id)
-    try:
-        conn, cursor = _read_cursor()
-        cursor.execute(
-            """SELECT * from activity where puzzle_id = %s AND type = 'revise' ORDER BY time DESC LIMIT 1""",
-            (id,),
-        )
-        return cursor.fetchone()
-    except IndexError:
-        debug_log(4, "No Sheet Activity for Puzzle %s found in database yet" % id)
-        return None
+    conn = mysql.connection
+    return pblib.get_last_sheet_activity_for_puzzle(id, conn)
 
 
 def get_last_activity_for_solver(id):
     debug_log(4, "start, called with: %s" % id)
-    try:
-        conn, cursor = _read_cursor()
-        cursor.execute(
-            "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
-            (id,),
-        )
-        return cursor.fetchone()
-    except IndexError:
-        debug_log(4, "No Activity for solver %s found in database yet" % id)
-        return None
+    conn = mysql.connection
+    return pblib.get_last_activity_for_solver(id, conn)
 
 
 def set_new_activity_for_puzzle(id, actstruct):

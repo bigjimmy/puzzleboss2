@@ -2,7 +2,7 @@
 """
 Extended unit tests for bigjimmybot.py - Additional coverage
 
-Tests additional functions and multi-threading behavior not covered in
+Tests additional functions and error handling not covered in
 test_bigjimmybot.py.
 
 Run with: pytest tests/test_bigjimmybot_extended.py -v
@@ -16,34 +16,45 @@ import time
 import queue
 import threading
 from unittest.mock import Mock, MagicMock, patch, call
+from datetime import datetime as dt
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Mock MySQL and Google API dependencies BEFORE importing bigjimmybot
 sys.modules['MySQLdb'] = MagicMock()
+sys.modules['MySQLdb.cursors'] = MagicMock()
 sys.modules['pbgooglelib'] = MagicMock()
 
 # Mock pblib module with minimal config
 pblib_mock = MagicMock()
-pblib_mock.config = {'API': {'APIURI': 'http://localhost:5000'}, 'MYSQL': {}}
+pblib_mock.config = {
+    'API': {'APIURI': 'http://localhost:5000'},
+    'MYSQL': {
+        'HOST': 'localhost',
+        'USERNAME': 'test',
+        'PASSWORD': 'test',
+        'DATABASE': 'test',
+    },
+}
 pblib_mock.configstruct = {
     'BIGJIMMY_AUTOASSIGN': 'true',
     'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES': '10',
     'BIGJIMMY_ABANDONED_STATUS': 'Abandoned'
 }
 pblib_mock.debug_log = lambda level, msg: None  # Suppress debug logs in tests
+pblib_mock.get_mysql_ssl_config.return_value = None
 sys.modules['pblib'] = pblib_mock
 
 # Now we can import bigjimmybot
 from bigjimmybot import (
-    _api_request_with_retry,
     _record_solver_activity,
     _assign_solver_to_puzzle,
     _fetch_last_sheet_activity,
     _update_sheet_count,
     _check_abandoned_puzzle,
     _process_puzzle,
+    _get_db_connection,
 )
 
 
@@ -54,176 +65,80 @@ def load_fixture(filename):
         return json.load(f)
 
 
-class TestApiRequestWithRetry:
-    """Test API request retry logic."""
-
-    @patch('bigjimmybot.requests.get')
-    def test_successful_get_request(self, mock_get):
-        """Test successful GET request on first try."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = '{"status": "ok"}'
-        mock_get.return_value = mock_response
-
-        # Test
-        result = _api_request_with_retry("get", "http://example.com/test")
-
-        # Verify
-        assert result == mock_response
-        mock_get.assert_called_once()
-
-    @patch('bigjimmybot.requests.post')
-    def test_successful_post_request(self, mock_post):
-        """Test successful POST request with JSON data."""
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = '{"status": "ok"}'
-        mock_post.return_value = mock_response
-
-        # Test
-        result = _api_request_with_retry(
-            "post",
-            "http://example.com/test",
-            json={"key": "value"}
-        )
-
-        # Verify
-        assert result == mock_response
-        mock_post.assert_called_once_with(
-            "http://example.com/test",
-            json={"key": "value"},
-            timeout=10
-        )
-
-    @patch('bigjimmybot.requests.get')
-    @patch('bigjimmybot.time.sleep')
-    def test_retry_on_timeout(self, mock_sleep, mock_get):
-        """Test retry behavior on timeout."""
-        import requests
-        # Mock: timeout twice, then success
-        mock_get.side_effect = [
-            requests.exceptions.Timeout("Connection timeout"),
-            requests.exceptions.Timeout("Connection timeout"),
-            Mock(status_code=200, text='{"status": "ok"}')
-        ]
-
-        # Test
-        result = _api_request_with_retry("get", "http://example.com/test", max_retries=3)
-
-        # Verify retries happened
-        assert mock_get.call_count == 3
-        # Verify exponential backoff sleeps: 1s, 2s
-        assert mock_sleep.call_count == 2
-        assert mock_sleep.call_args_list[0][0][0] == 1  # First retry: 1 second
-        assert mock_sleep.call_args_list[1][0][0] == 2  # Second retry: 2 seconds
-        assert result is not None
-
-    @patch('bigjimmybot.requests.get')
-    @patch('bigjimmybot.time.sleep')
-    def test_max_retries_exceeded(self, mock_sleep, mock_get):
-        """Test that None is returned after max retries."""
-        import requests
-        # Mock: always timeout
-        mock_get.side_effect = requests.exceptions.Timeout("Connection timeout")
-
-        # Test
-        result = _api_request_with_retry("get", "http://example.com/test", max_retries=3)
-
-        # Verify
-        assert result is None
-        assert mock_get.call_count == 3
-        assert mock_sleep.call_count == 2  # Sleep between first 2 retries (not after last)
-
-
 class TestRecordSolverActivity:
     """Test _record_solver_activity function."""
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_record_activity_success(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.log_activity')
+    def test_record_activity_success(self, mock_log_activity, mock_conn):
         """Test successfully recording solver activity."""
-        # Mock successful API response
-        mock_response = Mock()
-        mock_response.text = '{"status": "ok"}'
-        mock_api.return_value = mock_response
-
         # Test
         result = _record_solver_activity(123, 456, "test-thread")
 
         # Verify
-        assert result == mock_response
-        mock_api.assert_called_once()
-        call_args = mock_api.call_args
-        assert "/puzzles/123/lastact" in call_args[0][1]
-        assert call_args[1]['json']['lastact']['solver_id'] == '456'
-        assert call_args[1]['json']['lastact']['source'] == 'bigjimmybot'
+        assert result is True
+        mock_log_activity.assert_called_once_with(
+            123, "revise", 456, "bigjimmybot", mock_conn.return_value
+        )
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_record_activity_api_failure(self, mock_api):
-        """Test handling API failure when recording activity."""
-        # Mock API failure
-        mock_api.return_value = None
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.log_activity')
+    def test_record_activity_db_failure(self, mock_log_activity, mock_conn):
+        """Test handling database failure when recording activity."""
+        # Mock database failure
+        mock_log_activity.side_effect = Exception("Database error")
 
         # Test
         result = _record_solver_activity(123, 456, "test-thread")
 
-        # Verify returns None on failure
-        assert result is None
+        # Verify returns False on failure
+        assert result is False
 
 
 class TestAssignSolverToPuzzle:
     """Test _assign_solver_to_puzzle function."""
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_assign_solver_success(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.assign_solver_to_puzzle')
+    def test_assign_solver_success(self, mock_assign, mock_conn):
         """Test successfully assigning solver to puzzle."""
-        # Mock successful API response
-        mock_response = Mock()
-        mock_response.text = '{"status": "ok"}'
-        mock_api.return_value = mock_response
-
         # Test
         result = _assign_solver_to_puzzle(123, 456, "test-thread")
 
         # Verify
-        assert result == mock_response
-        mock_api.assert_called_once()
-        call_args = mock_api.call_args
-        assert "/solvers/456/puzz" in call_args[0][1]
-        assert call_args[1]['json']['puzz'] == '123'
+        assert result is True
+        mock_assign.assert_called_once_with(
+            123, 456, mock_conn.return_value
+        )
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_assign_solver_api_failure(self, mock_api):
-        """Test handling API failure when assigning solver."""
-        # Mock API failure
-        mock_api.return_value = None
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.assign_solver_to_puzzle')
+    def test_assign_solver_db_failure(self, mock_assign, mock_conn):
+        """Test handling database failure when assigning solver."""
+        # Mock database failure
+        mock_assign.side_effect = Exception("Database error")
 
         # Test
         result = _assign_solver_to_puzzle(123, 456, "test-thread")
 
-        # Verify returns None on failure
-        assert result is None
+        # Verify returns False on failure
+        assert result is False
 
 
 class TestFetchLastSheetActivity:
     """Test _fetch_last_sheet_activity function."""
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_fetch_lastsheetact_success(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_last_sheet_activity_for_puzzle')
+    def test_fetch_lastsheetact_success(self, mock_get_activity, mock_conn):
         """Test successfully fetching last sheet activity."""
-        # Mock successful API response
-        mock_response = Mock()
-        mock_response.text = json.dumps({
-            "puzzle": {
-                "lastsheetact": {
-                    "time": "Tue, 11 Feb 2026 23:19:43 GMT",
-                    "type": "revise",
-                    "source": "google"
-                }
-            }
-        })
-        mock_api.return_value = mock_response
+        # Mock database response with datetime object
+        mock_activity = {
+            "time": dt(2026, 2, 11, 23, 19, 43),
+            "type": "revise",
+            "source": "google",
+        }
+        mock_get_activity.return_value = mock_activity
 
         # Test
         puzzle = {"id": 123, "name": "TestPuzzle"}
@@ -231,20 +146,16 @@ class TestFetchLastSheetActivity:
 
         # Verify
         assert result is not None
-        assert result["time"] == "Tue, 11 Feb 2026 23:19:43 GMT"
         assert result["type"] == "revise"
+        assert isinstance(result["time"], dt)
+        mock_get_activity.assert_called_once_with(123, mock_conn.return_value)
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_fetch_lastsheetact_none_response(self, mock_api):
-        """Test fetching last sheet activity when it's None (no activity yet)."""
-        # Mock API response with None lastsheetact
-        mock_response = Mock()
-        mock_response.text = json.dumps({
-            "puzzle": {
-                "lastsheetact": None
-            }
-        })
-        mock_api.return_value = mock_response
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_last_sheet_activity_for_puzzle')
+    def test_fetch_lastsheetact_none_result(self, mock_get_activity, mock_conn):
+        """Test fetching last sheet activity when there's no activity (None)."""
+        # Mock database returning None
+        mock_get_activity.return_value = None
 
         # Test
         puzzle = {"id": 123, "name": "TestPuzzle"}
@@ -253,15 +164,12 @@ class TestFetchLastSheetActivity:
         # Verify None is returned (valid state)
         assert result is None
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_fetch_lastsheetact_api_error(self, mock_api):
-        """Test handling API error."""
-        # Mock API error response
-        mock_response = Mock()
-        mock_response.text = json.dumps({
-            "error": "Puzzle not found"
-        })
-        mock_api.return_value = mock_response
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_last_sheet_activity_for_puzzle')
+    def test_fetch_lastsheetact_db_error(self, mock_get_activity, mock_conn):
+        """Test handling database error."""
+        # Mock database exception
+        mock_get_activity.side_effect = Exception("Connection lost")
 
         # Test
         puzzle = {"id": 999, "name": "NonExistent"}
@@ -270,45 +178,42 @@ class TestFetchLastSheetActivity:
         # Verify None returned on error
         assert result is None
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_fetch_lastsheetact_api_timeout(self, mock_api):
-        """Test handling API timeout."""
-        # Mock API timeout
-        mock_api.return_value = None
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_last_sheet_activity_for_puzzle')
+    def test_fetch_lastsheetact_connection_failure(self, mock_get_activity, mock_conn):
+        """Test handling connection failure."""
+        # Mock connection failure
+        mock_conn.side_effect = Exception("Connection refused")
 
         # Test
         puzzle = {"id": 123, "name": "TestPuzzle"}
         result = _fetch_last_sheet_activity(puzzle, "test-thread")
 
-        # Verify None returned on timeout
+        # Verify None returned on connection failure
         assert result is None
 
 
 class TestUpdateSheetCount:
     """Test _update_sheet_count function."""
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_update_when_count_changed(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.update_puzzle_field')
+    def test_update_when_count_changed(self, mock_update, mock_conn):
         """Test updating sheet count when it has changed."""
-        # Mock successful API response
-        mock_response = Mock()
-        mock_response.text = '{"status": "ok"}'
-        mock_api.return_value = mock_response
-
         # Test with changed count
         puzzle = {"id": 123, "name": "TestPuzzle", "sheetcount": 45}
         sheet_info = {"sheetcount": 47}
 
         _update_sheet_count(puzzle, sheet_info, "test-thread")
 
-        # Verify API was called to update
-        mock_api.assert_called_once()
-        call_args = mock_api.call_args
-        assert "/puzzles/123/sheetcount" in call_args[0][1]
-        assert call_args[1]['json']['sheetcount'] == 47
+        # Verify database was called to update
+        mock_update.assert_called_once_with(
+            123, "sheetcount", 47, mock_conn.return_value
+        )
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_skip_update_when_count_unchanged(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.update_puzzle_field')
+    def test_skip_update_when_count_unchanged(self, mock_update, mock_conn):
         """Test skipping update when sheet count hasn't changed."""
         # Test with unchanged count
         puzzle = {"id": 123, "name": "TestPuzzle", "sheetcount": 47}
@@ -316,15 +221,16 @@ class TestUpdateSheetCount:
 
         _update_sheet_count(puzzle, sheet_info, "test-thread")
 
-        # Verify API was NOT called
-        mock_api.assert_not_called()
+        # Verify database was NOT called
+        mock_update.assert_not_called()
 
 
 class TestCheckAbandonedPuzzle:
     """Test _check_abandoned_puzzle function."""
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_puzzle_with_current_solvers_not_abandoned(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_last_activity_for_puzzle')
+    def test_puzzle_with_current_solvers_not_abandoned(self, mock_get_activity, mock_conn):
         """Test that puzzles with current solvers are not marked abandoned."""
         # Puzzle with solvers assigned
         puzzle = {
@@ -336,36 +242,33 @@ class TestCheckAbandonedPuzzle:
 
         _check_abandoned_puzzle(puzzle, "test-thread")
 
-        # Verify no API call was made
-        mock_api.assert_not_called()
+        # Verify no database call was made for lastact
+        mock_get_activity.assert_not_called()
 
-    @patch('bigjimmybot._api_request_with_retry')
-    @patch('bigjimmybot.datetime.datetime')
-    def test_puzzle_abandoned_after_timeout(self, mock_datetime_cls, mock_api):
+    @patch('bigjimmybot.configstruct', {
+        'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES': '10',
+        'BIGJIMMY_ABANDONED_STATUS': 'Abandoned',
+    })
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.update_puzzle_field')
+    @patch('bigjimmybot.get_last_activity_for_puzzle')
+    @patch('bigjimmybot.datetime')
+    def test_puzzle_abandoned_after_timeout(
+        self, mock_datetime, mock_get_activity, mock_update, mock_conn
+    ):
         """Test marking puzzle as abandoned after inactivity timeout."""
-        import datetime
-
-        # Use real datetime objects for proper subtraction
         # Last activity: 15 minutes ago (should trigger abandon at 10 min threshold)
-        now = datetime.datetime(2026, 2, 11, 23, 15, 0)
-        last_activity = datetime.datetime(2026, 2, 11, 23, 0, 0)  # 15 minutes ago
+        now = dt(2026, 2, 11, 23, 15, 0)
+        last_activity_time = dt(2026, 2, 11, 23, 0, 0)  # 15 minutes ago
 
-        # Mock datetime.strptime to return our last activity time
-        mock_datetime_cls.strptime.return_value = last_activity
-        # Mock datetime.utcnow to return our current time
-        mock_datetime_cls.utcnow.return_value = now
+        # Mock datetime.datetime.utcnow() to return our current time
+        mock_datetime.datetime.utcnow.return_value = now
 
-        # Mock API responses
-        lastact_response = Mock()
-        lastact_response.text = json.dumps({
-            "lastact": {
-                "time": "Tue, 11 Feb 2026 23:00:00 GMT",
-                "type": "revise"
-            }
-        })
-        update_response = Mock()
-        update_response.text = '{"status": "ok"}'
-        mock_api.side_effect = [lastact_response, update_response]
+        # Mock database returning activity with datetime object
+        mock_get_activity.return_value = {
+            "time": last_activity_time,
+            "type": "revise",
+        }
 
         # Puzzle with no current solvers
         puzzle = {
@@ -377,11 +280,12 @@ class TestCheckAbandonedPuzzle:
 
         _check_abandoned_puzzle(puzzle, "test-thread")
 
-        # Verify API was called at least once to fetch lastact
-        # Note: Status update may or may not happen depending on exact timing logic
-        assert mock_api.call_count >= 1
-        # Verify the first call was to fetch lastact
-        assert "/puzzles/123/lastact" in mock_api.call_args_list[0][0][1]
+        # Verify lastact was fetched
+        mock_get_activity.assert_called_once()
+        # Verify status update was attempted
+        mock_update.assert_called_once_with(
+            123, "status", "Abandoned", mock_conn.return_value
+        )
 
 
 class TestPuzzleProcessing:
@@ -419,7 +323,7 @@ class TestPuzzleProcessing:
     ):
         """Test that _process_puzzle continues even if subfunctions raise errors."""
         # Mock one function to raise an exception
-        mock_fetch.side_effect = Exception("API error")
+        mock_fetch.side_effect = Exception("Google API error")
 
         # Test puzzle
         puzzle = {"id": 123, "name": "TestPuzzle", "sheetlink": "http://example.com"}
@@ -429,19 +333,18 @@ class TestPuzzleProcessing:
             _process_puzzle(puzzle, "test-thread")
         except Exception as e:
             # Expected behavior: exception propagates (bigjimmybot logs and continues)
-            assert "API error" in str(e)
+            assert "Google API error" in str(e)
 
 
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_handle_malformed_json_response(self, mock_api):
-        """Test handling malformed JSON in API response."""
-        # Mock response with invalid JSON
-        mock_response = Mock()
-        mock_response.text = "not valid json {"
-        mock_api.return_value = mock_response
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_last_sheet_activity_for_puzzle')
+    def test_handle_db_exception(self, mock_get_activity, mock_conn):
+        """Test handling database exception gracefully."""
+        # Mock database exception
+        mock_get_activity.side_effect = Exception("Connection timeout")
 
         # Test
         puzzle = {"id": 123, "name": "TestPuzzle"}
@@ -450,13 +353,12 @@ class TestEdgeCases:
         # Should return None instead of raising exception
         assert result is None
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_handle_missing_required_fields(self, mock_api):
-        """Test handling missing required fields in response."""
-        # Mock response missing expected fields
-        mock_response = Mock()
-        mock_response.text = json.dumps({"puzzle": {}})  # Missing lastsheetact
-        mock_api.return_value = mock_response
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_last_sheet_activity_for_puzzle')
+    def test_handle_empty_activity_result(self, mock_get_activity, mock_conn):
+        """Test handling empty/None activity result from database."""
+        # Mock database returning None (no activity)
+        mock_get_activity.return_value = None
 
         # Test
         puzzle = {"id": 123, "name": "TestPuzzle"}
@@ -464,3 +366,43 @@ class TestEdgeCases:
 
         # Should handle gracefully
         assert result is None
+
+
+class TestGetDbConnection:
+    """Test _get_db_connection thread-local connection management."""
+
+    @patch('bigjimmybot.MySQLdb')
+    def test_creates_new_connection(self, mock_mysqldb):
+        """Test that a new connection is created when none exists."""
+        # Clear any existing thread-local state
+        import bigjimmybot
+        if hasattr(bigjimmybot._thread_local, 'db_conn'):
+            del bigjimmybot._thread_local.db_conn
+
+        mock_conn = MagicMock()
+        mock_mysqldb.connect.return_value = mock_conn
+
+        result = _get_db_connection()
+
+        assert result == mock_conn
+        mock_mysqldb.connect.assert_called_once()
+
+    @patch('bigjimmybot.MySQLdb')
+    def test_reuses_existing_connection(self, mock_mysqldb):
+        """Test that an existing connection is reused via ping."""
+        import bigjimmybot
+
+        # Set up an existing connection
+        mock_conn = MagicMock()
+        mock_conn.ping.return_value = None  # ping succeeds
+        bigjimmybot._thread_local.db_conn = mock_conn
+
+        result = _get_db_connection()
+
+        assert result == mock_conn
+        mock_conn.ping.assert_called_once_with(True)
+        # Should NOT create a new connection
+        mock_mysqldb.connect.assert_not_called()
+
+        # Cleanup
+        del bigjimmybot._thread_local.db_conn

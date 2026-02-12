@@ -482,3 +482,134 @@ def update_puzzle_field(puzzle_id, field, value, conn):
         cursor = conn.cursor()
         cursor.execute(f"UPDATE puzzle SET {field} = %s WHERE id = %s", (value, puzzle_id))
         conn.commit()
+
+
+def get_solver_by_id_from_db(solver_id, conn):
+    """Get solver by ID from database, including last activity.
+
+    Args:
+        solver_id: Solver database ID
+        conn: Database connection
+
+    Returns:
+        Solver dict from solver_view with 'lastact' key added, or None if not found.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT * from solver_view where id = %s", (solver_id,))
+    solver = cursor.fetchone()
+    if solver is None:
+        return None
+    solver["lastact"] = get_last_activity_for_solver(solver_id, conn)
+    return solver
+
+
+def get_last_activity_for_solver(solver_id, conn):
+    """Get the most recent activity record for a solver.
+
+    Args:
+        solver_id: Solver database ID
+        conn: Database connection
+
+    Returns:
+        Activity dict with 'time' as datetime object, or None if no activity.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
+        (solver_id,),
+    )
+    return cursor.fetchone()
+
+
+def get_last_sheet_activity_for_puzzle(puzzle_id, conn):
+    """Get the last 'revise' type activity for a puzzle (sheet edits only).
+
+    Args:
+        puzzle_id: Puzzle database ID
+        conn: Database connection
+
+    Returns:
+        Activity dict with 'time' as datetime object, or None if no activity.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * from activity where puzzle_id = %s AND type = 'revise' ORDER BY time DESC LIMIT 1",
+        (puzzle_id,),
+    )
+    return cursor.fetchone()
+
+
+def get_last_activity_for_puzzle(puzzle_id, conn):
+    """Get the most recent activity record for a puzzle (any type).
+
+    Args:
+        puzzle_id: Puzzle database ID
+        conn: Database connection
+
+    Returns:
+        Activity dict with 'time' as datetime object, or None if no activity.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1",
+        (puzzle_id,),
+    )
+    return cursor.fetchone()
+
+
+def update_botstat(key, value, conn):
+    """Insert or update a bot statistic.
+
+    Args:
+        key: Stat key name
+        value: Stat value (string)
+        conn: Database connection
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO botstats (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
+        (key, value, value),
+    )
+    conn.commit()
+
+
+def get_all_rounds_with_puzzles(conn):
+    """Fetch all rounds with their nested puzzles from database.
+
+    Args:
+        conn: Database connection
+
+    Returns:
+        List of round dicts, each with a 'puzzles' key containing list of puzzle dicts.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT * from puzzle_view")
+    puzzle_view = cursor.fetchall()
+
+    all_puzzles = {}
+    for puzzle in puzzle_view:
+        all_puzzles[puzzle["id"]] = puzzle
+
+    cursor.execute("SELECT * from round_view")
+    round_view = cursor.fetchall()
+
+    def is_int(val):
+        try:
+            int(val)
+            return True
+        except Exception:
+            return False
+
+    rounds = []
+    for rnd in round_view:
+        if "puzzles" in rnd and rnd["puzzles"]:
+            rnd["puzzles"] = [
+                all_puzzles[int(pid)]
+                for pid in rnd["puzzles"].split(",")
+                if is_int(pid) and int(pid) in all_puzzles
+            ]
+        else:
+            rnd["puzzles"] = []
+        rounds.append(rnd)
+
+    return rounds

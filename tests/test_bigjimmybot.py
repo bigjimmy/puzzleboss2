@@ -22,18 +22,27 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Mock MySQL and Google API dependencies BEFORE importing bigjimmybot
 sys.modules['MySQLdb'] = MagicMock()
+sys.modules['MySQLdb.cursors'] = MagicMock()
 sys.modules['pbgooglelib'] = MagicMock()
 
 # Mock pblib module with minimal config
 pblib_mock = MagicMock()
-pblib_mock.config = {'API': {'APIURI': 'http://localhost:5000'}, 'MYSQL': {}}
+pblib_mock.config = {
+    'API': {'APIURI': 'http://localhost:5000'},
+    'MYSQL': {
+        'HOST': 'localhost',
+        'USERNAME': 'test',
+        'PASSWORD': 'test',
+        'DATABASE': 'test',
+    },
+}
 pblib_mock.configstruct = {'BIGJIMMY_AUTOASSIGN': 'true'}
 pblib_mock.debug_log = lambda level, msg: None  # Suppress debug logs in tests
+pblib_mock.get_mysql_ssl_config.return_value = None
 sys.modules['pblib'] = pblib_mock
 
 # Now we can import bigjimmybot
 from bigjimmybot import (
-    _parse_api_timestamp,
     _parse_revision_timestamp,
     _get_solver_id,
     _process_activity_records,
@@ -47,18 +56,29 @@ def load_fixture(filename):
         return json.load(f)
 
 
+def _make_solver_with_lastact(fixture_name, lastact_time=None):
+    """Build a solver dict from fixture, adding lastact with a datetime object.
+
+    Args:
+        fixture_name: JSON fixture filename (solver dict without API envelope)
+        lastact_time: datetime object for lastact, or None for no activity
+    """
+    solver = load_fixture(fixture_name)
+    if lastact_time is not None:
+        solver["lastact"] = {
+            "time": lastact_time,
+            "type": "revise",
+            "source": "google",
+            "solver_id": solver["id"],
+            "puzzle_id": 123,
+        }
+    else:
+        solver["lastact"] = None
+    return solver
+
+
 class TestTimestampParsing:
     """Test timestamp parsing functions."""
-
-    def test_parse_api_timestamp_valid(self):
-        """Test parsing valid API timestamp (MySQL format)."""
-        timestamp = "Tue, 11 Feb 2026 23:19:43 GMT"
-        result = _parse_api_timestamp(timestamp)
-        # Verify it returns a numeric timestamp
-        assert isinstance(result, float)
-        assert result > 0
-        # Verify it's reasonable (year 2026)
-        assert 1700000000 < result < 1800000000
 
     def test_parse_revision_timestamp_valid(self):
         """Test parsing valid Google Drive revision timestamp."""
@@ -74,53 +94,46 @@ class TestTimestampParsing:
 
 
 class TestSolverLookup:
-    """Test solver lookup with mocked API."""
+    """Test solver lookup with mocked database."""
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_get_solver_id_by_name_found(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_name_from_db')
+    def test_get_solver_id_by_name_found(self, mock_get_solver, mock_conn):
         """Test successful solver lookup by name."""
-        # Mock API response
+        # Mock database response (solver dict directly, no API envelope)
         solver_data = load_fixture('solver_benoc.json')
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = json.dumps(solver_data)
-        mock_api.return_value = mock_response
+        mock_get_solver.return_value = solver_data
 
         # Test
         result = _get_solver_id("benoc", "name")
 
         # Verify
         assert result == 456
-        mock_api.assert_called_once()
-        call_args = mock_api.call_args[0]
-        assert call_args[0] == "get"
-        assert "byname/benoc" in call_args[1]
+        mock_get_solver.assert_called_once()
+        # Verify username was lowercased
+        assert mock_get_solver.call_args[0][0] == "benoc"
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_get_solver_id_by_email_found(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_name_from_db')
+    def test_get_solver_id_by_email_found(self, mock_get_solver, mock_conn):
         """Test successful solver lookup by email (extracts username)."""
-        # Mock API response
+        # Mock database response
         solver_data = load_fixture('solver_benoc.json')
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = json.dumps(solver_data)
-        mock_api.return_value = mock_response
+        mock_get_solver.return_value = solver_data
 
         # Test with full email
         result = _get_solver_id("benoc@example.com", "email")
 
         # Verify - should extract "benoc" from email
         assert result == 456
-        call_args = mock_api.call_args[0]
-        assert "byname/benoc" in call_args[1]
+        assert mock_get_solver.call_args[0][0] == "benoc"
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_get_solver_id_not_found_404(self, mock_api):
-        """Test solver lookup when solver doesn't exist (404 response)."""
-        # Mock 404 response
-        mock_response = Mock()
-        mock_response.status_code = 404
-        mock_api.return_value = mock_response
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_name_from_db')
+    def test_get_solver_id_not_found(self, mock_get_solver, mock_conn):
+        """Test solver lookup when solver doesn't exist."""
+        # Mock database returning None (not found)
+        mock_get_solver.return_value = None
 
         # Test
         result = _get_solver_id("nonexistent", "name")
@@ -128,45 +141,39 @@ class TestSolverLookup:
         # Verify returns 0 for not found
         assert result == 0
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_get_solver_id_api_error(self, mock_api):
-        """Test solver lookup when API returns error."""
-        # Mock error response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = json.dumps({
-            "status": "error",
-            "error": "Solver 'invalid' not found"
-        })
-        mock_api.return_value = mock_response
-
-        # Test
-        result = _get_solver_id("invalid", "name")
-
-        # Verify returns 0 for error
-        assert result == 0
-
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_get_solver_id_api_timeout(self, mock_api):
-        """Test solver lookup when API times out."""
-        # Mock timeout (no response)
-        mock_api.return_value = None
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_name_from_db')
+    def test_get_solver_id_db_error(self, mock_get_solver, mock_conn):
+        """Test solver lookup when database raises exception."""
+        # Mock database exception
+        mock_get_solver.side_effect = Exception("Database connection lost")
 
         # Test
         result = _get_solver_id("benoc", "name")
 
-        # Verify returns 0 for timeout
+        # Verify returns 0 for error
         assert result == 0
 
-    @patch('bigjimmybot._api_request_with_retry')
-    def test_get_solver_id_case_insensitive(self, mock_api):
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_name_from_db')
+    def test_get_solver_id_connection_failure(self, mock_get_solver, mock_conn):
+        """Test solver lookup when DB connection fails."""
+        # Mock connection failure
+        mock_conn.side_effect = Exception("Connection refused")
+
+        # Test
+        result = _get_solver_id("benoc", "name")
+
+        # Verify returns 0 for connection error
+        assert result == 0
+
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_name_from_db')
+    def test_get_solver_id_case_insensitive(self, mock_get_solver, mock_conn):
         """Test solver lookup is case-insensitive."""
-        # Mock API response
+        # Mock database response
         solver_data = load_fixture('solver_benoc.json')
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.text = json.dumps(solver_data)
-        mock_api.return_value = mock_response
+        mock_get_solver.return_value = solver_data
 
         # Test with different cases
         result1 = _get_solver_id("BENOC", "name")
@@ -175,9 +182,9 @@ class TestSolverLookup:
         # Verify both work
         assert result1 == 456
         assert result2 == 456
-        # Verify both were lowercased in API call
-        assert "byname/benoc" in mock_api.call_args_list[0][0][1]
-        assert "byname/benoc" in mock_api.call_args_list[1][0][1]
+        # Verify both were lowercased in DB call
+        assert mock_get_solver.call_args_list[0][0][0] == "benoc"
+        assert mock_get_solver.call_args_list[1][0][0] == "benoc"
 
 
 class TestActivityProcessing:
@@ -186,20 +193,22 @@ class TestActivityProcessing:
     @patch('bigjimmybot.configstruct', {'BIGJIMMY_AUTOASSIGN': 'true'})
     @patch('bigjimmybot._assign_solver_to_puzzle')
     @patch('bigjimmybot._record_solver_activity')
-    @patch('bigjimmybot._api_request_with_retry')
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_id_from_db')
     @patch('bigjimmybot._get_solver_id')
     def test_process_activity_assigns_new_solver(
-        self, mock_get_solver, mock_api, mock_record, mock_assign
+        self, mock_get_solver, mock_get_solver_by_id, mock_conn, mock_record, mock_assign
     ):
         """Test that new activity triggers solver assignment."""
         # Setup mocks
         mock_get_solver.return_value = 456  # benoc's ID
 
-        # Mock solver info response - on different puzzle
-        solver_data = load_fixture('solver_benoc.json')
-        mock_response = Mock()
-        mock_response.text = json.dumps(solver_data)
-        mock_api.return_value = mock_response
+        # Mock solver info from DB - on different puzzle, with old lastact
+        solver_info = _make_solver_with_lastact(
+            'solver_benoc.json',
+            lastact_time=datetime(2026, 2, 11, 23, 19, 43),
+        )
+        mock_get_solver_by_id.return_value = solver_info
 
         # Test data - edit timestamp is VERY NEW (way newer than solver's last activity)
         puzzle = load_fixture('puzzle_data.json')
@@ -220,20 +229,22 @@ class TestActivityProcessing:
     @patch('bigjimmybot.configstruct', {'BIGJIMMY_AUTOASSIGN': 'true'})
     @patch('bigjimmybot._assign_solver_to_puzzle')
     @patch('bigjimmybot._record_solver_activity')
-    @patch('bigjimmybot._api_request_with_retry')
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_id_from_db')
     @patch('bigjimmybot._get_solver_id')
     def test_process_activity_skips_already_assigned(
-        self, mock_get_solver, mock_api, mock_record, mock_assign
+        self, mock_get_solver, mock_get_solver_by_id, mock_conn, mock_record, mock_assign
     ):
         """Test that already-assigned solver is skipped for assignment."""
         # Setup mocks
         mock_get_solver.return_value = 456
 
         # Mock solver already on this puzzle
-        solver_data = load_fixture('solver_already_assigned.json')
-        mock_response = Mock()
-        mock_response.text = json.dumps(solver_data)
-        mock_api.return_value = mock_response
+        solver_info = _make_solver_with_lastact(
+            'solver_already_assigned.json',
+            lastact_time=datetime(2026, 2, 11, 23, 19, 43),
+        )
+        mock_get_solver_by_id.return_value = solver_info
 
         # Test data
         puzzle = {"id": 123, "name": "TestPuzzle"}
@@ -254,20 +265,22 @@ class TestActivityProcessing:
     @patch('bigjimmybot.configstruct', {'BIGJIMMY_AUTOASSIGN': 'false'})
     @patch('bigjimmybot._assign_solver_to_puzzle')
     @patch('bigjimmybot._record_solver_activity')
-    @patch('bigjimmybot._api_request_with_retry')
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_id_from_db')
     @patch('bigjimmybot._get_solver_id')
     def test_process_activity_respects_autoassign_disabled(
-        self, mock_get_solver, mock_api, mock_record, mock_assign
+        self, mock_get_solver, mock_get_solver_by_id, mock_conn, mock_record, mock_assign
     ):
         """Test that auto-assign is skipped when disabled."""
         # Setup mocks
         mock_get_solver.return_value = 456
 
         # Mock solver info
-        solver_data = load_fixture('solver_benoc.json')
-        mock_response = Mock()
-        mock_response.text = json.dumps(solver_data)
-        mock_api.return_value = mock_response
+        solver_info = _make_solver_with_lastact(
+            'solver_benoc.json',
+            lastact_time=datetime(2026, 2, 11, 23, 19, 43),
+        )
+        mock_get_solver_by_id.return_value = solver_info
 
         # Test data
         puzzle = load_fixture('puzzle_data.json')
@@ -288,20 +301,22 @@ class TestActivityProcessing:
     @patch('bigjimmybot.configstruct', {'BIGJIMMY_AUTOASSIGN': 'true'})
     @patch('bigjimmybot._assign_solver_to_puzzle')
     @patch('bigjimmybot._record_solver_activity')
-    @patch('bigjimmybot._api_request_with_retry')
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_id_from_db')
     @patch('bigjimmybot._get_solver_id')
     def test_process_activity_skips_old_edit(
-        self, mock_get_solver, mock_api, mock_record, mock_assign
+        self, mock_get_solver, mock_get_solver_by_id, mock_conn, mock_record, mock_assign
     ):
         """Test that edit older than solver's last activity is skipped."""
         # Setup mocks
         mock_get_solver.return_value = 456
 
-        # Mock solver with recent activity
-        solver_data = load_fixture('solver_benoc.json')
-        mock_response = Mock()
-        mock_response.text = json.dumps(solver_data)
-        mock_api.return_value = mock_response
+        # Mock solver with recent activity (lastact time is NEWER than edit)
+        solver_info = _make_solver_with_lastact(
+            'solver_benoc.json',
+            lastact_time=datetime(2026, 2, 11, 23, 19, 43),
+        )
+        mock_get_solver_by_id.return_value = solver_info
 
         # Test data - edit is OLDER than solver's last activity
         puzzle = load_fixture('puzzle_data.json')
@@ -383,14 +398,12 @@ class TestFixtureValidity:
     def test_solver_fixtures_valid(self):
         """Test that solver fixtures are valid and have required fields."""
         solver_benoc = load_fixture('solver_benoc.json')
-        assert solver_benoc['status'] == 'ok'
-        assert 'solver' in solver_benoc
-        assert solver_benoc['solver']['id'] == 456
-        assert solver_benoc['solver']['name'] == 'benoc'
-        assert 'lastact' in solver_benoc['solver']
+        assert solver_benoc['id'] == 456
+        assert solver_benoc['name'] == 'benoc'
+        assert solver_benoc['puzz'] == 'DifferentPuzzle'
 
         solver_assigned = load_fixture('solver_already_assigned.json')
-        assert solver_assigned['solver']['puzz'] == 'TestPuzzle'
+        assert solver_assigned['puzz'] == 'TestPuzzle'
 
     def test_puzzle_fixture_valid(self):
         """Test that puzzle fixture is valid and has required fields."""

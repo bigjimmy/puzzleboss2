@@ -1,15 +1,9 @@
 {
-  "status": "ok",
-  "solver": {
-    "id": 456,
-    "name": "benoc",
-    "fullname": "Benjamin O'Connor",
-    "email": "benoc@example.com",
-    "puzz": "DifferentPuzzle",
-    "lastact": {
-      "time": "Tue, 11 Feb 2026 23:19:43 GMT",
-      "type": "revise",
-      "source": "google"
-    }
-  }
+  "id": 456,
+  "name": "benoc",
+  "fullname": "Benjamin O'Connor",
+  "email": "benoc@example.com",
+  "puzz": "DifferentPuzzle",
+  "chat_uid": null,
+  "chat_name": null
 }

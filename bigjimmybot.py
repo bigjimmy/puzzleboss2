@@ -4,20 +4,28 @@ BigJimmy Bot - Sheet activity tracking and solver assignment.
 This bot monitors Google Sheets for puzzle-solving activity and automatically
 assigns solvers to puzzles based on their edits. Supports both modern hidden
 sheet tracking (via Apps Script) and legacy Revisions API tracking.
+
+Uses direct database access via pblib functions (no HTTP API dependency).
 """
 
 import sys
-import json
 import time
 import datetime
 import threading
 import queue
 from typing import Optional, Dict, Any, List
 
-import requests
+import MySQLdb
+import MySQLdb.cursors
 
 # Explicit imports instead of wildcard
-from pblib import debug_log, config, configstruct, refresh_config
+from pblib import (
+    debug_log, config, configstruct, refresh_config,
+    get_solver_by_name_from_db, get_solver_by_id_from_db,
+    get_last_sheet_activity_for_puzzle, get_last_activity_for_puzzle,
+    log_activity, assign_solver_to_puzzle, update_puzzle_field,
+    update_botstat, get_all_rounds_with_puzzles, get_mysql_ssl_config,
+)
 from pbgooglelib import (
     get_puzzle_sheet_info_activity,
     get_puzzle_sheet_info_legacy,
@@ -36,65 +44,48 @@ THREADS = []
 LOOP_ITERATIONS_TOTAL = 0
 
 
-# ── HTTP & API Helpers ──────────────────────────────────────────────────
+# ── Database Connection ───────────────────────────────────────────────
+
+# Thread-local storage for database connections
+_thread_local = threading.local()
 
 
-def _api_request_with_retry(
-    method: str, url: str, max_retries: int = 3, timeout: int = 10, **kwargs
-) -> Optional[requests.Response]:
+def _get_db_connection():
+    """Get or create a thread-local database connection.
+
+    Returns a MySQLdb connection with DictCursor. Each thread gets its own
+    connection, cached in thread-local storage. Reconnects if the connection
+    has been lost.
     """
-    Wrapper for requests.get/post with timeout and exponential backoff retry.
-
-    Args:
-        method: 'get' or 'post'
-        url: API endpoint URL
-        max_retries: Number of retry attempts (default 3)
-        timeout: Request timeout in seconds (default 10)
-        **kwargs: Additional arguments passed to requests (json, headers, etc.)
-
-    Returns:
-        requests.Response object on success, None on total failure
-    """
-    for attempt in range(max_retries):
+    conn = getattr(_thread_local, 'db_conn', None)
+    if conn is not None:
         try:
-            if method.lower() == "get":
-                response = requests.get(url, timeout=timeout, **kwargs)
-            elif method.lower() == "post":
-                response = requests.post(url, timeout=timeout, **kwargs)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
+            conn.ping(True)  # Reconnect if connection lost
+            return conn
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            _thread_local.db_conn = None
 
-            return response
+    # Create new connection
+    connect_params = {
+        "host": config["MYSQL"]["HOST"],
+        "user": config["MYSQL"]["USERNAME"],
+        "passwd": config["MYSQL"]["PASSWORD"],
+        "db": config["MYSQL"]["DATABASE"],
+        "cursorclass": MySQLdb.cursors.DictCursor,
+        "charset": "utf8mb4",
+    }
 
-        except requests.exceptions.Timeout:
-            delay = 2**attempt  # Exponential backoff: 1s, 2s, 4s
-            debug_log(
-                2,
-                f"API timeout (attempt {attempt + 1}/{max_retries}): {url} - retrying in {delay}s",
-            )
-            if attempt < max_retries - 1:
-                time.sleep(delay)
-            else:
-                debug_log(1, f"API timeout after {max_retries} attempts: {url}")
-                return None
+    ssl_config = get_mysql_ssl_config(config)
+    if ssl_config:
+        connect_params["ssl"] = ssl_config
 
-        except requests.exceptions.RequestException as e:
-            delay = 2**attempt
-            debug_log(
-                2,
-                f"API request error (attempt {attempt + 1}/{max_retries}): {url} - {e}",
-            )
-            if attempt < max_retries - 1:
-                time.sleep(delay)
-            else:
-                debug_log(
-                    1, f"API request failed after {max_retries} attempts: {url} - {e}"
-                )
-                return None
-
-    return None
-
-
+    conn = MySQLdb.connect(**connect_params)
+    _thread_local.db_conn = conn
+    return conn
 
 
 # ── Solver Lookup ───────────────────────────────────────────────────────
@@ -102,7 +93,7 @@ def _api_request_with_retry(
 
 def _get_solver_id(identifier: str, match_type: str = "name") -> int:
     """
-    Look up solver ID by name or email using efficient byname endpoint.
+    Look up solver ID by name or email via direct database query.
 
     Args:
         identifier: Solver name or email address
@@ -119,49 +110,22 @@ def _get_solver_id(identifier: str, match_type: str = "name") -> int:
 
     debug_log(4, f"Looking up solver by {match_type}: {identifier} (username: {username})")
 
-    # Use efficient byname endpoint (indexed query vs fetching all solvers)
-    response = _api_request_with_retry(
-        "get", f"{config['API']['APIURI']}/solvers/byname/{username}"
-    )
-    if not response:
-        debug_log(2, f"Failed to fetch solver {username} after retries")
-        return 0
-
-    # Check for 404 (solver not found)
-    if response.status_code == 404:
-        debug_log(4, f"Solver {username} not found in database")
-        return 0
-
     try:
-        result = json.loads(response.text)
-        if "error" in result:
-            debug_log(4, f"Solver {username} not found: {result['error']}")
+        conn = _get_db_connection()
+        solver = get_solver_by_name_from_db(username, conn)
+        if solver is None:
+            debug_log(4, f"Solver {username} not found in database")
             return 0
-        solver = result["solver"]
         debug_log(4, f"Found solver {username} with id: {solver['id']}")
         return solver["id"]
     except Exception as e:
-        debug_log(2, f"Error parsing solver response for {username}: {e}")
+        debug_log(2, f"Error looking up solver {username}: {e}")
         return 0
 
 
 
 
 # ── Timestamp Parsing ───────────────────────────────────────────────────
-
-
-def _parse_api_timestamp(timestamp_str: str) -> float:
-    """
-    Parse API timestamp string to Unix timestamp.
-
-    Args:
-        timestamp_str: Timestamp in format "Day, DD Mon YYYY HH:MM:SS TZ"
-
-    Returns:
-        Unix timestamp as float
-    """
-    dt = datetime.datetime.strptime(timestamp_str, "%a, %d %b %Y %H:%M:%S %Z")
-    return dt.timestamp()
 
 
 def _parse_revision_timestamp(revision_time: str) -> float:
@@ -185,9 +149,9 @@ def _parse_revision_timestamp(revision_time: str) -> float:
 
 def _record_solver_activity(
     puzzle_id: int, solver_id: int, threadname: str
-) -> Optional[requests.Response]:
+) -> bool:
     """
-    Record solver activity on a puzzle.
+    Record solver activity on a puzzle via direct database insert.
 
     Args:
         puzzle_id: Puzzle database ID
@@ -195,39 +159,28 @@ def _record_solver_activity(
         threadname: Name of worker thread (for logging)
 
     Returns:
-        Response object on success, None on failure
+        True on success, False on failure
     """
-    activity_data = {
-        "lastact": {
-            "solver_id": str(solver_id),
-            "source": "bigjimmybot",
-            "type": "revise",
-        }
-    }
-    response = _api_request_with_retry(
-        "post",
-        f"{config['API']['APIURI']}/puzzles/{puzzle_id}/lastact",
-        json=activity_data,
-    )
-
-    if response:
+    try:
+        conn = _get_db_connection()
+        log_activity(puzzle_id, "revise", solver_id, "bigjimmybot", conn)
         debug_log(
             4,
-            f"[Thread: {threadname}] Posted activity update for puzzle {puzzle_id}, solver {solver_id}. Response: {response.text}",
+            f"[Thread: {threadname}] Recorded activity for puzzle {puzzle_id}, solver {solver_id}",
         )
-    else:
+        return True
+    except Exception as e:
         debug_log(
-            2, f"[Thread: {threadname}] Failed to post activity update after retries"
+            2, f"[Thread: {threadname}] Failed to record activity: {e}"
         )
-
-    return response
+        return False
 
 
 def _assign_solver_to_puzzle(
     puzzle_id: int, solver_id: int, threadname: str
-) -> Optional[requests.Response]:
+) -> bool:
     """
-    Assign a solver to a puzzle.
+    Assign a solver to a puzzle via direct database update.
 
     Args:
         puzzle_id: Puzzle database ID
@@ -235,27 +188,22 @@ def _assign_solver_to_puzzle(
         threadname: Name of worker thread (for logging)
 
     Returns:
-        Response object on success, None on failure
+        True on success, False on failure
     """
-    assignment_data = {"puzz": str(puzzle_id)}
-    response = _api_request_with_retry(
-        "post",
-        f"{config['API']['APIURI']}/solvers/{solver_id}/puzz",
-        json=assignment_data,
-    )
-
-    if response:
+    try:
+        conn = _get_db_connection()
+        assign_solver_to_puzzle(puzzle_id, solver_id, conn)
         debug_log(
             4,
-            f"[Thread: {threadname}] Assigned solver {solver_id} to puzzle {puzzle_id}. Response: {response.text}",
+            f"[Thread: {threadname}] Assigned solver {solver_id} to puzzle {puzzle_id}",
         )
-    else:
+        return True
+    except Exception as e:
         debug_log(
             2,
-            f"[Thread: {threadname}] Failed to assign solver after retries",
+            f"[Thread: {threadname}] Failed to assign solver: {e}",
         )
-
-    return response
+        return False
 
 
 
@@ -278,7 +226,7 @@ def _process_activity_records(
 
     Args:
         records: List of editor records (hidden sheet) or revision records (legacy)
-        puzzle: Puzzle dictionary from API
+        puzzle: Puzzle dictionary from database
         last_sheet_act_ts: Last recorded sheet activity timestamp (Unix)
         threadname: Name of worker thread (for logging)
         use_hidden_sheet: True for hidden sheet format, False for revisions format
@@ -320,17 +268,22 @@ def _process_activity_records(
             continue
 
         # Fetch solver info to check current assignment
-        solver_response = _api_request_with_retry(
-            "get", f"{config['API']['APIURI']}/solvers/{solver_id}"
-        )
-        if not solver_response:
+        try:
+            conn = _get_db_connection()
+            solver_info = get_solver_by_id_from_db(solver_id, conn)
+        except Exception as e:
             debug_log(
                 2,
-                f"[Thread: {threadname}] Failed to fetch solver info for {solver_id} after retries",
+                f"[Thread: {threadname}] Error fetching solver {solver_id}: {e}",
             )
             continue
 
-        solver_info = json.loads(solver_response.text)["solver"]
+        if not solver_info:
+            debug_log(
+                2,
+                f"[Thread: {threadname}] Solver {solver_id} not found in database",
+            )
+            continue
 
         # Always record activity, even if solver is already on puzzle
         _record_solver_activity(puzzle["id"], solver_id, threadname)
@@ -347,7 +300,8 @@ def _process_activity_records(
         if not solver_info["lastact"]:
             last_solver_act_ts = 0
         else:
-            last_solver_act_ts = _parse_api_timestamp(solver_info["lastact"]["time"])
+            # MySQL returns datetime objects directly; convert to Unix timestamp
+            last_solver_act_ts = solver_info["lastact"]["time"].timestamp()
 
         debug_log(
             4,
@@ -388,7 +342,7 @@ def _fetch_sheet_info(
     Attempts to activate add-on if not yet enabled.
 
     Args:
-        puzzle: Puzzle dictionary from API
+        puzzle: Puzzle dictionary from database
         threadname: Name of worker thread (for logging)
 
     Returns:
@@ -428,20 +382,17 @@ def _fetch_sheet_info(
             3,
             f"[Thread: {threadname}] Add-on activated successfully on {puzzle['name']}, enabling sheetenabled",
         )
-        response = _api_request_with_retry(
-            "post",
-            f"{config['API']['APIURI']}/puzzles/{puzzle['id']}/sheetenabled",
-            json={"sheetenabled": 1},
-        )
-        if response:
+        try:
+            conn = _get_db_connection()
+            update_puzzle_field(puzzle["id"], "sheetenabled", 1, conn)
             sheet_info = get_puzzle_sheet_info_activity(
                 puzzle["drive_id"], puzzle["name"]
             )
             return sheet_info, 1
-        else:
+        except Exception as e:
             debug_log(
                 2,
-                f"[Thread: {threadname}] Failed to update sheetenabled in DB, falling back to legacy",
+                f"[Thread: {threadname}] Failed to update sheetenabled in DB: {e}, falling back to legacy",
             )
 
     # Activation failed or DB update failed, fall back to legacy Revisions API
@@ -460,7 +411,7 @@ def _update_sheet_count(
     Update puzzle sheet count if changed.
 
     Args:
-        puzzle: Puzzle dictionary from API
+        puzzle: Puzzle dictionary from database
         sheet_info: Sheet info from Google API
         threadname: Name of worker thread (for logging)
     """
@@ -473,15 +424,13 @@ def _update_sheet_count(
             f"[Thread: {threadname}] Updating sheetcount for {puzzle['name']}: "
             f"{puzzle.get('sheetcount')} -> {sheet_info['sheetcount']}",
         )
-        response = _api_request_with_retry(
-            "post",
-            f"{config['API']['APIURI']}/puzzles/{puzzle['id']}/sheetcount",
-            json={"sheetcount": sheet_info["sheetcount"]},
-        )
-        if not response:
+        try:
+            conn = _get_db_connection()
+            update_puzzle_field(puzzle["id"], "sheetcount", sheet_info["sheetcount"], conn)
+        except Exception as e:
             debug_log(
                 1,
-                f"[Thread: {threadname}] Failed to update sheetcount after retries",
+                f"[Thread: {threadname}] Failed to update sheetcount: {e}",
             )
 
 
@@ -489,33 +438,19 @@ def _fetch_last_sheet_activity(
     puzzle: Dict[str, Any], threadname: str
 ) -> Optional[Dict[str, Any]]:
     """
-    Fetch last sheet activity timestamp for puzzle.
+    Fetch last sheet activity timestamp for puzzle via direct database query.
 
     Args:
-        puzzle: Puzzle dictionary from API
+        puzzle: Puzzle dictionary from database
         threadname: Name of worker thread (for logging)
 
     Returns:
-        lastsheetact dict from API, or None if fetch failed
+        Activity dict from database, or None if no activity or fetch failed.
+        The 'time' field is a datetime object when present.
     """
-    url = f"{config['API']['APIURI']}/puzzles/{puzzle['id']}/lastsheetact"
-    response = _api_request_with_retry("get", url)
-    if not response:
-        debug_log(
-            1,
-            "Error fetching puzzle info from puzzleboss after retries. Puzzleboss down?",
-        )
-        return None
-
     try:
-        response_json = json.loads(response.text)
-        if "error" in response_json:
-            debug_log(
-                2,
-                f"[Thread: {threadname}] API error for puzzle {puzzle['id']}: {response_json.get('error')}",
-            )
-            return None
-        lastsheetact = response_json["puzzle"]["lastsheetact"]
+        conn = _get_db_connection()
+        lastsheetact = get_last_sheet_activity_for_puzzle(puzzle["id"], conn)
         debug_log(
             5,
             f"[Thread: {threadname}] Fetched lastsheetact for {puzzle['name']}: {lastsheetact}"
@@ -524,7 +459,7 @@ def _fetch_last_sheet_activity(
     except Exception as e:
         debug_log(
             1,
-            f"[Thread: {threadname}] Error parsing lastsheetact response for {puzzle['name']}: {e}, Response: {response.text[:200]}",
+            f"[Thread: {threadname}] Error fetching lastsheetact for {puzzle['name']}: {e}",
         )
         return None
 
@@ -536,7 +471,7 @@ def _process_sheet_activity(
     Process sheet activity and update solver assignments.
 
     Args:
-        puzzle: Puzzle dictionary from API
+        puzzle: Puzzle dictionary from database
         sheet_info: Sheet info from Google API
         sheetenabled: 1 for hidden sheet, 0 for legacy
         threadname: Name of worker thread (for logging)
@@ -550,7 +485,8 @@ def _process_sheet_activity(
     # Convert to Unix timestamp for comparison
     last_sheet_act_ts = 0
     if last_sheet_act and last_sheet_act.get("time"):
-        last_sheet_act_ts = _parse_api_timestamp(last_sheet_act["time"])
+        # MySQL returns datetime objects directly; convert to Unix timestamp
+        last_sheet_act_ts = last_sheet_act["time"].timestamp()
 
     debug_log(
         5,
@@ -588,7 +524,7 @@ def _check_abandoned_puzzle(puzzle: Dict[str, Any], threadname: str) -> None:
     A puzzle is abandoned if it's "Being worked" with no solvers and no recent activity.
 
     Args:
-        puzzle: Puzzle dictionary from API
+        puzzle: Puzzle dictionary from database
         threadname: Name of worker thread (for logging)
     """
     if puzzle.get("status") != "Being worked":
@@ -606,23 +542,13 @@ def _check_abandoned_puzzle(puzzle: Dict[str, Any], threadname: str) -> None:
     abandoned_status = configstruct.get("BIGJIMMY_ABANDONED_STATUS", "Abandoned")
 
     # Fetch lastact (any activity type - superset of lastsheetact)
-    lastact_response = _api_request_with_retry(
-        "get", f"{config['API']['APIURI']}/puzzles/{puzzle['id']}/lastact"
-    )
-    if not lastact_response:
-        debug_log(
-            2,
-            f"[Thread: {threadname}] Failed to fetch lastact for {puzzle['name']} after retries",
-        )
-        return
-
     try:
-        lastact_data = json.loads(lastact_response.text)
-        lastact = lastact_data.get("lastact")
+        conn = _get_db_connection()
+        lastact = get_last_activity_for_puzzle(puzzle["id"], conn)
     except Exception as e:
         debug_log(
             2,
-            f"[Thread: {threadname}] Error parsing lastact for {puzzle['name']}: {e}",
+            f"[Thread: {threadname}] Error fetching lastact for {puzzle['name']}: {e}",
         )
         return
 
@@ -635,9 +561,8 @@ def _check_abandoned_puzzle(puzzle: Dict[str, Any], threadname: str) -> None:
         return
 
     try:
-        lastact_time = datetime.datetime.strptime(
-            lastact["time"], "%a, %d %b %Y %H:%M:%S %Z"
-        )
+        # MySQL returns datetime objects directly
+        lastact_time = lastact["time"]
         now = datetime.datetime.utcnow()
         time_since_activity = (now - lastact_time).total_seconds()
 
@@ -648,25 +573,22 @@ def _check_abandoned_puzzle(puzzle: Dict[str, Any], threadname: str) -> None:
                 f"(threshold: {abandoned_timeout_minutes}), no solvers",
             )
 
-            response = _api_request_with_retry(
-                "post",
-                f"{config['API']['APIURI']}/puzzles/{puzzle['id']}/status",
-                json={"status": abandoned_status},
-            )
-            if response:
+            try:
+                conn = _get_db_connection()
+                update_puzzle_field(puzzle["id"], "status", abandoned_status, conn)
                 debug_log(
                     3,
                     f"[Thread: {threadname}] Set puzzle {puzzle['name']} status to '{abandoned_status}'",
                 )
-            else:
+            except Exception as e:
                 debug_log(
                     1,
-                    f"[Thread: {threadname}] Failed to update status for {puzzle['name']} after retries",
+                    f"[Thread: {threadname}] Failed to update status for {puzzle['name']}: {e}",
                 )
     except Exception as e:
         debug_log(
             2,
-            f"[Thread: {threadname}] Error parsing lastact time for {puzzle['name']}: {e}",
+            f"[Thread: {threadname}] Error processing lastact time for {puzzle['name']}: {e}",
         )
 
 
@@ -677,7 +599,7 @@ def _process_puzzle(puzzle: Dict[str, Any], threadname: str) -> None:
     Process a single puzzle: fetch sheet info, track activity, check abandoned status.
 
     Args:
-        puzzle: Puzzle dictionary from API
+        puzzle: Puzzle dictionary from database
         threadname: Name of worker thread (for logging)
     """
     puzzle_start_time = time.time()
@@ -724,7 +646,7 @@ def _check_puzzle_from_queue(threadname: str, q: queue.Queue) -> int:
             puzzle = q.get()
             QUEUE_LOCK.release()
 
-            # Throttle to avoid API rate limits
+            # Throttle to avoid Google API rate limits
             time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
 
             try:
@@ -771,7 +693,7 @@ def _post_botstats_metrics(
     loop_elapsed: float, setup_elapsed: float, processing_elapsed: float, puzzle_count: int
 ) -> None:
     """
-    Post timing statistics to API for Prometheus metrics.
+    Post timing statistics to database for Prometheus metrics.
 
     Args:
         loop_elapsed: Total loop time in seconds
@@ -779,39 +701,22 @@ def _post_botstats_metrics(
         processing_elapsed: Processing phase time in seconds
         puzzle_count: Number of puzzles processed
     """
-    _api_request_with_retry(
-        "post",
-        f"{config['API']['APIURI']}/botstats/loop_time_seconds",
-        json={"val": f"{loop_elapsed:.2f}"},
-    )
-    _api_request_with_retry(
-        "post",
-        f"{config['API']['APIURI']}/botstats/loop_setup_seconds",
-        json={"val": f"{setup_elapsed:.2f}"},
-    )
-    _api_request_with_retry(
-        "post",
-        f"{config['API']['APIURI']}/botstats/loop_processing_seconds",
-        json={"val": f"{processing_elapsed:.2f}"},
-    )
-    _api_request_with_retry(
-        "post",
-        f"{config['API']['APIURI']}/botstats/loop_puzzle_count",
-        json={"val": str(puzzle_count)},
-    )
-    if puzzle_count > 0:
-        _api_request_with_retry(
-            "post",
-            f"{config['API']['APIURI']}/botstats/loop_avg_seconds_per_puzzle",
-            json={"val": f"{processing_elapsed / puzzle_count:.2f}"},
-        )
-
-    quota_failures = get_quota_failure_count()
-    _api_request_with_retry(
-        "post",
-        f"{config['API']['APIURI']}/botstats/quota_failures",
-        json={"val": str(quota_failures)},
-    )
+    try:
+        conn = _get_db_connection()
+        update_botstat("loop_time_seconds", f"{loop_elapsed:.2f}", conn)
+        update_botstat("loop_setup_seconds", f"{setup_elapsed:.2f}", conn)
+        update_botstat("loop_processing_seconds", f"{processing_elapsed:.2f}", conn)
+        update_botstat("loop_puzzle_count", str(puzzle_count), conn)
+        if puzzle_count > 0:
+            update_botstat(
+                "loop_avg_seconds_per_puzzle",
+                f"{processing_elapsed / puzzle_count:.2f}",
+                conn,
+            )
+        quota_failures = get_quota_failure_count()
+        update_botstat("quota_failures", str(quota_failures), conn)
+    except Exception as e:
+        debug_log(2, f"Failed to post botstats metrics: {e}")
 
 
 # ── Main Bot Loop ───────────────────────────────────────────────────────
@@ -837,13 +742,11 @@ def main():
 
         # Increment and post loop iteration counter
         LOOP_ITERATIONS_TOTAL += 1
-        response = _api_request_with_retry(
-            "post",
-            f"{config['API']['APIURI']}/botstats/loop_iterations_total",
-            json={"val": str(LOOP_ITERATIONS_TOTAL)},
-        )
-        if not response:
-            debug_log(2, "Failed to post loop iteration counter after retries")
+        try:
+            conn = _get_db_connection()
+            update_botstat("loop_iterations_total", str(LOOP_ITERATIONS_TOTAL), conn)
+        except Exception as e:
+            debug_log(2, f"Failed to post loop iteration counter: {e}")
 
         # Skip if Google API is disabled
         if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
@@ -854,25 +757,15 @@ def main():
         # Start timing setup phase
         setup_start_time = time.time()
 
-        # Fetch all puzzles
-        response = _api_request_with_retry("get", f"{config['API']['APIURI']}/all")
-        if not response:
-            debug_log(
-                1,
-                "Error fetching puzzle info from puzzleboss after retries. Puzzleboss down?",
-            )
-            time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
-            continue
-
+        # Fetch all puzzles directly from database
         try:
-            hunt_data = json.loads(response.text)
+            conn = _get_db_connection()
+            rounds = get_all_rounds_with_puzzles(conn)
         except Exception as e:
-            debug_log(1, f"Error parsing JSON from /all endpoint: {e}")
+            debug_log(1, f"Error fetching puzzle data from database: {e}")
             time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
             continue
 
-        debug_log(5, f"api return: {hunt_data}")
-        rounds = hunt_data["rounds"]
         debug_log(4, "loaded round list")
 
         # Build list of unsolved puzzles
@@ -929,7 +822,7 @@ def main():
             f"{processing_elapsed / len(puzzles) if puzzles else 0:.2f} sec/puzzle avg)",
         )
 
-        # Post timing stats to API for Prometheus metrics
+        # Post timing stats to database for Prometheus metrics
         _post_botstats_metrics(loop_elapsed, setup_elapsed, processing_elapsed, len(puzzles))
 
         # Reset for next iteration
