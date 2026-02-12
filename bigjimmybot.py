@@ -277,7 +277,7 @@ def _process_activity_records(
             match_type = "name"
         else:
             identifier = record["lastModifyingUser"]["emailAddress"]
-            edit_ts = parse_revision_timestamp(record["modifiedTime"])
+            edit_ts = _parse_revision_timestamp(record["modifiedTime"])
             match_type = "email"
 
         # Skip bot's own activity
@@ -300,7 +300,7 @@ def _process_activity_records(
         )
 
         # Look up solver ID
-        solver_id = get_solver_id(identifier, match_type)
+        solver_id = _get_solver_id(identifier, match_type)
         if solver_id == 0:
             debug_log(
                 2,
@@ -309,7 +309,7 @@ def _process_activity_records(
             continue
 
         # Fetch solver info to check current assignment
-        solver_response = api_request_with_retry(
+        solver_response = _api_request_with_retry(
             "get", f"{config['API']['APIURI']}/solvers/{solver_id}"
         )
         if not solver_response:
@@ -322,7 +322,7 @@ def _process_activity_records(
         solver_info = json.loads(solver_response.text)["solver"]
 
         # Always record activity, even if solver is already on puzzle
-        record_solver_activity(puzzle["id"], solver_id, threadname)
+        _record_solver_activity(puzzle["id"], solver_id, threadname)
 
         # Only auto-assign if solver is not already on this puzzle
         if solver_info["puzz"] == puzzle["name"]:
@@ -332,7 +332,7 @@ def _process_activity_records(
         if not solver_info["lastact"]:
             last_solver_act_ts = 0
         else:
-            last_solver_act_ts = parse_api_timestamp(solver_info["lastact"]["time"])
+            last_solver_act_ts = _parse_api_timestamp(solver_info["lastact"]["time"])
 
         debug_log(
             4,
@@ -347,7 +347,7 @@ def _process_activity_records(
                     3,
                     f"[Thread: {threadname}] Assigning solver {solver_id} to puzzle {puzzle['id']}.",
                 )
-                assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
+                _assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
 
 
 
@@ -525,17 +525,17 @@ def _process_sheet_activity(
     # Convert to Unix timestamp for comparison
     last_sheet_act_ts = 0
     if last_sheet_act:
-        last_sheet_act_ts = parse_api_timestamp(last_sheet_act["time"])
+        last_sheet_act_ts = _parse_api_timestamp(last_sheet_act["time"])
 
     # Process activity records using unified function
     if sheetenabled == 1:
         # Hidden sheet approach
         records = sheet_info.get("editors", [])
-        process_activity_records(records, puzzle, last_sheet_act_ts, threadname, True)
+        _process_activity_records(records, puzzle, last_sheet_act_ts, threadname, True)
     else:
         # Legacy Revisions API approach
         records = sheet_info.get("revisions", [])
-        process_activity_records(records, puzzle, last_sheet_act_ts, threadname, False)
+        _process_activity_records(records, puzzle, last_sheet_act_ts, threadname, False)
 
 
 
