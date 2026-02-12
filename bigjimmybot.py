@@ -546,22 +546,23 @@ def _process_sheet_activity(
     """
     # Fetch last sheet activity for this puzzle
     last_sheet_act = _fetch_last_sheet_activity(puzzle, threadname)
-    if last_sheet_act is None:
-        debug_log(
-            2,
-            f"[Thread: {threadname}] Skipping activity processing for {puzzle['name']} - failed to fetch lastsheetact"
-        )
-        return
 
+    # Note: last_sheet_act can be None for puzzles with no previous sheet activity
+    # This is normal and should be treated as timestamp=0, not as an error
     debug_log(
         5,
-        f"mypuzzlelastsheetact pulled for puzzle {puzzle['id']} as {str(last_sheet_act)}",
+        f"[Thread: {threadname}] lastsheetact for puzzle {puzzle['id']}: {str(last_sheet_act)}",
     )
 
     # Convert to Unix timestamp for comparison
     last_sheet_act_ts = 0
-    if last_sheet_act:
+    if last_sheet_act and last_sheet_act.get("time"):
         last_sheet_act_ts = _parse_api_timestamp(last_sheet_act["time"])
+
+    debug_log(
+        5,
+        f"[Thread: {threadname}] {puzzle['name']}: last_sheet_act_ts = {last_sheet_act_ts}"
+    )
 
     # Process activity records using unified function
     if sheetenabled == 1:
