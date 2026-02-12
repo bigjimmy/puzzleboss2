@@ -287,7 +287,7 @@ def _process_activity_records(
 
         debug_log(
             5,
-            f"[Thread: {threadname}] Processing record for {identifier} at {edit_ts}"
+            f"[Thread: {threadname}] Processing record for {identifier} at {edit_ts} on puzzle {puzzle['name']}"
         )
 
         # Skip bot's own activity
@@ -350,7 +350,7 @@ def _process_activity_records(
 
         debug_log(
             4,
-            f"[Thread: {threadname}] Edit at {datetime.datetime.fromtimestamp(edit_ts)}, "
+            f"[Thread: {threadname}] Puzzle {puzzle['name']}: Edit at {datetime.datetime.fromtimestamp(edit_ts)}, "
             f"solver {solver_info['name']} last activity at {datetime.datetime.fromtimestamp(last_solver_act_ts) if last_solver_act_ts else 'never'}"
         )
 
@@ -358,12 +358,12 @@ def _process_activity_records(
         if configstruct["BIGJIMMY_AUTOASSIGN"] != "true":
             debug_log(
                 4,
-                f"[Thread: {threadname}] Auto-assign disabled (BIGJIMMY_AUTOASSIGN={configstruct.get('BIGJIMMY_AUTOASSIGN', 'not set')})"
+                f"[Thread: {threadname}] Puzzle {puzzle['name']}: Auto-assign disabled (BIGJIMMY_AUTOASSIGN={configstruct.get('BIGJIMMY_AUTOASSIGN', 'not set')})"
             )
         elif edit_ts <= last_solver_act_ts:
             debug_log(
                 4,
-                f"[Thread: {threadname}] Edit timestamp {edit_ts} <= solver's last activity {last_solver_act_ts}, not auto-assigning"
+                f"[Thread: {threadname}] Puzzle {puzzle['name']}: Edit timestamp {edit_ts} <= solver's last activity {last_solver_act_ts}, not auto-assigning"
             )
         else:
             debug_log(
