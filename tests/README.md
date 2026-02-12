@@ -40,11 +40,36 @@ pytest --cov=bigjimmybot --cov-report=html
 
 ## Test Structure
 
-- **tests/test_bigjimmybot.py**: Unit tests for bigjimmybot.py functions
-  - `TestTimestampParsing`: Tests for timestamp conversion functions
-  - `TestSolverLookup`: Tests for solver ID lookup with mocked API
-  - `TestActivityProcessing`: Tests for sheet activity processing and assignment logic
-  - `TestFixtureValidity`: Validation tests for fixture data
+- **tests/test_bigjimmybot.py**: Core unit tests for bigjimmybot.py
+  - `TestTimestampParsing`: Timestamp conversion functions
+  - `TestSolverLookup`: Solver ID lookup with mocked API
+  - `TestActivityProcessing`: Sheet activity processing and assignment logic
+  - `TestFixtureValidity`: Validation of fixture data
+
+- **tests/test_bigjimmybot_extended.py**: Extended unit tests for bigjimmybot.py
+  - `TestRecordSolverActivity`: Activity recording with timestamps
+  - `TestAssignSolverToPuzzle`: Solver assignment via pblib
+  - `TestFetchLastSheetActivity`: Sheet activity queries
+  - `TestUpdateSheetCount`, `TestCheckAbandonedPuzzle`: Metadata updates
+  - `TestPuzzleProcessing`, `TestEdgeCases`: Processing pipeline
+  - `TestGetDbConnection`: Connection management
+  - `TestFetchSheetInfoErrorHandling`, `TestFetchSheetInfoProbe`: Hybrid sheet probing
+
+- **tests/test_pblib_id_types.py**: ID type normalization tests for pblib.py
+  - Tests every pblib function that accepts an ID parameter with both `int` and `str` input
+  - Verifies SQL parameters are always `int`, never `str`
+  - Guards the integer ID convention (see CLAUDE.md)
+
+- **tests/test_pblib_solver_assignment.py**: Solver assignment behavior tests for pblib.py
+  - `TestAssignSolverTypeNormalization`: solver_id stored as int in JSON
+  - `TestUnassignSolverTypeNormalization`: unassign handles int/string input
+  - `TestAssignUnassignsFromOldPuzzle`: cross-puzzle reassignment
+  - `TestAssignSolverHistoryType`: solver_history JSON integrity
+
+- **tests/test_rate_limiter.py**: Google API rate limiter tests
+  - `TestRateLimiterBasics`: Acquire timing and slot spacing
+  - `TestRateLimiterConfig`: QPM configuration
+  - `TestRateLimiterThreadSafety`: Concurrent access
 
 - **tests/fixtures/**: JSON fixtures for test data
   - `solver_*.json`: Sample solver API responses
@@ -74,7 +99,5 @@ This allows testing business logic without requiring:
 ## Future Work
 
 See README.md "Future TODOs" section for plans to expand testing to:
-- pbrest.py API endpoints
 - pbgooglelib.py Google API integration
 - pbllmlib.py LLM query functions
-- Integration tests with Docker container

@@ -403,8 +403,14 @@ SQL SECURITY INVOKER
 BEGIN
     DECLARE result TEXT CHARACTER SET utf8mb4;
     SELECT p.name INTO result
-    FROM puzzle p
-    WHERE JSON_SEARCH(p.current_solvers, 'one', solver_id, NULL, '$.solvers[*].solver_id') IS NOT NULL
+    FROM puzzle p,
+    JSON_TABLE(
+        p.current_solvers,
+        '$.solvers[*]' COLUMNS (
+            sid INT PATH '$.solver_id'
+        )
+    ) AS jt
+    WHERE jt.sid = solver_id
     LIMIT 1;
     RETURN IFNULL(result, '');
 END //
@@ -416,8 +422,14 @@ SQL SECURITY INVOKER
 BEGIN
     DECLARE result TEXT CHARACTER SET utf8mb4;
     SELECT GROUP_CONCAT(DISTINCT p.name) INTO result
-    FROM puzzle p
-    WHERE JSON_SEARCH(p.solver_history, 'one', solver_id, NULL, '$.solvers[*].solver_id') IS NOT NULL;
+    FROM puzzle p,
+    JSON_TABLE(
+        p.solver_history,
+        '$.solvers[*]' COLUMNS (
+            sid INT PATH '$.solver_id'
+        )
+    ) AS jt
+    WHERE jt.sid = solver_id;
     RETURN IFNULL(result, '');
 END //
 

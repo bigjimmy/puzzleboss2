@@ -2,18 +2,18 @@
 """
 Unit tests for pblib solver assignment functions.
 
-Focuses on the type normalization boundary: solver_id can arrive as
-int (from bigjimmybot/MySQL DictCursor) or str (from Flask URL params).
-Both paths must produce consistent JSON in current_solvers/solver_history.
+Tests verify that solver_id is always stored as INT in JSON, matching the
+solver.id column type (INT(11)).  All SQL functions use JSON_TABLE with
+INT PATH to extract solver_ids, which handles both int and string values.
+Assumes the normalize_solver_ids migration has been run so all existing
+database entries use integer solver_ids.
 
 Run with: pytest tests/test_pblib_solver_assignment.py -v
 """
 
-import pytest
 import json
 import os
 import sys
-import importlib
 from unittest.mock import MagicMock, patch, mock_open
 
 # Add parent directory to path
@@ -88,7 +88,7 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None):
     fetchone_count = {"n": 0}
 
     # Call sequence in assign_solver_to_puzzle:
-    # 1. JSON_SEARCH lookup for current puzzle → fetchall (returns [] = not assigned)
+    # 1. JSON_TABLE lookup for current puzzle → fetchall (returns [] = not assigned)
     # 2. SELECT current_solvers → fetchone
     # 3. SELECT solver_history → fetchone
     cursor.fetchall.return_value = []  # Not currently assigned to any puzzle
@@ -108,7 +108,15 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None):
 
 
 class TestAssignSolverTypeNormalization:
-    """Test that solver_id type (int vs str) is handled consistently."""
+    """Test that solver_id is always stored as INT in JSON.
+
+    Storing as int matches the native solver.id column type (INT(11)).
+    All SQL functions use JSON_TABLE with INT PATH to extract solver_ids,
+    which handles both int and string JSON values via coercion.
+
+    Assumes the normalize_solver_ids migration has been run so all existing
+    data in the database uses integer solver_ids.
+    """
 
     @patch('pblib.debug_log')
     def test_string_solver_id_stored_as_int(self, mock_log):
@@ -127,7 +135,7 @@ class TestAssignSolverTypeNormalization:
         # Extract the JSON that was written
         stored_json = update_calls[0][0][1][0]  # First positional arg tuple, first element
         stored = json.loads(stored_json)
-        assert stored["solvers"][0]["solver_id"] == 101  # int, not "101"
+        assert stored["solvers"][0]["solver_id"] == 101
         assert isinstance(stored["solvers"][0]["solver_id"], int)
 
     @patch('pblib.debug_log')
@@ -148,24 +156,9 @@ class TestAssignSolverTypeNormalization:
         assert isinstance(stored["solvers"][0]["solver_id"], int)
 
     @patch('pblib.debug_log')
-    def test_no_duplicate_when_string_matches_existing_int(self, mock_log):
-        """Assigning with string "101" should not duplicate existing int 101."""
+    def test_no_duplicate_when_already_present(self, mock_log):
+        """Assigning solver already in current_solvers should not duplicate."""
         existing = json.dumps({"solvers": [{"solver_id": 101}]})
-        conn, cursor = _make_mock_conn(current_solvers_json=existing)
-
-        assign_solver_to_puzzle("287", "101", conn)
-
-        # Should NOT have an UPDATE current_solvers call (already present)
-        update_calls = [
-            c for c in cursor.execute.call_args_list
-            if 'SET current_solvers' in str(c)
-        ]
-        assert len(update_calls) == 0, "Should not duplicate solver in current_solvers"
-
-    @patch('pblib.debug_log')
-    def test_no_duplicate_when_int_matches_existing_string(self, mock_log):
-        """Assigning with int 101 should not duplicate existing string "101"."""
-        existing = json.dumps({"solvers": [{"solver_id": "101"}]})
         conn, cursor = _make_mock_conn(current_solvers_json=existing)
 
         assign_solver_to_puzzle(287, 101, conn)
@@ -178,15 +171,18 @@ class TestAssignSolverTypeNormalization:
 
 
 class TestUnassignSolverTypeNormalization:
-    """Test that unassign handles int/string solver_id correctly."""
+    """Test that unassign handles int/string solver_id input correctly.
+
+    Post-migration: all database entries use integer solver_ids.
+    Both int and string caller input must be normalized to int to match.
+    """
 
     @patch('pblib.debug_log')
     def test_string_id_removes_int_entry(self, mock_log):
-        """String solver_id "101" should remove int entry 101."""
+        """String solver_id "101" from Flask should remove int entry 101."""
         existing = json.dumps({"solvers": [{"solver_id": 101}]})
         conn, cursor = _make_mock_conn(current_solvers_json=existing)
 
-        # Mock fetchone for unassign (only one SELECT)
         cursor.fetchone = lambda: {"current_solvers": existing}
 
         unassign_solver_from_puzzle("287", "101", conn)
@@ -201,9 +197,9 @@ class TestUnassignSolverTypeNormalization:
         assert len(stored["solvers"]) == 0, "Solver should have been removed"
 
     @patch('pblib.debug_log')
-    def test_int_id_removes_string_entry(self, mock_log):
-        """Int solver_id 101 should remove legacy string entry "101"."""
-        existing = json.dumps({"solvers": [{"solver_id": "101"}]})
+    def test_int_id_removes_int_entry(self, mock_log):
+        """Int solver_id 101 from bigjimmybot should remove int entry 101."""
+        existing = json.dumps({"solvers": [{"solver_id": 101}]})
         conn, cursor = _make_mock_conn(current_solvers_json=existing)
 
         cursor.fetchone = lambda: {"current_solvers": existing}
@@ -217,7 +213,7 @@ class TestUnassignSolverTypeNormalization:
         assert len(update_calls) == 1
         stored_json = update_calls[0][0][1][0]
         stored = json.loads(stored_json)
-        assert len(stored["solvers"]) == 0, "Legacy string solver should have been removed"
+        assert len(stored["solvers"]) == 0, "Solver should have been removed"
 
     @patch('pblib.debug_log')
     def test_unassign_preserves_other_solvers(self, mock_log):
@@ -247,8 +243,8 @@ class TestAssignUnassignsFromOldPuzzle:
     """Test that assigning to a new puzzle unassigns from old puzzles."""
 
     @patch('pblib.debug_log')
-    def test_unassign_from_old_puzzle_with_legacy_string_id(self, mock_log):
-        """Assigning solver should unassign from old puzzle even if stored as string."""
+    def test_unassign_from_old_puzzle(self, mock_log):
+        """Assigning solver should unassign from old puzzle first."""
         conn = MagicMock()
         cursor = MagicMock()
         conn.cursor.return_value = cursor
@@ -266,8 +262,7 @@ class TestAssignUnassignsFromOldPuzzle:
             # 2. assign: SELECT current_solvers for puzzle 287
             # 3. assign: SELECT solver_history for puzzle 287
             if n == 1:
-                # Old puzzle has solver stored as string (legacy)
-                return {"current_solvers": json.dumps({"solvers": [{"solver_id": "101"}]})}
+                return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
             elif n == 2:
                 return {"current_solvers": json.dumps({"solvers": []})}
             elif n == 3:
@@ -326,7 +321,7 @@ class TestAssignUnassignsFromOldPuzzle:
 
 
 class TestAssignSolverHistoryType:
-    """Test that solver_history also uses consistent int types."""
+    """Test that solver_history also stores solver_id as int."""
 
     @patch('pblib.debug_log')
     def test_history_stores_int_from_string(self, mock_log):
@@ -346,8 +341,8 @@ class TestAssignSolverHistoryType:
         assert isinstance(stored["solvers"][0]["solver_id"], int)
 
     @patch('pblib.debug_log')
-    def test_history_no_duplicate_string_vs_int(self, mock_log):
-        """String "101" should not duplicate existing int 101 in history."""
+    def test_history_no_duplicate_when_already_present(self, mock_log):
+        """Solver already in history should not be added again."""
         existing_history = json.dumps({"solvers": [{"solver_id": 101}]})
         conn, cursor = _make_mock_conn(solver_history_json=existing_history)
 
@@ -357,4 +352,4 @@ class TestAssignSolverHistoryType:
             c for c in cursor.execute.call_args_list
             if 'SET solver_history' in str(c)
         ]
-        assert len(update_calls) == 0, "Should not duplicate solver in history"
+        assert len(update_calls) == 0, "Should not write to history when solver already present"

@@ -79,16 +79,16 @@ See `docker/README.md` for details, or continue reading for production setup.
 
 **Current Test Coverage:**
 - ✅ pbrest.py: 28/28 API integration tests (100% coverage via end-to-end tests)
-- ✅ bigjimmybot.py: 18/18 unit tests with mocking (100% coverage)
+- ✅ bigjimmybot.py: 26/26 unit tests with mocking (100% coverage)
+- ✅ pblib.py: 27/27 unit tests — solver assignment behavior + ID type normalization
+- ✅ rate_limiter.py: 10/10 unit tests — timing, config, thread safety
 - ✅ UI workflows: 27/27 Playwright tests (100% coverage)
 - ⚠️ pbgooglelib.py: No unit tests (integration tested via bigjimmybot/pbrest)
 - ⚠️ pbllmlib.py: No unit tests (integration tested via API endpoints)
-- ⚠️ pblib.py: No unit tests (integration tested via pbrest/bigjimmybot)
 
-**Recommended: Add unit tests for high-value targets**
+**Recommended: Add unit tests for remaining targets**
 1. **pbgooglelib.py** (High Priority): Complex Google API logic (Drive/Sheets/Revisions), quota management, error handling. Unit tests would enable testing without actual Google API access and cover edge cases.
 2. **pbllmlib.py** (High Priority): LLM query logic, function calling, RAG integration. Unit tests can mock AI responses to test parsing and error handling.
-3. **pblib.py** (Medium Priority): Reusable library functions (solver assignment, activity logging, config management). Currently difficult due to init-time config loading, but refactoring for testability would enable unit tests.
 
 **Note:** pbrest.py unit tests are LOW priority - already has comprehensive end-to-end API test coverage (28 tests). Adding unit tests would duplicate coverage without significant benefit since pbrest is now thin wrappers around pblib functions.
 

@@ -12,11 +12,12 @@ Puzzleboss 2000 is a puzzle hunt management system developed by ATTORNEY for mys
 
 **Backend (Python)**
 - `pbrest.py` - Flask REST API server with MySQL database. Main entry point for API operations. Uses Flasgger for Swagger/OpenAPI documentation.
-- `pblib.py` - Core library with configuration management, logging utilities, and email functions. Loads config from both `puzzleboss.yaml` (static) and database `config` table (dynamic). Config auto-refreshes every 30 seconds via `maybe_refresh_config()`.
+- `pblib.py` - Core library with configuration management, solver assignment/unassignment, activity logging, and email functions. Loads config from both `puzzleboss.yaml` (static) and database `config` table (dynamic). Config auto-refreshes every 30 seconds via `maybe_refresh_config()`. All functions that accept ID parameters normalize to `int()` at the boundary.
 - `pbgooglelib.py` - Google Drive/Sheets integration. Uses service account credentials (`service-account.json`) with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Supports hybrid metadata approach for sheet activity tracking.
 - `pbdiscordlib.py` - Discord integration via socket connection to puzzcord daemon. Creates channels, announces solves/rounds.
 - `pbllmlib.py` - LLM-powered natural language queries via Google Gemini. Includes function calling for hunt data and RAG support for wiki content via ChromaDB.
 - `bigjimmybot.py` - Multi-threaded bot that polls Google Sheets for activity and updates puzzle metadata (sheetcount, lastsheetact). Uses hybrid approach: reads hidden `_pb_activity` sheet for sheets with add-on, falls back to legacy Revisions API for old sheets.
+- `migrations/` - Data migration framework. Each module has `name`, `description`, and `run(conn)`. Discoverable via `GET /migrate`, executable via `POST /migrate/<name>`. Migrations are idempotent and intended to be pruned after they've been run everywhere.
 
 **Frontend (PHP + JavaScript)**
 - `www/puzzlebosslib.php` - Shared PHP library for API calls (`readapi`, `postapi`, `deleteapi`), authentication via `REMOTE_USER` header, and error handling.
@@ -152,7 +153,16 @@ php -S localhost:8080
 
 ## Testing
 
-**IMPORTANT:** All test suites should be run inside the Docker container to ensure consistent dependencies (PyYAML, Playwright, etc.) and clean database state. Local test runs may fail due to missing dependencies or leftover test data.
+**Unit Tests (pytest)**
+```bash
+# Run all unit tests (can run locally, no Docker needed — uses mocked DB)
+python3 -m pytest tests/ -v
+
+# Run specific test file
+python3 -m pytest tests/test_pblib_id_types.py -v
+```
+
+**IMPORTANT:** API and UI test suites should be run inside the Docker container to ensure consistent dependencies (PyYAML, Playwright, etc.) and clean database state.
 
 **API Integration Tests**
 ```bash
@@ -268,6 +278,22 @@ These operations rewrite git history and can cause:
 - Use `@swag_from` decorators in pbrest.py to reference API specs in `swag/` directory
 - Swagger validation is automatic via Flasgger
 
+### Integer ID Convention
+All database IDs (puzzle.id, solver.id, round.id, activity.id) are `INT(11)` in MySQL and **must remain integers throughout the entire stack**: database → Python → JSON → API responses → frontend.
+
+**Rules:**
+- Every `pblib.py` function that accepts an ID parameter calls `int()` at the entry point, so callers can safely pass either `int` or `str` (e.g., Flask route params are always strings)
+- JSON columns (`current_solvers`, `solver_history`) store `solver_id` as JSON number (`101`), never as JSON string (`"101"`). This matches how tags are stored in the `tags` column (`[42, 15, 8]`)
+- SQL functions that extract IDs from JSON use `JSON_TABLE` with `INT PATH` (not `JSON_SEARCH` or `JSON_CONTAINS`, which are string-only)
+- API response dicts must return `int(id)` for Flask route parameters (which arrive as strings), e.g., `{"id": int(id), ...}`
+- MySQL's DictCursor returns native Python `int` for INT columns — do not convert with `str()`
+
+**Why:** Python's `101 == "101"` is `False`, `json.dumps({"id": 101})` produces `101` (number) while `json.dumps({"id": "101"})` produces `"101"` (string), and JavaScript's `===` is type-strict. Mixing types causes silent comparison failures and inconsistent serialization.
+
+**Tests:** `tests/test_pblib_id_types.py` guards all pblib functions against type regression. `tests/test_pblib_solver_assignment.py` guards JSON structure integrity.
+
+**Migration:** Run `POST /migrate/normalize_solver_ids` to convert any legacy string solver_ids to integers in JSON columns.
+
 ### Database Access Patterns
 - Use `mysql.connection` from Flask-MySQLdb (connection pooling built-in)
 - Always commit after writes: `conn.commit()`
@@ -341,6 +367,8 @@ These operations rewrite git history and can cause:
 - `/activity` - Puzzle activity feed
 - `/tags` - Tag management
 - `/huntinfo` - Combined endpoint for config + statuses + tags (used by frontend)
+- `/migrate` - List available data migrations (GET)
+- `/migrate/<name>` - Run a named data migration (POST)
 - `/v1/query` - LLM natural language queries (requires google-genai)
 - `/metrics` - Prometheus metrics (requires prometheus_flask_exporter)
 

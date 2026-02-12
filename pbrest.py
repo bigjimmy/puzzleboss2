@@ -570,7 +570,7 @@ def get_puzzle_part(id, part):
             )
 
     debug_log(4, "fetched puzzle part %s for %s" % (part, id))
-    return {"status": "ok", "puzzle": {"id": id, part: rv}}
+    return {"status": "ok", "puzzle": {"id": int(id), part: rv}}
 
 
 @app.route("/puzzles/<id>/activity", endpoint="puzzle_activity", methods=["GET"])
@@ -690,7 +690,7 @@ def get_round_part(id, part):
         answer = get_puzzles_from_list(answer)
 
     debug_log(4, "fetched round part %s for %s" % (part, id))
-    return {"status": "ok", "round": {"id": id, part: answer}}
+    return {"status": "ok", "round": {"id": int(id), part: answer}}
 
 
 @app.route("/solvers", endpoint="solvers", methods=["GET"])
@@ -846,13 +846,16 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
             conn, cursor = _cursor()
             cursor.execute(
                 """
-                SELECT id FROM puzzle
-                WHERE JSON_CONTAINS(current_solvers,
-                    JSON_OBJECT('solver_id', %s),
-                    '$.solvers'
-                )
+                SELECT DISTINCT p.id FROM puzzle p,
+                JSON_TABLE(
+                    p.current_solvers,
+                    '$.solvers[*]' COLUMNS (
+                        solver_id INT PATH '$.solver_id'
+                    )
+                ) AS jt
+                WHERE jt.solver_id = %s
             """,
-                (id,),
+                (int(id),),
             )
             current_puzzle = cursor.fetchone()
             if current_puzzle:
@@ -921,7 +924,7 @@ def update_solver_multi(id):
     if needs_cache_invalidation:
         invalidate_cache_with_stats()
 
-    return {"status": "ok", "solver": {"id": id, **updated_parts}}
+    return {"status": "ok", "solver": {"id": int(id), **updated_parts}}
 
 
 @app.route("/solvers/<id>/<part>", endpoint="post_solver_part", methods=["POST"])
@@ -953,7 +956,7 @@ def update_solver_part(id, part):
     if part == "puzz":
         invalidate_cache_with_stats()
 
-    return {"status": "ok", "solver": {"id": id, part: updated_value}}
+    return {"status": "ok", "solver": {"id": int(id), part: updated_value}}
 
 
 @app.route("/config", endpoint="getconfig", methods=["GET"])
@@ -1361,7 +1364,7 @@ def create_puzzle():
         conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
         puzzle = cursor.fetchone()
-        myid = str(puzzle["id"])
+        myid = puzzle["id"]
 
         _log_activity(myid, "create")
 
@@ -1687,7 +1690,7 @@ def finish_puzzle_creation(code):
             # Get the assigned puzzle ID
             cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
             puzzle = cursor.fetchone()
-            myid = str(puzzle["id"])
+            myid = puzzle["id"]
 
             _log_activity(myid, "create")
 
@@ -1721,7 +1724,7 @@ def finish_puzzle_creation(code):
             if not puzzle:
                 return {"status": "error", "error": f"Puzzle {name} not found in database"}, 404
 
-            myid = str(puzzle["id"])
+            myid = puzzle["id"]
 
             # Set speculative status if needed
             if is_speculative:
@@ -1962,7 +1965,7 @@ def update_round_multi(id):
     # Invalidate cache once after all updates
     invalidate_cache_with_stats()
 
-    return {"status": "ok", "round": {"id": id, **updated_parts}}
+    return {"status": "ok", "round": {"id": int(id), **updated_parts}}
 
 
 @app.route("/rounds/<id>/<part>", endpoint="post_round_part", methods=["POST"])
@@ -1984,7 +1987,7 @@ def update_round_part(id, part):
     # Invalidate /allcached since round data changed
     invalidate_cache_with_stats()
 
-    return {"status": "ok", "round": {"id": id, part: updated_value}}
+    return {"status": "ok", "round": {"id": int(id), part: updated_value}}
 
 
 @app.route("/solvers", endpoint="post_solver", methods=["POST"])
@@ -2341,7 +2344,7 @@ def update_puzzle_multi(id):
     # Invalidate cache once after all updates
     invalidate_cache_with_stats()
 
-    return {"status": "ok", "puzzle": {"id": id, **updated_parts}}
+    return {"status": "ok", "puzzle": {"id": int(id), **updated_parts}}
 
 
 @app.route("/puzzles/<id>/<part>", endpoint="post_puzzle_part", methods=["POST"])
@@ -2372,7 +2375,7 @@ def update_puzzle_part(id, part):
     # Invalidate cache
     invalidate_cache_with_stats()
 
-    return {"status": "ok", "puzzle": {"id": id, part: updated_value}}
+    return {"status": "ok", "puzzle": {"id": int(id), part: updated_value}}
 
 
 @app.route("/account", endpoint="post_new_account", methods=["POST"])
@@ -2849,7 +2852,7 @@ def delete_pb_solver(username):
 def _get_validated_history(puzzle_id):
     """Parse request, validate puzzle+solver, return (solver_id, history, conn, cursor)."""
     data = request.get_json()
-    solver_id = data["solver_id"]
+    solver_id = int(data["solver_id"])  # Normalize to int
 
     mypuzzle = get_one_puzzle(puzzle_id)
     if "status" not in mypuzzle or mypuzzle["status"] != "ok":
@@ -2926,6 +2929,31 @@ def force_cache_invalidate():
         return {"status": "ok", "message": "Cache invalidated successfully"}
     except Exception as e:
         debug_log(1, f"Error invalidating cache: {str(e)}")
+        return {"status": "error", "error": str(e)}, 500
+
+
+@app.route("/migrate", endpoint="migrate_list", methods=["GET"])
+def list_migrations():
+    """List all available data migrations."""
+    from migrations import get_all_migrations
+    return {"status": "ok", "migrations": get_all_migrations()}
+
+
+@app.route("/migrate/<name>", endpoint="migrate_run", methods=["POST"])
+def run_migration(name):
+    """Run a named data migration."""
+    from migrations import run_migration as _run
+    debug_log(3, f"Running migration: {name}")
+    try:
+        success, message = _run(name, mysql.connection)
+        if success:
+            debug_log(3, f"Migration {name} succeeded: {message}")
+            return {"status": "ok", "message": message}
+        else:
+            debug_log(1, f"Migration {name} failed: {message}")
+            return {"status": "error", "error": message}, 404
+    except Exception as e:
+        debug_log(1, f"Migration {name} error: {e}")
         return {"status": "error", "error": str(e)}, 500
 
 

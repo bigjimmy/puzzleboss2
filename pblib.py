@@ -264,6 +264,7 @@ This is an automated message from {team_name} registration system.
 
 def check_round_completion(round_id, conn):
     """Check if all meta puzzles in a round are solved and update round status accordingly."""
+    round_id = int(round_id)
     try:
         cursor = conn.cursor()
         cursor.execute(
@@ -299,37 +300,40 @@ def check_round_completion(round_id, conn):
 
 
 def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
-    """Assign a solver to a puzzle, unassigning from any other puzzle first."""
-    # Normalize to int — Flask routes pass string IDs, bigjimmybot passes ints.
-    # JSON_CONTAINS and Python equality are type-sensitive, so mixing types
-    # causes silent failures (can't find existing assignment to unassign).
-    solver_id = int(solver_id)
+    """Assign a solver to a puzzle, unassigning from any other puzzle first.
+
+    Solver_id is stored as INT in JSON, matching solver.id column type.
+    All SQL functions use JSON_TABLE with INT PATH to extract solver_ids.
+    Run the normalize_solver_ids migration after deploy to ensure consistency.
+    """
+    solver_id = int(solver_id)  # Normalize: 101 whether caller passes 101 or "101"
     puzzle_id = int(puzzle_id)
     debug_log(4, "Started with puzzle id %s" % puzzle_id)
     cursor = conn.cursor()
 
-    # First, find and unassign from any other puzzle the solver is currently working on.
-    # Use JSON_SEARCH (type-insensitive) instead of JSON_CONTAINS (type-sensitive)
-    # because legacy data may store solver_id as string "101" instead of int 101.
-    # JSON_CONTAINS with JSON_OBJECT('solver_id', 101) won't match {"solver_id": "101"}.
+    # Find and unassign from any other puzzle the solver is currently on.
+    # JSON_TABLE with INT PATH extracts solver_ids as integers for comparison.
     cursor.execute(
         """
-        SELECT id FROM puzzle
-        WHERE JSON_SEARCH(current_solvers, 'one', %s, NULL, '$.solvers[*].solver_id') IS NOT NULL
+        SELECT DISTINCT p.id FROM puzzle p,
+        JSON_TABLE(
+            p.current_solvers,
+            '$.solvers[*]' COLUMNS (
+                solver_id INT PATH '$.solver_id'
+            )
+        ) AS jt
+        WHERE jt.solver_id = %s
     """,
-        (str(solver_id),),
+        (solver_id,),
     )
     current_puzzles = cursor.fetchall()
     for current_puzzle in current_puzzles:
         if current_puzzle["id"] != puzzle_id:
-            # Unassign from current puzzle if it's different from the new one
             unassign_solver_from_puzzle(current_puzzle["id"], solver_id, conn)
 
     # Update current solvers for the new puzzle
     cursor.execute(
-        """
-        SELECT current_solvers FROM puzzle WHERE id = %s
-    """,
+        "SELECT current_solvers FROM puzzle WHERE id = %s",
         (puzzle_id,),
     )
     current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
@@ -337,43 +341,27 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
     )
     current_solvers = json.loads(current_solvers_str)
 
-    # Add new solver if not already present (compare as int for legacy string IDs)
-    if not any(int(s["solver_id"]) == solver_id for s in current_solvers["solvers"]):
+    if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
         current_solvers["solvers"].append({"solver_id": solver_id})
         cursor.execute(
-            """
-            UPDATE puzzle
-            SET current_solvers = %s
-            WHERE id = %s
-        """,
+            "UPDATE puzzle SET current_solvers = %s WHERE id = %s",
             (json.dumps(current_solvers), puzzle_id),
         )
 
     # Update history
     cursor.execute(
-        """
-        SELECT solver_history FROM puzzle WHERE id = %s
-    """,
+        "SELECT solver_history FROM puzzle WHERE id = %s",
         (puzzle_id,),
     )
     history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
     history = json.loads(history_str)
 
-    # Add to history if not already present
-    # solver_id is already normalized to int at function entry
-    existing_ids = [s["solver_id"] for s in history["solvers"]]
-    # Check against both int and string for legacy data that may have string IDs
-    if not any(sid == solver_id or str(sid) == str(solver_id) for sid in existing_ids):
+    if not any(s["solver_id"] == solver_id for s in history["solvers"]):
         history["solvers"].append({"solver_id": solver_id})
-        history_json = json.dumps(history)
-        debug_log(5, f"Storing solver_history for puzzle {puzzle_id}: {history_json}")
+        debug_log(5, f"Storing solver_history for puzzle {puzzle_id}: {json.dumps(history)}")
         cursor.execute(
-            """
-            UPDATE puzzle
-            SET solver_history = %s
-            WHERE id = %s
-        """,
-            (history_json, puzzle_id),
+            "UPDATE puzzle SET solver_history = %s WHERE id = %s",
+            (json.dumps(history), puzzle_id),
         )
 
     conn.commit()
@@ -381,15 +369,12 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
 
 def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
     """Unassign a solver from a puzzle's current solvers list."""
-    solver_id = int(solver_id)
+    solver_id = int(solver_id)  # Normalize to int
     puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
 
-    # Update current solvers
     cursor.execute(
-        """
-        SELECT current_solvers FROM puzzle WHERE id = %s
-    """,
+        "SELECT current_solvers FROM puzzle WHERE id = %s",
         (puzzle_id,),
     )
     current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
@@ -397,17 +382,12 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
     )
     current_solvers = json.loads(current_solvers_str)
 
-    # Filter out the solver — compare as int to handle legacy string IDs in JSON
     current_solvers["solvers"] = [
-        s for s in current_solvers["solvers"] if int(s["solver_id"]) != solver_id
+        s for s in current_solvers["solvers"] if s["solver_id"] != solver_id
     ]
 
     cursor.execute(
-        """
-        UPDATE puzzle
-        SET current_solvers = %s
-        WHERE id = %s
-    """,
+        "UPDATE puzzle SET current_solvers = %s WHERE id = %s",
         (json.dumps(current_solvers), puzzle_id),
     )
 
@@ -416,6 +396,7 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
 
 def clear_puzzle_solvers(puzzle_id, conn):
     """Clear all solvers from a puzzle's current solvers list."""
+    puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
 
     # Clear current solvers
@@ -450,6 +431,8 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=No
     Raises:
         Exception: If database insert fails
     """
+    puzzle_id = int(puzzle_id)
+    solver_id = int(solver_id)
     cursor = conn.cursor()
     if timestamp is not None:
         cursor.execute(
@@ -526,6 +509,7 @@ def update_puzzle_field(puzzle_id, field, value, conn):
     Raises:
         Exception: If database update fails
     """
+    puzzle_id = int(puzzle_id)
     if field == "solvers":
         # Handle solver assignments using existing functions
         if value:  # Assign solver
@@ -549,6 +533,7 @@ def get_solver_by_id_from_db(solver_id, conn):
     Returns:
         Solver dict from solver_view with 'lastact' key added, or None if not found.
     """
+    solver_id = int(solver_id)
     cursor = conn.cursor()
     cursor.execute("SELECT * from solver_view where id = %s", (solver_id,))
     solver = cursor.fetchone()
@@ -568,6 +553,7 @@ def get_last_activity_for_solver(solver_id, conn):
     Returns:
         Activity dict with 'time' as datetime object, or None if no activity.
     """
+    solver_id = int(solver_id)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT * from activity where solver_id = %s ORDER BY time DESC LIMIT 1",
@@ -586,6 +572,7 @@ def get_last_sheet_activity_for_puzzle(puzzle_id, conn):
     Returns:
         Activity dict with 'time' as datetime object, or None if no activity.
     """
+    puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT * from activity where puzzle_id = %s AND type = 'revise' ORDER BY time DESC LIMIT 1",
@@ -604,6 +591,7 @@ def get_last_activity_for_puzzle(puzzle_id, conn):
     Returns:
         Activity dict with 'time' as datetime object, or None if no activity.
     """
+    puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1",
