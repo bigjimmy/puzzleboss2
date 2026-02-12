@@ -513,7 +513,7 @@ def _process_sheet_activity(
         threadname: Name of worker thread (for logging)
     """
     # Fetch last sheet activity for this puzzle
-    last_sheet_act = fetch_last_sheet_activity(puzzle, threadname)
+    last_sheet_act = _fetch_last_sheet_activity(puzzle, threadname)
     if last_sheet_act is None:
         return  # Error already logged
 
