@@ -28,6 +28,7 @@ from pbgooglelib import (
     get_puzzle_sheet_info_activity,
     get_puzzle_sheet_info_legacy,
     activate_puzzle_sheet_via_api,
+    repair_activity_sheet,
     get_quota_failure_count,
     initdrive,
 )
@@ -40,6 +41,11 @@ WORK_QUEUE = queue.Queue(300)
 THREAD_COUNTER = 0
 THREADS = []
 LOOP_ITERATIONS_TOTAL = 0
+
+# Track consecutive _pb_activity failures per drive_id for skip/repair logic
+_sheet_failure_counts: Dict[str, int] = {}
+_REPAIR_AFTER_FAILURES = 3      # Attempt repair after this many consecutive failures
+_SKIP_AFTER_FAILURES = 6        # Stop trying entirely after this many (repair failed)
 
 
 # ── Database Connection ───────────────────────────────────────────────
@@ -335,13 +341,75 @@ def _fetch_sheet_info(
     sheetenabled = puzzle.get("sheetenabled", 0)
 
     if sheetenabled == 1:
+        drive_id = puzzle["drive_id"]
+
+        # Fast-skip for puzzles that have exceeded the failure threshold
+        fail_count = _sheet_failure_counts.get(drive_id, 0)
+        if fail_count >= _SKIP_AFTER_FAILURES:
+            debug_log(
+                2,
+                f"[Thread: {threadname}] Skipping {puzzle['name']} — "
+                f"in failure cooldown ({fail_count} failures)",
+            )
+            return {"editors": [], "sheetcount": None, "error": True}, 1
+
         # Sheet has add-on enabled, use the hidden sheet approach
         debug_log(
             4,
             f"[Thread: {threadname}] Using hidden sheet tracking for {puzzle['name']} (sheetenabled=1)",
         )
         sheet_info = get_puzzle_sheet_info_activity(puzzle["drive_id"], puzzle["name"])
-        return sheet_info, 1
+
+        if sheet_info.get("error"):
+            _sheet_failure_counts[drive_id] = _sheet_failure_counts.get(drive_id, 0) + 1
+            fail_count = _sheet_failure_counts[drive_id]
+
+            debug_log(
+                2,
+                f"[Thread: {threadname}] _pb_activity error for {puzzle['name']} "
+                f"(consecutive failure #{fail_count})",
+            )
+
+            if fail_count == _REPAIR_AFTER_FAILURES:
+                debug_log(
+                    2,
+                    f"[Thread: {threadname}] Attempting _pb_activity repair for {puzzle['name']}",
+                )
+                try:
+                    repaired = repair_activity_sheet(puzzle["drive_id"], puzzle["name"])
+                    if repaired:
+                        debug_log(
+                            2,
+                            f"[Thread: {threadname}] Repair succeeded for {puzzle['name']}, "
+                            f"resetting failure count",
+                        )
+                        _sheet_failure_counts[drive_id] = 0
+                        # Don't re-read this cycle — let next loop pick up the fresh sheet
+                    else:
+                        debug_log(
+                            1,
+                            f"[Thread: {threadname}] Repair failed for {puzzle['name']}",
+                        )
+                except Exception as e:
+                    debug_log(
+                        1,
+                        f"[Thread: {threadname}] Repair exception for {puzzle['name']}: {e}",
+                    )
+
+            if fail_count >= _SKIP_AFTER_FAILURES:
+                debug_log(
+                    1,
+                    f"[Thread: {threadname}] Skipping {puzzle['name']} — "
+                    f"{fail_count} consecutive _pb_activity failures (repair did not help)",
+                )
+
+            # Return the error result as-is — caller processes empty editors harmlessly
+            return sheet_info, 1
+        else:
+            # Success — reset failure counter
+            if drive_id in _sheet_failure_counts:
+                del _sheet_failure_counts[drive_id]
+            return sheet_info, 1
 
     # No add-on deployed yet - try to activate it
     debug_log(
@@ -630,8 +698,7 @@ def _check_puzzle_from_queue(threadname: str, q: queue.Queue) -> int:
             puzzle = q.get()
             QUEUE_LOCK.release()
 
-            # Throttle to avoid Google API rate limits
-            time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
+            # Rate limiting is now handled by _rate_limiter.acquire() in pbgooglelib
 
             try:
                 _process_puzzle(puzzle, threadname)
@@ -747,7 +814,7 @@ def main():
             rounds = get_all_rounds_with_puzzles(conn)
         except Exception as e:
             debug_log(1, f"Error fetching puzzle data from database: {e}")
-            time.sleep(int(configstruct["BIGJIMMY_PUZZLEPAUSETIME"]))
+            time.sleep(5)  # Brief backoff before retrying on DB error
             continue
 
         debug_log(4, "loaded round list")

@@ -54,6 +54,10 @@ from bigjimmybot import (
     _check_abandoned_puzzle,
     _process_puzzle,
     _get_db_connection,
+    _fetch_sheet_info,
+    _sheet_failure_counts,
+    _REPAIR_AFTER_FAILURES,
+    _SKIP_AFTER_FAILURES,
 )
 
 
@@ -405,3 +409,97 @@ class TestGetDbConnection:
 
         # Cleanup
         del bigjimmybot._thread_local.db_conn
+
+
+class TestFetchSheetInfoErrorHandling:
+    """Test _fetch_sheet_info error tracking, repair, and skip logic."""
+
+    def setup_method(self):
+        """Clear failure counts before each test."""
+        _sheet_failure_counts.clear()
+
+    @patch('bigjimmybot.repair_activity_sheet', return_value=False)
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_error_flag_triggers_failure_tracking(self, mock_get_activity, mock_repair):
+        """Test that error responses increment the failure counter."""
+        mock_get_activity.return_value = {
+            "editors": [], "sheetcount": None, "error": True
+        }
+        puzzle = {
+            "id": 123, "name": "TestPuzzle",
+            "drive_id": "test_drive_id", "sheetenabled": 1,
+        }
+
+        # Call 3 times — each should increment the counter
+        for i in range(3):
+            _fetch_sheet_info(puzzle, "test-thread")
+
+        assert _sheet_failure_counts["test_drive_id"] == 3
+
+    @patch('bigjimmybot.repair_activity_sheet')
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_repair_attempted_after_threshold(self, mock_get_activity, mock_repair):
+        """Test that repair is attempted after REPAIR_AFTER_FAILURES consecutive errors."""
+        mock_get_activity.return_value = {
+            "editors": [], "sheetcount": None, "error": True
+        }
+        mock_repair.return_value = True  # Repair succeeds
+
+        puzzle = {
+            "id": 123, "name": "TestPuzzle",
+            "drive_id": "test_drive_id", "sheetenabled": 1,
+        }
+
+        # Call exactly REPAIR_AFTER_FAILURES times
+        for i in range(_REPAIR_AFTER_FAILURES):
+            _fetch_sheet_info(puzzle, "test-thread")
+
+        # Verify repair was called exactly once (on the Nth failure)
+        mock_repair.assert_called_once_with("test_drive_id", "TestPuzzle")
+        # Verify counter was reset after successful repair
+        assert _sheet_failure_counts.get("test_drive_id", 0) == 0
+
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_skip_after_max_failures(self, mock_get_activity):
+        """Test that puzzles are skipped entirely after exceeding failure threshold."""
+        # Pre-set failure count to the skip threshold
+        _sheet_failure_counts["test_drive_id"] = _SKIP_AFTER_FAILURES
+
+        puzzle = {
+            "id": 123, "name": "TestPuzzle",
+            "drive_id": "test_drive_id", "sheetenabled": 1,
+        }
+
+        result, sheetenabled = _fetch_sheet_info(puzzle, "test-thread")
+
+        # Verify the Google API was NOT called (skipped entirely)
+        mock_get_activity.assert_not_called()
+        # Verify error result returned
+        assert result["error"] is True
+        assert result["editors"] == []
+        assert sheetenabled == 1
+
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_success_resets_failure_count(self, mock_get_activity):
+        """Test that successful responses reset the failure counter."""
+        mock_get_activity.return_value = {
+            "editors": [{"solvername": "alice", "timestamp": 1234567890}],
+            "sheetcount": 5,
+            "error": False,
+        }
+
+        # Pre-set some failures
+        _sheet_failure_counts["test_drive_id"] = 2
+
+        puzzle = {
+            "id": 123, "name": "TestPuzzle",
+            "drive_id": "test_drive_id", "sheetenabled": 1,
+        }
+
+        result, sheetenabled = _fetch_sheet_info(puzzle, "test-thread")
+
+        # Verify counter was cleared
+        assert "test_drive_id" not in _sheet_failure_counts
+        # Verify normal result returned
+        assert result["error"] is False
+        assert len(result["editors"]) == 1

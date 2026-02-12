@@ -1,6 +1,7 @@
 import os.path
 import sys
 import time
+import random
 import threading
 from typing import Optional
 import googleapiclient
@@ -27,6 +28,48 @@ quota_failure_lock = threading.Lock()
 # Default retry/delay constants (can be overridden via config)
 _DEFAULT_MAX_RETRIES = 10
 _DEFAULT_RETRY_DELAY_SECONDS = 5
+
+# Default queries-per-minute limit (Google Sheets API hard limit is 60)
+_DEFAULT_QPM = 55
+
+
+class _GoogleApiRateLimiter:
+    """Global rate limiter for Google API calls using slot reservation.
+
+    Ensures API calls are spaced at minimum intervals to stay within
+    the Google Sheets API's per-minute quota. Thread-safe.
+
+    Threads call acquire() before making any Google API request.
+    Each call reserves the next available time slot and sleeps until
+    that slot arrives. QPM is read from config on each call so it
+    can be tuned at runtime via the admin UI.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._next_slot = 0.0
+
+    def acquire(self):
+        """Block until the next API call slot is available."""
+        qpm = int(configstruct.get("BIGJIMMY_GOOGLE_API_QPM", _DEFAULT_QPM))
+        min_interval = 60.0 / max(qpm, 1)
+
+        with self._lock:
+            now = time.time()
+            if self._next_slot <= now:
+                # Slot is in the past — go immediately, reserve next
+                self._next_slot = now + min_interval
+                wait_time = 0.0
+            else:
+                # Must wait for the next slot
+                wait_time = self._next_slot - now
+                self._next_slot += min_interval
+
+        if wait_time > 0:
+            time.sleep(wait_time)
+
+
+_rate_limiter = _GoogleApiRateLimiter()
 
 
 def _increment_quota_failure():
@@ -120,6 +163,7 @@ def initdrive():
     foldername = configstruct["HUNT_FOLDER_NAME"]
 
     # Check if hunt folder exists
+    _rate_limiter.acquire()
     huntfoldercheck = (
         service.files()
         .list(
@@ -138,6 +182,7 @@ def initdrive():
             "name": foldername,
             "mimeType": "application/vnd.google-apps.folder",
         }
+        _rate_limiter.acquire()
         folder_file = service.files().create(body=file_metadata, fields="id").execute()
 
         # Set global variable
@@ -188,7 +233,7 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
     max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
-    result = {"editors": [], "sheetcount": None}
+    result = {"editors": [], "sheetcount": None, "error": False}
 
     if configstruct["SKIP_GOOGLE_API"] == "true":
         debug_log(3, "google API skipped by config.")
@@ -200,6 +245,7 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
         try:
             sheetsservice = build("sheets", "v4", credentials=creds)
 
+            _rate_limiter.acquire()
             response = (
                 sheetsservice.spreadsheets()
                 .values()
@@ -276,9 +322,10 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
                     "[%s] Rate limit hit reading _pb_activity, waiting %d seconds (attempt %d/%d)"
                     % (puzz_label, retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(1, "[%s] Error reading _pb_activity: %s" % (puzz_label, e))
+                result["error"] = True
                 break
         except Exception as e:
             if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
@@ -288,9 +335,10 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
                     "[%s] Rate limit hit reading _pb_activity, waiting %d seconds (attempt %d/%d)"
                     % (puzz_label, retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(1, "[%s] Error reading _pb_activity: %s" % (puzz_label, e))
+                result["error"] = True
                 break  # Non-rate-limit error, don't retry
     else:
         if max_retries > 0:
@@ -299,6 +347,7 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
                 "[%s] EXHAUSTED all %d retries reading _pb_activity - giving up"
                 % (puzz_label, max_retries),
             )
+            result["error"] = True
 
     return result
 
@@ -323,7 +372,7 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
     max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
-    result = {"revisions": [], "sheetcount": None}
+    result = {"revisions": [], "sheetcount": None, "error": False}
 
     if configstruct["SKIP_GOOGLE_API"] == "true":
         debug_log(3, "google API skipped by config.")
@@ -336,6 +385,7 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
     revisions_success = False
     for attempt in range(max_retries):
         try:
+            _rate_limiter.acquire()
             retval = (
                 service.revisions()
                 .list(fileId=myfileid, fields="*")
@@ -374,9 +424,10 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
                     "[%s] Rate limit hit fetching revisions, waiting %d seconds (attempt %d/%d)"
                     % (puzz_label, retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(1, "[%s] Error fetching revisions: %s" % (puzz_label, e))
+                result["error"] = True
                 break  # Non-rate-limit error, don't retry
 
     if not revisions_success and max_retries > 0:
@@ -385,12 +436,14 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
             "[%s] EXHAUSTED all %d retries fetching revisions - giving up"
             % (puzz_label, max_retries),
         )
+        result["error"] = True
 
     # Get sheet count from Sheets API (with retry on rate limit)
     sheetcount_success = False
     for attempt in range(max_retries):
         try:
             sheetsservice = build("sheets", "v4", credentials=creds)
+            _rate_limiter.acquire()
             spreadsheet = (
                 sheetsservice.spreadsheets()
                 .get(spreadsheetId=myfileid, fields="sheets.properties.title")
@@ -408,9 +461,10 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
                     "[%s] Rate limit hit getting sheet count, waiting %d seconds (attempt %d/%d)"
                     % (puzz_label, retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(1, "[%s] Error getting sheet count: %s" % (puzz_label, e))
+                result["error"] = True
                 break  # Non-rate-limit error, don't retry
 
     if not sheetcount_success and max_retries > 0:
@@ -419,8 +473,145 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
             "[%s] EXHAUSTED all %d retries getting sheet count - giving up"
             % (puzz_label, max_retries),
         )
+        result["error"] = True
 
     return result
+
+
+def repair_activity_sheet(sheet_id: str, puzzlename: Optional[str] = None) -> bool:
+    """
+    Repair a corrupt _pb_activity sheet by deleting and recreating it.
+
+    Steps:
+      1. Get spreadsheet metadata to find the _pb_activity tab's sheetId
+      2. Delete the tab via batchUpdate deleteSheet request
+      3. Recreate the tab (hidden + protected + headers)
+
+    Returns True on success, False on failure. Non-fatal.
+    Uses the main sheets credentials (no script.projects scope needed).
+
+    Args:
+        sheet_id: Google Sheets file ID (drive_id)
+        puzzlename: Optional puzzle name for logging
+    """
+    puzz_label = puzzlename if puzzlename else sheet_id
+    debug_log(2, "[%s] repair_activity_sheet start (sheet_id: %s)" % (puzz_label, sheet_id))
+
+    if configstruct.get("SKIP_GOOGLE_API") == "true":
+        debug_log(3, "[%s] Skipping repair (SKIP_GOOGLE_API)" % puzz_label)
+        return False
+
+    max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
+    retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
+
+    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+
+    # ── Step 1: Find the _pb_activity tab's sheetId ───────────────
+    activity_tab_id = None
+    for attempt in range(max_retries):
+        try:
+            sheets_service = build("sheets", "v4", credentials=creds)
+            _rate_limiter.acquire()
+            spreadsheet = sheets_service.spreadsheets().get(
+                spreadsheetId=sheet_id,
+                fields="sheets.properties",
+            ).execute(http=threadsafe_http)
+
+            for sheet in spreadsheet.get("sheets", []):
+                props = sheet.get("properties", {})
+                if props.get("title") == _ACTIVITY_SHEET_NAME:
+                    activity_tab_id = props["sheetId"]
+                    break
+            break  # Success (even if tab not found)
+        except Exception as e:
+            if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                _increment_quota_failure()
+                debug_log(3, "[%s] Rate limit getting metadata, waiting %ds (attempt %d/%d)"
+                          % (puzz_label, retry_delay, attempt + 1, max_retries))
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
+            else:
+                debug_log(1, "[%s] Failed to get spreadsheet metadata: %s" % (puzz_label, e))
+                return False
+    else:
+        debug_log(1, "[%s] EXHAUSTED retries getting spreadsheet metadata" % puzz_label)
+        return False
+
+    # ── Step 2: Delete the existing tab (if found) ────────────────
+    if activity_tab_id is not None:
+        for attempt in range(max_retries):
+            try:
+                _rate_limiter.acquire()
+                sheets_service.spreadsheets().batchUpdate(
+                    spreadsheetId=sheet_id,
+                    body={"requests": [{
+                        "deleteSheet": {"sheetId": activity_tab_id}
+                    }]},
+                ).execute(http=threadsafe_http)
+                debug_log(2, "[%s] Deleted corrupt _pb_activity tab (sheetId=%s)"
+                          % (puzz_label, activity_tab_id))
+                break
+            except Exception as e:
+                if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
+                    _increment_quota_failure()
+                    debug_log(3, "[%s] Rate limit deleting tab, waiting %ds (attempt %d/%d)"
+                              % (puzz_label, retry_delay, attempt + 1, max_retries))
+                    time.sleep(retry_delay * random.uniform(0.5, 1.5))
+                else:
+                    debug_log(1, "[%s] Failed to delete _pb_activity tab: %s" % (puzz_label, e))
+                    return False
+        else:
+            debug_log(1, "[%s] EXHAUSTED retries deleting _pb_activity tab" % puzz_label)
+            return False
+    else:
+        debug_log(3, "[%s] _pb_activity tab not found — will create fresh" % puzz_label)
+
+    # ── Step 3: Recreate the tab (hidden + protected + headers) ───
+    try:
+        _rate_limiter.acquire()
+        add_result = sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{
+                "addSheet": {
+                    "properties": {
+                        "title": _ACTIVITY_SHEET_NAME,
+                        "hidden": True,
+                    }
+                }
+            }]},
+        ).execute(http=threadsafe_http)
+
+        new_sheet_id = add_result["replies"][0]["addSheet"]["properties"]["sheetId"]
+
+        # Write headers
+        _rate_limiter.acquire()
+        sheets_service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=f"{_ACTIVITY_SHEET_NAME}!A1:C1",
+            valueInputOption="RAW",
+            body={"values": [["editor", "timestamp", "num_sheets"]]},
+        ).execute(http=threadsafe_http)
+
+        # Add warning-only protection
+        _rate_limiter.acquire()
+        sheets_service.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{
+                "addProtectedRange": {
+                    "protectedRange": {
+                        "range": {"sheetId": new_sheet_id},
+                        "description": "Managed by Puzzleboss — do not edit manually.",
+                        "warningOnly": True,
+                    }
+                }
+            }]},
+        ).execute(http=threadsafe_http)
+
+        debug_log(2, "[%s] Recreated _pb_activity sheet successfully" % puzz_label)
+        return True
+
+    except Exception as e:
+        debug_log(1, "[%s] Failed to recreate _pb_activity sheet: %s" % (puzz_label, e))
+        return False
 
 
 def create_round_folder(foldername):
@@ -444,6 +635,7 @@ def create_round_folder(foldername):
     folder_file = None
     for attempt in range(max_retries):
         try:
+            _rate_limiter.acquire()
             folder_file = service.files().create(body=file_metadata, fields="id").execute()
             debug_log(4, "folder id returned: %s" % folder_file.get("id"))
             break  # Success
@@ -454,7 +646,7 @@ def create_round_folder(foldername):
                     "Rate limit hit creating round folder, waiting %d seconds (attempt %d/%d)"
                     % (retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(0, "Error creating round folder: %s" % e)
                 sys.exit(255)
@@ -477,6 +669,7 @@ def delete_puzzle_sheet(sheetid):
     body_value = {"trashed": True}
 
     try:
+        _rate_limiter.acquire()
         service.files().update(fileId=sheetid, body=body_value).execute()
 
     except Exception as e:
@@ -511,6 +704,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     sheet_file = None
     for attempt in range(max_retries):
         try:
+            _rate_limiter.acquire()
             if configstruct["SHEETS_TEMPLATE_ID"] == "none":
                 sheet_file = service.files().create(body=file_metadata, fields="id").execute()
                 debug_log(4, "file ID returned from creation: %s" % sheet_file.get("id"))
@@ -533,7 +727,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                     "Rate limit hit creating file, waiting %d seconds (attempt %d/%d)"
                     % (retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(0, "Error creating puzzle sheet file: %s" % e)
                 sys.exit(255)
@@ -756,6 +950,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     response = None
     for attempt in range(max_retries):
         try:
+            _rate_limiter.acquire()
             response = (
                 sheetsservice.spreadsheets()
                 .batchUpdate(spreadsheetId=sheet_file.get("id"), body=body)
@@ -772,7 +967,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                     "Rate limit hit on batchUpdate, waiting %d seconds (attempt %d/%d)"
                     % (retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(0, "Error in batchUpdate for puzzle sheet: %s" % e)
                 sys.exit(255)
@@ -793,6 +988,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
     permresp = None
     for attempt in range(max_retries):
         try:
+            _rate_limiter.acquire()
             permresp = (
                 service.permissions()
                 .create(fileId=sheet_file.get("id"), body=permission)
@@ -807,7 +1003,7 @@ def create_puzzle_sheet(parentfolder, puzzledict):
                     "Rate limit hit setting permissions, waiting %d seconds (attempt %d/%d)"
                     % (retry_delay, attempt + 1, max_retries),
                 )
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(0, "Error setting permissions for puzzle sheet: %s" % e)
                 sys.exit(255)
@@ -996,6 +1192,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
     for attempt in range(max_retries):
         try:
             script_service = build("script", "v1", credentials=api_creds)
+            _rate_limiter.acquire()
             project = script_service.projects().create(body={
                 "title": "Puzzle Tools",
                 "parentId": sheet_id,
@@ -1008,7 +1205,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
                 _increment_quota_failure()
                 debug_log(3, "[%s] Rate limit creating script, waiting %ds (attempt %d/%d)"
                           % (puzz_label, retry_delay, attempt + 1, max_retries))
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(1, "[%s] Failed to create script project: %s" % (puzz_label, e))
                 return False
@@ -1019,6 +1216,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
     # ── Step 2: Push Apps Script code ───────────────────────────────
     for attempt in range(max_retries):
         try:
+            _rate_limiter.acquire()
             script_service.projects().updateContent(
                 scriptId=script_id,
                 body={
@@ -1038,7 +1236,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
                 _increment_quota_failure()
                 debug_log(3, "[%s] Rate limit pushing code, waiting %ds (attempt %d/%d)"
                           % (puzz_label, retry_delay, attempt + 1, max_retries))
-                time.sleep(retry_delay)
+                time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
                 debug_log(1, "[%s] Failed to push script code: %s" % (puzz_label, e))
                 return False
@@ -1051,6 +1249,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
         sheets_service = build("sheets", "v4", credentials=api_creds)
 
         # Add the hidden sheet
+        _rate_limiter.acquire()
         add_result = sheets_service.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{
@@ -1066,6 +1265,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
         activity_sheet_id = add_result["replies"][0]["addSheet"]["properties"]["sheetId"]
 
         # Write headers
+        _rate_limiter.acquire()
         sheets_service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=f"{_ACTIVITY_SHEET_NAME}!A1:C1",
@@ -1074,6 +1274,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
         ).execute()
 
         # Add warning-only protection
+        _rate_limiter.acquire()
         sheets_service.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{
@@ -1163,6 +1364,7 @@ def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
     datarange = "A7"
     datainputoption = "USER_ENTERED"
     data = {"values": [[f"last bigjimmybot probe: {mytimestamp}"]]}
+    _rate_limiter.acquire()
     response = (
         sheetsservice.spreadsheets()
         .values()
@@ -1200,6 +1402,7 @@ def add_user_to_google(username, firstname, lastname, password, recovery_email=N
     safe_body = {k: ("REDACTED" if k == "password" else v) for k, v in userbody.items()}
     debug_log(5, "Attempting to add user with post body: %s" % json.dumps(safe_body))
     try:
+        _rate_limiter.acquire()
         addresponse = userservice.users().insert(body=userbody).execute()
     except googleapiclient.errors.HttpError as e:
         msg = json.loads(e.content)["error"]["message"]
@@ -1227,6 +1430,7 @@ def delete_google_user(username):
     email = f"{username}@{configstruct['DOMAINNAME']}"
 
     try:
+        _rate_limiter.acquire()
         userservice.users().delete(userKey=email).execute()
     except googleapiclient.errors.HttpError as e:
         if e.resp.status == 404:
@@ -1253,6 +1457,7 @@ def change_google_user_password(username, password):
         5, "Attempting to change user pass with post body: %s" % json.dumps(userbody)
     )
     try:
+        _rate_limiter.acquire()
         changeresponse = (
             userservice.users().update(userKey=email, body=userbody).execute()
         )
