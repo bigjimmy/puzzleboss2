@@ -1315,8 +1315,9 @@ def create_puzzle():
     drive_uri = f"https://docs.google.com/spreadsheets/d/{drive_id}/edit#gid=1"
 
     # Activate the Puzzle Tools add-on via Apps Script API (non-fatal)
+    addon_activated = False
     try:
-        activate_puzzle_sheet_via_api(drive_id, name)
+        addon_activated = activate_puzzle_sheet_via_api(drive_id, name)
     except Exception as ae:
         debug_log(2, f"Apps Script activation failed for {name}, bigjimmy will fall back: {ae}")
 
@@ -1330,8 +1331,8 @@ def create_puzzle():
         cursor.execute(
             """
             INSERT INTO puzzle
-            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta, sheetenabled)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 name,
@@ -1343,6 +1344,7 @@ def create_puzzle():
                 drive_id,
                 drive_uri,
                 ismeta,
+                1 if addon_activated else 0,
             ),
         )
         conn.commit()
@@ -1659,13 +1661,14 @@ def finish_puzzle_creation(code):
             chat_link = req.get("chat_channel_link", "")
             drive_id = req.get("drive_id", "")
             drive_uri = req.get("drive_uri", "")
+            addon_activated = req.get("addon_activated", False)
 
             cursor = conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO puzzle
-                (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta, sheetenabled)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     name,
@@ -1677,6 +1680,7 @@ def finish_puzzle_creation(code):
                     drive_id,
                     drive_uri,
                     ismeta,
+                    1 if addon_activated else 0,
                 ),
             )
             conn.commit()

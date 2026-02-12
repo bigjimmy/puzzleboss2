@@ -503,3 +503,78 @@ class TestFetchSheetInfoErrorHandling:
         # Verify normal result returned
         assert result["error"] is False
         assert len(result["editors"]) == 1
+
+
+class TestFetchSheetInfoProbe:
+    """Test _fetch_sheet_info probe behavior when sheetenabled=0."""
+
+    @patch('bigjimmybot.update_puzzle_field')
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_probe_promotes_when_hidden_sheet_has_data(self, mock_get_activity, mock_conn, mock_update):
+        """When sheetenabled=0 but hidden sheet returns data, promote to sheetenabled=1."""
+        mock_get_activity.return_value = {
+            "editors": [{"solvername": "alice", "timestamp": 1234567890}],
+            "sheetcount": 5,
+            "error": False,
+        }
+
+        puzzle = {
+            "id": 123, "name": "TestPuzzle",
+            "drive_id": "test_drive_id", "sheetenabled": 0,
+        }
+
+        result, sheetenabled = _fetch_sheet_info(puzzle, "test-thread")
+
+        # Should return hidden sheet data and flag as enabled
+        assert sheetenabled == 1
+        assert len(result["editors"]) == 1
+        # Should update DB to set sheetenabled=1
+        mock_update.assert_called_once_with(123, "sheetenabled", 1, mock_conn.return_value)
+
+    @patch('bigjimmybot.get_puzzle_sheet_info_legacy')
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_probe_falls_back_to_legacy_when_no_hidden_sheet(self, mock_get_activity, mock_get_legacy):
+        """When sheetenabled=0 and hidden sheet has no data, fall back to legacy."""
+        mock_get_activity.return_value = {
+            "editors": [], "sheetcount": None, "error": False,
+        }
+        mock_get_legacy.return_value = {
+            "revisions": [{"modifiedTime": "2026-02-12T01:00:00.000Z"}],
+            "sheetcount": 3,
+            "error": False,
+        }
+
+        puzzle = {
+            "id": 123, "name": "TestPuzzle",
+            "drive_id": "test_drive_id", "sheetenabled": 0,
+        }
+
+        result, sheetenabled = _fetch_sheet_info(puzzle, "test-thread")
+
+        # Should fall back to legacy
+        assert sheetenabled == 0
+        assert "revisions" in result
+        mock_get_legacy.assert_called_once()
+
+    @patch('bigjimmybot.get_puzzle_sheet_info_legacy')
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_probe_falls_back_on_error(self, mock_get_activity, mock_get_legacy):
+        """When sheetenabled=0 and hidden sheet returns error, fall back to legacy."""
+        mock_get_activity.return_value = {
+            "editors": [], "sheetcount": None, "error": True,
+        }
+        mock_get_legacy.return_value = {
+            "revisions": [], "sheetcount": 2, "error": False,
+        }
+
+        puzzle = {
+            "id": 123, "name": "TestPuzzle",
+            "drive_id": "test_drive_id", "sheetenabled": 0,
+        }
+
+        result, sheetenabled = _fetch_sheet_info(puzzle, "test-thread")
+
+        # Error on hidden sheet probe should fall back to legacy
+        assert sheetenabled == 0
+        mock_get_legacy.assert_called_once()

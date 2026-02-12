@@ -27,7 +27,6 @@ from pblib import (
 from pbgooglelib import (
     get_puzzle_sheet_info_activity,
     get_puzzle_sheet_info_legacy,
-    activate_puzzle_sheet_via_api,
     repair_activity_sheet,
     get_quota_failure_count,
     initdrive,
@@ -275,8 +274,13 @@ def _process_activity_records(
             )
             continue
 
-        # Always record activity, even if solver is already on puzzle
-        _record_solver_activity(puzzle["id"], solver_id, threadname)
+        # Check if edit is newer than solver's last activity (BEFORE recording
+        # new activity, so the comparison uses the solver's pre-existing lastact)
+        if not solver_info["lastact"]:
+            last_solver_act_ts = 0
+        else:
+            # MySQL returns datetime objects directly; convert to Unix timestamp
+            last_solver_act_ts = solver_info["lastact"]["time"].timestamp()
 
         # Only auto-assign if solver is not already on this puzzle
         if solver_info["puzz"] == puzzle["name"]:
@@ -284,38 +288,34 @@ def _process_activity_records(
                 4,
                 f"[Thread: {threadname}] Solver {solver_info['name']} already assigned to {puzzle['name']}, skipping auto-assign"
             )
-            continue
-
-        # Check if edit is newer than solver's last activity
-        if not solver_info["lastact"]:
-            last_solver_act_ts = 0
-        else:
-            # MySQL returns datetime objects directly; convert to Unix timestamp
-            last_solver_act_ts = solver_info["lastact"]["time"].timestamp()
-
-        debug_log(
-            4,
-            f"[Thread: {threadname}] Puzzle {puzzle['name']}: Edit at {datetime.datetime.fromtimestamp(edit_ts)}, "
-            f"solver {solver_info['name']} last activity at {datetime.datetime.fromtimestamp(last_solver_act_ts) if last_solver_act_ts else 'never'}"
-        )
-
-        # Auto-assign if enabled and edit is newer than solver's last activity
-        if configstruct["BIGJIMMY_AUTOASSIGN"] != "true":
-            debug_log(
-                4,
-                f"[Thread: {threadname}] Puzzle {puzzle['name']}: Auto-assign disabled (BIGJIMMY_AUTOASSIGN={configstruct.get('BIGJIMMY_AUTOASSIGN', 'not set')})"
-            )
-        elif edit_ts <= last_solver_act_ts:
-            debug_log(
-                4,
-                f"[Thread: {threadname}] Puzzle {puzzle['name']}: Edit timestamp {edit_ts} <= solver's last activity {last_solver_act_ts}, not auto-assigning"
-            )
         else:
             debug_log(
                 4,
-                f"[Thread: {threadname}] Auto-assigning solver {solver_id} ({solver_info['name']}) to puzzle {puzzle['id']} ({puzzle['name']})"
+                f"[Thread: {threadname}] Puzzle {puzzle['name']}: Edit at {datetime.datetime.fromtimestamp(edit_ts)}, "
+                f"solver {solver_info['name']} last activity at {datetime.datetime.fromtimestamp(last_solver_act_ts) if last_solver_act_ts else 'never'}"
             )
-            _assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
+
+            # Auto-assign if enabled and edit is newer than solver's last activity
+            if configstruct["BIGJIMMY_AUTOASSIGN"] != "true":
+                debug_log(
+                    4,
+                    f"[Thread: {threadname}] Puzzle {puzzle['name']}: Auto-assign disabled (BIGJIMMY_AUTOASSIGN={configstruct.get('BIGJIMMY_AUTOASSIGN', 'not set')})"
+                )
+            elif edit_ts <= last_solver_act_ts:
+                debug_log(
+                    4,
+                    f"[Thread: {threadname}] Puzzle {puzzle['name']}: Edit timestamp {edit_ts} <= solver's last activity {last_solver_act_ts}, not auto-assigning"
+                )
+            else:
+                debug_log(
+                    4,
+                    f"[Thread: {threadname}] Auto-assigning solver {solver_id} ({solver_info['name']}) to puzzle {puzzle['id']} ({puzzle['name']})"
+                )
+                _assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
+
+        # Always record activity (after assignment decision, so lastact comparison
+        # above uses the solver's pre-existing activity, not the one we're about to create)
+        _record_solver_activity(puzzle["id"], solver_id, threadname)
 
 
 
@@ -411,46 +411,37 @@ def _fetch_sheet_info(
                 del _sheet_failure_counts[drive_id]
             return sheet_info, 1
 
-    # No add-on deployed yet - try to activate it
+    # sheetenabled=0: Add-on may already be deployed (pbrest sets it during creation)
+    # but the DB flag wasn't set. Try reading _pb_activity first — if it works,
+    # promote to sheetenabled=1. Otherwise fall back to legacy Revisions API.
     debug_log(
-        3,
-        f"[Thread: {threadname}] Attempting to activate add-on on {puzzle['name']} (sheetenabled=0)",
+        4,
+        f"[Thread: {threadname}] Probing hidden sheet for {puzzle['name']} (sheetenabled=0)",
     )
 
-    activation_success = False
-    try:
-        activation_success = activate_puzzle_sheet_via_api(
-            puzzle["drive_id"], puzzle["name"]
-        )
-    except Exception as e:
-        debug_log(
-            2,
-            f"[Thread: {threadname}] Add-on activation failed for {puzzle['name']}: {e}",
-        )
+    sheet_info = get_puzzle_sheet_info_activity(puzzle["drive_id"], puzzle["name"])
 
-    if activation_success:
-        # Activation succeeded! Set sheetenabled=1 and use hidden sheet approach
+    if not sheet_info.get("error") and (sheet_info.get("editors") or sheet_info.get("sheetcount") is not None):
+        # Hidden sheet exists and returned data — promote to sheetenabled=1
         debug_log(
             3,
-            f"[Thread: {threadname}] Add-on activated successfully on {puzzle['name']}, enabling sheetenabled",
+            f"[Thread: {threadname}] Hidden sheet found for {puzzle['name']}, promoting sheetenabled=1",
         )
         try:
             conn = _get_db_connection()
             update_puzzle_field(puzzle["id"], "sheetenabled", 1, conn)
-            sheet_info = get_puzzle_sheet_info_activity(
-                puzzle["drive_id"], puzzle["name"]
-            )
-            return sheet_info, 1
         except Exception as e:
             debug_log(
                 2,
-                f"[Thread: {threadname}] Failed to update sheetenabled in DB: {e}, falling back to legacy",
+                f"[Thread: {threadname}] Failed to update sheetenabled in DB: {e}",
             )
+        return sheet_info, 1
 
-    # Activation failed or DB update failed, fall back to legacy Revisions API
+    # Hidden sheet not available (no data and no error = sheet doesn't exist yet,
+    # or error reading it). Fall back to legacy Revisions API.
     debug_log(
         4,
-        f"[Thread: {threadname}] Using legacy Revisions API for {puzzle['name']} (activation not available)",
+        f"[Thread: {threadname}] No hidden sheet data for {puzzle['name']}, using legacy Revisions API",
     )
     sheet_info = get_puzzle_sheet_info_legacy(puzzle["drive_id"], puzzle["name"])
     return sheet_info, 0

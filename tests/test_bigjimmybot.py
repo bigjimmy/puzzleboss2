@@ -231,6 +231,44 @@ class TestActivityProcessing:
     @patch('bigjimmybot._get_db_connection')
     @patch('bigjimmybot.get_solver_by_id_from_db')
     @patch('bigjimmybot._get_solver_id')
+    def test_process_activity_records_after_assign(
+        self, mock_get_solver, mock_get_solver_by_id, mock_conn, mock_record, mock_assign
+    ):
+        """Test that activity is recorded AFTER assignment decision (not before).
+
+        This is critical: if _record_solver_activity() runs before
+        _assign_solver_to_puzzle(), the freshly-inserted activity row
+        pollutes the solver's lastact, making edit_ts <= last_solver_act_ts
+        always true and preventing assignment.
+        """
+        # Track call order
+        call_order = []
+        mock_assign.side_effect = lambda *a: call_order.append('assign')
+        mock_record.side_effect = lambda *a: call_order.append('record')
+
+        mock_get_solver.return_value = 456
+        solver_info = _make_solver_with_lastact(
+            'solver_benoc.json',
+            lastact_time=datetime(2026, 2, 11, 23, 19, 43),
+        )
+        mock_get_solver_by_id.return_value = solver_info
+
+        puzzle = load_fixture('puzzle_data.json')
+        records = [
+            {"solvername": "benoc", "timestamp": 1900000000}
+        ]
+
+        _process_activity_records(records, puzzle, 0, "test-thread", True)
+
+        # Verify assignment happens BEFORE activity recording
+        assert call_order == ['assign', 'record']
+
+    @patch('bigjimmybot.configstruct', {'BIGJIMMY_AUTOASSIGN': 'true'})
+    @patch('bigjimmybot._assign_solver_to_puzzle')
+    @patch('bigjimmybot._record_solver_activity')
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.get_solver_by_id_from_db')
+    @patch('bigjimmybot._get_solver_id')
     def test_process_activity_skips_already_assigned(
         self, mock_get_solver, mock_get_solver_by_id, mock_conn, mock_record, mock_assign
     ):
