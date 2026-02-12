@@ -8,10 +8,29 @@ import os
 from flask import Flask, request
 from flask_restful import Api
 from flask_mysqldb import MySQL
-from pblib import *
+from pblib import (
+    debug_log, config, configstruct, maybe_refresh_config,
+    configure_flask_mysql,
+    get_solver_by_name_from_db, get_solver_by_id_from_db,
+    get_last_activity_for_puzzle, get_last_sheet_activity_for_puzzle,
+    get_last_activity_for_solver, log_activity,
+    assign_solver_to_puzzle, unassign_solver_from_puzzle,
+    clear_puzzle_solvers, check_round_completion,
+    update_puzzle_field, update_botstat, sanitize_puzzle_name,
+    email_user_verification, solver_exists,
+)
 import pbgooglelib
-from pbgooglelib import *
-from pbdiscordlib import *
+from pbgooglelib import (
+    initdrive, create_puzzle_sheet, create_round_folder,
+    delete_puzzle_sheet, activate_puzzle_sheet_via_api,
+    add_user_to_google, delete_google_user,
+)
+from pbdiscordlib import (
+    chat_create_channel_for_puzzle, chat_announce_round,
+    chat_announce_new, chat_announce_solved,
+    chat_announce_attention, chat_say_something,
+    chat_announce_move,
+)
 from secrets import token_hex
 from flasgger.utils import swag_from
 from werkzeug.exceptions import HTTPException
@@ -69,19 +88,7 @@ import pbcachelib
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False  # Allow trailing slashes on all routes
-app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
-app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
-app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
-app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
-app.config["MYSQL_CURSORCLASS"] = "DictCursor"
-app.config["MYSQL_CHARSET"] = "utf8mb4"
-
-# SSL configuration (optional)
-ssl_config = get_mysql_ssl_config(config)
-if ssl_config:
-    app.config["MYSQL_CUSTOM_OPTIONS"] = {"ssl": ssl_config}
-    debug_log(3, f"MySQL SSL enabled with CA: {ssl_config['ca']}")
-
+configure_flask_mysql(app)
 mysql = MySQL(app)
 api = Api(app)
 swagger = flasgger.Swagger(app)
@@ -1358,7 +1365,6 @@ def create_puzzle():
         # If this is a meta puzzle, check round completion status
         # This handles unmarking rounds that were previously solved when a new unsolved meta is added
         if ismeta:
-            from pblib import check_round_completion
             check_round_completion(round_id, conn)
     except Exception:
         raise Exception("Exception checking database for puzzle after insert")
@@ -1685,7 +1691,6 @@ def finish_puzzle_creation(code):
             # If this is a meta puzzle, check round completion status
             # This handles unmarking rounds that were previously solved when a new unsolved meta is added
             if ismeta:
-                from pblib import check_round_completion
                 check_round_completion(round_id, conn)
 
             debug_log(3, f"Step 4: Inserted puzzle {name} into database with ID {myid}")

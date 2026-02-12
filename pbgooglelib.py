@@ -12,7 +12,7 @@ import httplib2
 import pblib
 import datetime
 import json
-from pblib import *
+from pblib import debug_log, configstruct
 
 
 service = None

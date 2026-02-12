@@ -1,4 +1,4 @@
-from pblib import *
+from pblib import debug_log, configstruct
 import socket
 import json
 

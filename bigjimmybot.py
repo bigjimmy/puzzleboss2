@@ -15,16 +15,14 @@ import threading
 import queue
 from typing import Optional, Dict, Any, List
 
-import MySQLdb
-import MySQLdb.cursors
-
 # Explicit imports instead of wildcard
 from pblib import (
     debug_log, config, configstruct, refresh_config,
+    create_db_connection,
     get_solver_by_name_from_db, get_solver_by_id_from_db,
     get_last_sheet_activity_for_puzzle, get_last_activity_for_puzzle,
     log_activity, assign_solver_to_puzzle, update_puzzle_field,
-    update_botstat, get_all_rounds_with_puzzles, get_mysql_ssl_config,
+    update_botstat, get_all_rounds_with_puzzles,
 )
 from pbgooglelib import (
     get_puzzle_sheet_info_activity,
@@ -54,13 +52,13 @@ def _get_db_connection():
     """Get or create a thread-local database connection.
 
     Returns a MySQLdb connection with DictCursor. Each thread gets its own
-    connection, cached in thread-local storage. Reconnects if the connection
-    has been lost.
+    connection, cached in thread-local storage. Uses pblib.create_db_connection()
+    for consistent connection parameters across the codebase.
     """
     conn = getattr(_thread_local, 'db_conn', None)
     if conn is not None:
         try:
-            conn.ping(True)  # Reconnect if connection lost
+            conn.ping()  # Check if connection is alive (no args — avoids deprecated MYSQL_OPT_RECONNECT)
             return conn
         except Exception:
             try:
@@ -69,21 +67,7 @@ def _get_db_connection():
                 pass
             _thread_local.db_conn = None
 
-    # Create new connection
-    connect_params = {
-        "host": config["MYSQL"]["HOST"],
-        "user": config["MYSQL"]["USERNAME"],
-        "passwd": config["MYSQL"]["PASSWORD"],
-        "db": config["MYSQL"]["DATABASE"],
-        "cursorclass": MySQLdb.cursors.DictCursor,
-        "charset": "utf8mb4",
-    }
-
-    ssl_config = get_mysql_ssl_config(config)
-    if ssl_config:
-        connect_params["ssl"] = ssl_config
-
-    conn = MySQLdb.connect(**connect_params)
+    conn = create_db_connection()
     _thread_local.db_conn = conn
     return conn
 

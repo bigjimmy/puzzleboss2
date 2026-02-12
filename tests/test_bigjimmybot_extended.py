@@ -29,7 +29,6 @@ sys.modules['pbgooglelib'] = MagicMock()
 # Mock pblib module with minimal config
 pblib_mock = MagicMock()
 pblib_mock.config = {
-    'API': {'APIURI': 'http://localhost:5000'},
     'MYSQL': {
         'HOST': 'localhost',
         'USERNAME': 'test',
@@ -43,7 +42,7 @@ pblib_mock.configstruct = {
     'BIGJIMMY_ABANDONED_STATUS': 'Abandoned'
 }
 pblib_mock.debug_log = lambda level, msg: None  # Suppress debug logs in tests
-pblib_mock.get_mysql_ssl_config.return_value = None
+pblib_mock.create_db_connection.return_value = MagicMock()
 sys.modules['pblib'] = pblib_mock
 
 # Now we can import bigjimmybot
@@ -371,8 +370,8 @@ class TestEdgeCases:
 class TestGetDbConnection:
     """Test _get_db_connection thread-local connection management."""
 
-    @patch('bigjimmybot.MySQLdb')
-    def test_creates_new_connection(self, mock_mysqldb):
+    @patch('bigjimmybot.create_db_connection')
+    def test_creates_new_connection(self, mock_create):
         """Test that a new connection is created when none exists."""
         # Clear any existing thread-local state
         import bigjimmybot
@@ -380,15 +379,15 @@ class TestGetDbConnection:
             del bigjimmybot._thread_local.db_conn
 
         mock_conn = MagicMock()
-        mock_mysqldb.connect.return_value = mock_conn
+        mock_create.return_value = mock_conn
 
         result = _get_db_connection()
 
         assert result == mock_conn
-        mock_mysqldb.connect.assert_called_once()
+        mock_create.assert_called_once()
 
-    @patch('bigjimmybot.MySQLdb')
-    def test_reuses_existing_connection(self, mock_mysqldb):
+    @patch('bigjimmybot.create_db_connection')
+    def test_reuses_existing_connection(self, mock_create):
         """Test that an existing connection is reused via ping."""
         import bigjimmybot
 
@@ -400,9 +399,9 @@ class TestGetDbConnection:
         result = _get_db_connection()
 
         assert result == mock_conn
-        mock_conn.ping.assert_called_once_with(True)
+        mock_conn.ping.assert_called_once_with()  # No args — avoids deprecated MYSQL_OPT_RECONNECT
         # Should NOT create a new connection
-        mock_mysqldb.connect.assert_not_called()
+        mock_create.assert_not_called()
 
         # Cleanup
         del bigjimmybot._thread_local.db_conn

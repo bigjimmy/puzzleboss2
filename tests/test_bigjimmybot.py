@@ -28,7 +28,6 @@ sys.modules['pbgooglelib'] = MagicMock()
 # Mock pblib module with minimal config
 pblib_mock = MagicMock()
 pblib_mock.config = {
-    'API': {'APIURI': 'http://localhost:5000'},
     'MYSQL': {
         'HOST': 'localhost',
         'USERNAME': 'test',
@@ -38,7 +37,7 @@ pblib_mock.config = {
 }
 pblib_mock.configstruct = {'BIGJIMMY_AUTOASSIGN': 'true'}
 pblib_mock.debug_log = lambda level, msg: None  # Suppress debug logs in tests
-pblib_mock.get_mysql_ssl_config.return_value = None
+pblib_mock.create_db_connection.return_value = MagicMock()
 sys.modules['pblib'] = pblib_mock
 
 # Now we can import bigjimmybot

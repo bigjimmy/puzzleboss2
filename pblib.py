@@ -4,6 +4,7 @@ import inspect
 import datetime
 import smtplib
 import MySQLdb
+import MySQLdb.cursors
 import json
 from email.message import EmailMessage
 
@@ -37,6 +38,44 @@ def get_mysql_ssl_config(config):
         ssl_config["key"] = config["MYSQL"]["SSL"]["KEY"]
 
     return ssl_config
+
+
+def create_db_connection():
+    """Create a new MySQLdb connection using the global config.
+
+    Returns a connection with DictCursor and utf8mb4 charset.
+    This centralizes connection parameters so all consumers (bigjimmybot,
+    pbrest, scripts) use identical settings.
+    """
+    connect_params = {
+        "host": config["MYSQL"]["HOST"],
+        "user": config["MYSQL"]["USERNAME"],
+        "passwd": config["MYSQL"]["PASSWORD"],
+        "db": config["MYSQL"]["DATABASE"],
+        "cursorclass": MySQLdb.cursors.DictCursor,
+        "charset": "utf8mb4",
+    }
+    ssl_config = get_mysql_ssl_config(config)
+    if ssl_config:
+        connect_params["ssl"] = ssl_config
+    return MySQLdb.connect(**connect_params)
+
+
+def configure_flask_mysql(app):
+    """Configure a Flask app's MYSQL_* settings from the global config.
+
+    Call this before creating a Flask-MySQLdb MySQL(app) instance.
+    Centralizes config so pbrest.py doesn't duplicate connection parameters.
+    """
+    app.config["MYSQL_HOST"] = config["MYSQL"]["HOST"]
+    app.config["MYSQL_USER"] = config["MYSQL"]["USERNAME"]
+    app.config["MYSQL_PASSWORD"] = config["MYSQL"]["PASSWORD"]
+    app.config["MYSQL_DB"] = config["MYSQL"]["DATABASE"]
+    app.config["MYSQL_CURSORCLASS"] = "DictCursor"
+    app.config["MYSQL_CHARSET"] = "utf8mb4"
+    ssl_config = get_mysql_ssl_config(config)
+    if ssl_config:
+        app.config["MYSQL_CUSTOM_OPTIONS"] = {"ssl": ssl_config}
 
 
 def maybe_refresh_config():
@@ -95,15 +134,12 @@ def refresh_config():
 
     # Reload database config with change detection
     try:
-        # Build connection parameters
         connect_params = {
             "host": config["MYSQL"]["HOST"],
             "user": config["MYSQL"]["USERNAME"],
             "passwd": config["MYSQL"]["PASSWORD"],
             "db": config["MYSQL"]["DATABASE"],
         }
-
-        # Add SSL configuration if present
         ssl_config = get_mysql_ssl_config(config)
         if ssl_config:
             connect_params["ssl"] = ssl_config
