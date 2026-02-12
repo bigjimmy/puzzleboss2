@@ -269,11 +269,6 @@ def _process_activity_records(
         threadname: Name of worker thread (for logging)
         use_hidden_sheet: True for hidden sheet format, False for revisions format
     """
-    debug_log(
-        5,
-        f"[Thread: {threadname}] _process_activity_records called for {puzzle['name']} with {len(records)} records"
-    )
-
     for record in records:
         # Normalize differences between hidden sheet and revisions formats
         if use_hidden_sheet:
@@ -285,16 +280,8 @@ def _process_activity_records(
             edit_ts = _parse_revision_timestamp(record["modifiedTime"])
             match_type = "email"
 
-        debug_log(
-            5,
-            f"[Thread: {threadname}] Processing record for {identifier} at {edit_ts} on puzzle {puzzle['name']}"
-        )
-
         # Skip bot's own activity
         if use_hidden_sheet and identifier.lower() == "bigjimmy":
-            debug_log(
-                5, f"[Thread: {threadname}] Skipping bot's own activity on {puzzle['name']}"
-            )
             continue
 
         # Check if this edit is newer than last recorded activity
@@ -303,7 +290,7 @@ def _process_activity_records(
 
         # New activity detected!
         debug_log(
-            3,
+            4,
             f"[Thread: {threadname}] New edit on puzzle {puzzle['name']} by {identifier} "
             f"at {datetime.datetime.fromtimestamp(edit_ts)} "
             f"(last sheet activity was {datetime.datetime.fromtimestamp(last_sheet_act_ts) if last_sheet_act_ts else 'never'})",
@@ -367,7 +354,7 @@ def _process_activity_records(
             )
         else:
             debug_log(
-                3,
+                4,
                 f"[Thread: {threadname}] Auto-assigning solver {solver_id} ({solver_info['name']}) to puzzle {puzzle['id']} ({puzzle['name']})"
             )
             _assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
@@ -497,10 +484,6 @@ def _fetch_last_sheet_activity(
     Returns:
         lastsheetact dict from API, or None if fetch failed
     """
-    debug_log(
-        5,
-        f"[Thread: {threadname}] Fetching lastsheetact for puzzle {puzzle['id']} ({puzzle['name']})"
-    )
     url = f"{config['API']['APIURI']}/puzzles/{puzzle['id']}/lastsheetact"
     response = _api_request_with_retry("get", url)
     if not response:
@@ -549,10 +532,6 @@ def _process_sheet_activity(
 
     # Note: last_sheet_act can be None for puzzles with no previous sheet activity
     # This is normal and should be treated as timestamp=0, not as an error
-    debug_log(
-        5,
-        f"[Thread: {threadname}] lastsheetact for puzzle {puzzle['id']}: {str(last_sheet_act)}",
-    )
 
     # Convert to Unix timestamp for comparison
     last_sheet_act_ts = 0
