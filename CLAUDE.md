@@ -379,3 +379,12 @@ All database IDs (puzzle.id, solver.id, round.id, activity.id) are `INT(11)` in 
 - Apache should restrict access to parent directory (only www/ should be web-accessible)
 - Database user should only have access to puzzleboss database
 - REMOTE_USER authentication is required for production (disable test mode)
+
+## TODO / Future Work
+
+### Propagate `source="discord"` from puzzcord REST calls
+**Context:** The `activity` table's `source` ENUM supports `'google','puzzleboss','bigjimmybot','discord'`, but puzzcord (`../puzzcord/db.py`) never passes `source="discord"` in its POST bodies when calling puzzleboss API endpoints. All Discord-initiated actions (solver assignments, status changes, solves, comments, location updates) are currently logged as `source="puzzleboss"`.
+
+**Puzzleboss side is already ready:** `update_puzzle_part_in_db()` and the solver update endpoints already accept and propagate `source` from the request body. The `pblib.update_puzzle_field()` function passes `source` through to `log_activity()`.
+
+**What needs to change:** In `puzzcord/db.py`, the `_post_parts()` method should include `"source": "discord"` in its POST request bodies so that activity originating from Discord commands is correctly attributed. This may require updating the puzzcord REST wrapper to optionally accept and forward a `source` field alongside the existing field values.
