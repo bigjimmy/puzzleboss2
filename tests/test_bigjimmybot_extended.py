@@ -81,7 +81,18 @@ class TestRecordSolverActivity:
         # Verify
         assert result is True
         mock_log_activity.assert_called_once_with(
-            123, "revise", 456, "bigjimmybot", mock_conn.return_value
+            123, "revise", 456, "bigjimmybot", mock_conn.return_value, timestamp=None
+        )
+
+    @patch('bigjimmybot._get_db_connection')
+    @patch('bigjimmybot.log_activity')
+    def test_record_activity_with_edit_ts(self, mock_log_activity, mock_conn):
+        """Test recording activity with explicit edit timestamp."""
+        result = _record_solver_activity(123, 456, "test-thread", edit_ts=1770873089)
+
+        assert result is True
+        mock_log_activity.assert_called_once_with(
+            123, "revise", 456, "bigjimmybot", mock_conn.return_value, timestamp=1770873089
         )
 
     @patch('bigjimmybot._get_db_connection')

@@ -423,7 +423,7 @@ def clear_puzzle_solvers(puzzle_id, conn):
     conn.commit()
 
 
-def log_activity(puzzle_id, activity_type, solver_id, source, conn):
+def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=None):
     """
     Log an activity entry to the activity table.
 
@@ -433,15 +433,26 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn):
         solver_id: Solver database ID who performed the activity
         source: Source of activity ('puzzleboss', 'bigjimmybot', 'google', 'discord')
         conn: Database connection
+        timestamp: Optional Unix timestamp to use instead of CURRENT_TIMESTAMP.
+            When provided, the activity's `time` column is set to this value
+            (via FROM_UNIXTIME). This is important for sheet-edit activity so
+            the recorded time matches the actual Google Sheet edit time, not
+            the server time when bigjimmybot processes it.
 
     Raises:
         Exception: If database insert fails
     """
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, %s, %s)",
-        (puzzle_id, solver_id, source, activity_type),
-    )
+    if timestamp is not None:
+        cursor.execute(
+            "INSERT INTO activity (puzzle_id, solver_id, source, type, time) VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))",
+            (puzzle_id, solver_id, source, activity_type, timestamp),
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, %s, %s)",
+            (puzzle_id, solver_id, source, activity_type),
+        )
     conn.commit()
 
 

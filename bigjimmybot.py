@@ -137,7 +137,7 @@ def _parse_revision_timestamp(revision_time: str) -> float:
 
 
 def _record_solver_activity(
-    puzzle_id: int, solver_id: int, threadname: str
+    puzzle_id: int, solver_id: int, threadname: str, edit_ts: float = None
 ) -> bool:
     """
     Record solver activity on a puzzle via direct database insert.
@@ -146,16 +146,21 @@ def _record_solver_activity(
         puzzle_id: Puzzle database ID
         solver_id: Solver database ID
         threadname: Name of worker thread (for logging)
+        edit_ts: Optional Unix timestamp of the actual edit. When provided,
+            the activity row's time column is set to this value (not NOW()).
+            This ensures the "last sheet activity" timestamp matches the
+            real edit time, so duplicate detection works correctly.
 
     Returns:
         True on success, False on failure
     """
     try:
         conn = _get_db_connection()
-        log_activity(puzzle_id, "revise", solver_id, "bigjimmybot", conn)
+        log_activity(puzzle_id, "revise", solver_id, "bigjimmybot", conn, timestamp=edit_ts)
         debug_log(
             4,
-            f"[Thread: {threadname}] Recorded activity for puzzle {puzzle_id}, solver {solver_id}",
+            f"[Thread: {threadname}] Recorded activity for puzzle {puzzle_id}, solver {solver_id}"
+            + (f" (edit_ts={edit_ts})" if edit_ts else ""),
         )
         return True
     except Exception as e:
@@ -314,8 +319,10 @@ def _process_activity_records(
                 _assign_solver_to_puzzle(puzzle["id"], solver_id, threadname)
 
         # Always record activity (after assignment decision, so lastact comparison
-        # above uses the solver's pre-existing activity, not the one we're about to create)
-        _record_solver_activity(puzzle["id"], solver_id, threadname)
+        # above uses the solver's pre-existing activity, not the one we're about to create).
+        # Pass edit_ts so the activity row's time matches the actual sheet edit,
+        # not the server's current time — this is critical for duplicate detection.
+        _record_solver_activity(puzzle["id"], solver_id, threadname, edit_ts=edit_ts)
 
 
 

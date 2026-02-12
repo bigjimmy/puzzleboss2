@@ -219,8 +219,8 @@ class TestActivityProcessing:
         # Test
         _process_activity_records(records, puzzle, last_sheet_act_ts, "test-thread", True)
 
-        # Verify activity was recorded
-        mock_record.assert_called_once_with(123, 456, "test-thread")
+        # Verify activity was recorded with the actual edit timestamp
+        mock_record.assert_called_once_with(123, 456, "test-thread", edit_ts=1900000000)
 
         # Verify solver was assigned
         mock_assign.assert_called_once_with(123, 456, "test-thread")
@@ -243,8 +243,8 @@ class TestActivityProcessing:
         """
         # Track call order
         call_order = []
-        mock_assign.side_effect = lambda *a: call_order.append('assign')
-        mock_record.side_effect = lambda *a: call_order.append('record')
+        mock_assign.side_effect = lambda *a, **kw: call_order.append('assign')
+        mock_record.side_effect = lambda *a, **kw: call_order.append('record')
 
         mock_get_solver.return_value = 456
         solver_info = _make_solver_with_lastact(
