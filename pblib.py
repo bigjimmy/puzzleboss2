@@ -308,21 +308,22 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
     debug_log(4, "Started with puzzle id %s" % puzzle_id)
     cursor = conn.cursor()
 
-    # First, find and unassign from any other puzzle the solver is currently working on
+    # First, find and unassign from any other puzzle the solver is currently working on.
+    # Use JSON_SEARCH (type-insensitive) instead of JSON_CONTAINS (type-sensitive)
+    # because legacy data may store solver_id as string "101" instead of int 101.
+    # JSON_CONTAINS with JSON_OBJECT('solver_id', 101) won't match {"solver_id": "101"}.
     cursor.execute(
         """
         SELECT id FROM puzzle
-        WHERE JSON_CONTAINS(current_solvers,
-            JSON_OBJECT('solver_id', %s),
-            '$.solvers'
-        )
+        WHERE JSON_SEARCH(current_solvers, 'one', %s, NULL, '$.solvers[*].solver_id') IS NOT NULL
     """,
-        (solver_id,),
+        (str(solver_id),),
     )
-    current_puzzle = cursor.fetchone()
-    if current_puzzle and current_puzzle["id"] != puzzle_id:
-        # Unassign from current puzzle if it's different from the new one
-        unassign_solver_from_puzzle(current_puzzle["id"], solver_id, conn)
+    current_puzzles = cursor.fetchall()
+    for current_puzzle in current_puzzles:
+        if current_puzzle["id"] != puzzle_id:
+            # Unassign from current puzzle if it's different from the new one
+            unassign_solver_from_puzzle(current_puzzle["id"], solver_id, conn)
 
     # Update current solvers for the new puzzle
     cursor.execute(

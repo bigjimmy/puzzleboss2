@@ -85,20 +85,20 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None):
 
     # Track what queries have been executed so we can return different
     # results for different SELECT queries
-    call_count = {"n": 0}
+    fetchone_count = {"n": 0}
+
+    # Call sequence in assign_solver_to_puzzle:
+    # 1. JSON_SEARCH lookup for current puzzle → fetchall (returns [] = not assigned)
+    # 2. SELECT current_solvers → fetchone
+    # 3. SELECT solver_history → fetchone
+    cursor.fetchall.return_value = []  # Not currently assigned to any puzzle
 
     def mock_fetchone():
-        call_count["n"] += 1
-        n = call_count["n"]
-        # Call sequence in assign_solver_to_puzzle:
-        # 1. JSON_CONTAINS lookup for current puzzle (returns None = not assigned)
-        # 2. SELECT current_solvers
-        # 3. SELECT solver_history
+        fetchone_count["n"] += 1
+        n = fetchone_count["n"]
         if n == 1:
-            return None  # Not currently assigned to any puzzle
-        elif n == 2:
             return {"current_solvers": current_solvers_json}
-        elif n == 3:
+        elif n == 2:
             return {"solver_history": solver_history_json}
         return None
 
@@ -241,6 +241,88 @@ class TestUnassignSolverTypeNormalization:
         stored = json.loads(stored_json)
         remaining_ids = [s["solver_id"] for s in stored["solvers"]]
         assert remaining_ids == [101, 303]
+
+
+class TestAssignUnassignsFromOldPuzzle:
+    """Test that assigning to a new puzzle unassigns from old puzzles."""
+
+    @patch('pblib.debug_log')
+    def test_unassign_from_old_puzzle_with_legacy_string_id(self, mock_log):
+        """Assigning solver should unassign from old puzzle even if stored as string."""
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value = cursor
+
+        fetchone_count = {"n": 0}
+
+        # fetchall returns old puzzle (id=284) with solver on it
+        cursor.fetchall.return_value = [{"id": 284}]
+
+        def mock_fetchone():
+            fetchone_count["n"] += 1
+            n = fetchone_count["n"]
+            # Calls:
+            # 1. unassign_solver_from_puzzle SELECT current_solvers for puzzle 284
+            # 2. assign: SELECT current_solvers for puzzle 287
+            # 3. assign: SELECT solver_history for puzzle 287
+            if n == 1:
+                # Old puzzle has solver stored as string (legacy)
+                return {"current_solvers": json.dumps({"solvers": [{"solver_id": "101"}]})}
+            elif n == 2:
+                return {"current_solvers": json.dumps({"solvers": []})}
+            elif n == 3:
+                return {"solver_history": json.dumps({"solvers": []})}
+            return None
+
+        cursor.fetchone = mock_fetchone
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        # Verify the unassign UPDATE was called for puzzle 284
+        unassign_calls = [
+            c for c in cursor.execute.call_args_list
+            if 'SET current_solvers' in str(c) and '284' in str(c)
+        ]
+        assert len(unassign_calls) >= 1, "Should unassign from old puzzle 284"
+        stored_json = unassign_calls[0][0][1][0]
+        stored = json.loads(stored_json)
+        assert len(stored["solvers"]) == 0, "Old puzzle should have no solvers"
+
+    @patch('pblib.debug_log')
+    def test_unassign_from_multiple_old_puzzles(self, mock_log):
+        """Solver on multiple puzzles (stale data) should be unassigned from all."""
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value = cursor
+
+        fetchone_count = {"n": 0}
+
+        # fetchall returns two old puzzles
+        cursor.fetchall.return_value = [{"id": 284}, {"id": 285}]
+
+        def mock_fetchone():
+            fetchone_count["n"] += 1
+            n = fetchone_count["n"]
+            # unassign calls for 284 and 285, then assign calls for 287
+            if n <= 2:
+                return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
+            elif n == 3:
+                return {"current_solvers": json.dumps({"solvers": []})}
+            elif n == 4:
+                return {"solver_history": json.dumps({"solvers": []})}
+            return None
+
+        cursor.fetchone = mock_fetchone
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        # Verify unassign was called for both old puzzles
+        unassign_calls = [
+            c for c in cursor.execute.call_args_list
+            if 'SET current_solvers' in str(c)
+        ]
+        # Should have: unassign 284, unassign 285, assign 287 = at least 3 UPDATE calls
+        assert len(unassign_calls) >= 3, f"Expected at least 3 current_solvers UPDATEs, got {len(unassign_calls)}"
 
 
 class TestAssignSolverHistoryType:
