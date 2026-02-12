@@ -300,6 +300,11 @@ def check_round_completion(round_id, conn):
 
 def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
     """Assign a solver to a puzzle, unassigning from any other puzzle first."""
+    # Normalize to int — Flask routes pass string IDs, bigjimmybot passes ints.
+    # JSON_CONTAINS and Python equality are type-sensitive, so mixing types
+    # causes silent failures (can't find existing assignment to unassign).
+    solver_id = int(solver_id)
+    puzzle_id = int(puzzle_id)
     debug_log(4, "Started with puzzle id %s" % puzzle_id)
     cursor = conn.cursor()
 
@@ -331,8 +336,8 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
     )
     current_solvers = json.loads(current_solvers_str)
 
-    # Add new solver if not already present
-    if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
+    # Add new solver if not already present (compare as int for legacy string IDs)
+    if not any(int(s["solver_id"]) == solver_id for s in current_solvers["solvers"]):
         current_solvers["solvers"].append({"solver_id": solver_id})
         cursor.execute(
             """
@@ -354,14 +359,13 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
     history = json.loads(history_str)
 
     # Add to history if not already present
-    # Normalize to int for storage, but check against both int and string for legacy data
-    solver_id_int = int(solver_id)
+    # solver_id is already normalized to int at function entry
     existing_ids = [s["solver_id"] for s in history["solvers"]]
-    # Check if already present as either int or string
-    if not any(sid == solver_id_int or str(sid) == str(solver_id_int) for sid in existing_ids):
-        history["solvers"].append({"solver_id": solver_id_int})
+    # Check against both int and string for legacy data that may have string IDs
+    if not any(sid == solver_id or str(sid) == str(solver_id) for sid in existing_ids):
+        history["solvers"].append({"solver_id": solver_id})
         history_json = json.dumps(history)
-        debug_log(5, f"Storing solver_history for puzzle {puzzle_id}: {history_json}, solver_id_int type: {type(solver_id_int)}")
+        debug_log(5, f"Storing solver_history for puzzle {puzzle_id}: {history_json}")
         cursor.execute(
             """
             UPDATE puzzle
@@ -376,6 +380,8 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
 
 def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
     """Unassign a solver from a puzzle's current solvers list."""
+    solver_id = int(solver_id)
+    puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
 
     # Update current solvers
@@ -390,8 +396,9 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
     )
     current_solvers = json.loads(current_solvers_str)
 
+    # Filter out the solver — compare as int to handle legacy string IDs in JSON
     current_solvers["solvers"] = [
-        s for s in current_solvers["solvers"] if s["solver_id"] != solver_id
+        s for s in current_solvers["solvers"] if int(s["solver_id"]) != solver_id
     ]
 
     cursor.execute(
