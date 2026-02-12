@@ -497,6 +497,10 @@ def _fetch_last_sheet_activity(
     Returns:
         lastsheetact dict from API, or None if fetch failed
     """
+    debug_log(
+        5,
+        f"[Thread: {threadname}] Fetching lastsheetact for puzzle {puzzle['id']} ({puzzle['name']})"
+    )
     url = f"{config['API']['APIURI']}/puzzles/{puzzle['id']}/lastsheetact"
     response = _api_request_with_retry("get", url)
     if not response:
@@ -514,11 +518,16 @@ def _fetch_last_sheet_activity(
                 f"[Thread: {threadname}] API error for puzzle {puzzle['id']}: {response_json.get('error')}",
             )
             return None
-        return response_json["puzzle"]["lastsheetact"]
+        lastsheetact = response_json["puzzle"]["lastsheetact"]
+        debug_log(
+            5,
+            f"[Thread: {threadname}] Fetched lastsheetact for {puzzle['name']}: {lastsheetact}"
+        )
+        return lastsheetact
     except Exception as e:
         debug_log(
             1,
-            f"Error interpreting puzzle info from puzzleboss. Response: {response.text[:200]}, Error: {e}",
+            f"[Thread: {threadname}] Error parsing lastsheetact response for {puzzle['name']}: {e}, Response: {response.text[:200]}",
         )
         return None
 
@@ -538,7 +547,11 @@ def _process_sheet_activity(
     # Fetch last sheet activity for this puzzle
     last_sheet_act = _fetch_last_sheet_activity(puzzle, threadname)
     if last_sheet_act is None:
-        return  # Error already logged
+        debug_log(
+            2,
+            f"[Thread: {threadname}] Skipping activity processing for {puzzle['name']} - failed to fetch lastsheetact"
+        )
+        return
 
     debug_log(
         5,
