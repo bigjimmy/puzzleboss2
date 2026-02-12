@@ -312,11 +312,18 @@ These operations rewrite git history and can cause:
 - `API.APIURI`: REST API endpoint (default: http://localhost:5000)
 
 ### config table (Dynamic)
-Key config variables:
-- `LOGLEVEL`: Logging verbosity (0-5)
+
+**Current Hunt Adjustments** (change every year):
 - `TEAMNAME`: Team display name
-- `HUNT_FOLDER_NAME`: Google Drive folder name
+- `HUNT_FOLDER_NAME`: Google Drive folder name for current hunt
+
+**Google API Settings**:
 - `SKIP_GOOGLE_API`: Disable Google Sheets integration
+- `GOOGLE_APPS_SCRIPT_CODE`: Apps Script code to deploy to puzzle sheets (defaults to simple onEdit tracker)
+- `GOOGLE_APPS_SCRIPT_MANIFEST`: Apps Script manifest JSON (defaults to V8 runtime config)
+
+**System Settings**:
+- `LOGLEVEL`: Logging verbosity (0-5)
 - `SKIP_PUZZCORD`: Disable Discord integration
 - `MEMCACHE_ENABLED`, `MEMCACHE_HOST`, `MEMCACHE_PORT`: Memcache settings
 - `PUZZCORD_HOST`, `PUZZCORD_PORT`: Discord bot connection

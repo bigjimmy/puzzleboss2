@@ -7,7 +7,7 @@
  * to puzzle sheets via the Apps Script API.
  *
  * Configuration:
- * - Store this code in the APPS_SCRIPT_ADDON_CODE config value
+ * - Store this code in the GOOGLE_APPS_SCRIPT_CODE config value
  * - The pbgooglelib.py activate_puzzle_sheet_via_api() function will deploy it
  */
 

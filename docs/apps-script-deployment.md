@@ -14,7 +14,7 @@ The deployed add-on provides:
 Puzzle Creation Flow:
   addpuzzle.php (UI)  →  pbrest.py  →  pbgooglelib.activate_puzzle_sheet_via_api()
                                         ├── Creates container-bound Apps Script project
-                                        ├── Deploys code from APPS_SCRIPT_ADDON_CODE config
+                                        ├── Deploys code from GOOGLE_APPS_SCRIPT_CODE config
                                         └── Creates hidden _pb_activity sheet
 
 Activity Tracking Flow:
@@ -29,12 +29,12 @@ Activity Tracking Flow:
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `APPS_SCRIPT_ADDON_CODE` | The Apps Script code to deploy (JavaScript) | Falls back to simple onEdit tracker |
-| `APPS_SCRIPT_ADDON_MANIFEST` | The appsscript.json manifest | Default V8 runtime config |
+| `GOOGLE_APPS_SCRIPT_CODE` | The Apps Script code to deploy (JavaScript) | Falls back to simple onEdit tracker |
+| `GOOGLE_APPS_SCRIPT_MANIFEST` | The appsscript.json manifest | Default V8 runtime config |
 
 ### Add-on Code
 
-The add-on code is stored in the `APPS_SCRIPT_ADDON_CODE` database config value:
+The add-on code is stored in the `GOOGLE_APPS_SCRIPT_CODE` database config value:
 
 **Current Implementation** (based on **dannybd/sheets-puzzleboss-tools**)
 - Puzzle-solving utilities (symmetry, formatting, tab creation, hex grids, delete blank rows)
@@ -53,7 +53,7 @@ When a new puzzle sheet is created via `addpuzzle.php` or the API, Puzzleboss au
 1. **Creates the sheet** via Drive/Sheets API
 2. **Deploys the add-on** via `activate_puzzle_sheet_via_api()`:
    - Creates a container-bound Apps Script project
-   - Pushes the code from `APPS_SCRIPT_ADDON_CODE` config
+   - Pushes the code from `GOOGLE_APPS_SCRIPT_CODE` config
    - Initializes spreadsheet metadata
 3. **Registers the puzzle** in the database
 
@@ -81,11 +81,11 @@ To change the add-on code deployed to new sheets:
 # Method 1: Direct database update
 mysql -u puzzleboss -p puzzleboss << EOF
 UPDATE config SET val = '$(cat /path/to/new_code.gs | sed "s/'/''/g")'
-WHERE \`key\` = 'APPS_SCRIPT_ADDON_CODE';
+WHERE \`key\` = 'GOOGLE_APPS_SCRIPT_CODE';
 EOF
 
 # Method 2: Via pbtools.php UI
-# Go to pbtools.php → Config Editor → Edit APPS_SCRIPT_ADDON_CODE
+# Go to pbtools.php → Config Editor → Edit GOOGLE_APPS_SCRIPT_CODE
 ```
 
 **Important**: Updating the config only affects **new puzzle sheets**. Existing sheets retain their deployed version unless manually re-deployed.
@@ -311,7 +311,7 @@ SELECT `key`, LENGTH(val) as size_bytes FROM config
 WHERE `key` LIKE 'APPS_SCRIPT%';
 
 -- Update add-on code (be careful with escaping!)
-UPDATE config SET val = '<new_code>' WHERE `key` = 'APPS_SCRIPT_ADDON_CODE';
+UPDATE config SET val = '<new_code>' WHERE `key` = 'GOOGLE_APPS_SCRIPT_CODE';
 ```
 
 ## Future Enhancements

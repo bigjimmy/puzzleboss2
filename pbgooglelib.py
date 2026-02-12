@@ -918,9 +918,9 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
     Creates a container-bound Apps Script project on the spreadsheet and
     pushes configurable Apps Script code. The code can be customized via
     config values:
-      - APPS_SCRIPT_ADDON_CODE: The Apps Script code to deploy (falls back to
+      - GOOGLE_APPS_SCRIPT_CODE: The Apps Script code to deploy (falls back to
         default onEdit activity tracker if not set)
-      - APPS_SCRIPT_ADDON_MANIFEST: The appsscript.json manifest (falls back
+      - GOOGLE_APPS_SCRIPT_MANIFEST: The appsscript.json manifest (falls back
         to default if not set)
 
     Uses the existing service account with Domain-Wide Delegation.
@@ -947,14 +947,14 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
     # Get the Apps Script code to deploy (configurable or default)
-    addon_code = configstruct.get("APPS_SCRIPT_ADDON_CODE", "").strip()
-    addon_manifest = configstruct.get("APPS_SCRIPT_ADDON_MANIFEST", "").strip()
+    addon_code = configstruct.get("GOOGLE_APPS_SCRIPT_CODE", "").strip()
+    addon_manifest = configstruct.get("GOOGLE_APPS_SCRIPT_MANIFEST", "").strip()
 
     if not addon_code:
         addon_code = _APPS_SCRIPT_ONEDIT_CODE
         debug_log(4, "[%s] Using default onEdit activity tracker" % puzz_label)
     else:
-        debug_log(3, "[%s] Using custom Apps Script code from config (APPS_SCRIPT_ADDON_CODE)"
+        debug_log(3, "[%s] Using custom Apps Script code from config (GOOGLE_APPS_SCRIPT_CODE)"
                   % puzz_label)
 
     if not addon_manifest:
@@ -964,7 +964,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
         try:
             json.loads(addon_manifest)
         except json.JSONDecodeError as e:
-            debug_log(1, "[%s] APPS_SCRIPT_ADDON_MANIFEST is invalid JSON (%s), using default"
+            debug_log(1, "[%s] GOOGLE_APPS_SCRIPT_MANIFEST is invalid JSON (%s), using default"
                       % (puzz_label, e))
             addon_manifest = _APPS_SCRIPT_MANIFEST
 
