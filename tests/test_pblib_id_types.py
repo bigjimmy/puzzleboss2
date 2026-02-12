@@ -107,8 +107,9 @@ class TestClearPuzzleSolversIdType:
 
         pblib.clear_puzzle_solvers("287", conn)
 
+        # First execute call is the UPDATE — verify the SQL parameter is int
         execute_calls = cursor.execute.call_args_list
-        assert len(execute_calls) == 1
+        assert len(execute_calls) >= 1
         params = execute_calls[0][0][1]
         assert params == (287,), f"Expected (287,), got {params}"
 
@@ -175,8 +176,9 @@ class TestUpdatePuzzleFieldIdType:
 
         pblib.update_puzzle_field("287", "status", "Solved", conn)
 
+        # First execute call is the UPDATE — verify the SQL parameter is int
         execute_calls = cursor.execute.call_args_list
-        assert len(execute_calls) == 1
+        assert len(execute_calls) >= 1
         params = execute_calls[0][0][1]
         # Should be ('Solved', 287) — value first, then puzzle_id in WHERE
         assert params[1] == 287, f"puzzle_id should be int 287, got {params[1]!r}"

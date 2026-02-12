@@ -19,7 +19,7 @@ except ImportError:
 # Memcache client (initialized later after config is available)
 mc = None
 MEMCACHE_CACHE_KEY = "puzzleboss:all"
-MEMCACHE_TTL = 60  # seconds
+MEMCACHE_TTL = 15  # seconds
 
 # Flag to track if memcache has been initialized
 _memcache_initialized = False

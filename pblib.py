@@ -282,6 +282,7 @@ def check_round_completion(round_id, conn):
                 "UPDATE round SET status = 'Solved' WHERE id = %s", (round_id,)
             )
             conn.commit()
+            _invalidate_cache(conn)
             debug_log(
                 3, "Round %s marked as solved - all meta puzzles completed" % round_id
             )
@@ -292,6 +293,7 @@ def check_round_completion(round_id, conn):
             )
             if cursor.rowcount > 0:
                 conn.commit()
+                _invalidate_cache(conn)
                 debug_log(
                     3, "Round %s unmarked as solved - not all meta puzzles completed" % round_id
                 )
@@ -501,6 +503,21 @@ def solver_exists(identifier, conn):
         return False
 
 
+def _invalidate_cache(conn):
+    """Invalidate the puzzle/round cache after a database mutation.
+
+    Uses a lazy import to avoid circular dependency (pbcachelib imports pblib).
+    Fails silently if cache is not available — cache misses are safe, stale data is not.
+    """
+    try:
+        from pbcachelib import invalidate_all_cache
+        invalidate_all_cache(conn)
+    except ImportError:
+        pass  # pbcachelib/pymemcache not installed — no cache to invalidate
+    except Exception as e:
+        debug_log(3, "Cache invalidation failed: %s" % e)
+
+
 def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
     """
     Update a single puzzle field in the database.
@@ -517,6 +534,7 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
         - 'status' field: Auto-logs "interact" activity (except for "Solved",
           which is logged as "solve" by the answer handler in pbrest.py)
         - Other fields: Direct UPDATE query
+        - All mutations invalidate the /allcached memcache entry.
 
     Raises:
         Exception: If database update fails
@@ -539,6 +557,11 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
         # answer handler — logging "interact" here would duplicate it.
         if field == "status" and value != "Solved":
             log_activity(puzzle_id, "interact", 0, source, conn)
+
+    # Invariant: any puzzle mutation must invalidate the cached /allcached response.
+    # This ensures all callers (pbrest, bigjimmybot, future processes) get automatic
+    # cache invalidation without needing to remember to call it explicitly.
+    _invalidate_cache(conn)
 
 
 def get_solver_by_id_from_db(solver_id, conn):

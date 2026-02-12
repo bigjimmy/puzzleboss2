@@ -905,17 +905,9 @@ def update_solver_multi(id):
     source = data.pop("source", "puzzleboss") if "source" in data else "puzzleboss"
 
     updated_parts = {}
-    needs_cache_invalidation = False
-
     for part, value in data.items():
         updated_value = _update_single_solver_part(id, part, value, source)
         updated_parts[part] = updated_value
-        if part == "puzz":
-            needs_cache_invalidation = True
-
-    # Invalidate cache if puzzle assignment changed
-    if needs_cache_invalidation:
-        invalidate_cache_with_stats()
 
     return {"status": "ok", "solver": {"id": int(id), **updated_parts}}
 
@@ -944,10 +936,6 @@ def update_solver_part(id, part):
     source = data.get("source", "puzzleboss")
 
     updated_value = _update_single_solver_part(id, part, value, source)
-
-    # Invalidate /allcached if solver assignment changed
-    if part == "puzz":
-        invalidate_cache_with_stats()
 
     return {"status": "ok", "solver": {"id": int(id), part: updated_value}}
 
