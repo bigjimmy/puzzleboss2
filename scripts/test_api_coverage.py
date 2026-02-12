@@ -478,18 +478,37 @@ class TestRunner:
             result.fail("Need at least 2 rounds")
             return
 
-        round_1, round_2 = rounds[0], rounds[1]
-
-        # Find an unsolved puzzle in round_1
+        # Find a round with an unsolved puzzle and a different target round
         test_puzzle = None
-        for p in self.get_all_puzzles():
+        round_1 = None
+        round_2 = None
+
+        all_puzzles = self.get_all_puzzles()
+
+        # Find any unsolved puzzle
+        for p in all_puzzles:
             details = self.get_puzzle_details(p["id"])
-            if details and str(details.get("round_id")) == str(round_1["id"]) and details.get("status") != "Solved":
+            if details and details.get("status") != "Solved":
                 test_puzzle = details
+                # Find the round this puzzle is in
+                for r in rounds:
+                    if str(r["id"]) == str(details.get("round_id")):
+                        round_1 = r
+                        break
                 break
 
-        if not test_puzzle:
-            result.fail(f"No unsolved puzzles in round {round_1['name']}")
+        if not test_puzzle or not round_1:
+            result.fail("No unsolved puzzles found in any round")
+            return
+
+        # Find a different round to move to
+        for r in rounds:
+            if str(r["id"]) != str(round_1["id"]):
+                round_2 = r
+                break
+
+        if not round_2:
+            result.fail("Need at least 2 different rounds")
             return
 
         # Move puzzle to round_2
