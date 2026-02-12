@@ -385,3 +385,100 @@ def clear_puzzle_solvers(puzzle_id, conn):
     )
 
     conn.commit()
+
+
+def log_activity(puzzle_id, activity_type, solver_id, source, conn):
+    """
+    Log an activity entry to the activity table.
+
+    Args:
+        puzzle_id: Puzzle database ID
+        activity_type: Type of activity ('create', 'revise', 'comment', 'interact', 'solve')
+        solver_id: Solver database ID who performed the activity
+        source: Source of activity ('puzzleboss', 'bigjimmybot', 'google', 'discord')
+        conn: Database connection
+
+    Raises:
+        Exception: If database insert fails
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, %s, %s)",
+        (puzzle_id, solver_id, source, activity_type),
+    )
+    conn.commit()
+
+
+def get_solver_by_name_from_db(name, conn):
+    """
+    Get solver by username from database.
+
+    Args:
+        name: Solver username
+        conn: Database connection
+
+    Returns:
+        Solver dict from solver_view if found, None if not found
+
+    Raises:
+        Exception: If database query fails
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT * from solver_view where name = %s", (name,))
+    return cursor.fetchone()
+
+
+def solver_exists(identifier, conn):
+    """
+    Check if a solver exists in the database.
+
+    Args:
+        identifier: Either solver ID (int) or username (str)
+        conn: Database connection
+
+    Returns:
+        True if solver exists, False otherwise
+    """
+    try:
+        cursor = conn.cursor()
+
+        # Check by id if integer, by name if string
+        if isinstance(identifier, int):
+            cursor.execute("SELECT id FROM solver WHERE id = %s", (identifier,))
+        else:
+            cursor.execute("SELECT id FROM solver WHERE name = %s", (identifier,))
+
+        solver = cursor.fetchone()
+        return solver is not None
+    except Exception:
+        return False
+
+
+def update_puzzle_field(puzzle_id, field, value, conn):
+    """
+    Update a single puzzle field in the database.
+
+    Args:
+        puzzle_id: Puzzle database ID
+        field: Field name to update
+        value: New value for the field
+        conn: Database connection
+
+    Special handling:
+        - 'solvers' field: Uses assign_solver_to_puzzle() or clear_puzzle_solvers()
+        - Other fields: Direct UPDATE query
+
+    Raises:
+        Exception: If database update fails
+    """
+    if field == "solvers":
+        # Handle solver assignments using existing functions
+        if value:  # Assign solver
+            assign_solver_to_puzzle(puzzle_id, value, conn)
+        else:  # Clear all solvers
+            clear_puzzle_solvers(puzzle_id, conn)
+    else:
+        # Handle other puzzle updates
+        cursor = conn.cursor()
+        cursor.execute(f"UPDATE puzzle SET {field} = %s WHERE id = %s", (value, puzzle_id))
+        conn.commit()

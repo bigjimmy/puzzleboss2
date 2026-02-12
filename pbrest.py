@@ -132,11 +132,7 @@ def _log_activity(puzzle_id, activity_type, solver_id=100, source="puzzleboss"):
     """Log an activity entry. Fails silently (logs error only)."""
     try:
         conn, cursor = _cursor()
-        cursor.execute(
-            "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, %s, %s)",
-            (puzzle_id, solver_id, source, activity_type),
-        )
-        conn.commit()
+        pblib.log_activity(puzzle_id, activity_type, solver_id, source, conn)
     except Exception as e:
         debug_log(1, "Failed to log activity for puzzle %s: %s" % (puzzle_id, e))
 
@@ -735,8 +731,7 @@ def get_solver_by_name(name):
     debug_log(4, "start. name: %s" % name)
     try:
         conn, cursor = _read_cursor()
-        cursor.execute("SELECT * from solver_view where name = %s", (name,))
-        solver = cursor.fetchone()
+        solver = pblib.get_solver_by_name_from_db(name, conn)
         if solver is None:
             return {"status": "error", "error": f"Solver '{name}' not found"}, 404
     except Exception as e:
@@ -797,15 +792,7 @@ def _solver_exists(identifier):
     """
     try:
         conn, cursor = _read_cursor()
-
-        # Check by id if integer, by name if string
-        if isinstance(identifier, int):
-            cursor.execute("SELECT id FROM solver WHERE id = %s", (identifier,))
-        else:
-            cursor.execute("SELECT id FROM solver WHERE name = %s", (identifier,))
-
-        solver = cursor.fetchone()
-        return solver is not None
+        return pblib.solver_exists(identifier, conn)
     except Exception as e:
         debug_log(1, "Error checking solver existence for %s: %s" % (identifier, e))
         return False
@@ -2787,20 +2774,8 @@ def get_puzzle_id_by_name(name):
 
 def update_puzzle_part_in_db(id, part, value):
     conn, cursor = _cursor()
-
-    if part == "solvers":
-        # Handle solver assignments
-        if value:  # Assign solver
-            assign_solver_to_puzzle(id, value, mysql.connection)
-        else:  # Clear all solvers
-            clear_puzzle_solvers(id, mysql.connection)
-    else:
-        # Handle other puzzle updates
-        cursor.execute(f"UPDATE puzzle SET {part} = %s WHERE id = %s", (value, id))
-        conn.commit()
-
+    pblib.update_puzzle_field(id, part, value, conn)
     debug_log(4, "puzzle %s %s updated in database" % (id, part))
-
     return 0
 
 
