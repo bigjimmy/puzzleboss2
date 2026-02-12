@@ -33,6 +33,10 @@ except ImportError:
 bind = "0.0.0.0:5000"
 workers = 4
 
+# Worker timeout - increase from default 30s as safety margin
+# (With lazy imports, workers should start quickly, but allow extra time)
+timeout = 60
+
 
 def on_starting(server):
     """Called just before the master process is initialized.

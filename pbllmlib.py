@@ -9,50 +9,69 @@ fetch relevant data. Also includes RAG support for wiki content.
 import threading
 import fcntl
 import os
+import importlib.util
 from pblib import debug_log
 
-# Optional Google Gemini support for LLM queries
-GEMINI_AVAILABLE = False
+# Lazy-loaded modules (imported on first use to speed up worker startup)
 genai = None
 types = None
-try:
-    from google import genai
-    from google.genai import types
-
-    GEMINI_AVAILABLE = True
-    debug_log(3, "google-genai SDK available for LLM queries")
-except ImportError:
-    debug_log(3, "google-genai not installed - /v1/query endpoint unavailable")
-
-# Optional ChromaDB support for wiki RAG
-CHROMADB_AVAILABLE = False
 chromadb = None
-try:
-    import chromadb
-    from chromadb.config import Settings
+Settings = None
 
-    CHROMADB_AVAILABLE = True
-    debug_log(3, "ChromaDB available for wiki RAG")
+# Check if optional dependencies are available WITHOUT importing them
+GEMINI_AVAILABLE = importlib.util.find_spec("google.genai") is not None
+CHROMADB_AVAILABLE = importlib.util.find_spec("chromadb") is not None
+
+# Wiki indexer needs to be imported at startup (runs in background thread)
+WIKI_INDEXER_AVAILABLE = False
+index_wiki = None
+load_wiki_config = None
+try:
+    from scripts.wiki_indexer import index_wiki, load_config as load_wiki_config
+    WIKI_INDEXER_AVAILABLE = True
 except ImportError:
-    debug_log(3, "chromadb not installed - wiki search unavailable")
+    pass  # Silent - wiki indexing is optional
 
 # Global ChromaDB client (lazy initialized)
 _chroma_client = None
 _wiki_collection = None
 
-# Wiki indexer for RAG (optional)
-WIKI_INDEXER_AVAILABLE = False
-try:
-    from scripts.wiki_indexer import index_wiki, load_config as load_wiki_config
 
-    WIKI_INDEXER_AVAILABLE = True
-except ImportError:
-    debug_log(3, "wiki_indexer not available - wiki RAG disabled")
+def _ensure_genai_imported():
+    """Lazy import google-genai SDK on first use."""
+    global genai, types
+    if genai is None and GEMINI_AVAILABLE:
+        try:
+            from google import genai as _genai
+            from google.genai import types as _types
+            genai = _genai
+            types = _types
+            debug_log(3, "google-genai SDK loaded (lazy import)")
+        except ImportError:
+            debug_log(1, "google-genai import failed despite find_spec success")
+            return False
+    return genai is not None
+
+
+def _ensure_chromadb_imported():
+    """Lazy import chromadb on first use."""
+    global chromadb, Settings
+    if chromadb is None and CHROMADB_AVAILABLE:
+        try:
+            import chromadb as _chromadb
+            from chromadb.config import Settings as _Settings
+            chromadb = _chromadb
+            Settings = _Settings
+            debug_log(3, "ChromaDB loaded (lazy import)")
+        except ImportError:
+            debug_log(1, "chromadb import failed despite find_spec success")
+            return False
+    return chromadb is not None
 
 
 def get_gemini_tools():
     """Define tools for Gemini function calling."""
-    if not GEMINI_AVAILABLE:
+    if not GEMINI_AVAILABLE or not _ensure_genai_imported():
         return []
 
     return [
@@ -203,7 +222,7 @@ def _init_wiki_search(chromadb_path, api_key):
     """Initialize ChromaDB client and collection for wiki search."""
     global _chroma_client, _wiki_collection
 
-    if not CHROMADB_AVAILABLE:
+    if not CHROMADB_AVAILABLE or not _ensure_chromadb_imported():
         return None
 
     if _wiki_collection is not None:
@@ -261,10 +280,10 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
     - Priority pages (marked in WIKI_PRIORITY_PAGES config)
     - Recency (more recently modified pages rank higher)
     """
-    if not CHROMADB_AVAILABLE:
+    if not CHROMADB_AVAILABLE or not _ensure_chromadb_imported():
         return {"status": "error", "error": "Wiki search not available - chromadb not installed"}
 
-    if not GEMINI_AVAILABLE:
+    if not GEMINI_AVAILABLE or not _ensure_genai_imported():
         return {"status": "error", "error": "Wiki search not available - google-genai not installed"}
 
     collection = _init_wiki_search(chromadb_path, api_key)
@@ -668,7 +687,7 @@ def process_query(
     Returns:
         dict with 'status', 'response', and 'user_id'
     """
-    if not GEMINI_AVAILABLE:
+    if not GEMINI_AVAILABLE or not _ensure_genai_imported():
         return {"status": "error", "error": "Google Generative AI SDK not installed"}
 
     if not api_key:
