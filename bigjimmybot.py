@@ -269,6 +269,11 @@ def _process_activity_records(
         threadname: Name of worker thread (for logging)
         use_hidden_sheet: True for hidden sheet format, False for revisions format
     """
+    debug_log(
+        5,
+        f"[Thread: {threadname}] _process_activity_records called for {puzzle['name']} with {len(records)} records"
+    )
+
     for record in records:
         # Normalize differences between hidden sheet and revisions formats
         if use_hidden_sheet:
@@ -279,6 +284,11 @@ def _process_activity_records(
             identifier = record["lastModifyingUser"]["emailAddress"]
             edit_ts = _parse_revision_timestamp(record["modifiedTime"])
             match_type = "email"
+
+        debug_log(
+            5,
+            f"[Thread: {threadname}] Processing record for {identifier} at {edit_ts}"
+        )
 
         # Skip bot's own activity
         if use_hidden_sheet and identifier.lower() == "bigjimmy":
@@ -544,10 +554,18 @@ def _process_sheet_activity(
     if sheetenabled == 1:
         # Hidden sheet approach
         records = sheet_info.get("editors", [])
+        debug_log(
+            4,
+            f"[Thread: {threadname}] Processing {len(records)} editor records from hidden sheet for {puzzle['name']}"
+        )
         _process_activity_records(records, puzzle, last_sheet_act_ts, threadname, True)
     else:
         # Legacy Revisions API approach
         records = sheet_info.get("revisions", [])
+        debug_log(
+            4,
+            f"[Thread: {threadname}] Processing {len(records)} revision records from Revisions API for {puzzle['name']}"
+        )
         _process_activity_records(records, puzzle, last_sheet_act_ts, threadname, False)
 
 
