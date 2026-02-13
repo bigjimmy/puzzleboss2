@@ -110,13 +110,13 @@ if (!$allowed) {
   <div class="info-box-content" v-show="showFilters">
     <div class="field-label">Type</div>
     <div class="controls-section">
-      <div class="filter" v-for="t in allTypes" :key="t" :class="{ active: selectedTypes.includes(t) }" @click="toggleType(t)">{{ t }} <input type="checkbox" :checked="selectedTypes.includes(t)" @click.stop /></div>
+      <div class="filter" v-for="t in allTypes" :key="t" :class="{ active: selectedTypes.includes(t) }" @click="toggleType(t)">{{ t }} <input type="checkbox" :checked="selectedTypes.includes(t)" @change="toggleType(t)" @click.stop /></div>
       <div class="filter-action-group"><div class="filter filter-action" @click="selectAllTypes">Select All</div><div class="filter filter-action" @click="selectNoTypes">Select None</div></div>
     </div>
 
     <div class="field-label" style="margin-top: 10px;">Source</div>
     <div class="controls-section">
-      <div class="filter" v-for="s in allSources" :key="s" :class="{ active: selectedSources.includes(s) }" @click="toggleSource(s)">{{ s }} <input type="checkbox" :checked="selectedSources.includes(s)" @click.stop /></div>
+      <div class="filter" v-for="s in allSources" :key="s" :class="{ active: selectedSources.includes(s) }" @click="toggleSource(s)">{{ s }} <input type="checkbox" :checked="selectedSources.includes(s)" @change="toggleSource(s)" @click.stop /></div>
       <div class="filter-action-group"><div class="filter filter-action" @click="selectAllSources">Select All</div><div class="filter filter-action" @click="selectNoSources">Select None</div></div>
     </div>
 
@@ -158,11 +158,11 @@ if (!$allowed) {
   </div>
   <div class="info-box-content" v-show="showColumnVisibility">
     <div class="controls-section">
-      <div class="filter" :class="{ active: visibleColumns.time }" @click="visibleColumns.time = !visibleColumns.time">Time <input type="checkbox" :checked="visibleColumns.time" @click.stop /></div>
-      <div class="filter" :class="{ active: visibleColumns.type }" @click="visibleColumns.type = !visibleColumns.type">Type <input type="checkbox" :checked="visibleColumns.type" @click.stop /></div>
-      <div class="filter" :class="{ active: visibleColumns.source }" @click="visibleColumns.source = !visibleColumns.source">Source <input type="checkbox" :checked="visibleColumns.source" @click.stop /></div>
-      <div class="filter" :class="{ active: visibleColumns.puzzle }" @click="visibleColumns.puzzle = !visibleColumns.puzzle">Puzzle <input type="checkbox" :checked="visibleColumns.puzzle" @click.stop /></div>
-      <div class="filter" :class="{ active: visibleColumns.solver }" @click="visibleColumns.solver = !visibleColumns.solver">Solver <input type="checkbox" :checked="visibleColumns.solver" @click.stop /></div>
+      <div class="filter" :class="{ active: visibleColumns.time }" @click="visibleColumns.time = !visibleColumns.time">Time <input type="checkbox" :checked="visibleColumns.time" @change="visibleColumns.time = !visibleColumns.time" @click.stop /></div>
+      <div class="filter" :class="{ active: visibleColumns.type }" @click="visibleColumns.type = !visibleColumns.type">Type <input type="checkbox" :checked="visibleColumns.type" @change="visibleColumns.type = !visibleColumns.type" @click.stop /></div>
+      <div class="filter" :class="{ active: visibleColumns.source }" @click="visibleColumns.source = !visibleColumns.source">Source <input type="checkbox" :checked="visibleColumns.source" @change="visibleColumns.source = !visibleColumns.source" @click.stop /></div>
+      <div class="filter" :class="{ active: visibleColumns.puzzle }" @click="visibleColumns.puzzle = !visibleColumns.puzzle">Puzzle <input type="checkbox" :checked="visibleColumns.puzzle" @change="visibleColumns.puzzle = !visibleColumns.puzzle" @click.stop /></div>
+      <div class="filter" :class="{ active: visibleColumns.solver }" @click="visibleColumns.solver = !visibleColumns.solver">Solver <input type="checkbox" :checked="visibleColumns.solver" @change="visibleColumns.solver = !visibleColumns.solver" @click.stop /></div>
       <div class="filter-action-group"><div class="filter filter-action" @click="showAllColumns">Show All</div><div class="filter filter-action" @click="hideAllColumns">Hide All</div></div>
     </div>
   </div>
