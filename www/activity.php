@@ -1,7 +1,8 @@
 <?php
 require('puzzlebosslib.php');
 
-$uid = getauthenticateduser();
+$solver = getauthenticatedsolver();
+$uid = $solver->id;
 $allowed = checkpriv("puzztech", $uid);
 
 if (!$allowed) {
@@ -215,6 +216,8 @@ createApp({
       allSources: ['puzzleboss', 'bigjimmybot'],
       selectedTypes: [],
       selectedSources: [],
+      currentSolverId: <?= json_encode($solver->id) ?>,
+      currentSolverName: <?= json_encode($solver->name) ?>,
       solverInput: '',
       puzzleInput: '',
       selectedSolverId: null,
@@ -242,6 +245,8 @@ createApp({
     } else {
       this.selectedTypes = [...this.allTypes];
       this.selectedSources = [...this.allSources];
+      this.selectedSolverId = this.currentSolverId;
+      this.solverInput = this.currentSolverName;
     }
     // Load datalists; once both are ready, resolve names and auto-search
     Promise.all([this.loadSolvers(), this.loadPuzzles()]).then(() => {
