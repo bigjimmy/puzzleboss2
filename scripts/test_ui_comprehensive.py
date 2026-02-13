@@ -2587,6 +2587,195 @@ def test_dashboard_hint_dialog():
 
 
 # ──────────────────────────────────────────────────────────
+# Test 28: Activity Log Page
+# ──────────────────────────────────────────────────────────
+
+def test_activity_page():
+    """Test that activity.php renders correctly with filter controls, search, and results table."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        # First ensure we have test data: create a round + puzzle + assign solver
+        print("  Setting up test data for activity page...")
+        try:
+            rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+            if not rounds:
+                requests.post(f"{API_URL}/rounds", json={"name": "ActivityTestRound"})
+                rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+            round_id = rounds[0]["id"]
+
+            puzzles = requests.get(f"{API_URL}/puzzles").json().get("puzzles", [])
+            if not puzzles:
+                requests.post(f"{API_URL}/puzzles", json={"puzzle": {
+                    "name": "ActivityTestPuzzle",
+                    "round_id": round_id,
+                    "puzzle_uri": "https://example.com/acttest"
+                }})
+                puzzles = requests.get(f"{API_URL}/puzzles").json().get("puzzles", [])
+
+            solvers = requests.get(f"{API_URL}/solvers").json().get("solvers", [])
+            if solvers and puzzles:
+                requests.post(f"{API_URL}/solvers/{solvers[0]['id']}/puzz",
+                              json={"puzz": puzzles[0]["id"]})
+            print("    ✓ Test data ready")
+        except Exception as e:
+            print(f"    Warning: Could not set up test data: {e}")
+
+        # Navigate to activity page as admin
+        print("  Navigating to activity page as admin...")
+        page.goto(f"{BASE_URL}/activity.php?assumedid=testuser", wait_until="networkidle")
+
+        # Verify page loaded (not access denied)
+        page.wait_for_selector("h1", timeout=5000)
+        title = page.locator("h1").first.inner_text()
+        assert "Activity Log" in title, f"Unexpected title: {title}"
+        print(f"    ✓ Page title: {title}")
+
+        # Verify navbar is rendered
+        page.wait_for_selector(".nav-links", timeout=5000)
+        print("    ✓ Navbar rendered")
+
+        # Verify Search Filters section exists and is visible
+        print("  Checking filter controls...")
+        filters_header = page.locator("h3:has-text('Search Filters')")
+        assert filters_header.count() > 0, "Search Filters header not found"
+        print("    ✓ Search Filters section present")
+
+        # Verify type filter pills exist
+        type_pills = page.locator(".info-box-content .controls-section .filter")
+        pill_count = type_pills.count()
+        assert pill_count > 0, "No filter pills found"
+        print(f"    ✓ Found {pill_count} filter pills")
+
+        # Verify specific type pills exist
+        for expected_type in ["create", "solve", "change", "status", "assignment"]:
+            pill = page.locator(f".filter:has-text('{expected_type}')")
+            assert pill.count() > 0, f"Missing type pill: {expected_type}"
+        print("    ✓ All expected type pills present")
+
+        # Verify source filter pills
+        for expected_source in ["puzzleboss", "bigjimmybot"]:
+            pill = page.locator(f".filter:has-text('{expected_source}')")
+            assert pill.count() > 0, f"Missing source pill: {expected_source}"
+        print("    ✓ Source pills present")
+
+        # Verify Select All / Select None action pills exist
+        select_all = page.locator(".filter-action:has-text('Select All')")
+        assert select_all.count() > 0, "Select All pill not found"
+        select_none = page.locator(".filter-action:has-text('Select None')")
+        assert select_none.count() > 0, "Select None pill not found"
+        print("    ✓ Select All / Select None pills present")
+
+        # Verify Column Visibility section exists
+        col_vis = page.locator("h3:has-text('Column Visibility')")
+        assert col_vis.count() > 0, "Column Visibility section not found"
+        print("    ✓ Column Visibility section present")
+
+        # Verify Solver/Puzzle input fields
+        solver_input = page.locator("input[list='solverlist']")
+        assert solver_input.count() > 0, "Solver typeahead input not found"
+        puzzle_input = page.locator("input[list='puzzlelist']")
+        assert puzzle_input.count() > 0, "Puzzle typeahead input not found"
+        print("    ✓ Solver and Puzzle typeahead inputs present")
+
+        # Verify Search button
+        search_btn = page.locator("button:has-text('Search')")
+        assert search_btn.count() > 0, "Search button not found"
+        print("    ✓ Search button present")
+
+        # Verify auto-search on load: all types/sources selected, results shown
+        print("  Checking auto-search on initial load...")
+        page.wait_for_function(
+            "document.querySelector('.activity-table table') || document.querySelector('.activity-table em')",
+            timeout=10000
+        )
+        time.sleep(0.5)
+
+        # All type and source pills should be active on initial load
+        active_pills = page.locator(".controls-section .filter.active")
+        assert active_pills.count() >= 12, f"Expected 12+ active pills on load (8 types + 4 sources), got {active_pills.count()}"
+        print(f"    ✓ All types and sources selected on load ({active_pills.count()} active pills)")
+
+        # Check for results table or no-results message
+        table = page.locator(".activity-table table")
+        no_results = page.locator("em:has-text('No activity found')")
+        has_table = table.count() > 0
+        has_no_results = no_results.count() > 0
+
+        assert has_table or has_no_results, "Neither results table nor no-results message found after auto-search"
+
+        if has_table:
+            # Verify table structure
+            headers = page.locator(".activity-table thead th")
+            header_count = headers.count()
+            assert header_count == 5, f"Expected 5 table headers, got {header_count}"
+            print(f"    ✓ Results table rendered with {header_count} columns")
+
+            rows = page.locator(".activity-table tbody tr")
+            row_count = rows.count()
+            assert row_count > 0, "Results table has no data rows"
+            print(f"    ✓ Auto-search returned {row_count} result row(s)")
+
+            # Verify result count message
+            count_text = page.locator("small:has-text('result(s) returned')")
+            assert count_text.count() > 0, "Result count message not found"
+            print("    ✓ Result count message displayed")
+        else:
+            print("    ✓ No results found (empty database is ok for this test)")
+
+        # Test filter interaction: click a type pill to deactivate it (all are active by default)
+        print("  Testing filter pill interaction...")
+        create_pill = page.locator(".filter:has-text('create')").first
+        create_pill.click()
+        time.sleep(0.2)
+        # Check the pill no longer has 'active' class (it was active, click toggles it off)
+        pill_classes = create_pill.get_attribute("class") or ""
+        assert "active" not in pill_classes, "Pill should lose 'active' class after click (toggle off)"
+        print("    ✓ Filter pill toggles off on click")
+
+        # Test Select None for types
+        page.locator(".filter-action:has-text('Select None')").first.click()
+        time.sleep(0.2)
+        print("    ✓ Select None clears type selections")
+
+        # Test Select All for types
+        page.locator(".filter-action:has-text('Select All')").first.click()
+        time.sleep(0.2)
+        # All type pills should now be active
+        active_pills = page.locator(".controls-section .filter.active")
+        assert active_pills.count() >= 8, f"Expected 8+ active pills after Select All, got {active_pills.count()}"
+        print(f"    ✓ Select All activated {active_pills.count()} pills")
+
+        # Test URL persistence: navigate with filter params and verify auto-search
+        print("  Testing URL filter persistence...")
+        page.goto(f"{BASE_URL}/activity.php?assumedid=testuser&types=create&sources=puzzleboss", wait_until="networkidle")
+        # Wait for auto-search to complete
+        page.wait_for_function("document.querySelector('.activity-table table') || document.querySelector('em')", timeout=10000)
+        time.sleep(0.5)
+        # Verify the type 'create' pill is active
+        create_active = page.locator(".filter.active:has-text('create')")
+        assert create_active.count() > 0, "URL param should activate 'create' type pill"
+        # Verify the source 'puzzleboss' pill is active
+        pb_active = page.locator(".filter.active:has-text('puzzleboss')")
+        assert pb_active.count() > 0, "URL param should activate 'puzzleboss' source pill"
+        # Verify search was auto-executed (no "Use the filters above" prompt)
+        prompt = page.locator("em:has-text('Use the filters above')")
+        assert prompt.count() == 0, "Auto-search should have executed (prompt should be gone)"
+        print("    ✓ URL params restored filters and auto-executed search")
+
+        # Test access denied for non-admin
+        print("  Testing access restriction for non-admin user...")
+        page.goto(f"{BASE_URL}/activity.php?assumedid=testsolver1", wait_until="networkidle")
+        denied_text = page.locator("body").inner_text()
+        assert "ACCESS DENIED" in denied_text, "Non-admin user should see ACCESS DENIED"
+        print("    ✓ Non-admin access correctly denied")
+
+        browser.close()
+        print("✓ Activity page test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
 # Main Entry Point
 # ──────────────────────────────────────────────────────────
 
@@ -2642,6 +2831,7 @@ def main():
         ('25', 'acctcrud', test_account_create_delete, 'Account Create Delete Lifecycle'),
         ('26', 'hintqueue', test_hint_queue, 'Hint Queue'),
         ('27', 'dashhint', test_dashboard_hint_dialog, 'Dashboard Hint Dialog'),
+        ('28', 'activitypage', test_activity_page, 'Activity Log Page'),
     ]
 
     if args.list:

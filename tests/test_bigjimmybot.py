@@ -67,7 +67,7 @@ def _make_solver_with_lastact(fixture_name, lastact_time=None):
         solver["lastact"] = {
             "time": lastact_time,
             "type": "revise",
-            "source": "google",
+            "source": "bigjimmybot",
             "solver_id": solver["id"],
             "puzzle_id": 123,
         }

@@ -312,7 +312,7 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
         - Cannot assign to a solved puzzle
         - Solver must exist
         - Auto-transitions New/Abandoned → Being worked
-        - Logs "interact" activity for the assignment
+        - Logs "assignment" activity for the assignment
         - Unassigns solver from any other puzzle first
 
     Args:
@@ -320,7 +320,7 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
         solver_id: Solver database ID (int or string, normalized to int)
         conn: Database connection
         source: Caller identity for activity logging (default "system").
-                Typical values: "puzzleboss", "bigjimmybot", "discord"
+                Typical values: "puzzleboss", "bigjimmybot"
 
     Raises:
         ValueError: If puzzle doesn't exist, is solved, or solver doesn't exist
@@ -401,8 +401,8 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
 
     conn.commit()
 
-    # Invariant: all assignments are logged as "interact" activity.
-    log_activity(puzzle_id, "interact", solver_id, source, conn)
+    # Invariant: all assignments are logged as "assignment" activity.
+    log_activity(puzzle_id, "assignment", solver_id, source, conn)
 
 
 def unassign_solver_from_puzzle(puzzle_id, solver_id, conn, source="system"):
@@ -475,9 +475,10 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=No
 
     Args:
         puzzle_id: Puzzle database ID
-        activity_type: Type of activity ('create', 'revise', 'comment', 'interact', 'solve')
+        activity_type: Type of activity ('create', 'revise', 'comment', 'interact',
+            'solve', 'change', 'status', 'assignment')
         solver_id: Solver database ID who performed the activity (100 = system sentinel)
-        source: Source of activity ('puzzleboss', 'bigjimmybot', 'google', 'discord')
+        source: Source of activity ('puzzleboss', 'bigjimmybot')
         conn: Database connection
         timestamp: Optional Unix timestamp to use instead of CURRENT_TIMESTAMP.
             When provided, the activity's `time` column is set to this value
@@ -583,7 +584,7 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
 
     Special handling:
         - 'solvers' field: Uses assign_solver_to_puzzle() or clear_puzzle_solvers()
-        - 'status' field: Auto-logs "interact" activity (except for "Solved",
+        - 'status' field: Auto-logs "status" activity (except for "Solved",
           which is logged as "solve" by the answer handler in pbrest.py)
         - Other fields: Direct UPDATE query
         - All mutations invalidate the /allcached memcache entry.
@@ -604,11 +605,11 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
         cursor.execute(f"UPDATE puzzle SET {field} = %s WHERE id = %s", (value, puzzle_id))
         conn.commit()
 
-        # Invariant: all non-Solved status changes are logged as "interact" activity.
+        # Invariant: all non-Solved status changes are logged as "status" activity.
         # "Solved" is excluded because solves are logged as "solve" type via the
-        # answer handler — logging "interact" here would duplicate it.
+        # answer handler — logging "status" here would duplicate it.
         if field == "status" and value != "Solved":
-            log_activity(puzzle_id, "interact", 100, source, conn)
+            log_activity(puzzle_id, "status", 100, source, conn)
 
     # Invariant: any puzzle mutation must invalidate the cached /allcached response.
     # This ensures all callers (pbrest, bigjimmybot, future processes) get automatic

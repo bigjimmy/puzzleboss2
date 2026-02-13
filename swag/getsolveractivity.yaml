@@ -46,11 +46,11 @@ responses:
                 description: ID of puzzle this activity is for
               source:
                 type: string
-                enum: [google, puzzleboss, bigjimmybot, discord]
+                enum: [puzzleboss, bigjimmybot]
                 description: Source system that recorded this activity
               type:
                 type: string
-                enum: [create, revise, comment, interact, solve]
+                enum: [create, revise, comment, interact, solve, change, status, assignment]
                 description: Type of activity
               uri:
                 type: string

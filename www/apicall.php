@@ -15,7 +15,7 @@ if (!isset($_GET['apicall']) || empty($_GET['apicall'])) {
 $apicall = $_GET['apicall'];
 
 // Operations that require puzztech privilege
-$puzztech_required = ['deleteuser', 'googleusers', 'privs', 'newusers'];
+$puzztech_required = ['deleteuser', 'googleusers', 'privs', 'newusers', 'activitysearch'];
 $puzztech_required_post = ['rbac', 'config'];
 
 $needs_puzztech = in_array($apicall, $puzztech_required)
@@ -175,6 +175,16 @@ else {
       break;
     case "hintcount":
       echo json_encode(readapi('/hints/count'));
+      break;
+    case "activitysearch":
+      $searchParams = [];
+      foreach (['types', 'sources', 'solver_id', 'puzzle_id', 'limit'] as $param) {
+        if (isset($_GET[$param]) && $_GET[$param] !== '') {
+          $searchParams[] = $param . '=' . urlencode($_GET[$param]);
+        }
+      }
+      $queryString = count($searchParams) > 0 ? '?' . implode('&', $searchParams) : '';
+      echo json_encode(readapi('/activitysearch' . $queryString));
       break;
     default:
       http_response_code(500);
