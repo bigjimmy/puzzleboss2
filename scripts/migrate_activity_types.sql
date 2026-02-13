@@ -1,4 +1,4 @@
--- Migration: Add new activity types (change, status, assignment)
+-- Migration: Add new activity types and remove unused sources
 -- For existing installs. Safe to re-run (idempotent ALTER TABLE).
 --
 -- Run with:
@@ -6,3 +6,6 @@
 
 ALTER TABLE activity
   MODIFY type ENUM('create','revise','comment','interact','solve','change','status','assignment') DEFAULT NULL;
+
+ALTER TABLE activity
+  MODIFY source ENUM('puzzleboss','bigjimmybot') DEFAULT NULL;

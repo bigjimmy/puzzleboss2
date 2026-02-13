@@ -2798,7 +2798,7 @@ def get_all_activities():
 def activity_search():
     """Search activity log with filters for type, source, solver, and puzzle."""
     VALID_TYPES = {"create", "revise", "comment", "interact", "solve", "change", "status", "assignment"}
-    VALID_SOURCES = {"google", "puzzleboss", "bigjimmybot", "discord"}
+    VALID_SOURCES = {"puzzleboss", "bigjimmybot"}
 
     try:
         # Parse query parameters
@@ -2813,8 +2813,8 @@ def activity_search():
             limit = int(limit_param)
         except ValueError:
             return {"status": "error", "error": "limit must be an integer"}, 400
-        if limit not in (50, 100, 200):
-            return {"status": "error", "error": "limit must be 50, 100, or 200"}, 400
+        if limit not in (50, 100, 200, 500):
+            return {"status": "error", "error": "limit must be 50, 100, 200, or 500"}, 400
 
         # Build WHERE clause dynamically
         conditions = []
@@ -2855,7 +2855,7 @@ def activity_search():
             params.append(puzzle_id_int)
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        params.append(limit)
+        params.append(limit + 1)
 
         conn, cursor = _read_cursor()
         cursor.execute(
@@ -2888,7 +2888,11 @@ def activity_search():
                 "solver_name": row["solver_name"],
             })
 
-        return {"status": "ok", "activity": results, "count": len(results)}
+        has_more = len(results) > limit
+        if has_more:
+            results = results[:limit]
+
+        return {"status": "ok", "activity": results, "count": len(results), "has_more": has_more}
 
     except Exception as e:
         debug_log(1, "Exception in activity search: %s" % e)

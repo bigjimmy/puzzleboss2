@@ -30,7 +30,7 @@ parameters:
     type: integer
     required: false
     default: 50
-    enum: [50, 100, 200]
+    enum: [50, 100, 200, 500]
     description: Maximum number of results to return
 produces:
   - application/json
@@ -46,6 +46,9 @@ responses:
         count:
           type: integer
           description: Number of results returned
+        has_more:
+          type: boolean
+          description: True if more results exist beyond the limit
         activity:
           type: array
           description: List of matching activity entries
@@ -65,7 +68,7 @@ responses:
                 description: Type of activity
               source:
                 type: string
-                enum: [google, puzzleboss, bigjimmybot, discord]
+                enum: [puzzleboss, bigjimmybot]
                 description: Source system that recorded this activity
               puzzle_id:
                 type: integer

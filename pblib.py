@@ -320,7 +320,7 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
         solver_id: Solver database ID (int or string, normalized to int)
         conn: Database connection
         source: Caller identity for activity logging (default "system").
-                Typical values: "puzzleboss", "bigjimmybot", "discord"
+                Typical values: "puzzleboss", "bigjimmybot"
 
     Raises:
         ValueError: If puzzle doesn't exist, is solved, or solver doesn't exist
@@ -478,7 +478,7 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=No
         activity_type: Type of activity ('create', 'revise', 'comment', 'interact',
             'solve', 'change', 'status', 'assignment')
         solver_id: Solver database ID who performed the activity (100 = system sentinel)
-        source: Source of activity ('puzzleboss', 'bigjimmybot', 'google', 'discord')
+        source: Source of activity ('puzzleboss', 'bigjimmybot')
         conn: Database connection
         timestamp: Optional Unix timestamp to use instead of CURRENT_TIMESTAMP.
             When provided, the activity's `time` column is set to this value

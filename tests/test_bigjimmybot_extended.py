@@ -150,7 +150,7 @@ class TestFetchLastSheetActivity:
         mock_activity = {
             "time": dt(2026, 2, 11, 23, 19, 43),
             "type": "revise",
-            "source": "google",
+            "source": "bigjimmybot",
         }
         mock_get_activity.return_value = mock_activity
 

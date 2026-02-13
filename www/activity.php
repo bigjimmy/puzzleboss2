@@ -42,6 +42,11 @@ if (!$allowed) {
     .filter-row > div { display: flex; flex-direction: column; gap: 2px; }
     .loading { opacity: 0.5; }
     .system-solver { color: var(--text-secondary); font-style: italic; }
+    .help-table { width: 100%; border-collapse: collapse; }
+    .help-table th, .help-table td { padding: 4px 8px; border-bottom: 1px solid var(--border-light); text-align: left; vertical-align: top; }
+    .help-table th { white-space: nowrap; }
+    .help-table code { font-family: var(--font-mono); font-size: 0.9em; }
+    .help-table .type-legacy { color: var(--text-secondary); font-style: italic; }
   </style>
 </head>
 <body class="status-page">
@@ -51,6 +56,51 @@ if (!$allowed) {
 </div>
 
 <?= render_navbar() ?>
+
+<div class="info-box">
+  <div class="info-box-header" @click="showHelp = !showHelp">
+    <span class="collapse-icon" :class="{ collapsed: !showHelp }">▼</span>
+    <h3>Help</h3>
+  </div>
+  <div class="info-box-content" v-show="showHelp">
+    <p>The activity log tracks all actions across the hunt. Use the filters below to narrow results by type, source, solver, or puzzle. Results are ordered most-recent-first.</p>
+
+    <div class="field-label" style="margin-top: 10px;">Activity Types</div>
+    <table class="help-table">
+      <thead>
+        <tr><th>Type</th><th>Meaning</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>create</code></td><td>Puzzle created</td><td>New puzzle added via bookmarklet or admin page</td></tr>
+        <tr><td><code>revise</code></td><td>Sheet edited</td><td>Solver edits the puzzle's Google Sheet</td></tr>
+        <tr><td><code>comment</code></td><td>Comment or tag changed</td><td>Puzzleboss updates a puzzle's note or tags</td></tr>
+        <tr><td><code>solve</code></td><td>Puzzle solved</td><td>Correct answer submitted</td></tr>
+        <tr><td><code>change</code></td><td>Puzzle field changed</td><td>Location, round, name, meta status, or sheet URL updated</td></tr>
+        <tr><td><code>status</code></td><td>Puzzle status changed</td><td>Status set to "Needs eyes", "Being worked", etc.</td></tr>
+        <tr><td><code>assignment</code></td><td>Solver assigned to puzzle</td><td>Solver joins or is assigned to a puzzle</td></tr>
+        <tr><td><code>interact</code></td><td class="type-legacy">Legacy — undifferentiated activity</td><td class="type-legacy">Pre-existing rows from before the type taxonomy was refined</td></tr>
+      </tbody>
+    </table>
+
+    <div class="field-label" style="margin-top: 10px;">Sources</div>
+    <table class="help-table">
+      <thead>
+        <tr><th>Source</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>puzzleboss</code></td><td>Action taken through the Puzzleboss web UI or REST API</td></tr>
+        <tr><td><code>bigjimmybot</code></td><td>Automatic action by the BigJimmy polling bot (sheet edits, auto-assignments)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="field-label" style="margin-top: 10px;">Tips</div>
+    <ul style="margin: 4px 0; padding-left: 20px;">
+      <li>Solver <em>"system"</em> (ID 100) represents automated actions not tied to a specific person.</li>
+      <li>Filters are preserved in the URL — bookmark or share a filtered view directly.</li>
+      <li>Column visibility settings are saved in your browser's local storage.</li>
+    </ul>
+  </div>
+</div>
 
 <div class="info-box">
   <div class="info-box-header" @click="showFilters = !showFilters">
@@ -91,6 +141,7 @@ if (!$allowed) {
           <option value="50">50</option>
           <option value="100">100</option>
           <option value="200">200</option>
+          <option value="500">500</option>
         </select>
       </div>
       <div>
@@ -143,7 +194,10 @@ if (!$allowed) {
     </tr>
     </tbody>
   </table>
-  <p v-if="results.length > 0"><small>{{ results.length }} result(s) returned.</small></p>
+  <p v-if="results.length > 0">
+    <small>{{ results.length }} result(s) returned.</small>
+    <small v-if="hasMore" style="color: var(--text-secondary);"> More results exist — increase the row limit or narrow your filters.</small>
+  </p>
 </div>
 
 </div>
@@ -154,10 +208,11 @@ const { createApp } = Vue;
 createApp({
   data() {
     return {
+      showHelp: false,
       showFilters: true,
       showColumnVisibility: false,
       allTypes: ['create', 'revise', 'comment', 'interact', 'solve', 'change', 'status', 'assignment'],
-      allSources: ['google', 'puzzleboss', 'bigjimmybot', 'discord'],
+      allSources: ['puzzleboss', 'bigjimmybot'],
       selectedTypes: [],
       selectedSources: [],
       solverInput: '',
@@ -168,6 +223,7 @@ createApp({
       solvers: [],
       puzzles: [],
       results: [],
+      hasMore: false,
       isLoading: false,
       hasSearched: false,
       visibleColumns: {
@@ -253,8 +309,10 @@ createApp({
         .then(data => {
           if (data && data.activity) {
             this.results = data.activity;
+            this.hasMore = !!data.has_more;
           } else {
             this.results = [];
+            this.hasMore = false;
           }
         })
         .catch(e => {
@@ -306,7 +364,7 @@ createApp({
       if (p.has('sources')) this.selectedSources = p.get('sources').split(',').filter(s => this.allSources.includes(s));
       if (p.has('solver_id')) this.selectedSolverId = parseInt(p.get('solver_id')) || null;
       if (p.has('puzzle_id')) this.selectedPuzzleId = parseInt(p.get('puzzle_id')) || null;
-      if (p.has('limit') && ['50','100','200'].includes(p.get('limit'))) this.limit = p.get('limit');
+      if (p.has('limit') && ['50','100','200','500'].includes(p.get('limit'))) this.limit = p.get('limit');
     },
     syncFiltersToUrl() {
       const p = new URLSearchParams();
