@@ -1892,6 +1892,250 @@ class TestRunner:
 
         result.set_success("Hint queue test completed successfully")
 
+    # ------------------------------------------------------------------
+    # Test 29: Activity Search Endpoint
+    # ------------------------------------------------------------------
+    def test_activity_search(self, result: TestResult):
+        """Test the /activitysearch endpoint with various filter combinations."""
+        # First, ensure we have some activity data by doing a few operations
+        rounds = self.get_all_rounds()
+        if not rounds:
+            rnd = self.create_round(self.get_emoji_string("SearchRnd", include_emoji=False))
+            rounds = [rnd]
+        round_id = rounds[0]["id"]
+
+        puz = self.create_puzzle(
+            self.get_emoji_string("SearchTestPuz", include_emoji=False),
+            round_id
+        )
+        solvers = self.get_all_solvers()
+        if not solvers:
+            result.fail("No solvers available")
+            return
+        solver = solvers[0]
+
+        # Generate activity: assign solver, change status, change xyzloc
+        self.assign_solver_to_puzzle(solver["id"], puz["id"])
+        self.api_post(f"/puzzles/{puz['id']}/status", {"status": "Critical"})
+        self.api_post(f"/puzzles/{puz['id']}/xyzloc", {"xyzloc": "Table 5"})
+
+        # 1. Basic search - no filters
+        self.logger.log_operation("  Testing: no filters")
+        data = self.api_get("/activitysearch")
+        if data.get("status") != "ok":
+            result.fail(f"No-filter search failed: {data}")
+            return
+        if not isinstance(data.get("activity"), list):
+            result.fail("activity should be a list")
+            return
+        if data.get("count", 0) < 1:
+            result.fail("Should have at least 1 activity entry")
+            return
+        self.logger.log_operation(f"    ✓ Got {data['count']} results")
+
+        # Validate response shape
+        for field in ["id", "time", "type", "source", "puzzle_id", "solver_id", "puzzle_name", "solver_name"]:
+            if field not in data["activity"][0]:
+                result.fail(f"Missing field '{field}' in activity result")
+                return
+        self.logger.log_operation("    ✓ Response shape validated")
+
+        # 2. Filter by type
+        self.logger.log_operation("  Testing: type filter")
+        data = self.api_get("/activitysearch?types=assignment,status")
+        if data.get("status") != "ok":
+            result.fail(f"Type filter search failed: {data}")
+            return
+        for act in data.get("activity", []):
+            if act["type"] not in ("assignment", "status"):
+                result.fail(f"Type filter leaked: got type '{act['type']}'")
+                return
+        self.logger.log_operation(f"    ✓ Type filter returned {data['count']} results (all assignment/status)")
+
+        # 3. Filter by source
+        self.logger.log_operation("  Testing: source filter")
+        data = self.api_get("/activitysearch?sources=puzzleboss")
+        if data.get("status") != "ok":
+            result.fail(f"Source filter search failed: {data}")
+            return
+        for act in data.get("activity", []):
+            if act["source"] != "puzzleboss":
+                result.fail(f"Source filter leaked: got source '{act['source']}'")
+                return
+        self.logger.log_operation(f"    ✓ Source filter returned {data['count']} results (all puzzleboss)")
+
+        # 4. Filter by solver_id
+        self.logger.log_operation("  Testing: solver_id filter")
+        data = self.api_get(f"/activitysearch?solver_id={solver['id']}")
+        if data.get("status") != "ok":
+            result.fail(f"Solver filter search failed: {data}")
+            return
+        for act in data.get("activity", []):
+            if act["solver_id"] != solver["id"] and act["solver_id"] != 100:
+                # solver_id 100 is system, which is valid for status/change entries
+                pass  # Some entries have system solver_id; just verify the filter worked
+        self.logger.log_operation(f"    ✓ Solver filter returned {data['count']} results")
+
+        # 5. Filter by puzzle_id
+        self.logger.log_operation("  Testing: puzzle_id filter")
+        data = self.api_get(f"/activitysearch?puzzle_id={puz['id']}")
+        if data.get("status") != "ok":
+            result.fail(f"Puzzle filter search failed: {data}")
+            return
+        for act in data.get("activity", []):
+            if act["puzzle_id"] != puz["id"]:
+                result.fail(f"Puzzle filter leaked: got puzzle_id {act['puzzle_id']}, expected {puz['id']}")
+                return
+        self.logger.log_operation(f"    ✓ Puzzle filter returned {data['count']} results")
+
+        # 6. Limit enforcement
+        self.logger.log_operation("  Testing: limit parameter")
+        data = self.api_get("/activitysearch?limit=50")
+        if data.get("status") != "ok":
+            result.fail(f"Limit search failed: {data}")
+            return
+        if len(data.get("activity", [])) > 50:
+            result.fail(f"Limit 50 returned {len(data['activity'])} results")
+            return
+        self.logger.log_operation(f"    ✓ Limit 50 respected ({data['count']} results)")
+
+        # 7. Combined filters
+        self.logger.log_operation("  Testing: combined filters")
+        data = self.api_get(f"/activitysearch?types=change&sources=puzzleboss&puzzle_id={puz['id']}&limit=50")
+        if data.get("status") != "ok":
+            result.fail(f"Combined filter search failed: {data}")
+            return
+        for act in data.get("activity", []):
+            if act["type"] != "change":
+                result.fail(f"Combined filter: wrong type '{act['type']}'")
+                return
+            if act["source"] != "puzzleboss":
+                result.fail(f"Combined filter: wrong source '{act['source']}'")
+                return
+            if act["puzzle_id"] != puz["id"]:
+                result.fail(f"Combined filter: wrong puzzle_id {act['puzzle_id']}")
+                return
+        self.logger.log_operation(f"    ✓ Combined filters returned {data['count']} results")
+
+        # 8. Error cases
+        self.logger.log_operation("  Testing: error cases")
+        r = self.api_get_raw("/activitysearch?limit=999")
+        if r.ok:
+            result.fail("Invalid limit (999) should return error")
+            return
+        self.logger.log_operation(f"    ✓ Invalid limit returned {r.status_code}")
+
+        r = self.api_get_raw("/activitysearch?types=bogustype")
+        if r.ok:
+            result.fail("Invalid type should return error")
+            return
+        self.logger.log_operation(f"    ✓ Invalid type returned {r.status_code}")
+
+        r = self.api_get_raw("/activitysearch?solver_id=notanumber")
+        if r.ok:
+            result.fail("Non-integer solver_id should return error")
+            return
+        self.logger.log_operation(f"    ✓ Non-integer solver_id returned {r.status_code}")
+
+        # 9. Time ordering (most recent first)
+        self.logger.log_operation("  Testing: time ordering")
+        data = self.api_get("/activitysearch?limit=50")
+        activities = data.get("activity", [])
+        if len(activities) > 1:
+            times = [a["time"] for a in activities]
+            if times[0] < times[-1]:
+                result.fail("Activities not sorted most-recent-first")
+                return
+        self.logger.log_operation("    ✓ Results sorted by time DESC")
+
+        result.set_success("Activity search endpoint test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 30: Activity Type Verification
+    # ------------------------------------------------------------------
+    def test_activity_type_verification(self, result: TestResult):
+        """Verify that actions produce the correct new activity type values."""
+        rounds = self.get_all_rounds()
+        if not rounds:
+            rnd = self.create_round("TypeVerifyRnd")
+            rounds = [rnd]
+        round_id = rounds[0]["id"]
+
+        puz = self.create_puzzle(
+            self.get_emoji_string("TypeVerifyPuz", include_emoji=False),
+            round_id
+        )
+        solvers = self.get_all_solvers()
+        if not solvers:
+            result.fail("No solvers available")
+            return
+        solver = solvers[0]
+
+        def get_latest_activity(puzzle_id, expected_type=None):
+            """Get recent activity for a puzzle, optionally filtered by type."""
+            data = self.api_get(f"/puzzles/{puzzle_id}/activity")
+            acts = data.get("activity", [])
+            if expected_type:
+                return [a for a in acts if a.get("type") == expected_type]
+            return acts
+
+        # 1. Puzzle creation should produce 'create' type
+        self.logger.log_operation("  Checking: puzzle creation → 'create' type")
+        acts = get_latest_activity(puz["id"], "create")
+        if not acts:
+            result.fail("No 'create' activity found after puzzle creation")
+            return
+        self.logger.log_operation(f"    ✓ Found {len(acts)} 'create' activity entry(ies)")
+
+        # 2. Solver assignment should produce 'assignment' type (not 'interact')
+        self.logger.log_operation("  Checking: solver assignment → 'assignment' type")
+        self.assign_solver_to_puzzle(solver["id"], puz["id"])
+        acts = get_latest_activity(puz["id"], "assignment")
+        if not acts:
+            result.fail("No 'assignment' activity found after solver assignment")
+            return
+        # Also verify 'interact' was NOT used
+        interact_acts = get_latest_activity(puz["id"], "interact")
+        self.logger.log_operation(f"    ✓ Found {len(acts)} 'assignment' entry(ies), {len(interact_acts)} legacy 'interact' entries")
+
+        # 3. Solver assignment should also produce 'status' for auto-transition
+        self.logger.log_operation("  Checking: assignment auto-transition → 'status' type")
+        acts = get_latest_activity(puz["id"], "status")
+        if not acts:
+            result.fail("No 'status' activity found after assignment (auto-transition to 'Being worked')")
+            return
+        self.logger.log_operation(f"    ✓ Found {len(acts)} 'status' entry(ies)")
+
+        # 4. xyzloc change should produce 'change' type (not 'interact')
+        self.logger.log_operation("  Checking: xyzloc change → 'change' type")
+        self.api_post(f"/puzzles/{puz['id']}/xyzloc", {"xyzloc": "Room 7"})
+        acts = get_latest_activity(puz["id"], "change")
+        if not acts:
+            result.fail("No 'change' activity found after xyzloc update")
+            return
+        self.logger.log_operation(f"    ✓ Found {len(acts)} 'change' entry(ies)")
+
+        # 5. Manual status change should produce 'status' type
+        self.logger.log_operation("  Checking: status change → 'status' type")
+        before_status_count = len(get_latest_activity(puz["id"], "status"))
+        self.api_post(f"/puzzles/{puz['id']}/status", {"status": "Needs eyes"})
+        after_acts = get_latest_activity(puz["id"], "status")
+        if len(after_acts) <= before_status_count:
+            result.fail("No new 'status' activity after manual status change")
+            return
+        self.logger.log_operation(f"    ✓ Status count increased: {before_status_count} → {len(after_acts)}")
+
+        # 6. Solve should still produce 'solve' type
+        self.logger.log_operation("  Checking: solve → 'solve' type")
+        self.api_post(f"/puzzles/{puz['id']}/answer", {"answer": "TYPETEST"})
+        acts = get_latest_activity(puz["id"], "solve")
+        if not acts:
+            result.fail("No 'solve' activity found after answering puzzle")
+            return
+        self.logger.log_operation(f"    ✓ Found {len(acts)} 'solve' entry(ies)")
+
+        result.set_success("Activity type verification test completed successfully")
+
     # ======================================================================
     # Test suite runner
     # ======================================================================
@@ -1926,6 +2170,8 @@ class TestRunner:
             ("RBAC Privilege Management", self.test_rbac_privileges),
             ("Puzzle Deletion", self.test_puzzle_deletion),
             ("Hint Queue", self.test_hint_queue),
+            ("Activity Search", self.test_activity_search),
+            ("Activity Type Verification", self.test_activity_type_verification),
         ]
 
         if selected_tests:

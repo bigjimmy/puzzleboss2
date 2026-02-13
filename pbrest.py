@@ -1812,6 +1812,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
         update_puzzle_part_in_db(id, part, value)
+        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
 
         # Check round completion whenever metaness changes
         # This handles both marking rounds as solved AND unmarking them if a new unsolved meta is added
@@ -1820,7 +1821,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
 
-        pblib.log_activity(id, "interact", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
 
         if (value is not None) and (value != ""):
             chat_say_something(
@@ -1879,7 +1880,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         updated_puzzle = get_one_puzzle(id)
         chat_announce_move(updated_puzzle["puzzle"]["name"])
 
-        pblib.log_activity(id, "interact", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
 
     elif part == "name":
         # Update puzzle name (strip spaces like in create_puzzle)
@@ -1896,6 +1897,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             raise Exception(f"Duplicate puzzle name {sanitized_name} detected")
 
         update_puzzle_part_in_db(id, part, sanitized_name)
+        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
 
     elif part == "puzzle_uri":
         # Update puzzle URI
@@ -2026,6 +2028,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
             pblib.log_activity(id, "comment", 100, "puzzleboss", mysql.connection)
+
+    elif part in ("chat_channel_id", "drive_uri"):
+        update_puzzle_part_in_db(id, part, value)
+        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
 
     else:
         # For any other part, just try to update it directly
@@ -2779,6 +2785,113 @@ def get_all_activities():
             }
     except Exception as e:
         debug_log(1, "Exception in getting activity counts: %s" % e)
+        return {"status": "error", "error": str(e)}, 500
+
+
+# ============================================================================
+# Activity Search Endpoint
+# ============================================================================
+
+
+@app.route("/activitysearch", endpoint="activitysearch", methods=["GET"])
+@swag_from("swag/getactivitysearch.yaml", endpoint="activitysearch", methods=["GET"])
+def activity_search():
+    """Search activity log with filters for type, source, solver, and puzzle."""
+    VALID_TYPES = {"create", "revise", "comment", "interact", "solve", "change", "status", "assignment"}
+    VALID_SOURCES = {"google", "puzzleboss", "bigjimmybot", "discord"}
+
+    try:
+        # Parse query parameters
+        types_param = request.args.get("types", "")
+        sources_param = request.args.get("sources", "")
+        solver_id = request.args.get("solver_id", "")
+        puzzle_id = request.args.get("puzzle_id", "")
+        limit_param = request.args.get("limit", "50")
+
+        # Validate limit
+        try:
+            limit = int(limit_param)
+        except ValueError:
+            return {"status": "error", "error": "limit must be an integer"}, 400
+        if limit not in (50, 100, 200):
+            return {"status": "error", "error": "limit must be 50, 100, or 200"}, 400
+
+        # Build WHERE clause dynamically
+        conditions = []
+        params = []
+
+        if types_param:
+            requested_types = [t.strip() for t in types_param.split(",") if t.strip()]
+            valid = [t for t in requested_types if t in VALID_TYPES]
+            if not valid:
+                return {"status": "error", "error": "No valid types specified"}, 400
+            placeholders = ",".join(["%s"] * len(valid))
+            conditions.append(f"a.type IN ({placeholders})")
+            params.extend(valid)
+
+        if sources_param:
+            requested_sources = [s.strip() for s in sources_param.split(",") if s.strip()]
+            valid = [s for s in requested_sources if s in VALID_SOURCES]
+            if not valid:
+                return {"status": "error", "error": "No valid sources specified"}, 400
+            placeholders = ",".join(["%s"] * len(valid))
+            conditions.append(f"a.source IN ({placeholders})")
+            params.extend(valid)
+
+        if solver_id:
+            try:
+                solver_id_int = int(solver_id)
+            except ValueError:
+                return {"status": "error", "error": "solver_id must be an integer"}, 400
+            conditions.append("a.solver_id = %s")
+            params.append(solver_id_int)
+
+        if puzzle_id:
+            try:
+                puzzle_id_int = int(puzzle_id)
+            except ValueError:
+                return {"status": "error", "error": "puzzle_id must be an integer"}, 400
+            conditions.append("a.puzzle_id = %s")
+            params.append(puzzle_id_int)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        params.append(limit)
+
+        conn, cursor = _read_cursor()
+        cursor.execute(
+            f"""
+            SELECT a.id, a.time, a.type, a.source, a.puzzle_id, a.solver_id,
+                   p.name AS puzzle_name, s.name AS solver_name
+            FROM activity a
+            LEFT JOIN puzzle p ON a.puzzle_id = p.id
+            LEFT JOIN solver s ON a.solver_id = s.id
+            WHERE {where_clause}
+            ORDER BY a.time DESC
+            LIMIT %s
+            """,
+            tuple(params),
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+
+        # Format results
+        results = []
+        for row in rows:
+            results.append({
+                "id": row["id"],
+                "time": row["time"].isoformat() if row["time"] else None,
+                "type": row["type"],
+                "source": row["source"],
+                "puzzle_id": row["puzzle_id"],
+                "puzzle_name": row["puzzle_name"],
+                "solver_id": row["solver_id"],
+                "solver_name": row["solver_name"],
+            })
+
+        return {"status": "ok", "activity": results, "count": len(results)}
+
+    except Exception as e:
+        debug_log(1, "Exception in activity search: %s" % e)
         return {"status": "error", "error": str(e)}, 500
 
 

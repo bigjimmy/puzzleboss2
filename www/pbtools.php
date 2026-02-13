@@ -22,6 +22,12 @@ $bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot],
 <?= render_navbar('pbtools') ?>
 
 <div class="info-box">
+  <div class="info-box-header">
+    <h3><a href="./activity.php">Activity Log →</a></h3>
+  </div>
+</div>
+
+<div class="info-box">
   <div class="info-box-header" @click="showBookmarklet = !showBookmarklet">
     <span class="collapse-icon" :class="{ collapsed: !showBookmarklet }">▼</span>
     <h3>New Puzzle / Check for Puzzles Bookmarklet</h3>

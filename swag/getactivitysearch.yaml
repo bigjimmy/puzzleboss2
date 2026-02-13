@@ -1,0 +1,103 @@
+tags:
+  - Activity
+summary: Search activity log with filters
+description: |
+  Search the activity log with optional filters for type, source, solver, and puzzle.
+  Returns matching activity entries ordered by time (most recent first).
+parameters:
+  - name: types
+    in: query
+    type: string
+    required: false
+    description: Comma-separated activity types to include (e.g. "change,status,solve")
+  - name: sources
+    in: query
+    type: string
+    required: false
+    description: Comma-separated sources to include (e.g. "puzzleboss,bigjimmybot")
+  - name: solver_id
+    in: query
+    type: integer
+    required: false
+    description: Filter by solver ID
+  - name: puzzle_id
+    in: query
+    type: integer
+    required: false
+    description: Filter by puzzle ID
+  - name: limit
+    in: query
+    type: integer
+    required: false
+    default: 50
+    enum: [50, 100, 200]
+    description: Maximum number of results to return
+produces:
+  - application/json
+responses:
+  200:
+    description: Successful response with activity list
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        count:
+          type: integer
+          description: Number of results returned
+        activity:
+          type: array
+          description: List of matching activity entries
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Activity entry ID
+              time:
+                type: string
+                format: date-time
+                description: Timestamp of activity (ISO 8601 format)
+              type:
+                type: string
+                enum: [create, revise, comment, interact, solve, change, status, assignment]
+                description: Type of activity
+              source:
+                type: string
+                enum: [google, puzzleboss, bigjimmybot, discord]
+                description: Source system that recorded this activity
+              puzzle_id:
+                type: integer
+                description: ID of puzzle this activity is for
+              puzzle_name:
+                type: string
+                description: Name of the puzzle (from JOIN)
+              solver_id:
+                type: integer
+                description: ID of solver who performed the activity
+              solver_name:
+                type: string
+                description: Name of the solver (from JOIN)
+  400:
+    description: Invalid parameters
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Error message
+  500:
+    description: Server error
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Error message

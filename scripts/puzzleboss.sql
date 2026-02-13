@@ -25,7 +25,7 @@ CREATE TABLE `activity` (
   `solver_id` int(11) NOT NULL,
   `puzzle_id` int(11) DEFAULT NULL,
   `source` enum('google','puzzleboss','bigjimmybot','discord') DEFAULT NULL,
-  `type` enum('create','revise','comment','interact','solve') DEFAULT NULL,
+  `type` enum('create','revise','comment','interact','solve','change','status','assignment') DEFAULT NULL,
   `uri` text,
   `source_version` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
