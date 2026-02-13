@@ -135,14 +135,6 @@ def _read_cursor():
     return conn, cursor
 
 
-def _log_activity(puzzle_id, activity_type, solver_id=100, source="puzzleboss"):
-    """Log an activity entry. Fails silently (logs error only)."""
-    try:
-        conn, cursor = _cursor()
-        pblib.log_activity(puzzle_id, activity_type, solver_id, source, conn)
-    except Exception as e:
-        debug_log(1, "Failed to log activity for puzzle %s: %s" % (puzzle_id, e))
-
 
 def _get_status_names():
     """Get puzzle status names from the DB ENUM definition."""
@@ -812,27 +804,12 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
     Raises Exception on error.
     """
     # Special handling for puzzle assignment
+    # Validation (puzzle exists, not solved, solver exists) and activity logging
+    # are handled inside assign/unassign_solver_to_puzzle() in pblib.
     if part == "puzz":
-        current_puzzle = None  # Initialize to avoid NameError
-
         if value:
-            # Assigning puzzle, so check if puzzle is real
             debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
-            mypuzz = get_one_puzzle(value)
-            debug_log(5, "return value from get_one_puzzle %s is %s" % (value, mypuzz))
-            if mypuzz["status"] != "ok":
-                raise Exception(
-                    f"Error retrieving info on puzzle {value}, which user {id} is attempting to claim"
-                )
-            # Reject assignment to solved puzzles
-            if mypuzz["puzzle"]["status"] == "Solved":
-                raise Exception(
-                    f"Cannot assign solver to puzzle {value} - puzzle is already solved"
-                )
-
-            # Assign the solver to the puzzle using the new JSON-based system
-            # (also handles "New"/"Abandoned" → "Being worked" status transition)
-            assign_solver_to_puzzle(value, id, mysql.connection)
+            assign_solver_to_puzzle(value, id, mysql.connection, source)
         else:
             # Puzz is empty, so this is a de-assignment
             # Find the puzzle the solver is currently assigned to
@@ -852,18 +829,8 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
             )
             current_puzzle = cursor.fetchone()
             if current_puzzle:
-                # Unassign the solver from their current puzzle
-                unassign_solver_from_puzzle(current_puzzle["id"], id, mysql.connection)
+                unassign_solver_from_puzzle(current_puzzle["id"], id, mysql.connection, source)
 
-        # Now log it in the activity table
-        # For de-assignment (empty value), use the actual puzzle_id we found
-        # For assignment (non-empty value), use the provided puzzle_id
-        puzzle_id_for_log = current_puzzle["id"] if (not value and current_puzzle) else value
-
-        if puzzle_id_for_log:  # Only log if we have a valid puzzle_id
-            _log_activity(puzzle_id_for_log, "interact", id, source)
-
-        debug_log(4, "Activity table updated: solver %s taking puzzle %s" % (id, value))
         debug_log(3, "solver %s puzz updated to %s" % (id, value))
         return value
 
@@ -1233,86 +1200,99 @@ def delete_tag(tag):
         raise Exception(f"Error deleting tag '{tag_name}': {e}")
 
 
-@app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
-@swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
-def create_puzzle():
-    debug_log(4, "start")
-    try:
-        puzzle_data = request.get_json()
-        debug_log(
-            5, f"Incoming puzzle creation payload: {json.dumps(puzzle_data, indent=2)}"
-        )
-        if not puzzle_data or "puzzle" not in puzzle_data:
-            return {"status": "error", "error": "Invalid JSON POST structure"}, 400
+def _run_creation_step(code, step):
+    """
+    Execute a single puzzle creation step.  Raises on any error.
 
-        puzzle = puzzle_data["puzzle"]
-        name = puzzle.get("name").replace(" ", "")  # Strip spaces from name
-        round_id = puzzle.get("round_id")
-        puzzle_uri = puzzle.get("puzzle_uri")
-        ismeta = puzzle.get("ismeta", False)
-        debug_log(5, "request data is - %s" % str(puzzle))
-    except TypeError:
-        raise Exception("failed due to invalid JSON POST structure or empty POST")
+    Steps:
+    1. Validate puzzle data and get round info
+    2. Create Discord channel (or skip if SKIP_PUZZCORD)
+    3. Create Google Sheet (or skip if SKIP_GOOGLE_API)
+    4. Insert puzzle into database
+    5. Finalize: set metadata, announce, cleanup temp storage
 
-    # Check for duplicate
-    try:
-        conn, cursor = _cursor()
-        cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
-        existing_puzzle = cursor.fetchone()
-    except Exception:
-        raise Exception(
-            "Exception checking database for duplicate puzzle before insert"
-        )
+    Returns a dict with step results (always includes "status" and "step").
+    """
+    conn, cursor = _cursor()
+    cursor.execute("SELECT * FROM temp_puzzle_creation WHERE code = %s", (code,))
+    req = cursor.fetchone()
+    if not req:
+        raise Exception(f"Invalid or expired puzzle creation code: {code}")
 
-    if existing_puzzle:
-        raise Exception(f"Duplicate puzzle name {name} detected")
+    name = req["name"]
+    round_id = req["round_id"]
+    puzzle_uri = req["puzzle_uri"]
+    ismeta = req["ismeta"]
+    is_speculative = req["is_speculative"]
 
-    round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
-    round_name = get_round_part(round_id, "name")["round"]["name"]
-    round_drive_id = round_drive_uri.split("/")[-1]
+    debug_log(4, f"_run_creation_step {step} for puzzle {name}")
 
-    # Make new channel so we can get channel id and link (use doc redirect hack since no doc yet)
-    drive_uri = f"{configstruct['BIN_URI']}/doc.php?pname={name}"
-    chat_channel = chat_create_channel_for_puzzle(
-        name, round_name, puzzle_uri, drive_uri
-    )
-    debug_log(4, "return from creating chat channel: %s" % str(chat_channel))
+    if step == 1:
+        round_name = get_round_part(round_id, "name")["round"]["name"]
+        debug_log(3, f"Step 1: Validated puzzle {name} for round {round_name}")
+        return {"status": "ok", "step": 1, "message": f"Validated puzzle data for {name}", "round_name": round_name}
 
-    try:
+    elif step == 2:
+        if configstruct.get("SKIP_PUZZCORD") == "true":
+            debug_log(3, f"Step 2: Skipping Discord channel creation (SKIP_PUZZCORD enabled)")
+            return {"status": "ok", "step": 2, "skipped": True, "message": "Discord integration disabled"}
+
+        round_name = get_round_part(round_id, "name")["round"]["name"]
+        drive_uri = f"{configstruct['BIN_URI']}/doc.php?pname={name}"
+        chat_channel = chat_create_channel_for_puzzle(name, round_name, puzzle_uri, drive_uri)
         chat_id = chat_channel[0]
         chat_link = chat_channel[1]
-    except Exception:
-        raise Exception("Error in creating chat channel for puzzle")
 
-    debug_log(4, "chat channel for puzzle %s is made" % name)
+        cursor.execute(
+            "UPDATE temp_puzzle_creation SET chat_channel_id = %s, chat_channel_link = %s WHERE code = %s",
+            (chat_id, chat_link, code),
+        )
+        conn.commit()
 
-    # Create google sheet
-    drive_id = create_puzzle_sheet(
-        round_drive_id,
-        {
-            "name": name,
-            "roundname": round_name,
-            "puzzle_uri": puzzle_uri,
-            "chat_uri": chat_link,
-        },
-    )
-    drive_uri = f"https://docs.google.com/spreadsheets/d/{drive_id}/edit#gid=1"
+        debug_log(3, f"Step 2: Created Discord channel for {name}")
+        return {"status": "ok", "step": 2, "message": f"Created Discord channel for {name}", "chat_channel_id": chat_id, "chat_link": chat_link}
 
-    # Activate the Puzzle Tools add-on via Apps Script API (non-fatal)
-    try:
-        activate_puzzle_sheet_via_api(drive_id, name)
-    except Exception as ae:
-        debug_log(2, f"Apps Script activation failed for {name}, bigjimmy will fall back: {ae}")
+    elif step == 3:
+        if configstruct.get("SKIP_GOOGLE_API") == "true":
+            debug_log(3, f"Step 3: Skipping Google Sheet creation (SKIP_GOOGLE_API enabled)")
+            return {"status": "ok", "step": 3, "skipped": True, "message": "Google API integration disabled"}
 
-    # Actually insert into the database
-    # Note: sheetenabled stays at default 0 — bigjimmybot will probe the hidden sheet
-    # and promote to 1 once it confirms the sheet is working. This is safer than trusting
-    # that activation succeeded.
-    try:
-        conn, cursor = _cursor()
+        round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
+        round_name = get_round_part(round_id, "name")["round"]["name"]
+        round_drive_id = round_drive_uri.split("/")[-1]
+        chat_link = req.get("chat_channel_link", "")
 
-        # Store the full puzzle name in UTF-8 as the chat channel name
-        # The Discord bot will handle creating a proper channel
+        drive_id = create_puzzle_sheet(
+            round_drive_id,
+            {"name": name, "roundname": round_name, "puzzle_uri": puzzle_uri, "chat_uri": chat_link},
+        )
+        drive_uri = f"https://docs.google.com/spreadsheets/d/{drive_id}/edit#gid=1"
+
+        cursor.execute(
+            "UPDATE temp_puzzle_creation SET drive_id = %s, drive_uri = %s WHERE code = %s",
+            (drive_id, drive_uri, code),
+        )
+        conn.commit()
+
+        # Activate the Puzzle Tools add-on via Apps Script API (non-fatal)
+        addon_activated = False
+        try:
+            addon_activated = activate_puzzle_sheet_via_api(drive_id, name)
+        except Exception as ae:
+            debug_log(2, f"Step 3: Apps Script activation failed for {name}, bigjimmy will fall back: {ae}")
+
+        msg = f"Created Google Sheet for {name}"
+        if addon_activated:
+            msg += " (add-on activated)"
+
+        debug_log(3, f"Step 3: {msg}")
+        return {"status": "ok", "step": 3, "message": msg, "drive_id": drive_id, "drive_uri": drive_uri, "addon_activated": addon_activated}
+
+    elif step == 4:
+        chat_id = req.get("chat_channel_id", "")
+        chat_link = req.get("chat_channel_link", "")
+        drive_id = req.get("drive_id", "")
+        drive_uri = req.get("drive_uri", "")
 
         cursor.execute(
             """
@@ -1320,62 +1300,112 @@ def create_puzzle():
             (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
-            (
-                name,
-                puzzle_uri,
-                round_id,
-                chat_id,
-                chat_link,
-                name,  # Store the full name with emojis intact
-                drive_id,
-                drive_uri,
-                ismeta,
-            ),
+            (name, puzzle_uri, round_id, chat_id, chat_link, name, drive_id, drive_uri, ismeta),
         )
         conn.commit()
-    except MySQLdb._exceptions.IntegrityError:
-        raise Exception(
-            f"MySQL integrity failure. Does another puzzle with the same name {name} exist?"
-        )
-    except Exception:
-        raise Exception(f"Exception in insertion of puzzle {name} into database")
 
-    # We need to figure out what the ID is that the puzzle got assigned
-    try:
-        conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
-        puzzle = cursor.fetchone()
-        myid = puzzle["id"]
+        myid = cursor.fetchone()["id"]
 
-        _log_activity(myid, "create")
+        pblib.log_activity(myid, "create", 100, "puzzleboss", conn)
 
-        # If this is a meta puzzle, check round completion status
-        # This handles unmarking rounds that were previously solved when a new unsolved meta is added
         if ismeta:
             check_round_completion(round_id, conn)
-    except Exception:
-        raise Exception("Exception checking database for puzzle after insert")
 
-    # Announce new puzzle in chat
-    chat_announce_new(name)
+        debug_log(3, f"Step 4: Inserted puzzle {name} into database with ID {myid}")
+        return {"status": "ok", "step": 4, "message": f"Inserted puzzle {name} into database", "puzzle_id": myid}
 
-    debug_log(
-        3,
-        "puzzle %s added to system fully (chat room, spreadsheet, database, etc.)!"
-        % name,
+    elif step == 5:
+        cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
+        puzzle = cursor.fetchone()
+        if not puzzle:
+            raise Exception(f"Puzzle {name} not found in database")
+        myid = puzzle["id"]
+
+        if is_speculative:
+            cursor.execute("UPDATE puzzle SET status = 'Speculative' WHERE id = %s", (myid,))
+            conn.commit()
+            debug_log(3, f"Set puzzle {name} status to Speculative")
+
+        chat_announce_new(name)
+        invalidate_cache_with_stats()
+
+        cursor.execute("DELETE FROM temp_puzzle_creation WHERE code = %s", (code,))
+        conn.commit()
+
+        debug_log(3, f"Step 5: Finalized puzzle {name} (ID {myid}) - announced and cleaned up")
+        return {"status": "ok", "step": 5, "message": f"Puzzle {name} creation complete!", "puzzle_id": myid, "is_speculative": is_speculative}
+
+    else:
+        raise Exception(f"Invalid step: {step}. Must be 1-5")
+
+
+@app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
+@swag_from("swag/putpuzzle.yaml", endpoint="post_puzzles", methods=["POST"])
+def create_puzzle():
+    """
+    One-shot puzzle creation (backwards compatible).
+    Validates, stores in temp table, runs all 5 creation steps, returns result.
+    """
+    debug_log(4, "start")
+    try:
+        puzzle_data = request.get_json()
+        debug_log(5, f"Incoming puzzle creation payload: {json.dumps(puzzle_data, indent=2)}")
+        if not puzzle_data or "puzzle" not in puzzle_data:
+            return {"status": "error", "error": "Invalid JSON POST structure"}, 400
+
+        puzzle = puzzle_data["puzzle"]
+        name = puzzle.get("name", "").replace(" ", "")
+        round_id = puzzle.get("round_id")
+        puzzle_uri = puzzle.get("puzzle_uri", "")
+        ismeta = puzzle.get("ismeta", False)
+        debug_log(5, "request data is - %s" % str(puzzle))
+    except TypeError:
+        raise Exception("failed due to invalid JSON POST structure or empty POST")
+
+    # Check for duplicate
+    conn, cursor = _cursor()
+    cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
+    if cursor.fetchone():
+        raise Exception(f"Duplicate puzzle name {name} detected")
+
+    # Store in temp table and run all steps
+    code = token_hex(8)
+    conn, cursor = _cursor()
+    cursor.execute(
+        """
+        INSERT INTO temp_puzzle_creation
+        (code, name, round_id, puzzle_uri, ismeta, is_speculative)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (code, name, round_id, puzzle_uri, ismeta, False),
     )
+    conn.commit()
 
-    # Invalidate /allcached since new puzzle was created
-    invalidate_cache_with_stats()
+    try:
+        results = {}
+        for step in range(1, 6):
+            results[step] = _run_creation_step(code, step)
+    except Exception:
+        # Clean up temp record on failure
+        try:
+            conn, cursor = _cursor()
+            cursor.execute("DELETE FROM temp_puzzle_creation WHERE code = %s", (code,))
+            conn.commit()
+        except Exception:
+            pass
+        raise
+
+    debug_log(3, "puzzle %s added to system fully (chat room, spreadsheet, database, etc.)!" % name)
 
     return {
         "status": "ok",
         "puzzle": {
-            "id": myid,
+            "id": results[4]["puzzle_id"],
             "name": name,
-            "chat_channel_id": chat_id,
-            "chat_link": chat_link,
-            "drive_uri": drive_uri,
+            "chat_channel_id": results[2].get("chat_channel_id", ""),
+            "chat_link": results[2].get("chat_link", ""),
+            "drive_uri": results[3].get("drive_uri", ""),
         },
     }
 
@@ -1390,14 +1420,12 @@ def create_puzzle_stepwise():
     debug_log(4, "start stepwise puzzle creation")
     try:
         puzzle_data = request.get_json()
-        debug_log(
-            5, f"Incoming stepwise puzzle creation payload: {json.dumps(puzzle_data, indent=2)}"
-        )
+        debug_log(5, f"Incoming stepwise puzzle creation payload: {json.dumps(puzzle_data, indent=2)}")
         if not puzzle_data or "puzzle" not in puzzle_data:
             return {"status": "error", "error": "Invalid JSON POST structure"}, 400
 
         puzzle = puzzle_data["puzzle"]
-        name = puzzle.get("name", "").replace(" ", "")  # Strip spaces from name
+        name = puzzle.get("name", "").replace(" ", "")
         round_id = puzzle.get("round_id")
         puzzle_uri = puzzle.get("puzzle_uri", "")
         ismeta = puzzle.get("ismeta", False)
@@ -1406,7 +1434,6 @@ def create_puzzle_stepwise():
     except TypeError:
         return {"status": "error", "error": "Invalid JSON POST structure or empty POST"}, 400
 
-    # Validate required fields
     if not name or not round_id or not puzzle_uri:
         return {"status": "error", "error": "Missing required fields: name, round_id, puzzle_uri"}, 400
 
@@ -1429,7 +1456,6 @@ def create_puzzle_stepwise():
     except Exception:
         return {"status": "error", "error": f"Round ID {round_id} not found"}, 404
 
-    # Generate unique code and store request (8 bytes = 16 hex chars, fits varchar(16))
     code = token_hex(8)
 
     try:
@@ -1453,7 +1479,7 @@ def create_puzzle_stepwise():
         "status": "ok",
         "code": code,
         "name": name,
-        "message": "Puzzle creation request validated. Use /createpuzzle/<code>?step=N to proceed."
+        "message": "Puzzle creation request validated. Use /createpuzzle/<code>?step=N to proceed.",
     }
 
 
@@ -1462,13 +1488,7 @@ def create_puzzle_stepwise():
 def finish_puzzle_creation(code):
     """
     Step-by-step puzzle creation endpoint.
-
-    Steps:
-    1. Validate puzzle data (retrieve from temp storage)
-    2. Create Discord channel (or skip if SKIP_PUZZCORD)
-    3. Create Google Sheet (or skip if SKIP_GOOGLE_API)
-    4. Insert puzzle into database
-    5. Finalize: set metadata, announce, cleanup temp storage
+    Dispatches to _run_creation_step() for the requested step.
     """
     debug_log(4, f"finish_puzzle_creation called with code {code}")
 
@@ -1481,272 +1501,13 @@ def finish_puzzle_creation(code):
     except ValueError:
         return {"status": "error", "error": "Step parameter must be an integer"}, 400
 
-    # Retrieve puzzle creation request from temp storage
     try:
-        conn, cursor = _cursor()
-        cursor.execute(
-            "SELECT * FROM temp_puzzle_creation WHERE code = %s",
-            (code,)
-        )
-        req = cursor.fetchone()
+        return _run_creation_step(code, step)
+    except MySQLdb._exceptions.IntegrityError:
+        return {"status": "error", "error": "Duplicate puzzle detected"}, 400
     except Exception as e:
-        debug_log(1, f"Error retrieving puzzle creation request: {e}")
-        return {"status": "error", "error": f"Database error: {e}"}, 500
-
-    if not req:
-        return {"status": "error", "error": f"Invalid or expired code: {code}"}, 404
-
-    name = req["name"]
-    round_id = req["round_id"]
-    puzzle_uri = req["puzzle_uri"]
-    ismeta = req["ismeta"]
-    is_speculative = req["is_speculative"]
-
-    debug_log(4, f"Processing step {step} for puzzle {name}")
-
-    # Step 1: Validate puzzle data and get round info
-    if step == 1:
-        try:
-            round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
-            round_name = get_round_part(round_id, "name")["round"]["name"]
-            round_drive_id = round_drive_uri.split("/")[-1]
-
-            debug_log(3, f"Step 1: Validated puzzle {name} for round {round_name}")
-
-            return {
-                "status": "ok",
-                "step": 1,
-                "message": f"Validated puzzle data for {name}",
-                "round_name": round_name
-            }
-        except Exception as e:
-            debug_log(1, f"Step 1 error: {e}")
-            return {"status": "error", "error": f"Validation failed: {e}"}, 500
-
-    # Step 2: Create Discord channel
-    elif step == 2:
-        if configstruct.get("SKIP_PUZZCORD") == "true":
-            debug_log(3, f"Step 2: Skipping Discord channel creation (SKIP_PUZZCORD enabled)")
-            return {
-                "status": "ok",
-                "step": 2,
-                "skipped": True,
-                "message": "Discord integration disabled"
-            }
-
-        try:
-            round_name = get_round_part(round_id, "name")["round"]["name"]
-            # Use doc redirect hack since no doc yet
-            drive_uri = f"{configstruct['BIN_URI']}/doc.php?pname={name}"
-            chat_channel = chat_create_channel_for_puzzle(
-                name, round_name, puzzle_uri, drive_uri
-            )
-            debug_log(4, f"Step 2: Created chat channel: {chat_channel}")
-
-            chat_id = chat_channel[0]
-            chat_link = chat_channel[1]
-
-            # Store channel info in temp table
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                UPDATE temp_puzzle_creation
-                SET chat_channel_id = %s, chat_channel_link = %s
-                WHERE code = %s
-                """,
-                (chat_id, chat_link, code)
-            )
-            conn.commit()
-
-            debug_log(3, f"Step 2: Created Discord channel for {name}")
-
-            return {
-                "status": "ok",
-                "step": 2,
-                "message": f"Created Discord channel for {name}",
-                "chat_channel_id": chat_id,
-                "chat_link": chat_link
-            }
-        except Exception as e:
-            debug_log(1, f"Step 2 error: {e}")
-            return {"status": "error", "error": f"Failed to create Discord channel: {e}"}, 500
-
-    # Step 3: Create Google Sheet
-    elif step == 3:
-        if configstruct.get("SKIP_GOOGLE_API") == "true":
-            debug_log(3, f"Step 3: Skipping Google Sheet creation (SKIP_GOOGLE_API enabled)")
-            return {
-                "status": "ok",
-                "step": 3,
-                "skipped": True,
-                "message": "Google API integration disabled"
-            }
-
-        try:
-            round_drive_uri = get_round_part(round_id, "drive_uri")["round"]["drive_uri"]
-            round_name = get_round_part(round_id, "name")["round"]["name"]
-            round_drive_id = round_drive_uri.split("/")[-1]
-
-            chat_link = req.get("chat_channel_link", "")
-
-            drive_id = create_puzzle_sheet(
-                round_drive_id,
-                {
-                    "name": name,
-                    "roundname": round_name,
-                    "puzzle_uri": puzzle_uri,
-                    "chat_uri": chat_link,
-                },
-            )
-            drive_uri = f"https://docs.google.com/spreadsheets/d/{drive_id}/edit#gid=1"
-
-            # Store sheet info in temp table
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                UPDATE temp_puzzle_creation
-                SET drive_id = %s, drive_uri = %s
-                WHERE code = %s
-                """,
-                (drive_id, drive_uri, code)
-            )
-            conn.commit()
-
-            debug_log(3, f"Step 3: Created Google Sheet for {name}")
-
-            # Activate the Puzzle Tools add-on via Apps Script API (non-fatal if it fails;
-            # bigjimmybot will fall back to the legacy Revisions API)
-            addon_activated = False
-            try:
-                addon_activated = activate_puzzle_sheet_via_api(drive_id, name)
-            except Exception as ae:
-                debug_log(2, f"Step 3: Apps Script activation failed for {name}, "
-                          f"bigjimmy will fall back: {ae}")
-
-            msg = f"Created Google Sheet for {name}"
-            if addon_activated:
-                msg += " (add-on activated)"
-
-            return {
-                "status": "ok",
-                "step": 3,
-                "message": msg,
-                "drive_id": drive_id,
-                "drive_uri": drive_uri,
-                "addon_activated": addon_activated
-            }
-        except Exception as e:
-            debug_log(1, f"Step 3 error: {e}")
-            return {"status": "error", "error": f"Failed to create Google Sheet: {e}"}, 500
-
-    # Step 4: Insert puzzle into database
-    elif step == 4:
-        try:
-            chat_id = req.get("chat_channel_id", "")
-            chat_link = req.get("chat_channel_link", "")
-            drive_id = req.get("drive_id", "")
-            drive_uri = req.get("drive_uri", "")
-
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO puzzle
-                (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    name,
-                    puzzle_uri,
-                    round_id,
-                    chat_id,
-                    chat_link,
-                    name,  # Store the full name with emojis intact
-                    drive_id,
-                    drive_uri,
-                    ismeta,
-                ),
-            )
-            conn.commit()
-
-            # Get the assigned puzzle ID
-            cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
-            puzzle = cursor.fetchone()
-            myid = puzzle["id"]
-
-            _log_activity(myid, "create")
-
-            # If this is a meta puzzle, check round completion status
-            # This handles unmarking rounds that were previously solved when a new unsolved meta is added
-            if ismeta:
-                check_round_completion(round_id, conn)
-
-            debug_log(3, f"Step 4: Inserted puzzle {name} into database with ID {myid}")
-
-            return {
-                "status": "ok",
-                "step": 4,
-                "message": f"Inserted puzzle {name} into database",
-                "puzzle_id": myid
-            }
-        except MySQLdb._exceptions.IntegrityError as e:
-            debug_log(1, f"Step 4 integrity error: {e}")
-            return {"status": "error", "error": f"Duplicate puzzle name {name} detected"}, 400
-        except Exception as e:
-            debug_log(1, f"Step 4 error: {e}")
-            return {"status": "error", "error": f"Failed to insert puzzle into database: {e}"}, 500
-
-    # Step 5: Finalize - set status, announce, cleanup
-    elif step == 5:
-        try:
-            # Get puzzle ID
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
-            puzzle = cursor.fetchone()
-            if not puzzle:
-                return {"status": "error", "error": f"Puzzle {name} not found in database"}, 404
-
-            myid = puzzle["id"]
-
-            # Set speculative status if needed
-            if is_speculative:
-                cursor.execute(
-                    "UPDATE puzzle SET status = 'Speculative' WHERE id = %s",
-                    (myid,)
-                )
-                conn.commit()
-                debug_log(3, f"Set puzzle {name} status to Speculative")
-
-            # Announce new puzzle in chat
-            chat_announce_new(name)
-
-            # Invalidate /allcached since new puzzle was created
-            invalidate_cache_with_stats()
-
-            # Clean up temp storage
-            cursor.execute(
-                "DELETE FROM temp_puzzle_creation WHERE code = %s",
-                (code,)
-            )
-            conn.commit()
-
-            debug_log(
-                3,
-                f"Step 5: Finalized puzzle {name} (ID {myid}) - announced and cleaned up"
-            )
-
-            return {
-                "status": "ok",
-                "step": 5,
-                "message": f"Puzzle {name} creation complete!",
-                "puzzle_id": myid,
-                "is_speculative": is_speculative
-            }
-        except Exception as e:
-            debug_log(1, f"Step 5 error: {e}")
-            return {"status": "error", "error": f"Failed to finalize puzzle: {e}"}, 500
-
-    else:
-        return {"status": "error", "error": f"Invalid step: {step}. Must be 1-5"}, 400
+        debug_log(1, f"Step {step} error for code {code}: {e}")
+        return {"status": "error", "error": f"Step {step} failed: {e}"}, 500
 
 
 @app.route("/puzzles/activate_all", endpoint="post_activate_all", methods=["POST"])
@@ -2059,7 +1820,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "xyzloc":
         update_puzzle_part_in_db(id, part, value)
 
-        _log_activity(id, "interact")
+        pblib.log_activity(id, "interact", 100, "puzzleboss", mysql.connection)
 
         if (value is not None) and (value != ""):
             chat_say_something(
@@ -2084,7 +1845,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
             chat_announce_solved(mypuzzle["puzzle"]["name"])
 
-            _log_activity(id, "solve")
+            pblib.log_activity(id, "solve", 100, "puzzleboss", mysql.connection)
 
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
@@ -2097,7 +1858,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             f"**ATTENTION** new comment for puzzle {mypuzzle['puzzle']['name']}: {value}",
         )
 
-        _log_activity(id, "comment")
+        pblib.log_activity(id, "comment", 100, "puzzleboss", mysql.connection)
 
     elif part == "round":
         update_puzzle_part_in_db(id, part, value)
@@ -2118,7 +1879,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         updated_puzzle = get_one_puzzle(id)
         chat_announce_move(updated_puzzle["puzzle"]["name"])
 
-        _log_activity(id, "interact")
+        pblib.log_activity(id, "interact", 100, "puzzleboss", mysql.connection)
 
     elif part == "name":
         # Update puzzle name (strip spaces like in create_puzzle)
@@ -2264,7 +2025,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # Log tag change to activity table using system solver_id (100)
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
-            _log_activity(id, "comment")
+            pblib.log_activity(id, "comment", 100, "puzzleboss", mysql.connection)
 
     else:
         # For any other part, just try to update it directly
@@ -2800,6 +2561,12 @@ def get_last_activity_for_solver(id):
 
 
 def set_new_activity_for_puzzle(id, actstruct):
+    """Log a caller-specified activity entry. Raises on any failure.
+
+    Unlike other activity logging (which is fire-and-forget), this endpoint
+    is the explicit "write an activity row" API — if it fails, the caller
+    needs to know.
+    """
     debug_log(4, "start, called for puzzle id %s with: %s" % (id, actstruct))
 
     try:
@@ -2807,16 +2574,15 @@ def set_new_activity_for_puzzle(id, actstruct):
         source = actstruct["source"]
         activity_type = actstruct["type"]
     except Exception:
-        debug_log(
-            0,
-            "Failure parsing activity dict. Needs solver_id, source, type. dict passed in is: %s"
-            % actstruct,
+        raise Exception(
+            "Malformed activity dict. Needs solver_id, source, type. Got: %s"
+            % actstruct
         )
-        return 255
 
-    _log_activity(id, activity_type, solver_id, source)
+    if not pblib.log_activity(id, activity_type, solver_id, source, mysql.connection):
+        raise Exception("Failed to log activity for puzzle %s" % id)
+
     debug_log(3, "Updated activity for puzzle id %s" % id)
-    return 0
 
 
 def delete_pb_solver(username):

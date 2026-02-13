@@ -14,6 +14,7 @@ Run with: pytest tests/test_pblib_solver_assignment.py -v
 import json
 import os
 import sys
+import pytest
 from unittest.mock import MagicMock, patch, mock_open
 
 # Add parent directory to path
@@ -93,17 +94,21 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None, puzzle_
     fetchone_count = {"n": 0}
 
     # Call sequence in assign_solver_to_puzzle:
-    # 1. JSON_TABLE lookup for current puzzle → fetchall (returns [] = not assigned)
-    # 2. SELECT current_solvers, status → fetchone
-    # 3. SELECT solver_history → fetchone
+    # 1. solver_exists() → SELECT id FROM solver → fetchone (returns solver row)
+    # 2. JSON_TABLE lookup for current puzzle → fetchall (returns [] = not assigned)
+    # 3. SELECT current_solvers, status → fetchone
+    # 4. SELECT solver_history → fetchone
+    # 5. log_activity() → INSERT INTO activity (uses execute, no fetchone)
     cursor.fetchall.return_value = []  # Not currently assigned to any puzzle
 
     def mock_fetchone():
         fetchone_count["n"] += 1
         n = fetchone_count["n"]
         if n == 1:
-            return {"current_solvers": current_solvers_json, "status": puzzle_status}
+            return {"id": 101}  # solver_exists check
         elif n == 2:
+            return {"current_solvers": current_solvers_json, "status": puzzle_status}
+        elif n == 3:
             return {"solver_history": solver_history_json}
         return None
 
@@ -263,14 +268,17 @@ class TestAssignUnassignsFromOldPuzzle:
             fetchone_count["n"] += 1
             n = fetchone_count["n"]
             # Calls:
-            # 1. unassign_solver_from_puzzle SELECT current_solvers for puzzle 284
-            # 2. assign: SELECT current_solvers, status for puzzle 287
-            # 3. assign: SELECT solver_history for puzzle 287
+            # 1. solver_exists() → SELECT id FROM solver
+            # 2. unassign_solver_from_puzzle: SELECT current_solvers for puzzle 284
+            # 3. assign: SELECT current_solvers, status for puzzle 287
+            # 4. assign: SELECT solver_history for puzzle 287
             if n == 1:
-                return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
+                return {"id": 101}  # solver_exists
             elif n == 2:
-                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
+                return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
             elif n == 3:
+                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
+            elif n == 4:
                 return {"solver_history": json.dumps({"solvers": []})}
             return None
 
@@ -303,12 +311,17 @@ class TestAssignUnassignsFromOldPuzzle:
         def mock_fetchone():
             fetchone_count["n"] += 1
             n = fetchone_count["n"]
-            # unassign calls for 284 and 285, then assign calls for 287
-            if n <= 2:
+            # 1. solver_exists() → SELECT id FROM solver
+            # 2-3. unassign calls for 284 and 285 (SELECT current_solvers)
+            # 4. assign: SELECT current_solvers, status for 287
+            # 5. assign: SELECT solver_history for 287
+            if n == 1:
+                return {"id": 101}  # solver_exists
+            elif n <= 3:
                 return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
-            elif n == 3:
-                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
             elif n == 4:
+                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
+            elif n == 5:
                 return {"solver_history": json.dumps({"solvers": []})}
             return None
 
@@ -411,14 +424,9 @@ class TestAssignStatusTransition:
         assert len(status_calls) == 0, "Should not update status when already 'Being worked'"
 
     @patch('pblib.debug_log')
-    def test_solved_puzzle_no_status_change(self, mock_log):
-        """Puzzle with status 'Solved' should not be changed to 'Being worked'."""
+    def test_solved_puzzle_raises_error(self, mock_log):
+        """Puzzle with status 'Solved' should raise ValueError (cannot assign)."""
         conn, cursor = _make_mock_conn(puzzle_status="Solved")
 
-        assign_solver_to_puzzle(287, 101, conn)
-
-        status_calls = [
-            c for c in cursor.execute.call_args_list
-            if 'SET status' in str(c)
-        ]
-        assert len(status_calls) == 0, "Should not change status of solved puzzle"
+        with pytest.raises(ValueError, match="already solved"):
+            assign_solver_to_puzzle(287, 101, conn)

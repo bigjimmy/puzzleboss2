@@ -186,7 +186,7 @@ def _assign_solver_to_puzzle(
     """
     try:
         conn = _get_db_connection()
-        assign_solver_to_puzzle(puzzle_id, solver_id, conn)
+        assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="bigjimmybot")
         debug_log(
             4,
             f"[Thread: {threadname}] Assigned solver {solver_id} to puzzle {puzzle_id}",

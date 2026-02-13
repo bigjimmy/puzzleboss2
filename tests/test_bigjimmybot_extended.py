@@ -122,7 +122,7 @@ class TestAssignSolverToPuzzle:
         # Verify
         assert result is True
         mock_assign.assert_called_once_with(
-            123, 456, mock_conn.return_value
+            123, 456, mock_conn.return_value, source="bigjimmybot"
         )
 
     @patch('bigjimmybot._get_db_connection')

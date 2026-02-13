@@ -301,17 +301,38 @@ def check_round_completion(round_id, conn):
         debug_log(1, "Error checking round completion status for round %s" % round_id)
 
 
-def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
+def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
     """Assign a solver to a puzzle, unassigning from any other puzzle first.
 
-    Solver_id is stored as INT in JSON, matching solver.id column type.
-    All SQL functions use JSON_TABLE with INT PATH to extract solver_ids.
-    Run the normalize_solver_ids migration after deploy to ensure consistency.
+    This is the single unified entry point for all solver assignment — from
+    pbrest.py API endpoints, bigjimmybot auto-assignment, or any future caller.
+
+    Invariants enforced here (so callers don't need to):
+        - Puzzle must exist
+        - Cannot assign to a solved puzzle
+        - Solver must exist
+        - Auto-transitions New/Abandoned → Being worked
+        - Logs "interact" activity for the assignment
+        - Unassigns solver from any other puzzle first
+
+    Args:
+        puzzle_id: Puzzle database ID (int or string, normalized to int)
+        solver_id: Solver database ID (int or string, normalized to int)
+        conn: Database connection
+        source: Caller identity for activity logging (default "system").
+                Typical values: "puzzleboss", "bigjimmybot", "discord"
+
+    Raises:
+        ValueError: If puzzle doesn't exist, is solved, or solver doesn't exist
     """
     solver_id = int(solver_id)  # Normalize: 101 whether caller passes 101 or "101"
     puzzle_id = int(puzzle_id)
     debug_log(4, "Started with puzzle id %s" % puzzle_id)
     cursor = conn.cursor()
+
+    # Validate solver exists
+    if not solver_exists(solver_id, conn):
+        raise ValueError("Solver %d does not exist" % solver_id)
 
     # Find and unassign from any other puzzle the solver is currently on.
     # JSON_TABLE with INT PATH extracts solver_ids as integers for comparison.
@@ -331,26 +352,29 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
     current_puzzles = cursor.fetchall()
     for current_puzzle in current_puzzles:
         if current_puzzle["id"] != puzzle_id:
-            unassign_solver_from_puzzle(current_puzzle["id"], solver_id, conn)
+            unassign_solver_from_puzzle(current_puzzle["id"], solver_id, conn, source)
 
-    # Update current solvers for the new puzzle
+    # Fetch puzzle and validate it exists and is not solved
     cursor.execute(
         "SELECT current_solvers, status FROM puzzle WHERE id = %s",
         (puzzle_id,),
     )
     row = cursor.fetchone()
+    if row is None:
+        raise ValueError("Puzzle %d does not exist" % puzzle_id)
+    if row["status"] == "Solved":
+        raise ValueError("Cannot assign solver to puzzle %d - puzzle is already solved" % puzzle_id)
+
     current_solvers_str = row["current_solvers"] or json.dumps(
         {"solvers": []}
     )
     current_solvers = json.loads(current_solvers_str)
 
-    # Transition puzzle out of "New" or "Abandoned" when a solver is assigned
+    # Transition puzzle out of "New" or "Abandoned" when a solver is assigned.
+    # Use update_puzzle_field so the status-change activity logging invariant fires.
     if row["status"] in ("New", "Abandoned"):
         debug_log(3, "Auto-transitioning puzzle %s from '%s' to 'Being worked'" % (puzzle_id, row["status"]))
-        cursor.execute(
-            "UPDATE puzzle SET status = %s WHERE id = %s",
-            ("Being worked", puzzle_id),
-        )
+        update_puzzle_field(puzzle_id, "status", "Being worked", conn, source)
 
     if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
         current_solvers["solvers"].append({"solver_id": solver_id})
@@ -377,9 +401,22 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn):
 
     conn.commit()
 
+    # Invariant: all assignments are logged as "interact" activity.
+    log_activity(puzzle_id, "interact", solver_id, source, conn)
 
-def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
-    """Unassign a solver from a puzzle's current solvers list."""
+
+def unassign_solver_from_puzzle(puzzle_id, solver_id, conn, source="system"):
+    """Unassign a solver from a puzzle's current solvers list.
+
+    Args:
+        puzzle_id: Puzzle database ID (int or string, normalized to int)
+        solver_id: Solver database ID (int or string, normalized to int)
+        conn: Database connection
+        source: Caller identity for activity logging (default "system").
+
+    Raises:
+        ValueError: If puzzle doesn't exist
+    """
     solver_id = int(solver_id)  # Normalize to int
     puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
@@ -388,7 +425,11 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
         "SELECT current_solvers FROM puzzle WHERE id = %s",
         (puzzle_id,),
     )
-    current_solvers_str = cursor.fetchone()["current_solvers"] or json.dumps(
+    row = cursor.fetchone()
+    if row is None:
+        raise ValueError("Puzzle %d does not exist" % puzzle_id)
+
+    current_solvers_str = row["current_solvers"] or json.dumps(
         {"solvers": []}
     )
     current_solvers = json.loads(current_solvers_str)
@@ -403,6 +444,7 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn):
     )
 
     conn.commit()
+
 
 
 def clear_puzzle_solvers(puzzle_id, conn):
@@ -427,10 +469,14 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=No
     """
     Log an activity entry to the activity table.
 
+    Non-raising: on failure, logs a SEV1 error and returns False. This ensures
+    that a logging failure never rolls back an already-committed mutation or
+    prevents subsequent operations in the same call chain.
+
     Args:
         puzzle_id: Puzzle database ID
         activity_type: Type of activity ('create', 'revise', 'comment', 'interact', 'solve')
-        solver_id: Solver database ID who performed the activity
+        solver_id: Solver database ID who performed the activity (100 = system sentinel)
         source: Source of activity ('puzzleboss', 'bigjimmybot', 'google', 'discord')
         conn: Database connection
         timestamp: Optional Unix timestamp to use instead of CURRENT_TIMESTAMP.
@@ -439,23 +485,29 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=No
             the recorded time matches the actual Google Sheet edit time, not
             the server time when bigjimmybot processes it.
 
-    Raises:
-        Exception: If database insert fails
+    Returns:
+        True on success, False on failure
     """
-    puzzle_id = int(puzzle_id)
-    solver_id = int(solver_id)
-    cursor = conn.cursor()
-    if timestamp is not None:
-        cursor.execute(
-            "INSERT INTO activity (puzzle_id, solver_id, source, type, time) VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))",
-            (puzzle_id, solver_id, source, activity_type, timestamp),
-        )
-    else:
-        cursor.execute(
-            "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, %s, %s)",
-            (puzzle_id, solver_id, source, activity_type),
-        )
-    conn.commit()
+    try:
+        puzzle_id = int(puzzle_id)
+        solver_id = int(solver_id)
+        cursor = conn.cursor()
+        if timestamp is not None:
+            cursor.execute(
+                "INSERT INTO activity (puzzle_id, solver_id, source, type, time) VALUES (%s, %s, %s, %s, FROM_UNIXTIME(%s))",
+                (puzzle_id, solver_id, source, activity_type, timestamp),
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO activity (puzzle_id, solver_id, source, type) VALUES (%s, %s, %s, %s)",
+                (puzzle_id, solver_id, source, activity_type),
+            )
+        conn.commit()
+        return True
+    except Exception as e:
+        debug_log(1, "CRITICAL: Failed to log activity (puzzle=%s, type=%s, solver=%s, source=%s): %s"
+                  % (puzzle_id, activity_type, solver_id, source, e))
+        return False
 
 
 def get_solver_by_name_from_db(name, conn):
@@ -541,9 +593,9 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
     """
     puzzle_id = int(puzzle_id)
     if field == "solvers":
-        # Handle solver assignments using existing functions
+        # Handle solver assignments using unified functions
         if value:  # Assign solver
-            assign_solver_to_puzzle(puzzle_id, value, conn)
+            assign_solver_to_puzzle(puzzle_id, value, conn, source)
         else:  # Clear all solvers
             clear_puzzle_solvers(puzzle_id, conn)
     else:
@@ -556,7 +608,7 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
         # "Solved" is excluded because solves are logged as "solve" type via the
         # answer handler — logging "interact" here would duplicate it.
         if field == "status" and value != "Solved":
-            log_activity(puzzle_id, "interact", 0, source, conn)
+            log_activity(puzzle_id, "interact", 100, source, conn)
 
     # Invariant: any puzzle mutation must invalidate the cached /allcached response.
     # This ensures all callers (pbrest, bigjimmybot, future processes) get automatic

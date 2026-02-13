@@ -188,15 +188,17 @@ class TestUpdatePuzzleFieldIdType:
     def test_string_puzzle_id_solver_assignment(self, mock_log):
         """update_puzzle_field with field='solvers' delegates to assign_solver_to_puzzle."""
         conn, cursor = _make_conn()
-        # Mock the assign path: fetchall returns [] (no current puzzle), fetchone for current_solvers + history
+        # Mock the assign path: fetchall returns [] (no current puzzle), fetchone for solver_exists + current_solvers + history
         cursor.fetchall.return_value = []
         fetchone_count = {"n": 0}
 
         def mock_fetchone():
             fetchone_count["n"] += 1
             if fetchone_count["n"] == 1:
-                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
+                return {"id": 101}  # solver_exists check
             elif fetchone_count["n"] == 2:
+                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
+            elif fetchone_count["n"] == 3:
                 return {"solver_history": json.dumps({"solvers": []})}
             return None
 
