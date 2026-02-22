@@ -446,7 +446,6 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn, source="system"):
     conn.commit()
 
 
-
 def clear_puzzle_solvers(puzzle_id, conn):
     """Clear all solvers from a puzzle's current solvers list."""
     puzzle_id = int(puzzle_id)

@@ -1564,3 +1564,60 @@ td > .btn-hint-request {
     justify-content: flex-end;
 }
 
+/* ========================================
+   SHARED DATA-DISPLAY TABLE
+   Compact table for read-only data (activity log, help references, etc.)
+   Overrides status-page sortable-column defaults for non-interactive tables.
+   ======================================== */
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: 4px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.data-table th {
+    cursor: default;
+    user-select: auto;
+}
+
+/* ========================================
+   SHARED UTILITY CLASSES
+   Reusable layout and state helpers.
+   ======================================== */
+
+.field-label {
+    font-weight: bold;
+    font-size: 0.85em;
+    margin-bottom: 2px;
+    margin-top: 10px;
+}
+
+.info-box-content > .field-label:first-child {
+    margin-top: 0;
+}
+
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: flex-end;
+    margin: 8px 0;
+}
+
+.filter-row > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.loading {
+    opacity: 0.5;
+}
+

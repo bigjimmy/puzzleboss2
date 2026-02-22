@@ -71,6 +71,40 @@ class TestResult:
 # ============================================================================
 
 class TestRunner:
+    # Canonical list of test names — used by both run_all_tests() and --list.
+    TEST_NAMES = [
+        "Solver Listing",
+        "Puzzle Creation (One-Shot)",
+        "Puzzle Creation (Stepwise)",
+        "Puzzle Modification",
+        "Puzzle Round Change",
+        "Puzzle Multi-Part Update",
+        "Round Modification",
+        "Round Multi-Part Update",
+        "Solver Multi-Part Update",
+        "Meta Puzzles and Round Completion",
+        "Answer Verification",
+        "Solver Assignments",
+        "Solve Clears Location and Solvers",
+        "Solver Reassignment",
+        "Activity Tracking",
+        "Puzzle Activity Endpoint",
+        "Solver Activity Endpoint",
+        "Solver History",
+        "Sheetcount",
+        "Tagging",
+        "API Endpoints",
+        "API Documentation",
+        "Bot Statistics",
+        "Cache Invalidation",
+        "Solver CRUD",
+        "RBAC Privilege Management",
+        "Puzzle Deletion",
+        "Hint Queue",
+        "Activity Search",
+        "Activity Type Verification",
+    ]
+
     def __init__(self, base_url=BASE_URL):
         self.base_url = base_url
         self.logger = TestLogger()
@@ -2141,38 +2175,39 @@ class TestRunner:
     # ======================================================================
 
     def run_all_tests(self, selected_tests=None):
-        tests = [
-            ("Solver Listing", self.test_solver_listing),
-            ("Puzzle Creation (One-Shot)", self.test_puzzle_creation),
-            ("Puzzle Creation (Stepwise)", self.test_puzzle_creation_stepwise),
-            ("Puzzle Modification", self.test_puzzle_modification),
-            ("Puzzle Round Change", self.test_puzzle_round_change),
-            ("Puzzle Multi-Part Update", self.test_multi_part_update),
-            ("Round Modification", self.test_round_modification),
-            ("Round Multi-Part Update", self.test_round_multi_part_update),
-            ("Solver Multi-Part Update", self.test_solver_multi_part_update),
-            ("Meta Puzzles and Round Completion", self.test_meta_puzzles_and_round_completion),
-            ("Answer Verification", self.test_answer_verification),
-            ("Solver Assignments", self.test_solver_assignments),
-            ("Solve Clears Location and Solvers", self.test_solve_clears_location_and_solvers),
-            ("Solver Reassignment", self.test_solver_reassignment),
-            ("Activity Tracking", self.test_activity_tracking),
-            ("Puzzle Activity Endpoint", self.test_puzzle_activity_endpoint),
-            ("Solver Activity Endpoint", self.test_solver_activity_endpoint),
-            ("Solver History", self.test_solver_history),
-            ("Sheetcount", self.test_sheetcount),
-            ("Tagging", self.test_tagging),
-            ("API Endpoints", self.test_api_endpoints),
-            ("API Documentation", self.test_api_documentation),
-            ("Bot Statistics", self.test_bot_statistics),
-            ("Cache Invalidation", self.test_cache_invalidation),
-            ("Solver CRUD", self.test_solver_crud),
-            ("RBAC Privilege Management", self.test_rbac_privileges),
-            ("Puzzle Deletion", self.test_puzzle_deletion),
-            ("Hint Queue", self.test_hint_queue),
-            ("Activity Search", self.test_activity_search),
-            ("Activity Type Verification", self.test_activity_type_verification),
+        test_funcs = [
+            self.test_solver_listing,
+            self.test_puzzle_creation,
+            self.test_puzzle_creation_stepwise,
+            self.test_puzzle_modification,
+            self.test_puzzle_round_change,
+            self.test_multi_part_update,
+            self.test_round_modification,
+            self.test_round_multi_part_update,
+            self.test_solver_multi_part_update,
+            self.test_meta_puzzles_and_round_completion,
+            self.test_answer_verification,
+            self.test_solver_assignments,
+            self.test_solve_clears_location_and_solvers,
+            self.test_solver_reassignment,
+            self.test_activity_tracking,
+            self.test_puzzle_activity_endpoint,
+            self.test_solver_activity_endpoint,
+            self.test_solver_history,
+            self.test_sheetcount,
+            self.test_tagging,
+            self.test_api_endpoints,
+            self.test_api_documentation,
+            self.test_bot_statistics,
+            self.test_cache_invalidation,
+            self.test_solver_crud,
+            self.test_rbac_privileges,
+            self.test_puzzle_deletion,
+            self.test_hint_queue,
+            self.test_activity_search,
+            self.test_activity_type_verification,
         ]
+        tests = list(zip(self.TEST_NAMES, test_funcs))
 
         if selected_tests:
             tests = [(n, f) for i, (n, f) in enumerate(tests) if (i + 1) in selected_tests]
@@ -2249,7 +2284,7 @@ def main():
     parser.add_argument("--allow-destructive", action="store_true",
                         help="Allow destructive database operations (required)")
     parser.add_argument("--tests", nargs="+", type=int,
-                        help="Run specific test numbers (1-28)")
+                        help="Run specific test numbers (1-%d)" % len(TestRunner.TEST_NAMES))
     parser.add_argument("--list", action="store_true",
                         help="List all tests")
     parser.add_argument("--base-url", default=BASE_URL,
@@ -2257,20 +2292,7 @@ def main():
     args = parser.parse_args()
 
     if args.list:
-        runner = TestRunner()
-        tests = [
-            "Solver Listing", "Puzzle Creation (One-Shot)", "Puzzle Creation (Stepwise)",
-            "Puzzle Modification", "Puzzle Round Change", "Puzzle Multi-Part Update",
-            "Round Modification", "Round Multi-Part Update", "Solver Multi-Part Update",
-            "Meta Puzzles and Round Completion", "Answer Verification", "Solver Assignments",
-            "Solve Clears Location and Solvers", "Solver Reassignment", "Activity Tracking",
-            "Puzzle Activity Endpoint", "Solver Activity Endpoint", "Solver History",
-            "Sheetcount", "Tagging", "API Endpoints", "API Documentation",
-            "Bot Statistics", "Cache Invalidation",
-            "Solver CRUD", "RBAC Privilege Management", "Puzzle Deletion",
-            "Hint Queue",
-        ]
-        for i, name in enumerate(tests, 1):
+        for i, name in enumerate(TestRunner.TEST_NAMES, 1):
             print(f"  {i:2d}. {name}")
         sys.exit(0)
 

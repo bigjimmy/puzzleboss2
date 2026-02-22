@@ -117,6 +117,8 @@ def increment_cache_stat(stat_name, conn):
 
 def ensure_memcache_initialized(conn):
     """Initialize memcache from DB config on first use."""
+    # Note: No lock needed — concurrent initialization is harmless since both
+    # workers would read the same config and create equivalent clients.
     global _memcache_initialized
     if _memcache_initialized:
         return

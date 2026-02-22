@@ -1,4 +1,5 @@
 -- Migration: Add new activity types and remove unused sources
+-- Date: 2026-02-22
 -- For existing installs. Safe to re-run (idempotent ALTER TABLE).
 --
 -- Run with:

@@ -33,18 +33,12 @@ if (!$allowed) {
   <link rel="stylesheet" href="./pb-ui.css">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <style>
-    body.status-page #app .activity-table table { width: 100%; }
-    .activity-table th, .activity-table td { padding: 4px 8px; border-bottom: 1px solid var(--border-light); text-align: left; }
+    /* Page-specific overrides (shared classes in pb-ui.css) */
     .activity-table .col-time { white-space: nowrap; }
     .activity-table td.col-time { font-family: var(--font-mono); }
-    .field-label { font-weight: bold; font-size: 0.85em; margin-bottom: 2px; }
-    .filter-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin: 8px 0; }
-    .filter-row > div { display: flex; flex-direction: column; gap: 2px; }
-    .loading { opacity: 0.5; }
     .system-solver { color: var(--text-secondary); font-style: italic; }
-    .help-table { width: 100%; border-collapse: collapse; }
-    .help-table th, .help-table td { padding: 4px 8px; border-bottom: 1px solid var(--border-light); text-align: left; vertical-align: top; }
     .help-table th { white-space: nowrap; }
+    .help-table td { vertical-align: top; }
     .help-table code { font-family: var(--font-mono); font-size: 0.9em; }
     .help-table .type-legacy { color: var(--text-secondary); font-style: italic; }
   </style>
@@ -65,8 +59,8 @@ if (!$allowed) {
   <div class="info-box-content" v-show="showHelp">
     <p>The activity log tracks all actions across the hunt. Use the filters below to narrow results by type, source, solver, or puzzle. Results are ordered most-recent-first.</p>
 
-    <div class="field-label" style="margin-top: 10px;">Activity Types</div>
-    <table class="help-table">
+    <div class="field-label">Activity Types</div>
+    <table class="data-table help-table">
       <thead>
         <tr><th>Type</th><th>Meaning</th><th>Example</th></tr>
       </thead>
@@ -82,8 +76,8 @@ if (!$allowed) {
       </tbody>
     </table>
 
-    <div class="field-label" style="margin-top: 10px;">Sources</div>
-    <table class="help-table">
+    <div class="field-label">Sources</div>
+    <table class="data-table help-table">
       <thead>
         <tr><th>Source</th><th>Meaning</th></tr>
       </thead>
@@ -93,7 +87,7 @@ if (!$allowed) {
       </tbody>
     </table>
 
-    <div class="field-label" style="margin-top: 10px;">Tips</div>
+    <div class="field-label">Tips</div>
     <ul style="margin: 4px 0; padding-left: 20px;">
       <li>Solver <em>"system"</em> (ID 100) represents automated actions not tied to a specific person.</li>
       <li>Filters are preserved in the URL — bookmark or share a filtered view directly.</li>
@@ -114,13 +108,13 @@ if (!$allowed) {
       <div class="filter-action-group"><div class="filter filter-action" @click="selectAllTypes">Select All</div><div class="filter filter-action" @click="selectNoTypes">Select None</div></div>
     </div>
 
-    <div class="field-label" style="margin-top: 10px;">Source</div>
+    <div class="field-label">Source</div>
     <div class="controls-section">
       <div class="filter" v-for="s in allSources" :key="s" :class="{ active: selectedSources.includes(s) }" @click="toggleSource(s)">{{ s }} <input type="checkbox" :checked="selectedSources.includes(s)" @click.stop /></div>
       <div class="filter-action-group"><div class="filter filter-action" @click="selectAllSources">Select All</div><div class="filter filter-action" @click="selectNoSources">Select None</div></div>
     </div>
 
-    <div class="filter-row" style="margin-top: 10px;">
+    <div class="filter-row">
       <div>
         <label class="field-label">Solver</label>
         <input type="text" list="solverlist" v-model="solverInput" @change="onSolverChange" placeholder="Type solver name...">
@@ -171,7 +165,7 @@ if (!$allowed) {
 <div class="info-box activity-table" :class="{ loading: isLoading }">
   <p v-if="!hasSearched"><em>Use the filters above and click Search to view activity.</em></p>
   <p v-else-if="results.length === 0 && !isLoading"><em>No activity found matching your filters.</em></p>
-  <table v-else-if="results.length > 0">
+  <table class="data-table" v-else-if="results.length > 0">
     <thead>
     <tr>
       <th class="col-time" :class="{ 'hidden-column': !visibleColumns.time }">Time</th>

@@ -9,7 +9,6 @@ Run with: pytest tests/test_bigjimmybot_extended.py -v
 """
 
 import pytest
-import json
 import os
 import sys
 import time
@@ -60,12 +59,7 @@ from bigjimmybot import (
     _SKIP_AFTER_FAILURES,
 )
 
-
-def load_fixture(filename):
-    """Load a JSON fixture file."""
-    fixture_path = os.path.join(os.path.dirname(__file__), 'fixtures', filename)
-    with open(fixture_path) as f:
-        return json.load(f)
+from conftest import load_fixture
 
 
 class TestRecordSolverActivity:

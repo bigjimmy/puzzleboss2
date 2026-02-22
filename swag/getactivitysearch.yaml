@@ -62,23 +62,23 @@ responses:
                 type: string
                 format: date-time
                 description: Timestamp of activity (ISO 8601 format)
-              type:
-                type: string
-                enum: [create, revise, comment, interact, solve, change, status, assignment]
-                description: Type of activity
+              solver_id:
+                type: integer
+                description: ID of solver who performed the activity
+              puzzle_id:
+                type: integer
+                description: ID of puzzle this activity is for
               source:
                 type: string
                 enum: [puzzleboss, bigjimmybot]
                 description: Source system that recorded this activity
-              puzzle_id:
-                type: integer
-                description: ID of puzzle this activity is for
+              type:
+                type: string
+                enum: [create, revise, comment, interact, solve, change, status, assignment]
+                description: Type of activity
               puzzle_name:
                 type: string
                 description: Name of the puzzle (from JOIN)
-              solver_id:
-                type: integer
-                description: ID of solver who performed the activity
               solver_name:
                 type: string
                 description: Name of the solver (from JOIN)
