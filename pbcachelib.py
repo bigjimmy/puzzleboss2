@@ -48,9 +48,9 @@ def init_memcache(configstruct):
         mc = memcache_client.Client((host, port), timeout=1, connect_timeout=1)
         # Test connection
         mc.set("_test", "ok", expire=1)
-        debug_log(3, "Memcache: initialized successfully (%s:%d)" % (host, port))
+        debug_log(3, f"Memcache: initialized successfully ({host}:{port})")
     except Exception as e:
-        debug_log(2, "Memcache: failed to initialize: %s" % str(e))
+        debug_log(2, f"Memcache: failed to initialize: {e}")
         mc = None
 
 
@@ -61,10 +61,10 @@ def cache_get(key):
     try:
         value = mc.get(key)
         if value:
-            debug_log(5, "cache_get: hit for %s" % key)
+            debug_log(5, f"cache_get: hit for {key}")
         return value
     except Exception as e:
-        debug_log(3, "cache_get error: %s" % str(e))
+        debug_log(3, f"cache_get error: {e}")
         return None
 
 
@@ -74,9 +74,9 @@ def cache_set(key, value, ttl=MEMCACHE_TTL):
         return
     try:
         mc.set(key, value, expire=ttl)
-        debug_log(5, "cache_set: stored %s" % key)
+        debug_log(5, f"cache_set: stored {key}")
     except Exception as e:
-        debug_log(3, "cache_set error: %s" % str(e))
+        debug_log(3, f"cache_set error: {e}")
 
 
 def cache_delete(key):
@@ -85,9 +85,9 @@ def cache_delete(key):
         return
     try:
         mc.delete(key)
-        debug_log(5, "cache_delete: deleted %s" % key)
+        debug_log(5, f"cache_delete: deleted {key}")
     except Exception as e:
-        debug_log(3, "cache_delete error: %s" % str(e))
+        debug_log(3, f"cache_delete error: {e}")
 
 
 def invalidate_all_cache(conn):
@@ -112,7 +112,7 @@ def increment_cache_stat(stat_name, conn):
         )
         conn.commit()
     except Exception as e:
-        debug_log(3, "increment_cache_stat error for %s: %s" % (stat_name, str(e)))
+        debug_log(3, f"increment_cache_stat error for {stat_name}: {e}")
 
 
 def ensure_memcache_initialized(conn):
@@ -132,4 +132,4 @@ def ensure_memcache_initialized(conn):
         mc_config = {row["key"]: row["val"] for row in rows}
         init_memcache(mc_config)
     except Exception as e:
-        debug_log(2, "Failed to load memcache config from database: %s" % str(e))
+        debug_log(2, f"Failed to load memcache config from database: {e}")
