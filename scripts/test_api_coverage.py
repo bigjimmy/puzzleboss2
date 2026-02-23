@@ -106,6 +106,7 @@ class TestRunner:
         "Discord Source Propagation",
         "Activity Statistics Endpoint",
         "Activity has_more and Comment Type",
+        "Activity Source Metrics",
     ]
 
     def __init__(self, base_url=BASE_URL):
@@ -2279,15 +2280,19 @@ class TestRunner:
                 return
         self.logger.log_operation("    ✓ All top-level fields present")
 
-        # 2. Validate activity is a dict with int values
+        # 2. Validate activity is a nested dict: {type: {source: int}}
         activity = data["activity"]
         if not isinstance(activity, dict):
             result.fail(f"activity should be a dict, got {type(activity).__name__}")
             return
-        for k, v in activity.items():
-            if not isinstance(v, int):
-                result.fail(f"activity['{k}'] should be int, got {type(v).__name__}")
+        for act_type, sources in activity.items():
+            if not isinstance(sources, dict):
+                result.fail(f"activity['{act_type}'] should be a dict of sources, got {type(sources).__name__}")
                 return
+            for source, count in sources.items():
+                if not isinstance(count, int):
+                    result.fail(f"activity['{act_type}']['{source}'] should be int, got {type(count).__name__}")
+                    return
         self.logger.log_operation(f"    ✓ Activity counts dict has {len(activity)} type(s): {list(activity.keys())}")
 
         # 3. Validate timer sub-objects
@@ -2308,7 +2313,7 @@ class TestRunner:
 
         # 4. Create a puzzle and verify create count increases
         self.logger.log_operation("  Testing: create count increases after puzzle creation")
-        before_create = activity.get("create", 0)
+        before_create = sum(activity.get("create", {}).values())
 
         rounds = self.get_all_rounds()
         if not rounds:
@@ -2322,7 +2327,7 @@ class TestRunner:
         )
 
         data2 = self.api_get("/activity")
-        after_create = data2["activity"].get("create", 0)
+        after_create = sum(data2["activity"].get("create", {}).values())
         if after_create <= before_create:
             result.fail(f"Create count did not increase: {before_create} → {after_create}")
             return
@@ -2433,6 +2438,105 @@ class TestRunner:
 
         result.set_success("Activity has_more and comment type test completed successfully")
 
+    # ------------------------------------------------------------------
+    # Test 34: Activity Source Metrics
+    # ------------------------------------------------------------------
+    def test_activity_source_metrics(self, result: TestResult):
+        """Test that /activity returns counts grouped by type AND source, and that
+        different source values are tracked independently."""
+        # 1. Create a fresh puzzle to generate activity with known sources
+        rounds = self.get_all_rounds()
+        if not rounds:
+            rnd = self.create_round("SrcMetricsRnd")
+            rounds = [rnd]
+        round_id = rounds[0]["id"]
+
+        self.logger.log_operation("  Testing: /activity nested structure {type: {source: count}}")
+        data_before = self.api_get("/activity")
+        activity_before = data_before["activity"]
+
+        # Helper to sum counts for a given type across all sources
+        def type_total(activity, act_type):
+            return sum(activity.get(act_type, {}).values())
+
+        before_create = type_total(activity_before, "create")
+        before_change = type_total(activity_before, "change")
+
+        # 2. Create puzzle (default source=puzzleboss)
+        self.logger.log_operation("  Creating puzzle (source=puzzleboss by default)")
+        puz = self.create_puzzle(
+            self.get_emoji_string("SrcMetricsPuz", include_emoji=False),
+            round_id
+        )
+
+        data_after_create = self.api_get("/activity")
+        after_create = type_total(data_after_create["activity"], "create")
+        if after_create <= before_create:
+            result.fail(f"Create total did not increase: {before_create} → {after_create}")
+            return
+
+        # Verify the create entry has a puzzleboss source
+        create_sources = data_after_create["activity"].get("create", {})
+        if "puzzleboss" not in create_sources:
+            result.fail(f"Expected 'puzzleboss' source in create counts, got: {create_sources}")
+            return
+        self.logger.log_operation(f"    ✓ Create count increased, source=puzzleboss present")
+
+        # 3. Update xyzloc with source=discord
+        self.logger.log_operation("  Testing: xyzloc change with source=discord")
+        self.api_post(f"/puzzles/{puz['id']}/xyzloc", {"xyzloc": "DiscordLoc", "source": "discord"})
+
+        data_after_discord = self.api_get("/activity")
+        change_sources = data_after_discord["activity"].get("change", {})
+        if "discord" not in change_sources:
+            result.fail(f"Expected 'discord' source in change counts after discord update, got: {change_sources}")
+            return
+        self.logger.log_operation(f"    ✓ Change activity has source=discord: {change_sources}")
+
+        # 4. Update xyzloc again with default source (puzzleboss)
+        self.logger.log_operation("  Testing: xyzloc change with default source=puzzleboss")
+        self.api_post(f"/puzzles/{puz['id']}/xyzloc", {"xyzloc": "PBLoc"})
+
+        data_after_pb = self.api_get("/activity")
+        change_sources = data_after_pb["activity"].get("change", {})
+        if "puzzleboss" not in change_sources:
+            result.fail(f"Expected 'puzzleboss' source in change counts, got: {change_sources}")
+            return
+        self.logger.log_operation(f"    ✓ Change activity has both sources: {change_sources}")
+
+        # 5. Verify sources are independent — discord count shouldn't have changed
+        discord_count_before = data_after_discord["activity"].get("change", {}).get("discord", 0)
+        discord_count_after = data_after_pb["activity"].get("change", {}).get("discord", 0)
+        if discord_count_after != discord_count_before:
+            result.fail(f"Discord change count shifted after puzzleboss update: {discord_count_before} → {discord_count_after}")
+            return
+        self.logger.log_operation(f"    ✓ Discord count stable ({discord_count_after}) while puzzleboss incremented")
+
+        # 6. Multi-part update with source=discord
+        self.logger.log_operation("  Testing: multi-part update with source=discord")
+        self.api_post(f"/puzzles/{puz['id']}", {"xyzloc": "Room3", "comments": "test", "source": "discord"})
+
+        data_after_multi = self.api_get("/activity")
+        comment_sources = data_after_multi["activity"].get("comment", {})
+        if "discord" not in comment_sources:
+            result.fail(f"Expected 'discord' source in comment counts after multi-part update, got: {comment_sources}")
+            return
+        self.logger.log_operation(f"    ✓ Multi-part update: comment has source=discord")
+
+        # 7. Verify all values in the response are proper nested ints
+        self.logger.log_operation("  Testing: all activity values are {type: {source: int}}")
+        for act_type, sources in data_after_multi["activity"].items():
+            if not isinstance(sources, dict):
+                result.fail(f"activity['{act_type}'] should be dict, got {type(sources).__name__}")
+                return
+            for src, count in sources.items():
+                if not isinstance(count, int):
+                    result.fail(f"activity['{act_type}']['{src}'] should be int, got {type(count).__name__}: {count}")
+                    return
+        self.logger.log_operation(f"    ✓ All activity values are properly nested integers")
+
+        result.set_success("Activity source metrics test completed successfully")
+
     # ======================================================================
     # Test suite runner
     # ======================================================================
@@ -2472,6 +2576,7 @@ class TestRunner:
             self.test_discord_source_propagation,
             self.test_activity_statistics_endpoint,
             self.test_activity_has_more_and_comment,
+            self.test_activity_source_metrics,
         ]
         tests = list(zip(self.TEST_NAMES, test_funcs))
 

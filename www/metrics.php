@@ -133,44 +133,31 @@ try {
 
             // Export metrics defined in metadata config
             foreach ($stats_to_log as $stat => $stat_info) {
-                // Use db_key if provided, otherwise use stat name as-is
-                $db_key = $stat_info["db_key"] ?? $stat;
-
                 // Skip if the metric doesn't exist in botstats
-                if (!isset($botstats[$db_key])) {
+                if (!isset($botstats[$stat])) {
                     continue;
                 }
 
                 $metrics[] = sprintf("# HELP puzzleboss_%s %s", $stat, $stat_info["description"]);
                 $metrics[] = sprintf("# TYPE puzzleboss_%s %s", $stat, $stat_info["type"]);
-                $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$db_key]->val ?? "0");
+                $metrics[] = sprintf("puzzleboss_%s %s", $stat, $botstats[$stat]->val ?? "0");
                 $metrics[] = "";
             }
 
             // Also export any botstats not in metadata using convention-based defaults
             // This ensures new metrics are automatically available without config changes
-            foreach ($botstats as $db_key => $stat_value) {
-                // Check if this metric is already handled by metadata
-                $already_handled = false;
-                foreach ($stats_to_log as $stat => $stat_info) {
-                    if (($stat_info["db_key"] ?? $stat) === $db_key) {
-                        $already_handled = true;
-                        break;
-                    }
-                }
-
-                if ($already_handled) {
+            foreach ($botstats as $key => $stat_value) {
+                if (isset($stats_to_log[$key])) {
                     continue;
                 }
 
                 // Convention-based: metrics ending in _total are counters, others are gauges
-                $metric_name = $db_key;
-                $metric_type = (substr($metric_name, -6) === '_total') ? 'counter' : 'gauge';
-                $metric_description = ucfirst(str_replace('_', ' ', $metric_name));
+                $metric_type = (substr($key, -6) === '_total') ? 'counter' : 'gauge';
+                $metric_description = ucfirst(str_replace('_', ' ', $key));
 
-                $metrics[] = sprintf("# HELP puzzleboss_%s %s", $metric_name, $metric_description);
-                $metrics[] = sprintf("# TYPE puzzleboss_%s %s", $metric_name, $metric_type);
-                $metrics[] = sprintf("puzzleboss_%s %s", $metric_name, $stat_value->val ?? "0");
+                $metrics[] = sprintf("# HELP puzzleboss_%s %s", $key, $metric_description);
+                $metrics[] = sprintf("# TYPE puzzleboss_%s %s", $key, $metric_type);
+                $metrics[] = sprintf("puzzleboss_%s %s", $key, $stat_value->val ?? "0");
                 $metrics[] = "";
             }
         }

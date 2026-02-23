@@ -742,18 +742,18 @@ def _post_botstats_metrics(
     """
     try:
         conn = _get_db_connection()
-        update_botstat("loop_time_seconds", f"{loop_elapsed:.2f}", conn)
-        update_botstat("loop_setup_seconds", f"{setup_elapsed:.2f}", conn)
-        update_botstat("loop_processing_seconds", f"{processing_elapsed:.2f}", conn)
-        update_botstat("loop_puzzle_count", str(puzzle_count), conn)
+        update_botstat("bigjimmy_loop_time_seconds", f"{loop_elapsed:.2f}", conn)
+        update_botstat("bigjimmy_loop_setup_seconds", f"{setup_elapsed:.2f}", conn)
+        update_botstat("bigjimmy_loop_processing_seconds", f"{processing_elapsed:.2f}", conn)
+        update_botstat("bigjimmy_loop_puzzle_count", str(puzzle_count), conn)
         if puzzle_count > 0:
             update_botstat(
-                "loop_avg_seconds_per_puzzle",
+                "bigjimmy_avg_seconds_per_puzzle",
                 f"{processing_elapsed / puzzle_count:.2f}",
                 conn,
             )
         quota_failures = get_quota_failure_count()
-        update_botstat("quota_failures", str(quota_failures), conn)
+        update_botstat("bigjimmy_quota_failures", str(quota_failures), conn)
     except Exception as e:
         debug_log(2, f"Failed to post botstats metrics: {e}")
 
@@ -783,7 +783,7 @@ def main():
         LOOP_ITERATIONS_TOTAL += 1
         try:
             conn = _get_db_connection()
-            update_botstat("loop_iterations_total", str(LOOP_ITERATIONS_TOTAL), conn)
+            update_botstat("bigjimmy_loop_iterations_total", str(LOOP_ITERATIONS_TOTAL), conn)
         except Exception as e:
             debug_log(2, f"Failed to post loop iteration counter: {e}")
 

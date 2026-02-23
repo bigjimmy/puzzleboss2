@@ -304,9 +304,6 @@
     .meta-editor .col-desc {
       min-width: 200px;
     }
-    .meta-editor .col-dbkey {
-      width: 170px;
-    }
     .meta-editor .col-actions {
       width: 30px;
       text-align: center;
@@ -666,8 +663,8 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       <div class="config-value">
         <div class="meta-editor" id="metrics-editor">
           <div class="editor-note">
-            Each metric is exposed at the <code>/metrics</code> Prometheus endpoint. The <strong>key</strong> is the Prometheus metric name,
-            <strong>type</strong> is gauge or counter, and <strong>db_key</strong> (optional) links it to a <code>botstats</code> table column.
+            Each metric is exposed at the <code>/metrics</code> Prometheus endpoint. The <strong>key</strong> must match the <code>botstats</code> table key,
+            and <strong>type</strong> is gauge or counter.
           </div>
           <table>
             <thead>
@@ -675,7 +672,6 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
                 <th>Metric Key</th>
                 <th>Type</th>
                 <th>Description</th>
-                <th>DB Key (optional)</th>
                 <th></th>
               </tr>
             </thead>
@@ -690,7 +686,6 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
                   </select>
                 </td>
                 <td class="col-desc"><input type="text" value="<?= htmlspecialchars($m['description'] ?? '') ?>" data-field="description"></td>
-                <td class="col-dbkey"><input type="text" value="<?= htmlspecialchars($m['db_key'] ?? '') ?>" data-field="db_key" placeholder="(none)"></td>
                 <td class="col-actions"><button class="remove-row-btn" title="Remove" onclick="this.closest('tr').remove()">×</button></td>
               </tr>
               <?php endforeach; ?>
@@ -987,7 +982,6 @@ function addMetricRow() {
       </select>
     </td>
     <td class="col-desc"><input type="text" value="" data-field="description" placeholder="Description of the metric"></td>
-    <td class="col-dbkey"><input type="text" value="" data-field="db_key" placeholder="(none)"></td>
     <td class="col-actions"><button class="remove-row-btn" title="Remove" onclick="this.closest('tr').remove()">×</button></td>
   `;
   tbody.appendChild(tr);
@@ -999,13 +993,10 @@ function serializeMetricsEditor() {
   rows.forEach(tr => {
     const key = tr.querySelector('[data-field="key"]').value.trim();
     if (!key) return;
-    const entry = {
+    obj[key] = {
       type: tr.querySelector('[data-field="type"]').value,
       description: tr.querySelector('[data-field="description"]').value
     };
-    const dbKey = tr.querySelector('[data-field="db_key"]').value.trim();
-    if (dbKey) entry.db_key = dbKey;
-    obj[key] = entry;
   });
   document.querySelector('.config-input[data-key="METRICS_METADATA"]').value = JSON.stringify(obj);
 }
@@ -1027,7 +1018,6 @@ function revertMetricsEditor() {
         </select>
       </td>
       <td class="col-desc"><input type="text" value="${escapeAttr(m.description || '')}" data-field="description"></td>
-      <td class="col-dbkey"><input type="text" value="${escapeAttr(m.db_key || '')}" data-field="db_key" placeholder="(none)"></td>
       <td class="col-actions"><button class="remove-row-btn" title="Remove" onclick="this.closest('tr').remove()">×</button></td>
     `;
     tbody.appendChild(tr);
