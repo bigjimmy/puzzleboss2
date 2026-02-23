@@ -4,7 +4,7 @@ require_once('puzzlebosslib.php');
 try {
     // Get activity counts and timing data
     $activity_response = readapi('/activity');
-    $activity_counts = $activity_response->activity;
+    $activity_counts = (array)$activity_response->activity;
     $solve_timing = $activity_response->puzzle_solves_timer;
     $open_timing = $activity_response->open_puzzles_timer;
     
@@ -43,30 +43,14 @@ try {
     // Build metrics output
     $metrics = array();
     
-    // Activity metrics
-    $metrics[] = "# HELP puzzleboss_puzzles_created_total Total number of puzzles created";
-    $metrics[] = "# TYPE puzzleboss_puzzles_created_total counter";
-    $metrics[] = "puzzleboss_puzzles_created_total " . ($activity_counts->create ?? 0);
-    $metrics[] = "";
-    
-    $metrics[] = "# HELP puzzleboss_puzzles_solved_total Total number of puzzles solved";
-    $metrics[] = "# TYPE puzzleboss_puzzles_solved_total counter";
-    $metrics[] = "puzzleboss_puzzles_solved_total " . ($activity_counts->solve ?? 0);
-    $metrics[] = "";
-    
-    $metrics[] = "# HELP puzzleboss_comments_made_total Total number of comments made";
-    $metrics[] = "# TYPE puzzleboss_comments_made_total counter";
-    $metrics[] = "puzzleboss_comments_made_total " . ($activity_counts->comment ?? 0);
-    $metrics[] = "";
-    
-    $metrics[] = "# HELP puzzleboss_assignments_made_total Total number of puzzle assignments made";
-    $metrics[] = "# TYPE puzzleboss_assignments_made_total counter";
-    $metrics[] = "puzzleboss_assignments_made_total " . ($activity_counts->interact ?? 0);
-    $metrics[] = "";
-
-    $metrics[] = "# HELP puzzleboss_sheet_revisions_total Total number of sheet revisions detected";
-    $metrics[] = "# TYPE puzzleboss_sheet_revisions_total counter";
-    $metrics[] = "puzzleboss_sheet_revisions_total " . ($activity_counts->revise ?? 0);
+    // Activity metrics by type and source
+    $metrics[] = "# HELP puzzleboss_activity_total Total activity count by type and source";
+    $metrics[] = "# TYPE puzzleboss_activity_total counter";
+    foreach ($activity_counts as $type => $sources) {
+        foreach ((array)$sources as $source => $count) {
+            $metrics[] = 'puzzleboss_activity_total{type="' . $type . '",source="' . $source . '"} ' . $count;
+        }
+    }
     $metrics[] = "";
 
     // Puzzle solve timing metrics

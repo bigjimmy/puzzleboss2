@@ -15,19 +15,23 @@ responses:
           example: ok
         activity:
           type: object
-          properties:
+          description: |
+            Activity counts grouped by type and source.
+            Outer keys are activity types, inner keys are sources with integer counts.
+          example:
             create:
-              type: integer
-              description: Number of puzzle creation activities
+              puzzleboss: 10
+              bigjimmybot: 5
+              discord: 2
             solve:
+              puzzleboss: 3
+            revise:
+              bigjimmybot: 100
+          additionalProperties:
+            type: object
+            description: Source-to-count mapping for this activity type
+            additionalProperties:
               type: integer
-              description: Number of puzzle solve activities
-            comment:
-              type: integer
-              description: Number of comment activities
-            interact:
-              type: integer
-              description: Number of interaction activities
         puzzle_solves_timer:
           type: object
           properties:

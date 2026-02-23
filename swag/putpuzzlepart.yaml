@@ -54,6 +54,7 @@ parameters:
           For tags, this is an operation object.
         example:
           status: "Being worked"
+          source: "puzzleboss"
         properties:
           name:
             type: string

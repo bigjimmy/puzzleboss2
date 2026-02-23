@@ -2710,12 +2710,12 @@ def get_all_activities():
     try:
         conn, cursor = _read_cursor()
 
-        # Get activity counts
+        # Get activity counts by type and source
         cursor.execute(
             """
-            SELECT type, COUNT(*) as count
+            SELECT type, source, COUNT(*) as count
             FROM activity
-            GROUP BY type
+            GROUP BY type, source
             """
         )
         activities = cursor.fetchall()
@@ -2760,8 +2760,14 @@ def get_all_activities():
 
         cursor.close()
 
-        # Convert to dictionary format for easier access
-        activity_counts = {row["type"]: row["count"] for row in activities}
+        # Build nested dict: {type: {source: count, ...}, ...}
+        activity_counts = {}
+        for row in activities:
+            t = row["type"]
+            s = row["source"]
+            if t not in activity_counts:
+                activity_counts[t] = {}
+            activity_counts[t][s] = row["count"]
 
         return {
                 "status": "ok",
