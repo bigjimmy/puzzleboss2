@@ -81,7 +81,7 @@ from pbcachelib import (
     cache_set,
     cache_delete,
     invalidate_all_cache,
-    increment_cache_stat,
+    increment_botstat,
     ensure_memcache_initialized,
     MEMCACHE_CACHE_KEY,
     MEMCACHE_TTL,
@@ -117,7 +117,7 @@ def invalidate_cache_with_stats():
     """Invalidate cache and track stats (with error handling for stats)."""
     invalidate_all_cache(mysql.connection)
     try:
-        increment_cache_stat("cache_invalidations_total", mysql.connection)
+        increment_botstat("cache_invalidations_total", mysql.connection)
     except Exception as e:
         debug_log(3, f"Failed to increment cache stats: {e}")
 
@@ -287,10 +287,10 @@ def _get_all_with_cache():
         cached = cache_get(MEMCACHE_CACHE_KEY)
         if cached:
             debug_log(4, "cache hit")
-            increment_cache_stat("cache_hits_total", mysql.connection)
+            increment_botstat("cache_hits_total", mysql.connection)
             return json.loads(cached)
         debug_log(4, "cache miss")
-        increment_cache_stat("cache_misses_total", mysql.connection)
+        increment_botstat("cache_misses_total", mysql.connection)
 
     # Fall back to database
     data = _get_all_from_db()
@@ -1946,7 +1946,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
                 conn.commit()
                 debug_log(3, f"Added tag {tag_name} to puzzle {id}")
                 tag_changed = True
-                increment_cache_stat("tags_assigned_total", mysql.connection)
+                increment_botstat("tags_assigned_total", mysql.connection)
             else:
                 debug_log(4, f"Tag {tag_name} already on puzzle {id}")
 
@@ -1970,7 +1970,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
                 conn.commit()
                 debug_log(3, f"Added tag id {tag_id} to puzzle {id}")
                 tag_changed = True
-                increment_cache_stat("tags_assigned_total", mysql.connection)
+                increment_botstat("tags_assigned_total", mysql.connection)
             else:
                 debug_log(4, f"Tag id {tag_id} already on puzzle {id}")
 
