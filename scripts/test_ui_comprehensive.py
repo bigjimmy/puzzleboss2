@@ -24,350 +24,97 @@ import requests
 import json
 import argparse
 
-
-BASE_URL = "http://localhost"
-API_URL = "http://localhost:5000"
-
-
-# ──────────────────────────────────────────────────────────
-# Test Runner
-# ──────────────────────────────────────────────────────────
-
-class UITestRunner:
-    def __init__(self):
-        self.passed = 0
-        self.failed = 0
-        self.tests = []
-
-    def run_test(self, test_func):
-        """Run a test and track results."""
-        test_name = test_func.__name__.replace("_", " ").replace("test ", "").title()
-        print(f"\n{'='*70}")
-        print(f"TEST: {test_name}")
-        print(f"{'='*70}")
-
-        try:
-            start = time.time()
-            test_func()
-            duration = time.time() - start
-            print(f"✅ PASSED ({duration:.2f}s)")
-            self.passed += 1
-            self.tests.append((test_name, True, duration))
-        except Exception as e:
-            duration = time.time() - start
-            print(f"❌ FAILED: {str(e)}")
-            self.failed += 1
-            self.tests.append((test_name, False, duration))
-            import traceback
-            traceback.print_exc()
-
-    def print_summary(self):
-        """Print test results summary."""
-        print(f"\n{'='*70}")
-        print("TEST RESULTS SUMMARY")
-        print(f"{'='*70}")
-        for name, passed, duration in self.tests:
-            status = "✅" if passed else "❌"
-            print(f"{status} {name}: {duration:.2f}s")
-        print(f"\nTotal: {self.passed + self.failed} tests")
-        print(f"Passed: {self.passed}")
-        print(f"Failed: {self.failed}")
-        print(f"{'='*70}")
+from test_helpers import (
+    BASE_URL,
+    API_URL,
+    REFRESH_TIMEOUT,
+    DIALOG_TIMEOUT,
+    PAGE_LOAD_TIMEOUT,
+    CREATION_TIMEOUT,
+    NAV_TIMEOUT,
+    TestRunnerBase,
+    reset_hunt,
+    ensure_test_solvers_ui,
+    make_arg_parser,
+    handle_list_and_destructive,
+    resolve_selected_tests,
+    playwright_browser,
+    playwright_browsers,
+    MainPage,
+    create_round_via_ui,
+    create_puzzle_via_ui,
+)
 
 
 # ──────────────────────────────────────────────────────────
-# Setup Helpers
+# Legacy aliases — thin wrappers so existing tests keep working
+# with the old standalone-function calling convention.
+# These delegate to MainPage or test_helpers equivalents.
 # ──────────────────────────────────────────────────────────
-
-def reset_hunt():
-    """Reset the hunt database before running tests."""
-    print("Resetting hunt database...")
-    import subprocess
-    result = subprocess.run(
-        ['python3', 'scripts/reset-hunt.py', '--yes-i-am-sure-i-want-to-destroy-all-data'],
-        capture_output=True,
-        text=True,
-        cwd='/app'
-    )
-    if result.returncode != 0:
-        print(f"Warning: Hunt reset failed with code {result.returncode}")
-        print(f"stdout: {result.stdout}")
-        print(f"stderr: {result.stderr}")
-        sys.exit(1)
-    print("Hunt reset completed successfully")
-    time.sleep(3)  # Wait for database to settle
-
-
-def ensure_test_solvers():
-    """Ensure the named test solvers (testsolver1..5) exist for UI tests."""
-    print("Checking for test solvers...")
-    try:
-        response = requests.get(f"{API_URL}/solvers")
-        solvers = response.json().get("solvers", [])
-        existing_names = {s["name"] for s in solvers}
-
-        created = 0
-        for i in range(1, 6):
-            name = f"testsolver{i}"
-            if name not in existing_names:
-                try:
-                    requests.post(f"{API_URL}/solvers", json={
-                        "name": name,
-                        "fullname": f"Test Solver {i}"
-                    })
-                    created += 1
-                except Exception:
-                    pass  # May already exist
-
-        if created:
-            print(f"  Created {created} test solvers (testsolver1..5)")
-        else:
-            print(f"  All test solvers already exist")
-
-        response = requests.get(f"{API_URL}/solvers")
-        solvers = response.json().get("solvers", [])
-        print(f"  Total solvers available: {len(solvers)}")
-    except Exception as e:
-        print(f"Warning: Could not ensure test solvers: {e}")
-
-
-# ──────────────────────────────────────────────────────────
-# UI Creation Helpers
-# ──────────────────────────────────────────────────────────
-
-def create_round_via_ui(page, round_name):
-    """Create a round using the addround.php UI form. Returns {"name": sanitized_name}."""
-    timestamp = str(int(time.time()))
-    unique_name = f"{round_name}{timestamp}"
-
-    page.goto(f"{BASE_URL}/addround.php?assumedid=testuser")
-    page.fill("input[name='name']", unique_name)
-    page.click("input[type='submit'][value='Add Round']")
-    page.wait_for_selector("div.success", timeout=10000)
-
-    return {"name": unique_name.replace(" ", "")}
-
-
-def create_puzzle_via_ui(page, puzzle_name, round_name, is_meta=False, is_speculative=False):
-    """Create a puzzle using the addpuzzle.php UI form (5-step workflow). Returns {"name": sanitized_name}."""
-    page.goto(f"{BASE_URL}/addpuzzle.php?assumedid=testuser")
-    page.wait_for_selector("input[name='name']", timeout=10000)
-
-    page.fill("input[name='name']", puzzle_name)
-    page.fill("input[name='puzzle_uri']", f"https://example.com/{puzzle_name.replace(' ', '_')}")
-    page.select_option("select[name='round_id']", label=round_name)
-
-    if is_meta:
-        page.check("input[name='is_meta']")
-    if is_speculative:
-        page.check("input[name='is_speculative']")
-
-    page.click("input[type='submit'][value='Add New Puzzle']")
-    page.wait_for_selector("#step5 .status:has-text('✅')", timeout=30000)
-
-    return {"name": puzzle_name.replace(" ", "")}
-
 
 def goto_main(page):
     """Navigate to the main index page as testuser."""
     page.goto(f"{BASE_URL}/index.php?assumedid=testuser")
 
 
-# ──────────────────────────────────────────────────────────
-# DOM Query Helpers
-# ──────────────────────────────────────────────────────────
-
 def find_puzzle(page, name):
-    """Find a puzzle element by name text. Returns the Locator or raises AssertionError."""
-    for puzzle in page.locator(".puzzle").all():
-        if name in puzzle.inner_text():
-            return puzzle
-    raise AssertionError(f"Puzzle '{name}' not found in UI")
+    return MainPage(page).find_puzzle(name)
 
 
 def find_round_header(page, name):
-    """Find a round header element by name text. Returns the Locator or raises AssertionError."""
-    for header in page.locator(".round-header").all():
-        if name in header.inner_text():
-            return header
-    raise AssertionError(f"Round header '{name}' not found in UI")
+    return MainPage(page).find_round_header(name)
 
 
 def get_puzzle_icons(puzzle_elem):
-    """Get all .puzzle-icon elements from a puzzle. Icon order: 0=status, 1=workstate, 2=📊, 3=🗣️, 4=note-tags, 5=settings."""
     return puzzle_elem.locator(".puzzle-icon").all()
 
 
-# ──────────────────────────────────────────────────────────
-# Puzzle Interaction Helpers
-# ──────────────────────────────────────────────────────────
-
 def change_puzzle_status(page, puzzle_elem, status):
-    """Open the status modal on a puzzle and change its status. Does NOT handle answer field."""
-    icons = get_puzzle_icons(puzzle_elem)
-    assert len(icons) > 0, "No puzzle icons found"
-    icons[0].click()
-
-    page.wait_for_selector("dialog select.dropdown", timeout=5000)
-    page.select_option("dialog select.dropdown", status)
+    MainPage(page).change_puzzle_status(puzzle_elem, status)
 
 
 def solve_puzzle(page, puzzle_elem, answer):
-    """Solve a puzzle via UI: open status modal, select Solved, fill answer, save and close."""
-    change_puzzle_status(page, puzzle_elem, "Solved")
-    time.sleep(0.5)
-
-    answer_input = page.locator("dialog p:has-text('Answer:') input")
-    assert answer_input.count() > 0, "Answer input not found in dialog"
-    answer_input.fill(answer)
-
-    save_and_close_dialog(page)
+    MainPage(page).solve_puzzle(puzzle_elem, answer)
 
 
 def save_and_close_dialog(page):
-    """Click Save in the current dialog and wait for it to close."""
-    page.click("dialog button:has-text('Save')")
-    page.wait_for_selector("dialog", state="hidden", timeout=5000)
+    MainPage(page).save_and_close_dialog()
 
 
 def close_dialog(page):
-    """Click Close in the current dialog and wait for it to close."""
-    page.click("dialog button:has-text('Close')")
-    page.wait_for_selector("dialog", state="hidden", timeout=5000)
+    MainPage(page).close_dialog()
 
 
 def save_settings_dialog(page):
-    """Save the puzzle-settings gear modal with its two-step confirmation flow.
-    Clicks 'Save Changes' to reveal the confirmation banner, then 'Yes, Save'."""
-    page.click("dialog button:has-text('Save Changes')")
-    page.wait_for_selector("dialog .confirm-banner", timeout=3000)
-    page.click("dialog button:has-text('Yes, Save')")
-    page.wait_for_selector("dialog", state="hidden", timeout=5000)
+    MainPage(page).save_settings_dialog()
 
 
 def claim_puzzle(page, puzzle_elem):
-    """Click the workstate icon and claim the puzzle (click Yes)."""
-    icons = get_puzzle_icons(puzzle_elem)
-    assert len(icons) > 1, "Not enough puzzle icons for workstate"
-    icons[1].click()
-
-    page.wait_for_selector("dialog", timeout=5000)
-    time.sleep(0.5)
-
-    yes_button = page.locator("dialog button:has-text('Yes')")
-    if yes_button.count() > 0:
-        yes_button.click()
-    else:
-        # Already assigned or no Yes button - try Save or Close
-        save = page.locator("dialog button:has-text('Save')")
-        if save.count() > 0:
-            save.click()
-        else:
-            page.click("dialog button:has-text('Close')")
-
-    page.wait_for_selector("dialog", state="hidden", timeout=5000)
+    MainPage(page).claim_puzzle(puzzle_elem)
 
 
 def add_tag_to_puzzle(page, puzzle_elem, tag_name):
-    """Open the note-tags modal and add a tag."""
-    icons = get_puzzle_icons(puzzle_elem)
-    assert len(icons) > 4, f"Not enough puzzle icons for note-tags (found {len(icons)})"
-    icons[4].click()
-
-    page.wait_for_selector("dialog", timeout=5000)
-    tag_input = page.locator("dialog input[list='taglist']")
-    assert tag_input.count() > 0, "Tag input not found in dialog"
-    tag_input.fill(tag_name)
-
-    add_button = page.locator("dialog span.puzzle-icon:has-text('➕')")
-    assert add_button.count() > 0, "Add tag button (➕) not found"
-    add_button.click()
-    time.sleep(0.5)
-
-    save_and_close_dialog(page)
+    MainPage(page).add_tag_to_puzzle(puzzle_elem, tag_name)
 
 
-# ──────────────────────────────────────────────────────────
-# Auto-Refresh Wait Helpers
-# ──────────────────────────────────────────────────────────
-
-def wait_for_puzzle_status(page, puzzle_name, status, timeout=7000):
-    """Wait for auto-refresh to show a specific status on a puzzle."""
-    page.wait_for_function(f"""
-        () => {{
-            const puzzles = document.querySelectorAll('.puzzle');
-            for (let puzzle of puzzles) {{
-                if (puzzle.innerText.includes('{puzzle_name}')) {{
-                    const statusIcon = puzzle.querySelector('.puzzle-icon');
-                    return statusIcon && statusIcon.title.includes('{status}');
-                }}
-            }}
-            return false;
-        }}
-    """, timeout=timeout)
+def wait_for_puzzle_status(page, puzzle_name, status, timeout=REFRESH_TIMEOUT):
+    MainPage(page).wait_for_puzzle_status(puzzle_name, status, timeout)
 
 
-def wait_for_round_solved(page, round_name, timeout=7000):
-    """Wait for auto-refresh to mark a round as solved."""
-    page.wait_for_function(f"""
-        () => {{
-            const headers = document.querySelectorAll('.round-header');
-            for (let header of headers) {{
-                if (header.innerText.includes('{round_name}') && header.classList.contains('solved')) {{
-                    return true;
-                }}
-            }}
-            return false;
-        }}
-    """, timeout=timeout)
+def wait_for_round_solved(page, round_name, timeout=REFRESH_TIMEOUT):
+    MainPage(page).wait_for_round_solved(round_name, timeout)
 
 
-def wait_for_solver_on_puzzle(page, puzzle_name, solver_name, timeout=7000):
-    """Wait for auto-refresh to show a solver on a puzzle's workstate tooltip."""
-    page.wait_for_function(f"""
-        () => {{
-            const puzzles = document.querySelectorAll('.puzzle');
-            for (let puzzle of puzzles) {{
-                if (puzzle.innerText.includes('{puzzle_name}')) {{
-                    const icons = puzzle.querySelectorAll('.puzzle-icon');
-                    const workstateIcon = icons[1];
-                    return workstateIcon && workstateIcon.title.includes('{solver_name}');
-                }}
-            }}
-            return false;
-        }}
-    """, timeout=timeout)
+def wait_for_solver_on_puzzle(page, puzzle_name, solver_name, timeout=REFRESH_TIMEOUT):
+    MainPage(page).wait_for_solver_on_puzzle(puzzle_name, solver_name, timeout)
 
 
-def wait_for_solver_removed(page, puzzle_name, solver_name, timeout=7000):
-    """Wait for auto-refresh to show a solver removed from a puzzle."""
-    page.wait_for_function(f"""
-        () => {{
-            const puzzles = document.querySelectorAll('.puzzle');
-            for (let puzzle of puzzles) {{
-                if (puzzle.innerText.includes('{puzzle_name}')) {{
-                    const icons = puzzle.querySelectorAll('.puzzle-icon');
-                    const workstateIcon = icons[1];
-                    return workstateIcon && !workstateIcon.title.includes('{solver_name}');
-                }}
-            }}
-            return false;
-        }}
-    """, timeout=timeout)
+def wait_for_solver_removed(page, puzzle_name, solver_name, timeout=REFRESH_TIMEOUT):
+    MainPage(page).wait_for_solver_removed(puzzle_name, solver_name, timeout)
 
 
 def enable_all_puzzle_filters(page):
-    """Enable all puzzle status filters via localStorage and reload."""
-    page.evaluate("""() => {
-        const settings = JSON.parse(localStorage.getItem('settings') || '{}');
-        if (!settings.puzzleFilter) settings.puzzleFilter = {};
-        const statuses = ['New', 'Being worked', 'Needs eyes', 'Solved', 'Critical',
-                        'Unnecessary', 'WTF', 'Under control', 'Waiting for HQ',
-                        'Grind', 'Abandoned', 'Speculative'];
-        statuses.forEach(s => settings.puzzleFilter[s] = true);
-        localStorage.setItem('settings', JSON.stringify(settings));
-        location.reload();
-    }""")
+    MainPage(page).enable_all_puzzle_filters()
 
 
 # ──────────────────────────────────────────────────────────
@@ -384,7 +131,7 @@ def test_puzzle_lifecycle():
         puzzle_name = create_puzzle_via_ui(page, "Test Lifecycle Puzzle", round_name)["name"]
 
         goto_main(page)
-        page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         # Verify initial "New" status
         puzzle_elem = page.locator(".puzzle").first
@@ -396,12 +143,10 @@ def test_puzzle_lifecycle():
 
         # Wait for solver icon to appear
         print("  Waiting for auto-refresh to show solver assignment...")
-        page.wait_for_function("""
-            () => {
-                const puzzle = document.querySelector('.puzzle');
-                return puzzle && puzzle.innerText.includes('👥');
-            }
-        """, timeout=7000)
+        page.wait_for_function("""() => {
+            const puzzle = document.querySelector('.puzzle');
+            return puzzle && puzzle.innerText.includes('👥');
+        }""", timeout=REFRESH_TIMEOUT)
 
         # Change to "Being worked"
         print("  Changing status to 'Being worked' via UI...")
@@ -421,13 +166,8 @@ def test_puzzle_lifecycle():
         solve_puzzle(page, puzzle_elem, "TEST ANSWER")
 
         print("  Waiting for auto-refresh to show answer and solved status...")
-        page.wait_for_function("""
-            () => {
-                const puzzle = document.querySelector('.puzzle');
-                const answerElem = puzzle ? puzzle.querySelector('.answer') : null;
-                return answerElem && answerElem.innerText.includes('TEST ANSWER');
-            }
-        """, timeout=7000)
+        mp = MainPage(page)
+        mp.wait_for_answer_text(puzzle_name, "TEST ANSWER")
 
         # Verify answer and solved status
         puzzle_elem = page.locator(".puzzle").first
@@ -457,7 +197,7 @@ def test_speculative_puzzle_promotion():
         # Browser 2: Verify speculative status via auto-refresh
         print("  [Browser 2] Waiting for new puzzle to appear via auto-refresh...")
         goto_main(page2)
-        page2.wait_for_selector(f"text={puzzle_name}", timeout=15000)
+        page2.wait_for_selector(f"text={puzzle_name}", timeout=NAV_TIMEOUT)
 
         print("  [Browser 2] Verifying Speculative status in UI...")
         wait_for_puzzle_status(page2, puzzle_name, "Speculative")
@@ -470,16 +210,16 @@ def test_speculative_puzzle_promotion():
         # Browser 1: Promote puzzle
         print("  [Browser 1] Promoting puzzle...")
         page1.goto(f"{BASE_URL}/addpuzzle.php?assumedid=testuser")
-        page1.wait_for_selector("#promote-puzzle-fields", timeout=5000)
+        page1.wait_for_selector("#promote-puzzle-fields", timeout=DIALOG_TIMEOUT)
 
         radio_selector = f"tr:has-text('{puzzle_name}') input[name='promote_puzzle_id']"
-        page1.wait_for_selector(radio_selector, timeout=5000)
+        page1.wait_for_selector(radio_selector, timeout=DIALOG_TIMEOUT)
         page1.click(radio_selector)
         page1.wait_for_timeout(500)
 
         page1.fill("input[name='puzzle_uri']", "https://example.com/real_puzzle")
         page1.click("input[type='submit']")
-        page1.wait_for_selector("h2:has-text('Puzzle promoted successfully')", timeout=10000)
+        page1.wait_for_selector("h2:has-text('Puzzle promoted successfully')", timeout=PAGE_LOAD_TIMEOUT)
         print("  [Browser 1] ✓ Promotion completed")
 
         # Browser 2: Verify promotion to New status via auto-refresh (NO RELOAD!)
@@ -511,10 +251,10 @@ def test_round_completion_meta():
         create_puzzle_via_ui(page, "Meta Puzzle 2", round_name, is_meta=True)
 
         goto_main(page)
-        page.wait_for_selector(f"text={round_name}", timeout=10000)
+        page.wait_for_selector(f"text={round_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         # Wait for meta puzzles to render
-        page.wait_for_selector(".puzzle.meta", timeout=10000)
+        page.wait_for_selector(".puzzle.meta", timeout=PAGE_LOAD_TIMEOUT)
 
         # Verify round not yet solved
         round_header = page.locator(".round-header").first
@@ -530,7 +270,7 @@ def test_round_completion_meta():
 
         # Enable all filters to see solved puzzles
         enable_all_puzzle_filters(page)
-        page.wait_for_selector(f"text={round_name}", timeout=10000)
+        page.wait_for_selector(f"text={round_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         assert "solved" not in page.locator(".round-header").first.get_attribute("class"), \
             "Round marked solved with only 1/2 metas solved"
@@ -556,7 +296,7 @@ def test_round_completion_meta():
         create_puzzle_via_ui(page, "Meta Puzzle 3", round_name, is_meta=True)
 
         goto_main(page)
-        page.wait_for_selector(f"text={round_name}", timeout=10000)
+        page.wait_for_selector(f"text={round_name}", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(1)
 
         round_header = find_round_header(page, round_name)
@@ -598,7 +338,7 @@ def test_tag_management():
         create_puzzle_via_ui(page, "Logic Puzzle", round_name)
 
         goto_main(page)
-        page.wait_for_selector("text=CrypticPuzzle", timeout=10000)
+        page.wait_for_selector("text=CrypticPuzzle", timeout=PAGE_LOAD_TIMEOUT)
 
         timestamp = str(int(time.time()))
         tag_name1 = f"cryptic{timestamp}"
@@ -613,24 +353,22 @@ def test_tag_management():
 
         # Wait for auto-refresh to show tags in tooltips
         print("  Waiting for auto-refresh to show tags in tooltips...")
-        page.wait_for_function(f"""
-            () => {{
-                const puzzles = document.querySelectorAll('.puzzle');
-                let crypticHasTag = false;
-                let logicHasTag = false;
-                for (let puzzle of puzzles) {{
-                    const text = puzzle.innerText;
-                    const icons = puzzle.querySelectorAll('.puzzle-icon');
-                    const noteTagsIcon = icons[4];
-                    if (noteTagsIcon) {{
-                        const title = noteTagsIcon.title;
-                        if (text.includes('CrypticPuzzle') && title.includes('{tag_name1}')) crypticHasTag = true;
-                        if (text.includes('LogicPuzzle') && title.includes('{tag_name2}')) logicHasTag = true;
-                    }}
+        page.wait_for_function(f"""() => {{
+            const puzzles = document.querySelectorAll('.puzzle');
+            let crypticHasTag = false;
+            let logicHasTag = false;
+            for (let puzzle of puzzles) {{
+                const text = puzzle.innerText;
+                const icons = puzzle.querySelectorAll('.puzzle-icon');
+                const noteTagsIcon = icons[4];
+                if (noteTagsIcon) {{
+                    const title = noteTagsIcon.title;
+                    if (text.includes('CrypticPuzzle') && title.includes('{tag_name1}')) crypticHasTag = true;
+                    if (text.includes('LogicPuzzle') && title.includes('{tag_name2}')) logicHasTag = true;
                 }}
-                return crypticHasTag && logicHasTag;
             }}
-        """, timeout=7000)
+            return crypticHasTag && logicHasTag;
+        }}""", timeout=REFRESH_TIMEOUT)
 
         # Verify tags via tooltips
         for pname, tag in [("CrypticPuzzle", tag_name1), ("LogicPuzzle", tag_name2)]:
@@ -658,7 +396,7 @@ def test_solver_reassignment():
         solver_name = "testuser"
 
         goto_main(page)
-        page.wait_for_selector("text=PuzzleA", timeout=10000)
+        page.wait_for_selector("text=PuzzleA", timeout=PAGE_LOAD_TIMEOUT)
 
         # Assign to Puzzle A
         print("  Assigning testuser to Puzzle A via UI...")
@@ -676,23 +414,7 @@ def test_solver_reassignment():
         claim_puzzle(page, find_puzzle(page, "PuzzleB"))
 
         print("  Waiting for auto-refresh to show solver reassignment from A to B...")
-        page.wait_for_function(f"""
-            () => {{
-                const puzzles = document.querySelectorAll('.puzzle');
-                let puzzleANoSolver = false;
-                let puzzleBHasSolver = false;
-                for (let puzzle of puzzles) {{
-                    const text = puzzle.innerText;
-                    const icons = puzzle.querySelectorAll('.puzzle-icon');
-                    const workstateIcon = icons[1];
-                    if (workstateIcon) {{
-                        if (text.includes('PuzzleA') && !workstateIcon.title.includes('{solver_name}')) puzzleANoSolver = true;
-                        if (text.includes('PuzzleB') && workstateIcon.title.includes('{solver_name}')) puzzleBHasSolver = true;
-                    }}
-                }}
-                return puzzleANoSolver && puzzleBHasSolver;
-            }}
-        """, timeout=7000)
+        MainPage(page).wait_for_solver_reassignment("PuzzleA", "PuzzleB", solver_name)
 
         # Verify reassignment
         a_title = get_puzzle_icons(find_puzzle(page, "PuzzleA"))[1].get_attribute("title")
@@ -751,7 +473,7 @@ def test_round_visibility_and_collapse():
 
         # Solve both metas to mark round as solved
         goto_main(page)
-        page.wait_for_selector(".round", timeout=10000)
+        page.wait_for_selector(".round", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(1)
 
         for sp_name, answer in [(sp1["name"], "ANSWER1"), (sp2["name"], "ANSWER2")]:
@@ -759,13 +481,13 @@ def test_round_visibility_and_collapse():
             time.sleep(0.5)
 
         print("\nWaiting for round to be marked as solved...")
-        wait_for_round_solved(page, solved_round_name, timeout=10000)
+        wait_for_round_solved(page, solved_round_name, timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(0.5)
 
         # Test 7a: Default visibility
         print("\nTest 7a: Default round visibility")
         goto_main(page)
-        page.wait_for_selector(".round", timeout=10000)
+        page.wait_for_selector(".round", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(6)  # Wait for auto-refresh
 
         # Find both rounds
@@ -793,19 +515,8 @@ def test_round_visibility_and_collapse():
             }}
         """)
 
-        page.wait_for_function(f"""
-            () => {{
-                const rounds = document.querySelectorAll('.round');
-                for (let round of rounds) {{
-                    const header = round.querySelector('.round-header');
-                    if (header && header.innerText.includes('{unsolved_round_name}')) {{
-                        const body = round.querySelector('.round-body');
-                        return body && body.classList.contains('hiding');
-                    }}
-                }}
-                return false;
-            }}
-        """, timeout=3000)
+        mp = MainPage(page)
+        mp.wait_for_round_collapsed(unsolved_round_name, timeout=3000)
 
         # Verify collapsed
         for round_elem in page.locator(".round").all():
@@ -817,16 +528,7 @@ def test_round_visibility_and_collapse():
         print(f"  ✓ Clicking header collapsed unsolved round")
 
         # Click again to expand
-        page.evaluate(f"""
-            () => {{
-                const rounds = document.querySelectorAll('.round');
-                for (let round of rounds) {{
-                    const header = round.querySelector('.round-header');
-                    if (header && header.innerText.includes('{unsolved_round_name}')) {{ header.click(); return true; }}
-                }}
-                return false;
-            }}
-        """)
+        mp.click_round_header(unsolved_round_name)
         time.sleep(0.5)
 
         for round_elem in page.locator(".round").all():
@@ -848,20 +550,7 @@ def test_round_visibility_and_collapse():
 
         # Enable
         solved_rounds_label.click()
-
-        page.wait_for_function(f"""
-            () => {{
-                const rounds = document.querySelectorAll('.round');
-                for (let round of rounds) {{
-                    const header = round.querySelector('.round-header');
-                    if (header && header.innerText.includes('{solved_round_name}')) {{
-                        const body = round.querySelector('.round-body');
-                        return body && !body.classList.contains('hiding');
-                    }}
-                }}
-                return false;
-            }}
-        """, timeout=3000)
+        mp.wait_for_round_expanded(solved_round_name, timeout=3000)
 
         for round_elem in page.locator(".round").all():
             header = round_elem.locator(".round-header")
@@ -872,20 +561,7 @@ def test_round_visibility_and_collapse():
 
         # Disable
         page.locator(".toggle-row.pills label:has-text('Solved rounds')").click()
-
-        page.wait_for_function(f"""
-            () => {{
-                const rounds = document.querySelectorAll('.round');
-                for (let round of rounds) {{
-                    const header = round.querySelector('.round-header');
-                    if (header && header.innerText.includes('{solved_round_name}')) {{
-                        const body = round.querySelector('.round-body');
-                        return body && body.classList.contains('hiding');
-                    }}
-                }}
-                return false;
-            }}
-        """, timeout=3000)
+        mp.wait_for_round_collapsed(solved_round_name, timeout=3000)
 
         for round_elem in page.locator(".round").all():
             header = round_elem.locator(".round-header")
@@ -911,7 +587,7 @@ def test_form_validation():
         round_name = create_round_via_ui(page, "Validation Test Round")["name"]
 
         page.goto(f"{BASE_URL}/addpuzzle.php?assumedid=testuser")
-        page.wait_for_selector("input[name='name']", timeout=10000)
+        page.wait_for_selector("input[name='name']", timeout=PAGE_LOAD_TIMEOUT)
         page.fill("input[name='name']", "")
         page.fill("input[name='puzzle_uri']", "https://example.com/test")
         page.select_option("select[name='round_id']", label=round_name)
@@ -964,33 +640,21 @@ def test_move_puzzle_between_rounds():
         # Browser 2: Verify puzzle in round 1
         print("  [Browser 2] Waiting for puzzle to appear in original round...")
         goto_main(page2)
-        page2.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page2.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
-        page2.wait_for_function(f"""
-            () => {{
-                const rounds = document.querySelectorAll('.round');
-                for (let round of rounds) {{
-                    const headerText = round.querySelector('.round-header')?.innerText || '';
-                    if (headerText.includes('{round1_name}')) {{
-                        const bodyText = round.querySelector('.round-body')?.innerText || '';
-                        return bodyText.includes('{puzzle_name}');
-                    }}
-                }}
-                return false;
-            }}
-        """, timeout=7000)
+        MainPage(page2).wait_for_puzzle_in_round(puzzle_name, round1_name)
         print(f"  [Browser 2] ✓ Verified puzzle in {round1_name}")
 
         # Browser 1: Move puzzle via settings modal
         print("  [Browser 1] Moving puzzle to different round...")
         goto_main(page1)
-        page1.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page1.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         puzzle_elem = find_puzzle(page1, puzzle_name)
         icons = get_puzzle_icons(puzzle_elem)
         icons[-1].click()  # Settings icon (last)
 
-        page1.wait_for_selector("dialog", timeout=5000)
+        page1.wait_for_selector("dialog", timeout=DIALOG_TIMEOUT)
         time.sleep(0.5)
         page1.select_option("dialog select#puzzle-round", label=round2_name)
         save_settings_dialog(page1)
@@ -998,20 +662,7 @@ def test_move_puzzle_between_rounds():
 
         # Browser 2: Verify move via auto-refresh
         print("  [Browser 2] Waiting for auto-refresh to show puzzle in new round...")
-        page2.wait_for_function(f"""
-            () => {{
-                const rounds = document.querySelectorAll('.round');
-                let inRound2 = false;
-                let notInRound1 = true;
-                for (let round of rounds) {{
-                    const headerText = round.querySelector('.round-header')?.innerText || '';
-                    const bodyText = round.querySelector('.round-body')?.innerText || '';
-                    if (headerText.includes('{round2_name}') && bodyText.includes('{puzzle_name}')) inRound2 = true;
-                    if (headerText.includes('{round1_name}') && bodyText.includes('{puzzle_name}')) notInRound1 = false;
-                }}
-                return inRound2 && notInRound1;
-            }}
-        """, timeout=7000)
+        MainPage(page2).wait_for_puzzle_moved(puzzle_name, round1_name, round2_name)
         print(f"  [Browser 2] ✓ Verified puzzle moved to {round2_name}")
 
         browser1.close()
@@ -1038,18 +689,18 @@ def test_rename_puzzle():
         # Browser 2: Verify original name
         print("  [Browser 2] Waiting for puzzle with original name...")
         goto_main(page2)
-        page2.wait_for_selector(f"text={old_name}", timeout=10000)
+        page2.wait_for_selector(f"text={old_name}", timeout=PAGE_LOAD_TIMEOUT)
         print(f"  [Browser 2] ✓ Verified original name: {old_name}")
 
         # Browser 1: Rename via settings modal
         print("  [Browser 1] Renaming puzzle...")
         goto_main(page1)
-        page1.wait_for_selector(f"text={old_name}", timeout=10000)
+        page1.wait_for_selector(f"text={old_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         puzzle_elem = find_puzzle(page1, old_name)
         get_puzzle_icons(puzzle_elem)[-1].click()  # Settings icon
 
-        page1.wait_for_selector("dialog", timeout=5000)
+        page1.wait_for_selector("dialog", timeout=DIALOG_TIMEOUT)
         time.sleep(0.5)
         page1.locator("dialog input#puzzle-name").fill(new_name)
         save_settings_dialog(page1)
@@ -1057,15 +708,7 @@ def test_rename_puzzle():
 
         # Browser 2: Verify via auto-refresh
         print("  [Browser 2] Waiting for auto-refresh to show new name...")
-        page2.wait_for_function(f"""
-            () => {{
-                const puzzles = document.querySelectorAll('.puzzle');
-                for (let puzzle of puzzles) {{
-                    if (puzzle.innerText.includes('{new_name}')) return true;
-                }}
-                return false;
-            }}
-        """, timeout=7000)
+        MainPage(page2).wait_for_puzzle_name(new_name)
         print(f"  [Browser 2] ✓ Verified new name: {new_name}")
 
         browser1.close()
@@ -1089,7 +732,7 @@ def test_tag_filtering():
         create_puzzle_via_ui(page, "Math Puzzle", round_name)
 
         goto_main(page)
-        page.wait_for_selector("text=CryptoPuzzle", timeout=10000)
+        page.wait_for_selector("text=CryptoPuzzle", timeout=PAGE_LOAD_TIMEOUT)
 
         timestamp = str(int(time.time()))
         crypto_tag = f"crypto{timestamp}"
@@ -1140,7 +783,7 @@ def test_status_filtering():
         create_puzzle_via_ui(page, "New Puzzle Two", round_name)
 
         goto_main(page)
-        page.wait_for_selector("text=NewPuzzleOne", timeout=10000)
+        page.wait_for_selector("text=NewPuzzleOne", timeout=PAGE_LOAD_TIMEOUT)
 
         # Solve one puzzle
         print("  Changing NewPuzzleOne to Solved...")
@@ -1157,7 +800,7 @@ def test_status_filtering():
             location.reload();
         }""")
 
-        page.wait_for_selector("text=NewPuzzleOne", timeout=10000)
+        page.wait_for_selector("text=NewPuzzleOne", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(1)
 
         # Verify solved puzzle is still visible
@@ -1185,12 +828,12 @@ def test_status_change_last_activity():
         puzzle_name = create_puzzle_via_ui(page1, "Activity Puzzle", round_name)["name"]
 
         goto_main(page2)
-        page2.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page2.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         # Browser 1: Change status
         print("  [Browser 1] Changing status to 'Being worked'...")
         goto_main(page1)
-        page1.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page1.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         change_puzzle_status(page1, find_puzzle(page1, puzzle_name), "Being worked")
         save_and_close_dialog(page1)
@@ -1201,7 +844,7 @@ def test_status_change_last_activity():
         wait_for_puzzle_status(page2, puzzle_name, "Being worked")
 
         get_puzzle_icons(find_puzzle(page2, puzzle_name))[0].click()
-        page2.wait_for_selector("dialog", timeout=5000)
+        page2.wait_for_selector("dialog", timeout=DIALOG_TIMEOUT)
         time.sleep(0.5)
 
         modal_content = page2.locator("dialog").inner_text()
@@ -1236,14 +879,14 @@ def test_unassign_solver_historic():
         # Browser 1: Assign solver to first puzzle
         print("  [Browser 1] Assigning solver to first puzzle...")
         goto_main(page1)
-        page1.wait_for_selector(f"text={puzzle1_name}", timeout=10000)
+        page1.wait_for_selector(f"text={puzzle1_name}", timeout=PAGE_LOAD_TIMEOUT)
         claim_puzzle(page1, find_puzzle(page1, puzzle1_name))
         print("  [Browser 1] ✓ Solver assigned to first puzzle")
 
         # Browser 2: Verify solver on first puzzle
         print("  [Browser 2] Waiting for solver to appear on first puzzle...")
         goto_main(page2)
-        page2.wait_for_selector(f"text={puzzle1_name}", timeout=10000)
+        page2.wait_for_selector(f"text={puzzle1_name}", timeout=PAGE_LOAD_TIMEOUT)
         wait_for_solver_on_puzzle(page2, puzzle1_name, solver_name)
         print("  [Browser 2] ✓ Verified solver on first puzzle")
 
@@ -1260,7 +903,7 @@ def test_unassign_solver_historic():
         # Browser 2: Check historic solvers on first puzzle
         print("  [Browser 2] Checking historic solvers on first puzzle...")
         get_puzzle_icons(find_puzzle(page2, puzzle1_name))[1].click()
-        page2.wait_for_selector("dialog", timeout=5000)
+        page2.wait_for_selector("dialog", timeout=DIALOG_TIMEOUT)
         time.sleep(0.5)
 
         modal_content = page2.locator("dialog").inner_text()
@@ -1298,13 +941,13 @@ def test_basic_page_load():
         assert "Puzzboss 2000" in page.title(), f"Unexpected title: {page.title()}"
 
         print("  Waiting for Vue app to mount...")
-        page.wait_for_selector("#main", timeout=5000)
+        page.wait_for_selector("#main", timeout=DIALOG_TIMEOUT)
 
         print("  Checking for username display...")
-        page.wait_for_selector("text=Hello, testuser", timeout=5000)
+        page.wait_for_selector("text=Hello, testuser", timeout=DIALOG_TIMEOUT)
 
         print("  Checking for status indicator...")
-        page.wait_for_selector(".circle", timeout=5000)
+        page.wait_for_selector(".circle", timeout=DIALOG_TIMEOUT)
 
         browser.close()
         print("✓ Basic page load test completed successfully")
@@ -1325,13 +968,13 @@ def test_advanced_controls():
         page.goto(f"{BASE_URL}?assumedid=testuser", wait_until="networkidle")
 
         print("  Waiting for settings component to render...")
-        page.wait_for_selector(".toggle-row.pills label:has-text('Advanced')", timeout=10000)
+        page.wait_for_selector(".toggle-row.pills label:has-text('Advanced')", timeout=PAGE_LOAD_TIMEOUT)
 
         print("  Clicking 'Advanced' pill toggle...")
         page.click(".toggle-row.pills label:has-text('Advanced')")
 
         print("  Checking for status filters...")
-        page.wait_for_selector("#detailed-controls", timeout=5000)
+        page.wait_for_selector("#detailed-controls", timeout=DIALOG_TIMEOUT)
 
         filters = page.locator(".filter").count()
         print(f"  Found {filters} status filters")
@@ -1356,7 +999,7 @@ def test_navbar_functionality():
         page.goto(f"{BASE_URL}?assumedid=testuser", wait_until="networkidle")
 
         print("  Checking for navbar...")
-        page.wait_for_selector(".nav-links", timeout=5000)
+        page.wait_for_selector(".nav-links", timeout=DIALOG_TIMEOUT)
 
         print("  Verifying navbar links...")
         for link_text in ["Main Dashboard", "Status Overview", "PuzzBot", "PB Tools", "Wiki", "Old UI", "Admin"]:
@@ -1375,10 +1018,10 @@ def test_navbar_functionality():
 
         print("  Testing navigation to Status Overview...")
         page.click(".nav-links a:has-text('Status Overview')")
-        page.wait_for_url("**/status.php**", timeout=5000)
+        page.wait_for_url("**/status.php**", timeout=DIALOG_TIMEOUT)
 
         print("  Verifying Status Overview is now current page...")
-        page.wait_for_selector(".nav-links a.current:has-text('Status Overview')", timeout=5000)
+        page.wait_for_selector(".nav-links a.current:has-text('Status Overview')", timeout=DIALOG_TIMEOUT)
         print("    ✓ Status Overview is current after navigation")
 
         browser.close()
@@ -1399,8 +1042,8 @@ def test_status_page():
         print("  Navigating to status page...")
         for attempt in range(3):
             try:
-                page.goto(f"{BASE_URL}/status.php?assumedid=testuser", timeout=15000)
-                page.wait_for_selector("h1", timeout=10000)
+                page.goto(f"{BASE_URL}/status.php?assumedid=testuser", timeout=NAV_TIMEOUT)
+                page.wait_for_selector("h1", timeout=PAGE_LOAD_TIMEOUT)
                 break
             except Exception:
                 if attempt == 2:
@@ -1412,10 +1055,10 @@ def test_status_page():
         assert "Hunt Status Overview" in page.locator("h1").inner_text()
 
         print("  Waiting for Vue app to mount...")
-        page.wait_for_selector(".status-header", timeout=10000)
+        page.wait_for_selector(".status-header", timeout=PAGE_LOAD_TIMEOUT)
 
         for section in ["Hunt Progress", "Status Breakdown", "Column Visibility"]:
-            page.wait_for_selector(f"text={section}", timeout=5000)
+            page.wait_for_selector(f"text={section}", timeout=DIALOG_TIMEOUT)
             print(f"    ✓ Found section: {section}")
 
         # Expand Column Visibility if collapsed
@@ -1423,14 +1066,14 @@ def test_status_page():
         if not content.is_visible():
             print("  Expanding Column Visibility...")
             page.evaluate("() => { const h = document.querySelector('.column-visibility .info-box-header'); if (h) h.click(); }")
-            page.wait_for_selector(".column-visibility .info-box-content", state="visible", timeout=5000)
+            page.wait_for_selector(".column-visibility .info-box-content", state="visible", timeout=DIALOG_TIMEOUT)
             time.sleep(0.5)
 
         print("  Verifying all column toggle pills...")
         expected_columns = ["Round", "Status", "Doc (📊)", "Sheet #", "Chat (🗣️)",
                           "Solvers (cur)", "Solvers (all)", "Location", "Tags", "Comment"]
 
-        page.wait_for_selector(".controls-section .filter", timeout=5000)
+        page.wait_for_selector(".controls-section .filter", timeout=DIALOG_TIMEOUT)
         for col in expected_columns:
             assert page.locator(f".controls-section .filter:text-is('{col}')").count() > 0, \
                 f"Missing filter pill for column: {col}"
@@ -1491,7 +1134,7 @@ def test_solved_puzzles_excluded():
 
         print("  Navigating to status page...")
         page.goto(f"{BASE_URL}/status.php?assumedid=testuser", wait_until="domcontentloaded")
-        page.wait_for_selector(".status-header", timeout=10000)
+        page.wait_for_selector(".status-header", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(1)
 
         # Expand all sections
@@ -1578,18 +1221,18 @@ def test_accounts_page():
         page.goto(f"{BASE_URL}/accounts.php?assumedid=testuser", wait_until="networkidle")
 
         # Verify page loaded (not access denied)
-        page.wait_for_selector("h1", timeout=5000)
+        page.wait_for_selector("h1", timeout=DIALOG_TIMEOUT)
         title = page.locator("h1").inner_text()
         assert "Accounts Management" in title, f"Unexpected title: {title}"
         print(f"    ✓ Page title: {title}")
 
         # Verify navbar is rendered
-        page.wait_for_selector(".nav-links", timeout=5000)
+        page.wait_for_selector(".nav-links", timeout=DIALOG_TIMEOUT)
         print("    ✓ Navbar rendered")
 
         # Verify accounts table is populated
         print("  Checking accounts table...")
-        page.wait_for_selector("#accounts-table", timeout=5000)
+        page.wait_for_selector("#accounts-table", timeout=DIALOG_TIMEOUT)
         solver_rows = page.locator("#accounts-table tbody tr").count()
         assert solver_rows > 0, "Accounts table has no data rows"
         print(f"    ✓ Accounts table has {solver_rows} solver row(s)")
@@ -1734,7 +1377,7 @@ def test_privilege_and_gear_visibility():
         # Step 1: Verify non-admin user has NO gear icon
         print("  Step 1: Non-admin user should NOT see gear icon...")
         page.goto(f"{BASE_URL}/index.php?assumedid=testsolver1", wait_until="networkidle")
-        page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         puzzle_elem = find_puzzle(page, puzzle_name)
         icons = get_puzzle_icons(puzzle_elem)
@@ -1780,7 +1423,7 @@ def test_privilege_and_gear_visibility():
         # Step 4: Verify admin user NOW sees gear icon
         print("  Step 4: Newly privileged user should see gear icon...")
         page.goto(f"{BASE_URL}/index.php?assumedid=testsolver1", wait_until="networkidle")
-        page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         puzzle_elem = find_puzzle(page, puzzle_name)
         puzzle_html = puzzle_elem.inner_html()
@@ -1815,7 +1458,7 @@ def test_privilege_and_gear_visibility():
 
         print("  Verifying gear icon removed after privilege revocation...")
         page.goto(f"{BASE_URL}/index.php?assumedid=testsolver1", wait_until="networkidle")
-        page.wait_for_selector(f"text={puzzle_name}", timeout=10000)
+        page.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
 
         puzzle_elem = find_puzzle(page, puzzle_name)
         puzzle_html = puzzle_elem.inner_html()
@@ -1946,7 +1589,7 @@ def test_account_create_delete():
         print("  Step 1: Passing auth gate...")
         page = browser.new_page()
         page.goto(f"{BASE_URL}/account/", wait_until="load")
-        page.wait_for_selector("input[name='gate_username']", timeout=5000)
+        page.wait_for_selector("input[name='gate_username']", timeout=DIALOG_TIMEOUT)
         page.fill("input[name='gate_username']", acct_username)
         page.fill("input[name='gate_password']", acct_password)
         page.click("input[type='submit']")
@@ -2001,7 +1644,7 @@ def test_account_create_delete():
         # Wait for all steps to complete (each step makes an API call)
         # The success container appears when all 4 steps finish
         try:
-            page.wait_for_selector("#success-container:not([style*='display: none'])", timeout=15000)
+            page.wait_for_selector("#success-container:not([style*='display: none'])", timeout=NAV_TIMEOUT)
             print("    ✓ All verification steps completed")
         except PlaywrightTimeout:
             # Check which step failed
@@ -2037,7 +1680,7 @@ def test_account_create_delete():
         # ── Step 6: Delete via accounts.php UI ──
         print("  Step 6: Deleting account via accounts.php...")
         page.goto(f"{BASE_URL}/accounts.php?assumedid=testuser", wait_until="load")
-        page.wait_for_selector("#accounts-table", timeout=5000)
+        page.wait_for_selector("#accounts-table", timeout=DIALOG_TIMEOUT)
 
         # Find the row for our test user
         row = page.locator(f"tr[data-username='{test_username}']")
@@ -2119,9 +1762,9 @@ def test_hint_queue():
 
         # ── Step 2: Navigate to status page ──
         print("  Step 2: Navigating to status page...")
-        page.goto(f"{BASE_URL}/status.php?assumedid=testuser", timeout=15000)
-        page.wait_for_selector("h1", timeout=10000)
-        page.wait_for_selector(".status-header", timeout=10000)
+        page.goto(f"{BASE_URL}/status.php?assumedid=testuser", timeout=NAV_TIMEOUT)
+        page.wait_for_selector("h1", timeout=PAGE_LOAD_TIMEOUT)
+        page.wait_for_selector(".status-header", timeout=PAGE_LOAD_TIMEOUT)
         print("    ✓ Status page loaded")
 
         # ── Step 3: Verify no hint queue section when no hints ──
@@ -2166,7 +1809,7 @@ def test_hint_queue():
         time.sleep(2)  # Wait for API call and data refresh
 
         # Verify the hint queue section now appears
-        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        page.wait_for_selector(".hint-queue-section", timeout=PAGE_LOAD_TIMEOUT)
         assert page.locator(".hint-queue-section").is_visible(), \
             "Hint queue should be visible after submitting a hint"
         print("    ✓ Hint queue section appeared after submission")
@@ -2212,7 +1855,7 @@ def test_hint_queue():
 
         # Refresh page to pick up new hint
         page.reload()
-        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        page.wait_for_selector(".hint-queue-section", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(2)
 
         hint_previews = page.locator(".hint-table .hint-preview")
@@ -2289,7 +1932,7 @@ def test_hint_queue():
 
         # Verify second hint auto-promoted to ready
         page.reload()
-        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        page.wait_for_selector(".hint-queue-section", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(2)
         ready_status = page.locator(".hint-status-ready")
         assert ready_status.count() >= 1, "After answering submitted hint, next hint should auto-promote to 'Ready'"
@@ -2306,7 +1949,7 @@ def test_hint_queue():
         print("    ✓ Created third hint for demote testing")
 
         page.reload()
-        page.wait_for_selector(".hint-queue-section", timeout=10000)
+        page.wait_for_selector(".hint-queue-section", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(2)
 
         # Now demote the ready hint
@@ -2340,7 +1983,7 @@ def test_hint_queue():
         # ── Step 11: Test delete button ──
         print("  Step 11: Testing delete button...")
         page.reload()
-        page.wait_for_selector("h1", timeout=10000)
+        page.wait_for_selector("h1", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(2)
 
         remaining_count = page.locator(".hint-table .hint-preview").count()
@@ -2404,7 +2047,7 @@ def test_dashboard_hint_dialog():
         # ── Step 2: Navigate to main dashboard ──
         print("  Step 2: Loading main dashboard...")
         goto_main(page)
-        page.wait_for_selector(".puzzle", timeout=15000)
+        page.wait_for_selector(".puzzle", timeout=NAV_TIMEOUT)
         time.sleep(2)  # Let Vue fully render
 
         # ── Step 3: Verify status icons are NOT clowns ──
@@ -2415,7 +2058,7 @@ def test_dashboard_hint_dialog():
         for attempt in range(3):
             if attempt > 0:
                 page.reload()
-                page.wait_for_selector(".puzzle", timeout=15000)
+                page.wait_for_selector(".puzzle", timeout=NAV_TIMEOUT)
                 time.sleep(1)
 
             clown_icons = page.evaluate("""() => {
@@ -2437,7 +2080,7 @@ def test_dashboard_hint_dialog():
         assert len(icons) > 0, "No puzzle icons found"
         icons[0].click()  # Status icon
 
-        page.wait_for_selector("dialog", timeout=5000)
+        page.wait_for_selector("dialog", timeout=DIALOG_TIMEOUT)
         dialog = page.locator("dialog[open]")
         assert dialog.is_visible(), "Status dialog should be open"
         print("    ✓ Status modal opened")
@@ -2528,7 +2171,7 @@ def test_dashboard_hint_dialog():
         icons = get_puzzle_icons(puzzle_elem)
         icons[0].click()
 
-        page.wait_for_selector("dialog", timeout=5000)
+        page.wait_for_selector("dialog", timeout=DIALOG_TIMEOUT)
         dialog = page.locator("dialog[open]")
         time.sleep(1)
 
@@ -2557,7 +2200,7 @@ def test_dashboard_hint_dialog():
         icons = get_puzzle_icons(puzzle_elem)
         icons[0].click()
 
-        page.wait_for_selector("dialog", timeout=5000)
+        page.wait_for_selector("dialog", timeout=DIALOG_TIMEOUT)
         dialog = page.locator("dialog[open]")
         time.sleep(0.5)
 
@@ -2627,13 +2270,13 @@ def test_activity_page():
         page.goto(f"{BASE_URL}/activity.php?assumedid=testuser", wait_until="networkidle")
 
         # Verify page loaded (not access denied)
-        page.wait_for_selector("h1", timeout=5000)
+        page.wait_for_selector("h1", timeout=DIALOG_TIMEOUT)
         title = page.locator("h1").first.inner_text()
         assert "Activity Log" in title, f"Unexpected title: {title}"
         print(f"    ✓ Page title: {title}")
 
         # Verify navbar is rendered
-        page.wait_for_selector(".nav-links", timeout=5000)
+        page.wait_for_selector(".nav-links", timeout=DIALOG_TIMEOUT)
         print("    ✓ Navbar rendered")
 
         # Verify Search Filters section exists and is visible
@@ -2751,7 +2394,7 @@ def test_activity_page():
         print("  Testing URL filter persistence...")
         page.goto(f"{BASE_URL}/activity.php?assumedid=testuser&types=create&sources=puzzleboss", wait_until="networkidle")
         # Wait for auto-search to complete
-        page.wait_for_function("document.querySelector('.activity-table table') || document.querySelector('em')", timeout=10000)
+        page.wait_for_function("document.querySelector('.activity-table table') || document.querySelector('em')", timeout=PAGE_LOAD_TIMEOUT)
         time.sleep(0.5)
         # Verify the type 'create' pill is active
         create_active = page.locator(".filter.active:has-text('create')")
@@ -2815,7 +2458,7 @@ def test_discord_source_activity():
         # Navigate to activity page
         print("  Navigating to activity page...")
         page.goto(f"{BASE_URL}/activity.php?assumedid=testuser", wait_until="networkidle")
-        page.wait_for_selector("h1", timeout=5000)
+        page.wait_for_selector("h1", timeout=DIALOG_TIMEOUT)
 
         # Verify discord source pill exists (loaded from config)
         print("  Checking for discord source pill...")
@@ -2906,26 +2549,7 @@ def test_discord_source_activity():
 
 def main():
     """Run all tests."""
-    parser = argparse.ArgumentParser(
-        description='Comprehensive Puzzleboss UI Test Suite',
-        epilog='WARNING: This script will RESET THE HUNT DATABASE!'
-    )
-    parser.add_argument(
-        '--allow-destructive',
-        action='store_true',
-        required=True,
-        help='Required flag to confirm you understand this will DESTROY ALL PUZZLE DATA'
-    )
-    parser.add_argument(
-        '--tests',
-        nargs='+',
-        help='Run only specific tests (by number or name). Examples: --tests 1 3 7, --tests 1,3,7, or --tests lifecycle visibility'
-    )
-    parser.add_argument(
-        '--list',
-        action='store_true',
-        help='List available tests and exit'
-    )
+    parser = make_arg_parser("Comprehensive Puzzleboss UI Test Suite", [])
     args = parser.parse_args()
 
     all_tests = [
@@ -2960,62 +2584,36 @@ def main():
         ('29', 'discordsource', test_discord_source_activity, 'Discord Source Activity Filter'),
     ]
 
-    if args.list:
-        print("Available tests:")
-        for number, name, _, display_name in all_tests:
-            print(f"  {number}. {display_name} (--tests {number} or --tests {name})")
-        sys.exit(0)
+    handle_list_and_destructive(args, all_tests=all_tests)
 
-    if not args.allow_destructive:
-        print("ERROR: --allow-destructive flag is required")
-        print("This test suite will RESET THE HUNT DATABASE, destroying all puzzle data.")
-        print("DO NOT run this on a production system!")
-        sys.exit(1)
-
-    tests_to_run = []
-    if args.tests:
-        # Flatten: support both "--tests 1 3 7" and "--tests 1,3,7" (or mixed)
-        specs = []
-        for arg in args.tests:
-            specs.extend(arg.split(','))
-        specs = [s.strip() for s in specs if s.strip()]
-
-        for test_spec in specs:
-            test_spec_lower = test_spec.lower()
-            found = False
-            for number, name, test_func, display_name in all_tests:
-                if test_spec == number or test_spec_lower == name.lower():
-                    tests_to_run.append((test_func, display_name))
-                    found = True
-                    break
-            if not found:
-                print(f"ERROR: Unknown test '{test_spec}'")
-                print("Use --list to see available tests")
-                sys.exit(1)
+    # Resolve which tests to run
+    selected_indices = resolve_selected_tests(args, all_tests)
+    if selected_indices:
+        tests_to_run = [(f, dn) for num, _, f, dn in all_tests if int(num) in selected_indices]
     else:
-        tests_to_run = [(test_func, display_name) for _, _, test_func, display_name in all_tests]
+        tests_to_run = [(f, dn) for _, _, f, dn in all_tests]
 
-    print("="*70)
+    print("=" * 70)
     print("COMPREHENSIVE PUZZLEBOSS UI TEST SUITE")
-    print("="*70)
+    print("=" * 70)
     print()
     print(f"Running {len(tests_to_run)} test(s)")
     print()
     print("WARNING: About to reset hunt database (DESTRUCTIVE)")
     print("This will erase all puzzles, rounds, and activity data!")
     print("Solver accounts will be preserved.")
-    print("="*70)
+    print("=" * 70)
     print()
 
     reset_hunt()
-    ensure_test_solvers()
+    ensure_test_solvers_ui()
 
-    runner = UITestRunner()
-    for test_func, _ in tests_to_run:
-        runner.run_test(test_func)
+    runner = TestRunnerBase()
+    for test_func, display_name in tests_to_run:
+        runner.run_test(display_name, test_func)
 
     runner.print_summary()
-    sys.exit(0 if runner.failed == 0 else 1)
+    sys.exit(0 if runner.all_passed else 1)
 
 
 if __name__ == "__main__":

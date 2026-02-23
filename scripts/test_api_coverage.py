@@ -11,59 +11,31 @@ Usage:
     docker exec puzzleboss-app python3 scripts/test_api_coverage.py --list
 """
 
-import argparse
-import os
 import random
 import string
-import subprocess
 import sys
 import time
 import traceback
 
 import requests
 
+from test_helpers import (
+    API_URL,
+    TestLogger,
+    TestResult,
+    find_by_name,
+    assert_eq,
+    assert_field,
+    assert_in,
+    assert_true,
+    reset_hunt,
+    ensure_test_solvers_api,
+    make_arg_parser,
+    handle_list_and_destructive,
+)
+
 # Configuration
-BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:5000")
-
-
-# ============================================================================
-# Test infrastructure
-# ============================================================================
-
-class TestLogger:
-    """Simple indented logger for test output."""
-    def __init__(self):
-        self.indent = 0
-
-    def log_operation(self, msg):
-        ts = time.strftime("%H:%M:%S")
-        prefix = "  " * self.indent
-        print(f"[{ts}] [OP] {prefix}{msg}")
-
-    def log_error(self, msg):
-        ts = time.strftime("%H:%M:%S")
-        prefix = "  " * self.indent
-        print(f"[{ts}] [ERR] {prefix}{msg}")
-
-    def log_warning(self, msg):
-        ts = time.strftime("%H:%M:%S")
-        prefix = "  " * self.indent
-        print(f"[{ts}] [WARN] {prefix}{msg}")
-
-
-class TestResult:
-    """Tracks pass/fail for a single test."""
-    def __init__(self):
-        self.passed = True
-        self.message = ""
-
-    def fail(self, msg):
-        self.passed = False
-        self.message = msg
-
-    def set_success(self, msg):
-        if self.passed:
-            self.message = msg
+BASE_URL = API_URL
 
 
 # ============================================================================
@@ -209,12 +181,11 @@ class TestRunner:
         self.logger.log_operation(f"Creating round: {name}")
         self.api_post("/rounds", {"name": name})
         sanitized = name.replace(" ", "")
-        rounds = self.get_all_rounds()
-        for r in rounds:
-            if r["name"] == sanitized:
-                self.logger.log_operation(f"  Created round '{sanitized}' (id {r['id']})")
-                return r
-        raise Exception(f"Round '{sanitized}' not found after creation")
+        r = find_by_name(self.get_all_rounds(), sanitized)
+        if not r:
+            raise Exception(f"Round '{sanitized}' not found after creation")
+        self.logger.log_operation(f"  Created round '{sanitized}' (id {r['id']})")
+        return r
 
     def create_puzzle(self, name, round_id, use_stepwise=False, is_meta=False, is_speculative=False):
         """Create a puzzle and return its data dict."""
@@ -232,15 +203,14 @@ class TestRunner:
         if is_speculative:
             inner["is_speculative"] = 1
         data = self.api_post("/puzzles", {"puzzle": inner})
-        # Find created puzzle
         sanitized = name.replace(" ", "")
-        puzzles = self.get_all_puzzles()
-        for p in puzzles:
-            if p["name"] == sanitized:
-                details = self.get_puzzle_details(p["id"])
-                if details:
-                    return details
-        raise Exception(f"Puzzle '{sanitized}' not found after creation")
+        p = find_by_name(self.get_all_puzzles(), sanitized)
+        if not p:
+            raise Exception(f"Puzzle '{sanitized}' not found after creation")
+        details = self.get_puzzle_details(p["id"])
+        if not details:
+            raise Exception(f"Puzzle '{sanitized}' found but details unavailable")
+        return details
 
     def _create_puzzle_stepwise(self, name, round_id, is_meta=False, is_speculative=False):
         payload = {
@@ -264,15 +234,14 @@ class TestRunner:
             except Exception:
                 self.logger.log_warning(f"  Step {step} returned error (may be expected if Discord/Google disabled)")
 
-        # Find created puzzle
         sanitized = name.replace(" ", "")
-        puzzles = self.get_all_puzzles()
-        for p in puzzles:
-            if p["name"] == sanitized:
-                details = self.get_puzzle_details(p["id"])
-                if details:
-                    return details
-        raise Exception(f"Stepwise puzzle '{sanitized}' not found after creation")
+        p = find_by_name(self.get_all_puzzles(), sanitized)
+        if not p:
+            raise Exception(f"Stepwise puzzle '{sanitized}' not found after creation")
+        details = self.get_puzzle_details(p["id"])
+        if not details:
+            raise Exception(f"Stepwise puzzle '{sanitized}' found but details unavailable")
+        return details
 
     def update_puzzle(self, puzzle_id, field, value):
         """Update a single puzzle field. Returns True on success."""
@@ -1707,386 +1676,344 @@ class TestRunner:
         rd = self.create_round(f"HintRound {ts}")
         puz1 = self.create_puzzle(f"HintPuzzle1 {ts}", rd["id"])
         puz2 = self.create_puzzle(f"HintPuzzle2 {ts}", rd["id"])
+        ctx = {"ts": ts, "puz1": puz1, "puz2": puz2, "hint_ids": []}
 
-        # ── 1. Initially empty ──
-        data = self.api_get("/hints")
-        hints = data.get("hints", [])
-        if not isinstance(hints, list):
-            result.fail(f"GET /hints did not return a list: {data}")
+        self._hint_create_and_verify(result, ctx)
+        if not result.passed:
             return
-        self.logger.log_operation(f"  ✓ GET /hints returned {len(hints)} hints initially")
+        self._hint_auto_promotion(result, ctx)
+        if not result.passed:
+            return
+        self._hint_submit_to_hq(result, ctx)
+        if not result.passed:
+            return
+        self._hint_answer_submitted(result, ctx)
+        if not result.passed:
+            return
+        self._hint_demote(result, ctx)
+        if not result.passed:
+            return
+        self._hint_answer_ready(result, ctx)
+        if not result.passed:
+            return
+        self._hint_delete_and_cleanup(result, ctx)
+        if not result.passed:
+            return
+        self._hint_errors_and_all(result, ctx)
+        if not result.passed:
+            return
+        result.set_success("Hint queue test completed successfully")
 
-        count_data = self.api_get("/hints/count")
-        initial_count = count_data.get("count", -1)
-        self.logger.log_operation(f"  ✓ GET /hints/count returned {initial_count}")
+    def _hint_create_and_verify(self, result, ctx):
+        """Create 3 hints and verify list/count/positions."""
+        ts, puz1, puz2 = ctx["ts"], ctx["puz1"], ctx["puz2"]
 
-        # ── 2. Create three hints ──
-        hint_ids = []
+        # Initially empty
+        data = self.api_get("/hints")
+        if not assert_true(result, isinstance(data.get("hints", []), list), "GET /hints did not return a list"):
+            return
+        initial_count = self.api_get("/hints/count").get("count", -1)
+        self.logger.log_operation(f"  ✓ Initial hint count = {initial_count}")
+
+        # Create three hints
         for i, (puz, text) in enumerate([
             (puz1, f"Need help with clue A {ts}"),
             (puz2, f"Stuck on extraction {ts}"),
             (puz1, f"Second hint for puzzle 1 {ts}"),
         ]):
-            resp = self.api_post("/hints", {
-                "puzzle_id": puz["id"],
-                "solver": "testuser",
-                "request_text": text
-            })
-            if resp.get("status") != "ok":
-                result.fail(f"POST /hints failed for hint {i+1}: {resp}")
+            resp = self.api_post("/hints", {"puzzle_id": puz["id"], "solver": "testuser", "request_text": text})
+            if not assert_eq(result, resp.get("status"), "ok", f"POST /hints hint {i+1}"):
                 return
             hid = resp.get("id") or resp.get("hint", {}).get("id")
-            if not hid:
-                result.fail(f"POST /hints did not return id for hint {i+1}: {resp}")
+            if not assert_true(result, hid, f"POST /hints did not return id for hint {i+1}"):
                 return
-            hint_ids.append(hid)
+            ctx["hint_ids"].append(hid)
             self.logger.log_operation(f"  ✓ Created hint {i+1} (id={hid})")
 
-        # ── 3. Verify list and count ──
+        # Verify count and positions
         data = self.api_get("/hints")
         hints = data.get("hints", [])
-        if len(hints) < 3:
-            result.fail(f"Expected at least 3 hints, got {len(hints)}: {hints}")
+        if not assert_true(result, len(hints) >= 3, f"Expected ≥3 hints, got {len(hints)}"):
             return
-        self.logger.log_operation(f"  ✓ GET /hints now has {len(hints)} hints")
-
-        count_data = self.api_get("/hints/count")
-        new_count = count_data.get("count", -1)
-        if new_count < initial_count + 3:
-            result.fail(f"Expected count >= {initial_count + 3}, got {new_count}")
+        new_count = self.api_get("/hints/count").get("count", -1)
+        if not assert_true(result, new_count >= initial_count + 3, f"Count {new_count} < {initial_count + 3}"):
             return
-        self.logger.log_operation(f"  ✓ Hint count = {new_count}")
-
-        # Verify queue positions are 1, 2, 3
-        positions = sorted([h["queue_position"] for h in hints if h["id"] in hint_ids])
-        if positions != [1, 2, 3]:
-            result.fail(f"Expected positions [1,2,3], got {positions}")
+        positions = sorted([h["queue_position"] for h in hints if h["id"] in ctx["hint_ids"]])
+        if not assert_eq(result, positions, [1, 2, 3], "Queue positions"):
             return
-        self.logger.log_operation(f"  ✓ Queue positions correct: {positions}")
 
-        # Verify hints include puzzle_name
-        for h in hints:
-            if h["id"] == hint_ids[0]:
-                if not h.get("puzzle_name"):
-                    result.fail(f"Hint missing puzzle_name: {h}")
-                    return
-                break
-        self.logger.log_operation(f"  ✓ Hints include puzzle_name field")
+        # Verify puzzle_name field
+        top = [h for h in hints if h["id"] == ctx["hint_ids"][0]]
+        if not assert_true(result, top and top[0].get("puzzle_name"), "Hint missing puzzle_name"):
+            return
+        self.logger.log_operation("  ✓ Hints created, counted, positioned, with puzzle_name")
 
-        # ── 3b. Verify auto-promotion: hint at position 1 should be 'ready' ──
+    def _hint_auto_promotion(self, result, ctx):
+        """Verify top hint is 'ready', others are 'queued'."""
+        data = self.api_get("/hints")
+        hints = data.get("hints", [])
         top_hint = [h for h in hints if h["queue_position"] == 1][0]
-        if top_hint["status"] != "ready":
-            result.fail(f"Top hint should be 'ready', got '{top_hint['status']}'")
+        if not assert_eq(result, top_hint["status"], "ready", "Top hint status"):
             return
-        self.logger.log_operation(f"  ✓ Top hint auto-promoted to 'ready'")
-
-        non_top = [h for h in hints if h["queue_position"] > 1 and h["id"] in hint_ids]
-        for h in non_top:
-            if h["status"] != "queued":
-                result.fail(f"Hint at position {h['queue_position']} should be 'queued', got '{h['status']}'")
+        for h in [h for h in hints if h["queue_position"] > 1 and h["id"] in ctx["hint_ids"]]:
+            if not assert_eq(result, h["status"], "queued", f"Hint at pos {h['queue_position']}"):
                 return
-        self.logger.log_operation(f"  ✓ Non-top hints remain 'queued'")
+        ctx["top_hint_id"] = top_hint["id"]
+        self.logger.log_operation("  ✓ Auto-promotion: top=ready, others=queued")
 
-        # ── 3c. Test submit endpoint ──
-        resp = self.api_post(f"/hints/{top_hint['id']}/submit", {})
-        if resp.get("status") != "ok":
-            result.fail(f"POST /hints/{top_hint['id']}/submit failed: {resp}")
+    def _hint_submit_to_hq(self, result, ctx):
+        """Submit the top hint and verify status changes."""
+        resp = self.api_post(f"/hints/{ctx['top_hint_id']}/submit", {})
+        if not assert_eq(result, resp.get("status"), "ok", "Submit hint"):
             return
         data = self.api_get("/hints")
-        submitted_hint = [h for h in data["hints"] if h["id"] == top_hint["id"]][0]
-        if submitted_hint["status"] != "submitted":
-            result.fail(f"Hint should be 'submitted', got '{submitted_hint['status']}'")
+        submitted = [h for h in data["hints"] if h["id"] == ctx["top_hint_id"]][0]
+        if not assert_eq(result, submitted["status"], "submitted", "Submitted hint status"):
             return
-        self.logger.log_operation(f"  ✓ Submit endpoint changed status to 'submitted'")
-
-        # ── 3d. Submit on non-ready hint should fail ──
-        r = self.api_post_raw(f"/hints/{hint_ids[1]}/submit", {})
+        # Submit of non-ready hint should fail
+        r = self.api_post_raw(f"/hints/{ctx['hint_ids'][1]}/submit", {})
         if r.status_code < 400:
             self.logger.log_warning(f"  Submit of non-ready hint returned {r.status_code} (expected 404)")
         else:
-            self.logger.log_operation(f"  ✓ Submit of non-ready hint correctly returned {r.status_code}")
+            self.logger.log_operation(f"  ✓ Non-ready submit correctly returned {r.status_code}")
+        self.logger.log_operation("  ✓ Submit endpoint works correctly")
 
-        # ── 3e. Answer a submitted hint directly ──
-        resp = self.api_post(f"/hints/{top_hint['id']}/answer", {})
-        if resp.get("status") != "ok":
-            result.fail(f"Answer of submitted hint failed: {resp}")
+    def _hint_answer_submitted(self, result, ctx):
+        """Answer the submitted hint, verify auto-promotion of next."""
+        resp = self.api_post(f"/hints/{ctx['top_hint_id']}/answer", {})
+        if not assert_eq(result, resp.get("status"), "ok", "Answer submitted hint"):
             return
-        self.logger.log_operation(f"  ✓ Answered submitted hint directly")
-
-        # Verify auto-promotion of new top hint
         data = self.api_get("/hints")
         hints = data.get("hints", [])
         if hints:
             new_top = [h for h in hints if h["queue_position"] == 1]
-            if new_top and new_top[0]["status"] != "ready":
-                result.fail(f"New top hint should be 'ready' after answer, got '{new_top[0]['status']}'")
-                return
-            self.logger.log_operation(f"  ✓ New top hint auto-promoted to 'ready' after answering")
+            if new_top:
+                if not assert_eq(result, new_top[0]["status"], "ready", "New top hint after answer"):
+                    return
+        self.logger.log_operation("  ✓ Answered submitted hint, new top auto-promoted")
 
-        # After step 3e: hint_ids[0] answered, hint_ids[1] at pos 1 (ready), hint_ids[2] at pos 2 (queued)
-
-        # ── 4. Demote ready hint at position 1 — should reset to queued ──
+    def _hint_demote(self, result, ctx):
+        """Demote ready hint, verify position swap and status reset."""
+        hint_ids = ctx["hint_ids"]
         resp = self.api_post(f"/hints/{hint_ids[1]}/demote", {})
-        if resp.get("status") != "ok":
-            result.fail(f"POST /hints/{hint_ids[1]}/demote failed: {resp}")
+        if not assert_eq(result, resp.get("status"), "ok", "Demote hint"):
             return
         data = self.api_get("/hints")
         hints = data.get("hints", [])
-        status_map = {h["id"]: h["status"] for h in hints}
         pos_map = {h["id"]: h["queue_position"] for h in hints}
-        # hint_ids[1] demoted to pos 2, hint_ids[2] promoted to pos 1
-        if pos_map.get(hint_ids[1]) != 2 or pos_map.get(hint_ids[2]) != 1:
-            result.fail(f"Demote did not swap correctly: {pos_map}")
+        status_map = {h["id"]: h["status"] for h in hints}
+        if not assert_eq(result, pos_map.get(hint_ids[1]), 2, "Demoted hint position"):
             return
-        # Demoted hint should be 'queued' (was ready), new top should be 'ready'
-        if status_map.get(hint_ids[1]) != "queued":
-            result.fail(f"Demoted hint should be 'queued', got '{status_map.get(hint_ids[1])}'")
+        if not assert_eq(result, pos_map.get(hint_ids[2]), 1, "Promoted hint position"):
             return
-        if status_map.get(hint_ids[2]) != "ready":
-            result.fail(f"New top hint should be 'ready', got '{status_map.get(hint_ids[2])}'")
+        if not assert_eq(result, status_map.get(hint_ids[1]), "queued", "Demoted hint status"):
             return
-        self.logger.log_operation(f"  ✓ Demote swapped positions and reset statuses correctly")
+        if not assert_eq(result, status_map.get(hint_ids[2]), "ready", "Promoted hint status"):
+            return
+        self.logger.log_operation("  ✓ Demote swapped positions and reset statuses")
 
-        # ── 5. Answer the ready hint at position 1 ──
+    def _hint_answer_ready(self, result, ctx):
+        """Answer the ready hint, verify removal and promotion of remaining."""
+        hint_ids = ctx["hint_ids"]
         resp = self.api_post(f"/hints/{hint_ids[2]}/answer", {})
-        if resp.get("status") != "ok":
-            result.fail(f"POST /hints/{hint_ids[2]}/answer failed: {resp}")
+        if not assert_eq(result, resp.get("status"), "ok", "Answer ready hint"):
             return
         data = self.api_get("/hints")
         hints = data.get("hints", [])
-        active_ids = [h["id"] for h in hints]
-        if hint_ids[2] in active_ids:
-            result.fail(f"Answered hint {hint_ids[2]} still in active list")
+        if not assert_true(result, hint_ids[2] not in [h["id"] for h in hints], "Answered hint still in list"):
             return
-        # hint_ids[1] should now be at position 1 and auto-promoted to 'ready'
         remaining = [h for h in hints if h["id"] == hint_ids[1]]
-        if not remaining:
-            result.fail(f"hint_ids[1] not found after answering hint_ids[2]")
+        if not assert_true(result, remaining, "Remaining hint not found"):
             return
-        if remaining[0]["queue_position"] != 1:
-            result.fail(f"Expected position 1, got {remaining[0]['queue_position']}")
+        if not assert_eq(result, remaining[0]["queue_position"], 1, "Remaining hint position"):
             return
-        if remaining[0]["status"] != "ready":
-            result.fail(f"Auto-promoted hint should be 'ready', got '{remaining[0]['status']}'")
+        if not assert_eq(result, remaining[0]["status"], "ready", "Remaining hint status"):
             return
-        self.logger.log_operation(f"  ✓ Answer removed hint, remaining hint promoted to pos 1 as 'ready'")
+        self.logger.log_operation("  ✓ Answer removed hint, remaining promoted to pos 1 as ready")
 
-        # ── 6. Delete a hint and verify auto-promotion ──
-        # Create a new hint so we have 2 to test delete + promotion
+    def _hint_delete_and_cleanup(self, result, ctx):
+        """Delete a hint, verify auto-promotion of next."""
+        hint_ids = ctx["hint_ids"]
+        ts = ctx["ts"]
+        # Create extra hint so we have 2 to test delete + promotion
         resp = self.api_post("/hints", {
-            "puzzle_id": puz2["id"],
-            "solver": "testuser",
+            "puzzle_id": ctx["puz2"]["id"], "solver": "testuser",
             "request_text": f"Extra hint for delete test {ts}"
         })
-        extra_id = resp.get("hint", {}).get("id")
-        # hint_ids[1] at pos 1 (ready), extra_id at pos 2 (queued)
+        ctx["extra_id"] = resp.get("hint", {}).get("id")
         resp = self.api_delete(f"/hints/{hint_ids[1]}")
-        if resp.get("status") != "ok":
-            result.fail(f"DELETE /hints/{hint_ids[1]} failed: {resp}")
+        if not assert_eq(result, resp.get("status"), "ok", "Delete hint"):
             return
         data = self.api_get("/hints")
         hints = data.get("hints", [])
-        if any(h["id"] == hint_ids[1] for h in hints):
-            result.fail(f"Deleted hint {hint_ids[1]} still in list")
+        if not assert_true(result, not any(h["id"] == hint_ids[1] for h in hints), "Deleted hint still in list"):
             return
-        # extra_id should now be at pos 1 and 'ready'
-        extra = [h for h in hints if h["id"] == extra_id]
-        if extra and extra[0]["status"] != "ready":
-            result.fail(f"After delete, new top hint should be 'ready', got '{extra[0]['status']}'")
-            return
-        self.logger.log_operation(f"  ✓ Delete removed hint, new top auto-promoted to 'ready'")
+        extra = [h for h in hints if h["id"] == ctx["extra_id"]]
+        if extra:
+            if not assert_eq(result, extra[0]["status"], "ready", "After delete, new top status"):
+                return
+        self.logger.log_operation("  ✓ Delete removed hint, new top auto-promoted")
 
-        # ── 7. Verify /all includes hints ──
+    def _hint_errors_and_all(self, result, ctx):
+        """Verify /all includes hints, test error cases, clean up."""
+        extra_id = ctx.get("extra_id")
+        puz1 = ctx["puz1"]
+
         all_data = self.api_get("/all")
-        if "hints" not in all_data:
-            result.fail("/all response does not include hints key")
+        if not assert_in(result, "hints", all_data, "/all response"):
             return
-        self.logger.log_operation(f"  ✓ /all response includes hints ({len(all_data['hints'])} hints)")
+        self.logger.log_operation(f"  ✓ /all includes hints ({len(all_data['hints'])} hints)")
 
-        # ── 8. Error cases ──
-        # Demote the last hint (should fail — already at bottom)
-        r = self.api_post_raw(f"/hints/{extra_id}/demote", {})
-        if r.status_code < 400:
-            self.logger.log_warning(f"  Demote of last hint returned {r.status_code} (expected 400)")
-        else:
-            self.logger.log_operation(f"  ✓ Demote of last hint correctly returned {r.status_code}")
+        # Error cases
+        if extra_id:
+            r = self.api_post_raw(f"/hints/{extra_id}/demote", {})
+            if r.status_code < 400:
+                self.logger.log_warning(f"  Demote of last hint returned {r.status_code} (expected 400)")
+            else:
+                self.logger.log_operation(f"  ✓ Demote of last hint correctly returned {r.status_code}")
 
-        # Delete non-existent hint
         r = self.api_delete_raw("/hints/999999")
         self.logger.log_operation(f"  Delete non-existent hint: {r.status_code}")
 
-        # Create hint with missing fields
         r = self.api_post_raw("/hints", {"puzzle_id": puz1["id"]})
         if r.ok:
-            self.logger.log_warning(f"  POST /hints with missing fields unexpectedly succeeded")
+            self.logger.log_warning("  POST /hints with missing fields unexpectedly succeeded")
         else:
             self.logger.log_operation(f"  ✓ POST /hints with missing fields returned {r.status_code}")
 
-        # Clean up remaining hints
+        # Clean up
         data = self.api_get("/hints")
         for h in data.get("hints", []):
             self.api_delete(f"/hints/{h['id']}")
-        self.logger.log_operation(f"  ✓ Cleaned up remaining test hints")
-
-        result.set_success("Hint queue test completed successfully")
+        self.logger.log_operation("  ✓ Cleaned up remaining test hints")
 
     # ------------------------------------------------------------------
     # Test 29: Activity Search Endpoint
     # ------------------------------------------------------------------
     def test_activity_search(self, result: TestResult):
         """Test the /activitysearch endpoint with various filter combinations."""
-        # First, ensure we have some activity data by doing a few operations
+        puz, solver = self._activity_search_setup(result)
+        if not result.passed:
+            return
+        self._activity_search_basic_and_shape(result)
+        if not result.passed:
+            return
+        self._activity_search_filters(result, puz, solver)
+        if not result.passed:
+            return
+        self._activity_search_errors_and_ordering(result)
+        if not result.passed:
+            return
+        result.set_success("Activity search endpoint test completed successfully")
+
+    def _activity_search_setup(self, result):
+        """Set up test data for activity search tests. Returns (puzzle, solver)."""
         rounds = self.get_all_rounds()
         if not rounds:
             rnd = self.create_round(self.get_emoji_string("SearchRnd", include_emoji=False))
             rounds = [rnd]
-        round_id = rounds[0]["id"]
 
         puz = self.create_puzzle(
             self.get_emoji_string("SearchTestPuz", include_emoji=False),
-            round_id
+            rounds[0]["id"]
         )
         solvers = self.get_all_solvers()
-        if not solvers:
-            result.fail("No solvers available")
-            return
+        if not assert_true(result, solvers, "No solvers available"):
+            return None, None
         solver = solvers[0]
 
         # Generate activity: assign solver, change status, change xyzloc
         self.assign_solver_to_puzzle(solver["id"], puz["id"])
         self.api_post(f"/puzzles/{puz['id']}/status", {"status": "Critical"})
         self.api_post(f"/puzzles/{puz['id']}/xyzloc", {"xyzloc": "Table 5"})
+        return puz, solver
 
-        # 1. Basic search - no filters
+    def _activity_search_basic_and_shape(self, result):
+        """Test no-filter search and validate response shape."""
         self.logger.log_operation("  Testing: no filters")
         data = self.api_get("/activitysearch")
-        if data.get("status") != "ok":
-            result.fail(f"No-filter search failed: {data}")
+        if not assert_eq(result, data.get("status"), "ok", "No-filter search"):
             return
-        if not isinstance(data.get("activity"), list):
-            result.fail("activity should be a list")
+        if not assert_true(result, isinstance(data.get("activity"), list), "activity should be a list"):
             return
-        if data.get("count", 0) < 1:
-            result.fail("Should have at least 1 activity entry")
+        if not assert_true(result, data.get("count", 0) >= 1, "Should have ≥1 activity entry"):
             return
         self.logger.log_operation(f"    ✓ Got {data['count']} results")
 
-        # Validate response shape
-        for field in ["id", "time", "type", "source", "puzzle_id", "solver_id", "puzzle_name", "solver_name"]:
-            if field not in data["activity"][0]:
-                result.fail(f"Missing field '{field}' in activity result")
+        required_fields = ["id", "time", "type", "source", "puzzle_id", "solver_id", "puzzle_name", "solver_name"]
+        for field in required_fields:
+            if not assert_in(result, field, data["activity"][0], "Activity result fields"):
                 return
         self.logger.log_operation("    ✓ Response shape validated")
 
-        # 2. Filter by type
-        self.logger.log_operation("  Testing: type filter")
-        data = self.api_get("/activitysearch?types=assignment,status")
-        if data.get("status") != "ok":
-            result.fail(f"Type filter search failed: {data}")
-            return
-        for act in data.get("activity", []):
-            if act["type"] not in ("assignment", "status"):
-                result.fail(f"Type filter leaked: got type '{act['type']}'")
+    def _activity_search_filters(self, result, puz, solver):
+        """Test individual and combined filters using data-driven approach."""
+        # Data-driven filter tests: (label, query_params, validate_fn)
+        filter_tests = [
+            ("type", "types=assignment,status",
+             lambda act: act["type"] in ("assignment", "status")),
+            ("source", "sources=puzzleboss",
+             lambda act: act["source"] == "puzzleboss"),
+            ("solver_id", f"solver_id={solver['id']}",
+             lambda act: True),  # solver_id filter is loose (system entries OK)
+            ("puzzle_id", f"puzzle_id={puz['id']}",
+             lambda act: act["puzzle_id"] == puz["id"]),
+            ("limit", "limit=50",
+             lambda act: True),  # just verify count
+        ]
+
+        for label, params, validate_fn in filter_tests:
+            self.logger.log_operation(f"  Testing: {label} filter")
+            data = self.api_get(f"/activitysearch?{params}")
+            if not assert_eq(result, data.get("status"), "ok", f"{label} filter search"):
                 return
-        self.logger.log_operation(f"    ✓ Type filter returned {data['count']} results (all assignment/status)")
+            for act in data.get("activity", []):
+                if not validate_fn(act):
+                    result.fail(f"{label} filter leaked: {act}")
+                    return
+            if label == "limit":
+                if not assert_true(result, len(data.get("activity", [])) <= 50, "Limit 50 exceeded"):
+                    return
+            self.logger.log_operation(f"    ✓ {label} filter returned {data['count']} results")
 
-        # 3. Filter by source
-        self.logger.log_operation("  Testing: source filter")
-        data = self.api_get("/activitysearch?sources=puzzleboss")
-        if data.get("status") != "ok":
-            result.fail(f"Source filter search failed: {data}")
-            return
-        for act in data.get("activity", []):
-            if act["source"] != "puzzleboss":
-                result.fail(f"Source filter leaked: got source '{act['source']}'")
-                return
-        self.logger.log_operation(f"    ✓ Source filter returned {data['count']} results (all puzzleboss)")
-
-        # 4. Filter by solver_id
-        self.logger.log_operation("  Testing: solver_id filter")
-        data = self.api_get(f"/activitysearch?solver_id={solver['id']}")
-        if data.get("status") != "ok":
-            result.fail(f"Solver filter search failed: {data}")
-            return
-        for act in data.get("activity", []):
-            if act["solver_id"] != solver["id"] and act["solver_id"] != 100:
-                # solver_id 100 is system, which is valid for status/change entries
-                pass  # Some entries have system solver_id; just verify the filter worked
-        self.logger.log_operation(f"    ✓ Solver filter returned {data['count']} results")
-
-        # 5. Filter by puzzle_id
-        self.logger.log_operation("  Testing: puzzle_id filter")
-        data = self.api_get(f"/activitysearch?puzzle_id={puz['id']}")
-        if data.get("status") != "ok":
-            result.fail(f"Puzzle filter search failed: {data}")
-            return
-        for act in data.get("activity", []):
-            if act["puzzle_id"] != puz["id"]:
-                result.fail(f"Puzzle filter leaked: got puzzle_id {act['puzzle_id']}, expected {puz['id']}")
-                return
-        self.logger.log_operation(f"    ✓ Puzzle filter returned {data['count']} results")
-
-        # 6. Limit enforcement
-        self.logger.log_operation("  Testing: limit parameter")
-        data = self.api_get("/activitysearch?limit=50")
-        if data.get("status") != "ok":
-            result.fail(f"Limit search failed: {data}")
-            return
-        if len(data.get("activity", [])) > 50:
-            result.fail(f"Limit 50 returned {len(data['activity'])} results")
-            return
-        self.logger.log_operation(f"    ✓ Limit 50 respected ({data['count']} results)")
-
-        # 7. Combined filters
+        # Combined filters
         self.logger.log_operation("  Testing: combined filters")
         data = self.api_get(f"/activitysearch?types=change&sources=puzzleboss&puzzle_id={puz['id']}&limit=50")
-        if data.get("status") != "ok":
-            result.fail(f"Combined filter search failed: {data}")
+        if not assert_eq(result, data.get("status"), "ok", "Combined filter"):
             return
         for act in data.get("activity", []):
-            if act["type"] != "change":
-                result.fail(f"Combined filter: wrong type '{act['type']}'")
+            if not assert_eq(result, act["type"], "change", "Combined: type"):
                 return
-            if act["source"] != "puzzleboss":
-                result.fail(f"Combined filter: wrong source '{act['source']}'")
+            if not assert_eq(result, act["source"], "puzzleboss", "Combined: source"):
                 return
-            if act["puzzle_id"] != puz["id"]:
-                result.fail(f"Combined filter: wrong puzzle_id {act['puzzle_id']}")
+            if not assert_eq(result, act["puzzle_id"], puz["id"], "Combined: puzzle_id"):
                 return
         self.logger.log_operation(f"    ✓ Combined filters returned {data['count']} results")
 
-        # 8. Error cases
+    def _activity_search_errors_and_ordering(self, result):
+        """Test error cases and time ordering."""
         self.logger.log_operation("  Testing: error cases")
-        r = self.api_get_raw("/activitysearch?limit=999")
-        if r.ok:
-            result.fail("Invalid limit (999) should return error")
-            return
-        self.logger.log_operation(f"    ✓ Invalid limit returned {r.status_code}")
 
-        r = self.api_get_raw("/activitysearch?types=bogustype")
-        if r.ok:
-            result.fail("Invalid type should return error")
-            return
-        self.logger.log_operation(f"    ✓ Invalid type returned {r.status_code}")
+        error_cases = [
+            ("/activitysearch?limit=999", "Invalid limit"),
+            ("/activitysearch?types=bogustype", "Invalid type"),
+            ("/activitysearch?solver_id=notanumber", "Non-integer solver_id"),
+        ]
+        for path, label in error_cases:
+            r = self.api_get_raw(path)
+            if not assert_true(result, not r.ok, f"{label} should return error"):
+                return
+            self.logger.log_operation(f"    ✓ {label} returned {r.status_code}")
 
-        r = self.api_get_raw("/activitysearch?solver_id=notanumber")
-        if r.ok:
-            result.fail("Non-integer solver_id should return error")
-            return
-        self.logger.log_operation(f"    ✓ Non-integer solver_id returned {r.status_code}")
-
-        # 9. Time ordering (most recent first)
+        # Time ordering
         self.logger.log_operation("  Testing: time ordering")
         data = self.api_get("/activitysearch?limit=50")
         activities = data.get("activity", [])
         if len(activities) > 1:
             times = [a["time"] for a in activities]
-            if times[0] < times[-1]:
-                result.fail("Activities not sorted most-recent-first")
+            if not assert_true(result, times[0] >= times[-1], "Activities not sorted most-recent-first"):
                 return
         self.logger.log_operation("    ✓ Results sorted by time DESC")
-
-        result.set_success("Activity search endpoint test completed successfully")
 
     # ------------------------------------------------------------------
     # Test 30: Activity Type Verification
@@ -2616,67 +2543,33 @@ class TestRunner:
 # Main
 # ============================================================================
 
-def reset_hunt():
-    """Reset the hunt database using reset-hunt.py."""
-    script = os.path.join(os.path.dirname(__file__), "reset-hunt.py")
-    if not os.path.exists(script):
-        print(f"WARNING: {script} not found, skipping reset")
-        return
-    print("Resetting hunt database...")
-    result = subprocess.run(
-        ["python3", script, "--yes-i-am-sure-i-want-to-destroy-all-data"],
-        capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        print(f"WARNING: Reset failed: {result.stderr}")
-    else:
-        print("Hunt reset completed successfully")
-
-
-def ensure_test_solvers(base_url, count=10):
-    """Ensure enough test solvers exist."""
-    try:
-        r = requests.get(f"{base_url}/solvers")
-        solvers = r.json().get("solvers", [])
-        existing = len(solvers)
-        if existing >= count:
-            print(f"  Sufficient solvers available ({existing} >= {count})")
-            return
-        for i in range(count - existing):
-            name = f"testuser{existing + i + 1}"
-            requests.post(f"{base_url}/solvers", json={"name": name, "fullname": f"Test User {existing + i + 1}"})
-        print(f"  Created {count - existing} additional test solvers")
-    except Exception as e:
-        print(f"  Warning: Could not ensure test solvers: {e}")
-
-
 def main():
-    parser = argparse.ArgumentParser(description="PuzzleBoss API Test Suite")
-    parser.add_argument("--allow-destructive", action="store_true",
-                        help="Allow destructive database operations (required)")
-    parser.add_argument("--tests", nargs="+", type=int,
-                        help="Run specific test numbers (1-%d)" % len(TestRunner.TEST_NAMES))
-    parser.add_argument("--list", action="store_true",
-                        help="List all tests")
+    parser = make_arg_parser("PuzzleBoss API Test Suite", TestRunner.TEST_NAMES)
     parser.add_argument("--base-url", default=BASE_URL,
                         help=f"API base URL (default: {BASE_URL})")
     args = parser.parse_args()
 
-    if args.list:
-        for i, name in enumerate(TestRunner.TEST_NAMES, 1):
-            print(f"  {i:2d}. {name}")
-        sys.exit(0)
+    handle_list_and_destructive(args, test_names=TestRunner.TEST_NAMES)
 
-    if not args.allow_destructive:
-        print("ERROR: This test suite modifies the database.")
-        print("Run with --allow-destructive to confirm.")
-        sys.exit(1)
+    # Parse --tests into set of 1-based indices
+    selected = None
+    if args.tests:
+        specs = []
+        for arg in args.tests:
+            specs.extend(arg.split(","))
+        selected = set()
+        for s in specs:
+            try:
+                selected.add(int(s.strip()))
+            except ValueError:
+                print(f"ERROR: Invalid test number '{s}'")
+                sys.exit(1)
 
     reset_hunt()
-    ensure_test_solvers(args.base_url)
+    ensure_test_solvers_api(args.base_url)
 
     runner = TestRunner(args.base_url)
-    success = runner.run_all_tests(selected_tests=args.tests)
+    success = runner.run_all_tests(selected_tests=selected)
     sys.exit(0 if success else 1)
 
 
