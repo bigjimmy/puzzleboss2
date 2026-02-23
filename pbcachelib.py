@@ -94,25 +94,10 @@ def invalidate_all_cache(conn):
     """Invalidate the /all cache. Call when puzzle/round data changes.
 
     Note: This only invalidates the cache. If you want to track cache invalidation
-    stats, call increment_botstat() separately with proper error handling.
+    stats, call increment_botstat() from pblib separately with proper error handling.
     """
     ensure_memcache_initialized(conn)
     cache_delete(MEMCACHE_CACHE_KEY)
-
-
-def increment_botstat(stat_name, conn):
-    """Increment a counter in the botstats table (atomic upsert)."""
-    try:
-        cursor = conn.cursor()
-        # Use INSERT ... ON DUPLICATE KEY to atomically increment
-        cursor.execute(
-            """INSERT INTO botstats (`key`, `val`) VALUES (%s, '1')
-               ON DUPLICATE KEY UPDATE `val` = CAST(`val` AS UNSIGNED) + 1""",
-            (stat_name,),
-        )
-        conn.commit()
-    except Exception as e:
-        debug_log(3, f"increment_botstat error for {stat_name}: {e}")
 
 
 def ensure_memcache_initialized(conn):

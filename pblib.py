@@ -709,6 +709,26 @@ def update_botstat(key, value, conn):
     conn.commit()
 
 
+def increment_botstat(stat_name, conn):
+    """Increment a counter in the botstats table (atomic upsert).
+
+    Args:
+        stat_name: The botstats key to increment
+        conn: Database connection
+    """
+    try:
+        cursor = conn.cursor()
+        # Use INSERT ... ON DUPLICATE KEY to atomically increment
+        cursor.execute(
+            """INSERT INTO botstats (`key`, `val`) VALUES (%s, '1')
+               ON DUPLICATE KEY UPDATE `val` = CAST(`val` AS UNSIGNED) + 1""",
+            (stat_name,),
+        )
+        conn.commit()
+    except Exception as e:
+        debug_log(3, f"increment_botstat error for {stat_name}: {e}")
+
+
 def get_all_rounds_with_puzzles(conn):
     """Fetch all rounds with their nested puzzles from database.
 

@@ -18,7 +18,7 @@ from pblib import (
     get_last_activity_for_solver, log_activity,
     assign_solver_to_puzzle, unassign_solver_from_puzzle,
     clear_puzzle_solvers, check_round_completion,
-    update_puzzle_field, update_botstat, sanitize_puzzle_name,
+    update_puzzle_field, update_botstat, increment_botstat, sanitize_puzzle_name,
     email_user_verification, solver_exists,
 )
 import pbgooglelib
@@ -81,7 +81,6 @@ from pbcachelib import (
     cache_set,
     cache_delete,
     invalidate_all_cache,
-    increment_botstat,
     ensure_memcache_initialized,
     MEMCACHE_CACHE_KEY,
     MEMCACHE_TTL,
