@@ -448,6 +448,7 @@ $keyCategoryMap = [
   'REGEMAIL' => 'signup',
   'MAILRELAY' => 'signup',
 
+  'ACTIVITY_SOURCES' => 'general',
   'BIN_URI' => 'general',
 
   'STATUS_METADATA' => 'metadata',
@@ -494,6 +495,7 @@ $keyDescriptions = [
   'BIN_URI' => 'URL root for the Puzzleboss web UI',
   'REGEMAIL' => 'Admin email address for registration',
   'MAILRELAY' => 'SMTP relay server for outbound email',
+  'ACTIVITY_SOURCES' => 'Comma-separated list of valid activity sources. ⚠️ Must match the ENUM values in the activity.source column in the database — adding a value here without a corresponding ALTER TABLE will cause inserts to fail.',
   'STATUS_METADATA' => 'JSON array defining puzzle statuses (emoji, text, order)',
   'METRICS_METADATA' => 'JSON object defining Prometheus metric definitions',
 ];

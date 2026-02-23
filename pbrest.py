@@ -1,3 +1,5 @@
+"""PuzzleBoss REST API — Flask server for puzzle/round/solver management."""
+
 import MySQLdb
 import sys
 import flasgger
@@ -135,7 +137,6 @@ def _read_cursor():
     return conn, cursor
 
 
-
 def _get_status_names():
     """Get puzzle status names from the DB ENUM definition."""
     conn, cursor = _read_cursor()
@@ -154,6 +155,7 @@ def periodic_config_refresh():
 
 @app.errorhandler(Exception)
 def handle_error(e):
+    """Global error handler — returns JSON error responses with traceback."""
     code = 500
     if isinstance(e, HTTPException):
         code = e.code
@@ -218,7 +220,7 @@ def _promote_top_hint(cursor):
     top = cursor.fetchone()
     if top and top["status"] == "queued":
         cursor.execute("UPDATE hint SET status = 'ready' WHERE id = %s", (top["id"],))
-        debug_log(3, "Auto-promoted hint %d to 'ready'" % top["id"])
+        debug_log(3, f"Auto-promoted hint {top['id']} to 'ready'")
 
 
 def _get_all_from_db():
@@ -228,8 +230,8 @@ def _get_all_from_db():
         conn, cursor = _read_cursor()
         cursor.execute("SELECT * from puzzle_view")
         puzzle_view = cursor.fetchall()
-    except Exception:
-        raise Exception("Exception in querying puzzle_view")
+    except Exception as e:
+        raise Exception("Exception in querying puzzle_view") from e
 
     all_puzzles = {}
     for puzzle in puzzle_view:
@@ -239,8 +241,8 @@ def _get_all_from_db():
         conn, cursor = _read_cursor()
         cursor.execute("SELECT * from round_view")
         round_view = cursor.fetchall()
-    except Exception:
-        raise Exception("Exception in querying round_view")
+    except Exception as e:
+        raise Exception("Exception in querying round_view") from e
 
     def is_int(val):
         try:
@@ -265,8 +267,8 @@ def _get_all_from_db():
         conn, cursor = _read_cursor()
         cursor.execute(_HINT_QUERY)
         hint_rows = cursor.fetchall()
-    except Exception:
-        raise Exception("Exception in querying hint table")
+    except Exception as e:
+        raise Exception("Exception in querying hint table") from e
 
     hints = [_format_hint_row(row) for row in hint_rows]
 
@@ -298,7 +300,7 @@ def _get_all_with_cache():
         try:
             cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
         except Exception as e:
-            debug_log(3, "failed to cache: %s" % str(e))
+            debug_log(3, f"failed to cache: {e}")
 
     return data
 
@@ -332,7 +334,7 @@ def get_hunt_info():
         config_rows = cursor.fetchall()
         result["config"] = {row["key"]: row["val"] for row in config_rows}
     except Exception as e:
-        debug_log(2, "Could not fetch config: %s" % e)
+        debug_log(2, f"Could not fetch config: {e}")
         result["config"] = {}
 
     # Statuses - return rich objects with metadata
@@ -347,7 +349,7 @@ def get_hunt_info():
             metadata_list = json.loads(metadata_json)
             status_metadata = {item["name"]: item for item in metadata_list}
         except Exception as e:
-            debug_log(2, "Could not parse STATUS_METADATA: %s" % e)
+            debug_log(2, f"Could not parse STATUS_METADATA: {e}")
 
         # Build rich status objects
         status_list = []
@@ -373,7 +375,7 @@ def get_hunt_info():
         status_list.sort(key=lambda x: x["order"])
         result["statuses"] = status_list
     except Exception as e:
-        debug_log(2, "Could not fetch statuses: %s" % e)
+        debug_log(2, f"Could not fetch statuses: {e}")
         result["statuses"] = []
 
     # Tags
@@ -381,7 +383,7 @@ def get_hunt_info():
         cursor.execute("SELECT id, name FROM tag ORDER BY name")
         result["tags"] = cursor.fetchall()
     except Exception as e:
-        debug_log(2, "Could not fetch tags: %s" % e)
+        debug_log(2, f"Could not fetch tags: {e}")
         result["tags"] = []
 
     return result
@@ -407,7 +409,7 @@ def get_all_puzzles():
 
 def get_puzzles_by_tag_id(tag_id):
     """Get all puzzles with a specific tag ID. Reusable helper function."""
-    debug_log(4, "start with tag_id: %s" % tag_id)
+    debug_log(4, f"start with tag_id: {tag_id}")
     conn, cursor = _read_cursor()
 
     # Use MEMBER OF() to leverage the multi-valued JSON index
@@ -420,18 +422,18 @@ def get_puzzles_by_tag_id(tag_id):
     )
     puzzlist = cursor.fetchall()
 
-    debug_log(4, "found %d puzzles with tag_id %s" % (len(puzzlist), tag_id))
+    debug_log(4, f"found {len(puzzlist)} puzzles with tag_id {tag_id}")
     return puzzlist
 
 
 def get_tag_id_by_name(tag_name):
     """Get tag ID by name (case-insensitive). Returns None if not found."""
-    debug_log(4, "start with tag_name: %s" % tag_name)
+    debug_log(4, f"start with tag_name: {tag_name}")
     conn, cursor = _read_cursor()
     cursor.execute("SELECT id FROM tag WHERE LOWER(name) = LOWER(%s)", (tag_name,))
     tag_row = cursor.fetchone()
     if not tag_row:
-        debug_log(4, "tag '%s' not found" % tag_name)
+        debug_log(4, f"tag '{tag_name}' not found")
         return None
     return tag_row["id"]
 
@@ -468,7 +470,7 @@ def search_puzzles():
             conn, cursor = _read_cursor()
             cursor.execute("SELECT id FROM tag WHERE id = %s", (tag_id,))
             if not cursor.fetchone():
-                debug_log(4, "tag_id %s not found" % tag_id)
+                debug_log(4, f"tag_id {tag_id} not found")
                 return {"status": "ok", "puzzles": []}
 
         puzzlist = get_puzzles_by_tag_id(tag_id)
@@ -478,14 +480,14 @@ def search_puzzles():
         }
 
     except Exception as e:
-        debug_log(1, "Error searching puzzles: %s" % str(e))
+        debug_log(1, f"Error searching puzzles: {e}")
         raise Exception(f"Exception searching puzzles: {e}")
 
 
 @app.route("/rbac/<priv>/<uid>", endpoint="rbac_priv_uid", methods=["GET"])
 @swag_from("swag/getrbacprivuid.yaml", endpoint="rbac_priv_uid", methods=["GET"])
 def check_priv(priv, uid):
-    debug_log(4, "start. priv: %s, uid: %s" % (priv, uid))
+    debug_log(4, f"start. priv: {priv}, uid: {uid}")
     try:
         conn, cursor = _read_cursor()
         cursor.execute("SELECT * FROM privs WHERE uid = %s", (uid,))
@@ -493,7 +495,7 @@ def check_priv(priv, uid):
     except Exception:
         raise Exception("Exception querying database for privs)")
 
-    debug_log(4, "in database user %s ACL is %s" % (uid, rv))
+    debug_log(4, f"in database user {uid} ACL is {rv}")
 
     # Build dict of all privs for this user (the query already fetched them all)
     all_privs = {}
@@ -504,10 +506,10 @@ def check_priv(priv, uid):
 
     try:
         allowed = all_privs.get(priv, False)
-    except Exception:
+    except Exception as e:
         raise Exception(
             f"Exception in reading priv {priv} from user {uid} ACL. No such priv?"
-        )
+        ) from e
 
     return {
         "status": "ok",
@@ -519,17 +521,17 @@ def check_priv(priv, uid):
 @app.route("/puzzles/<id>", endpoint="puzzle_id", methods=["GET"])
 @swag_from("swag/getpuzzleid.yaml", endpoint="puzzle_id", methods=["GET"])
 def get_one_puzzle(id):
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     try:
         conn, cursor = _read_cursor()
         cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
         puzzle = cursor.fetchone()
     except IndexError:
         raise Exception(f"Puzzle {id} not found in database")
-    except Exception:
-        raise Exception(f"Exception in fetching puzzle {id} from database")
+    except Exception as e:
+        raise Exception(f"Exception in fetching puzzle {id} from database") from e
 
-    debug_log(5, "fetched puzzle %s: %s" % (id, puzzle))
+    debug_log(5, f"fetched puzzle {id}: {puzzle}")
 
     # Include lastact to reduce HTTP round-trips for clients
     return {
@@ -542,7 +544,7 @@ def get_one_puzzle(id):
 @app.route("/puzzles/<id>/<part>", endpoint="puzzle_part", methods=["GET"])
 @swag_from("swag/getpuzzlepart.yaml", endpoint="puzzle_part", methods=["GET"])
 def get_puzzle_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    debug_log(4, f"start. id: {id}, part: {part}")
     if part == "lastact":
         rv = get_last_activity_for_puzzle(id)
     elif part == "lastsheetact":
@@ -556,12 +558,12 @@ def get_puzzle_part(id, part):
             rv = cursor.fetchone()[part]
         except TypeError:
             raise Exception(f"Puzzle {id} not found in database")
-        except Exception:
+        except Exception as e:
             raise Exception(
                 f"Exception in fetching {part} part for puzzle {id} from database"
-            )
+            ) from e
 
-    debug_log(4, "fetched puzzle part %s for %s" % (part, id))
+    debug_log(4, f"fetched puzzle part {part} for {id}")
     return {"status": "ok", "puzzle": {"id": int(id), part: rv}}
 
 
@@ -569,7 +571,7 @@ def get_puzzle_part(id, part):
 @swag_from("swag/getpuzzleactivity.yaml", endpoint="puzzle_activity", methods=["GET"])
 def get_puzzle_activity(id):
     """Get all activity for a specific puzzle."""
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
 
     # Check if puzzle exists
     try:
@@ -595,7 +597,7 @@ def get_puzzle_activity(id):
     except Exception as e:
         raise Exception(f"Exception fetching activity for puzzle {id}: {e}")
 
-    debug_log(4, "fetched %d activity entries for puzzle %s" % (len(activities), id))
+    debug_log(4, f"fetched {len(activities)} activity entries for puzzle {id}")
     return {
         "status": "ok",
         "puzzle_id": int(id),
@@ -611,8 +613,8 @@ def get_all_rounds():
         conn, cursor = _read_cursor()
         cursor.execute("SELECT id, name from round")
         roundlist = cursor.fetchall()
-    except Exception:
-        raise Exception("Exception in fetching all rounds from database")
+    except Exception as e:
+        raise Exception("Exception in fetching all rounds from database") from e
 
     debug_log(4, "listed all rounds")
     return {
@@ -624,7 +626,7 @@ def get_all_rounds():
 @app.route("/rounds/<id>", endpoint="round_id", methods=["GET"])
 @swag_from("swag/getroundid.yaml", endpoint="round_id", methods=["GET"])
 def get_one_round(id):
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     try:
         conn, cursor = _read_cursor()
         cursor.execute(
@@ -649,10 +651,10 @@ def get_one_round(id):
             if pid:  # Skip empty strings
                 puzzles.append(get_one_puzzle(pid)["puzzle"])
         round["puzzles"] = puzzles
-    except Exception:
-        raise Exception(f"Exception in fetching round {id} from database")
+    except Exception as e:
+        raise Exception(f"Exception in fetching round {id} from database") from e
 
-    debug_log(4, "fetched round %s" % id)
+    debug_log(4, f"fetched round {id}")
     return {
         "status": "ok",
         "round": round,
@@ -662,7 +664,7 @@ def get_one_round(id):
 @app.route("/rounds/<id>/<part>", endpoint="round_part", methods=["GET"])
 @swag_from("swag/getroundpart.yaml", endpoint="round_part", methods=["GET"])
 def get_round_part(id, part):
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    debug_log(4, f"start. id: {id}, part: {part}")
     try:
         conn, cursor = _read_cursor()
         # Use round table directly instead of round_view to get status
@@ -673,15 +675,15 @@ def get_round_part(id, part):
         answer = answer[part]
     except TypeError:
         raise Exception(f"Round {id} not found in database")
-    except Exception:
+    except Exception as e:
         raise Exception(
             f"Exception in fetching {part} part for round {id} from database"
-        )
+        ) from e
 
     if part == "puzzles":
         answer = get_puzzles_from_list(answer)
 
-    debug_log(4, "fetched round part %s for %s" % (part, id))
+    debug_log(4, f"fetched round part {part} for {id}")
     return {"status": "ok", "round": {"id": int(id), part: answer}}
 
 
@@ -693,8 +695,8 @@ def get_all_solvers():
         conn, cursor = _read_cursor()
         cursor.execute("SELECT id, name, fullname, chat_uid, chat_name from solver")
         solvers = cursor.fetchall()
-    except Exception:
-        raise Exception("Exception in fetching all solvers from database")
+    except Exception as e:
+        raise Exception("Exception in fetching all solvers from database") from e
 
     debug_log(4, "listed all solvers")
     return {"status": "ok", "solvers": solvers}
@@ -703,7 +705,7 @@ def get_all_solvers():
 @app.route("/solvers/<id>", endpoint="solver_id", methods=["GET"])
 @swag_from("swag/getsolverid.yaml", endpoint="solver_id", methods=["GET"])
 def get_one_solver(id):
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     try:
         conn, cursor = _read_cursor()
         cursor.execute("SELECT * from solver_view where id = %s", (id,))
@@ -712,11 +714,11 @@ def get_one_solver(id):
             raise Exception(f"Solver {id} not found in database")
     except IndexError:
         raise Exception(f"Solver {id} not found in database")
-    except Exception:
-        raise Exception(f"Exception in fetching solver {id} from database")
+    except Exception as e:
+        raise Exception(f"Exception in fetching solver {id} from database") from e
 
     solver["lastact"] = get_last_activity_for_solver(id)
-    debug_log(4, "fetched solver %s" % id)
+    debug_log(4, f"fetched solver {id}")
     return {
         "status": "ok",
         "solver": solver,
@@ -727,7 +729,7 @@ def get_one_solver(id):
 @swag_from("swag/getsolverbyname.yaml", endpoint="solver_byname", methods=["GET"])
 def get_solver_by_name(name):
     """Get solver by username - more efficient than fetching all solvers"""
-    debug_log(4, "start. name: %s" % name)
+    debug_log(4, f"start. name: {name}")
     try:
         conn, cursor = _read_cursor()
         solver = pblib.get_solver_by_name_from_db(name, conn)
@@ -738,7 +740,7 @@ def get_solver_by_name(name):
             f"Exception in fetching solver '{name}' from database: {e}"
         )
 
-    debug_log(4, "fetched solver by name: %s" % name)
+    debug_log(4, f"fetched solver by name: {name}")
     return {
         "status": "ok",
         "solver": solver,
@@ -749,7 +751,7 @@ def get_solver_by_name(name):
 @swag_from("swag/getsolveractivity.yaml", endpoint="solver_activity", methods=["GET"])
 def get_solver_activity(id):
     """Get all activity for a specific solver."""
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
 
     # Check if solver exists
     try:
@@ -775,7 +777,7 @@ def get_solver_activity(id):
     except Exception as e:
         raise Exception(f"Exception fetching activity for solver {id}: {e}")
 
-    debug_log(4, "fetched %d activity entries for solver %s" % (len(activities), id))
+    debug_log(4, f"fetched {len(activities)} activity entries for solver {id}")
     return {
         "status": "ok",
         "solver_id": int(id),
@@ -793,7 +795,7 @@ def _solver_exists(identifier):
         conn, cursor = _read_cursor()
         return pblib.solver_exists(identifier, conn)
     except Exception as e:
-        debug_log(1, "Error checking solver existence for %s: %s" % (identifier, e))
+        debug_log(1, f"Error checking solver existence for {identifier}: {e}")
         return False
 
 
@@ -808,7 +810,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
     # are handled inside assign/unassign_solver_to_puzzle() in pblib.
     if part == "puzz":
         if value:
-            debug_log(4, "trying to assign solver %s to puzzle %s" % (id, value))
+            debug_log(4, f"trying to assign solver {id} to puzzle {value}")
             assign_solver_to_puzzle(value, id, mysql.connection, source)
         else:
             # Puzz is empty, so this is a de-assignment
@@ -831,7 +833,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
             if current_puzzle:
                 unassign_solver_from_puzzle(current_puzzle["id"], id, mysql.connection, source)
 
-        debug_log(3, "solver %s puzz updated to %s" % (id, value))
+        debug_log(3, f"solver {id} puzz updated to {value}")
         return value
 
     # For all other parts, just try to update - MySQL will reject invalid columns
@@ -844,7 +846,7 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
             f"Exception in modifying {part} of solver {id}: {e}"
         )
 
-    debug_log(3, "solver %s %s updated in database" % (id, part))
+    debug_log(3, f"solver {id} {part} updated in database")
     return value
 
 
@@ -852,10 +854,10 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
 @swag_from("swag/postsolver.yaml", endpoint="post_solver_id", methods=["POST"])
 def update_solver_multi(id):
     """Update multiple solver parts in a single call."""
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     try:
         data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
 
@@ -864,7 +866,7 @@ def update_solver_multi(id):
 
     # Check if this is a legit solver
     mysolver = get_one_solver(id)
-    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+    debug_log(5, f"return value from get_one_solver {id} is {mysolver}")
     if "status" not in mysolver or mysolver["status"] != "ok":
         raise Exception(f"Error looking up solver {id}")
 
@@ -883,10 +885,10 @@ def update_solver_multi(id):
 @swag_from("swag/putsolverpart.yaml", endpoint="post_solver_part", methods=["POST"])
 def update_solver_part(id, part):
     """Update a single solver part."""
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    debug_log(4, f"start. id: {id}, part: {part}")
     try:
         data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
         value = data[part]
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
@@ -895,7 +897,7 @@ def update_solver_part(id, part):
 
     # Check if this is a legit solver
     mysolver = get_one_solver(id)
-    debug_log(5, "return value from get_one_solver %s is %s" % (id, mysolver))
+    debug_log(5, f"return value from get_one_solver {id} is {mysolver}")
     if "status" not in mysolver or mysolver["status"] != "ok":
         raise Exception(f"Error looking up solver {id}")
 
@@ -935,8 +937,7 @@ def put_config():
         myval = data["cfgval"]
         debug_log(
             3,
-            "Config change attempt.  struct: %s key %s val %s"
-            % (str(data), mykey, myval),
+            f"Config change attempt.  struct: {data} key {mykey} val {myval}",
         )
     except Exception as e:
         raise Exception(f"Exception Interpreting input data for config change: {e}")
@@ -947,7 +948,7 @@ def put_config():
     )
     conn.commit()
 
-    debug_log(2, "Config value %s changed successfully" % mykey)
+    debug_log(2, f"Config value {mykey} changed successfully")
     return {"status": "ok"}
 
 
@@ -1002,7 +1003,7 @@ def put_botstats():
         if not stats_to_update:
             raise Exception("No statistics provided for update")
 
-        debug_log(4, "Updating %d botstats" % len(stats_to_update))
+        debug_log(4, f"Updating {len(stats_to_update)} botstats")
 
     except Exception as e:
         raise Exception(f"Exception interpreting input data for batch botstat update: {e}")
@@ -1015,11 +1016,11 @@ def put_botstats():
             "INSERT INTO botstats (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
             (key, val, val),
         )
-        debug_log(5, "Updated botstat: key=%s val=%s" % (key, val))
+        debug_log(5, f"Updated botstat: key={key} val={val}")
 
     conn.commit()
 
-    debug_log(4, "Successfully updated %d botstats" % len(stats_to_update))
+    debug_log(4, f"Successfully updated {len(stats_to_update)} botstats")
     return {"status": "ok", "updated": len(stats_to_update)}
 
 
@@ -1027,18 +1028,18 @@ def put_botstats():
 @swag_from("swag/putbotstat.yaml", endpoint="putbotstat", methods=["POST"])
 def put_botstat(key):
     """Update a single bot statistic"""
-    debug_log(4, "start with key: %s" % key)
+    debug_log(4, f"start with key: {key}")
     try:
         data = request.get_json()
         myval = data["val"]
-        debug_log(4, "Botstat update: key=%s val=%s" % (key, myval))
+        debug_log(4, f"Botstat update: key={key} val={myval}")
     except Exception as e:
         raise Exception(f"Exception interpreting input data for botstat update: {e}")
 
     conn, cursor = _cursor()
     pblib.update_botstat(key, myval, conn)
 
-    debug_log(4, "Botstat %s updated successfully to %s" % (key, myval))
+    debug_log(4, f"Botstat {key} updated successfully to {myval}")
     return {"status": "ok"}
 
 
@@ -1053,7 +1054,7 @@ def get_statuses():
     statuses = _get_status_names()
     if not statuses:
         raise Exception("Could not find status column in puzzle table")
-    debug_log(5, "fetched %d statuses from database" % len(statuses))
+    debug_log(5, f"fetched {len(statuses)} statuses from database")
     return {"status": "ok", "statuses": statuses}
 
 
@@ -1080,7 +1081,7 @@ def get_tags():
     except Exception as e:
         raise Exception(f"Exception fetching tags from database: {e}")
 
-    debug_log(4, "fetched %d tags from database" % len(tags))
+    debug_log(4, f"fetched {len(tags)} tags from database")
     return {"status": "ok", "tags": tags}
 
 
@@ -1088,13 +1089,13 @@ def get_tags():
 @swag_from("swag/gettag.yaml", endpoint="gettag", methods=["GET"])
 def get_tag(tag):
     """Get a single tag by name"""
-    debug_log(4, "start with tag: %s" % tag)
+    debug_log(4, f"start with tag: {tag}")
     try:
         conn, cursor = _read_cursor()
         cursor.execute("SELECT id, name, created_at FROM tag WHERE name = %s", (tag,))
         row = cursor.fetchone()
         if row is None:
-            debug_log(4, "Tag %s not found" % tag)
+            debug_log(4, f"Tag {tag} not found")
             return {"status": "error", "error": f"Tag {tag} not found"}, 404
         tag_data = {
             "id": row["id"],
@@ -1106,7 +1107,7 @@ def get_tag(tag):
     except Exception as e:
         raise Exception(f"Exception fetching tag {tag} from database: {e}")
 
-    debug_log(4, "fetched tag %s from database" % tag)
+    debug_log(4, f"fetched tag {tag} from database")
     return {"status": "ok", "tag": tag_data}
 
 
@@ -1118,7 +1119,7 @@ def create_tag():
     try:
         data = request.get_json()
         tag_name = data["name"].lower()  # Force lowercase
-        debug_log(4, "Creating tag: %s" % tag_name)
+        debug_log(4, f"Creating tag: {tag_name}")
     except (TypeError, KeyError):
         raise Exception("Missing or invalid 'name' field in request body")
 
@@ -1136,11 +1137,11 @@ def create_tag():
         new_id = cursor.lastrowid
     except Exception as e:
         if "Duplicate entry" in str(e):
-            debug_log(3, "Tag %s already exists" % tag_name)
+            debug_log(3, f"Tag {tag_name} already exists")
             return {"status": "error", "error": f"Tag {tag_name} already exists"}, 409
         raise Exception(f"Exception creating tag {tag_name}: {e}")
 
-    debug_log(3, "Created new tag: %s (id: %d)" % (tag_name, new_id))
+    debug_log(3, f"Created new tag: {tag_name} (id: {new_id})")
     return {"status": "ok", "tag": {"id": new_id, "name": tag_name}}
 
 
@@ -1148,7 +1149,7 @@ def create_tag():
 @swag_from("swag/deletetag.yaml", endpoint="deletetag", methods=["DELETE"])
 def delete_tag(tag):
     """Delete a tag and remove it from all puzzles"""
-    debug_log(4, "start with tag: %s" % tag)
+    debug_log(4, f"start with tag: {tag}")
     tag_name = tag.lower()  # Normalize to lowercase
 
     try:
@@ -1158,7 +1159,7 @@ def delete_tag(tag):
         cursor.execute("SELECT id FROM tag WHERE name = %s", (tag_name,))
         tag_row = cursor.fetchone()
         if not tag_row:
-            debug_log(3, "Tag '%s' not found for deletion" % tag_name)
+            debug_log(3, f"Tag '{tag_name}' not found for deletion")
             return {"status": "error", "error": f"Tag '{tag_name}' not found"}, 404
 
         tag_id = tag_row["id"]
@@ -1186,8 +1187,7 @@ def delete_tag(tag):
 
         debug_log(
             3,
-            "Deleted tag '%s' (id: %d), removed from %d puzzle(s)"
-            % (tag_name, tag_id, puzzles_updated),
+            f"Deleted tag '{tag_name}' (id: {tag_id}), removed from {puzzles_updated} puzzle(s)",
         )
         return {
             "status": "ok",
@@ -1196,7 +1196,7 @@ def delete_tag(tag):
         }
 
     except Exception as e:
-        debug_log(1, "Error deleting tag '%s': %s" % (tag_name, str(e)))
+        debug_log(1, f"Error deleting tag '{tag_name}': {e}")
         raise Exception(f"Error deleting tag '{tag_name}': {e}")
 
 
@@ -1359,7 +1359,7 @@ def create_puzzle():
         round_id = puzzle.get("round_id")
         puzzle_uri = puzzle.get("puzzle_uri", "")
         ismeta = puzzle.get("ismeta", False)
-        debug_log(5, "request data is - %s" % str(puzzle))
+        debug_log(5, f"request data is - {puzzle}")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
 
@@ -1396,7 +1396,7 @@ def create_puzzle():
             pass
         raise
 
-    debug_log(3, "puzzle %s added to system fully (chat room, spreadsheet, database, etc.)!" % name)
+    debug_log(3, f"puzzle {name} added to system fully (chat room, spreadsheet, database, etc.)!")
 
     return {
         "status": "ok",
@@ -1430,7 +1430,7 @@ def create_puzzle_stepwise():
         puzzle_uri = puzzle.get("puzzle_uri", "")
         ismeta = puzzle.get("ismeta", False)
         is_speculative = puzzle.get("is_speculative", False)
-        debug_log(5, "stepwise request data is - %s" % str(puzzle))
+        debug_log(5, f"stepwise request data is - {puzzle}")
     except TypeError:
         return {"status": "error", "error": "Invalid JSON POST structure or empty POST"}, 400
 
@@ -1581,7 +1581,7 @@ def create_round():
     try:
         data = request.get_json()
         roundname = sanitize_puzzle_name(data["name"])
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
@@ -1595,14 +1595,14 @@ def create_round():
         conn, cursor = _cursor()
         cursor.execute("SELECT id FROM round WHERE name = %s LIMIT 1", (roundname,))
         existing_round = cursor.fetchone()
-    except Exception:
-        raise Exception("Exception checking database for duplicate round before insert")
+    except Exception as e:
+        raise Exception("Exception checking database for duplicate round before insert") from e
 
     if existing_round:
         raise Exception(f"Duplicate round name {roundname} detected")
 
     chat_status = chat_announce_round(roundname)
-    debug_log(4, "return from announcing round in chat is - %s" % str(chat_status))
+    debug_log(4, f"return from announcing round in chat is - {chat_status}")
 
     if chat_status is None:
         raise Exception("Error in announcing new round in chat")
@@ -1610,7 +1610,7 @@ def create_round():
     debug_log(4, "Making call to create google drive folder for round")
     round_drive_id = create_round_folder(roundname)
     round_drive_uri = f"https://drive.google.com/drive/u/1/folders/{round_drive_id}"
-    debug_log(5, "Round drive URI created: %s" % round_drive_uri)
+    debug_log(5, f"Round drive URI created: {round_drive_uri}")
     # Actually insert into the database
     conn, cursor = _cursor()
     cursor.execute(
@@ -1620,7 +1620,7 @@ def create_round():
     conn.commit()
 
     debug_log(
-        3, "round %s added to database! drive_uri: %s" % (roundname, round_drive_uri)
+        3, f"round {roundname} added to database! drive_uri: {round_drive_uri}"
     )
 
     # Invalidate /allcached since new round was created
@@ -1632,10 +1632,10 @@ def create_round():
 @app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
 @swag_from("swag/putrbacprivuid.yaml", endpoint="post_rbac_priv_uid", methods=["POST"])
 def set_priv(priv, uid):
-    debug_log(4, "start. priv: %s, uid %s" % (priv, uid))
+    debug_log(4, f"start. priv: {priv}, uid {uid}")
     try:
         data = request.get_json()
-        debug_log(4, "post data: %s" % (data))
+        debug_log(4, f"post data: {data}")
         value = data["allowed"]
         if value != "YES" and value != "NO":
             raise Exception(
@@ -1643,7 +1643,7 @@ def set_priv(priv, uid):
             )
     except Exception as e:
         raise Exception(f"Error interpreting privset JSON allowed field: {e}")
-    debug_log(3, "Attempting privset of uid %s:  %s = %s" % (uid, priv, value))
+    debug_log(3, f"Attempting privset of uid {uid}:  {priv} = {value}")
 
     # Actually insert into the database
     try:
@@ -1653,10 +1653,10 @@ def set_priv(priv, uid):
             (uid, value, uid, value),
         )
         conn.commit()
-    except Exception:
+    except Exception as e:
         raise Exception(
             f"Error modifying priv table for uid {uid} priv {priv} value {value}. Is priv string valid?"
-        )
+        ) from e
 
     return {"status": "ok"}
 
@@ -1680,7 +1680,7 @@ def _update_single_round_part(id, part, value):
             f"Exception in modifying {part} of round {id}: {e}"
         )
 
-    debug_log(3, "round %s %s updated to %s" % (id, part, value))
+    debug_log(3, f"round {id} {part} updated to {value}")
     return value
 
 
@@ -1688,10 +1688,10 @@ def _update_single_round_part(id, part, value):
 @swag_from("swag/postround.yaml", endpoint="post_round", methods=["POST"])
 def update_round_multi(id):
     """Update multiple round parts in a single call."""
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     try:
         data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
 
@@ -1714,11 +1714,11 @@ def update_round_multi(id):
 @swag_from("swag/putroundpart.yaml", endpoint="post_round_part", methods=["POST"])
 def update_round_part(id, part):
     """Update a single round part."""
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    debug_log(4, f"start. id: {id}, part: {part}")
     try:
         data = request.get_json()
         value = data[part]
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
@@ -1738,7 +1738,7 @@ def create_solver():
     debug_log(4, "start")
     try:
         data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
         name = sanitize_puzzle_name(data["name"])
         fullname = data["fullname"]
     except TypeError:
@@ -1757,15 +1757,15 @@ def create_solver():
         raise Exception(
             f"MySQL integrity failure. Does another solver with the same name {name} exist?"
         )
-    except Exception:
-        raise Exception(f"Exception in insertion of solver {name} into database")
+    except Exception as e:
+        raise Exception(f"Exception in insertion of solver {name} into database") from e
 
-    debug_log(3, "solver %s added to database!" % name)
+    debug_log(3, f"solver {name} added to database!")
 
     return {"status": "ok", "solver": {"name": name, "fullname": fullname}}
 
 
-def _update_single_puzzle_part(id, part, value, mypuzzle):
+def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
     """
     Internal helper to update a single puzzle part.
     Returns the updated value (may be modified, e.g. uppercased answer).
@@ -1789,12 +1789,11 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             else:
                 debug_log(
                     3,
-                    "Puzzle id %s name %s has been Solved!!!"
-                    % (id, mypuzzle["puzzle"]["name"]),
+                    f"Puzzle id {id} name {mypuzzle['puzzle']['name']} has been Solved!!!",
                 )
                 clear_puzzle_solvers(id, mysql.connection)
-                update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
-                update_puzzle_part_in_db(id, part, value)
+                update_puzzle_part_in_db(id, "xyzloc", "", source)  # Clear location on solve
+                update_puzzle_part_in_db(id, part, value, source)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
 
                 # Check if this is a meta puzzle and if all metas in the round are solved
@@ -1802,26 +1801,26 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
         elif value in ("Needs eyes", "Critical", "WTF"):
             # These statuses trigger an attention announcement
-            update_puzzle_part_in_db(id, part, value)
+            update_puzzle_part_in_db(id, part, value, source)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
         else:
             # All other valid statuses (Being worked, Unnecessary, Under control, Waiting for HQ, Grind, etc.)
             # Activity logging handled by update_puzzle_field() for all non-Solved status changes
-            update_puzzle_part_in_db(id, part, value)
+            update_puzzle_part_in_db(id, part, value, source)
 
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
-        update_puzzle_part_in_db(id, part, value)
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        update_puzzle_part_in_db(id, part, value, source)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
         # Check round completion whenever metaness changes
         # This handles both marking rounds as solved AND unmarking them if a new unsolved meta is added
         check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
 
     elif part == "xyzloc":
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
         if (value is not None) and (value != ""):
             chat_say_something(
@@ -1834,35 +1833,34 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "answer":
         if value != "" and value is not None:
             # Mark puzzle as solved automatically when answer is filled in
-            update_puzzle_part_in_db(id, "status", "Solved")
+            update_puzzle_part_in_db(id, "status", "Solved", source)
             value = value.upper()
-            update_puzzle_part_in_db(id, part, value)
+            update_puzzle_part_in_db(id, part, value, source)
             debug_log(
                 3,
-                "Puzzle id %s name %s has been Solved!!!"
-                % (id, mypuzzle["puzzle"]["name"]),
+                f"Puzzle id {id} name {mypuzzle['puzzle']['name']} has been Solved!!!",
             )
             clear_puzzle_solvers(id, mysql.connection)
-            update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
+            update_puzzle_part_in_db(id, "xyzloc", "", source)  # Clear location on solve
             chat_announce_solved(mypuzzle["puzzle"]["name"])
 
-            pblib.log_activity(id, "solve", 100, "puzzleboss", mysql.connection)
+            pblib.log_activity(id, "solve", 100, source, mysql.connection)
 
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
                 check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
 
     elif part == "comments":
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
         chat_say_something(
             mypuzzle["puzzle"]["chat_channel_id"],
             f"**ATTENTION** new comment for puzzle {mypuzzle['puzzle']['name']}: {value}",
         )
 
-        pblib.log_activity(id, "comment", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "comment", 100, source, mysql.connection)
 
     elif part == "round":
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
         # This obviously needs some sanity checking
 
     elif part == "round_id":
@@ -1873,14 +1871,14 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             raise Exception(f"Round ID {value} not found")
 
         # Update the puzzle's round
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
         # Notify Discord to move the channel to the new round category
         # Re-fetch puzzle to get current name (in case it was updated earlier in this request)
         updated_puzzle = get_one_puzzle(id)
         chat_announce_move(updated_puzzle["puzzle"]["name"])
 
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
     elif part == "name":
         # Update puzzle name (strip spaces like in create_puzzle)
@@ -1896,16 +1894,16 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         if cursor.fetchone():
             raise Exception(f"Duplicate puzzle name {sanitized_name} detected")
 
-        update_puzzle_part_in_db(id, part, sanitized_name)
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        update_puzzle_part_in_db(id, part, sanitized_name, source)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
     elif part == "puzzle_uri":
         # Update puzzle URI
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
     elif part == "sheetcount":
         # Simple integer update for sheet count (set by bigjimmybot)
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
     elif part == "tags":
         # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}} or {"tags": {"remove_id": 123}}
@@ -1935,7 +1933,7 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                 cursor.execute("INSERT INTO tag (name) VALUES (%s)", (tag_name,))
                 conn.commit()
                 tag_id = cursor.lastrowid
-                debug_log(3, "Auto-created tag %s (id: %d)" % (tag_name, tag_id))
+                debug_log(3, f"Auto-created tag {tag_name} (id: {tag_id})")
             else:
                 tag_id = tag_row["id"]
 
@@ -1946,11 +1944,11 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     (json.dumps(current_tags), id),
                 )
                 conn.commit()
-                debug_log(3, "Added tag %s to puzzle %s" % (tag_name, id))
+                debug_log(3, f"Added tag {tag_name} to puzzle {id}")
                 tag_changed = True
                 increment_cache_stat("tags_assigned_total", mysql.connection)
             else:
-                debug_log(4, "Tag %s already on puzzle %s" % (tag_name, id))
+                debug_log(4, f"Tag {tag_name} already on puzzle {id}")
 
         elif "add_id" in value:
             # Add by tag ID - validate it's an integer first
@@ -1970,11 +1968,11 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     (json.dumps(current_tags), id),
                 )
                 conn.commit()
-                debug_log(3, "Added tag id %s to puzzle %s" % (tag_id, id))
+                debug_log(3, f"Added tag id {tag_id} to puzzle {id}")
                 tag_changed = True
                 increment_cache_stat("tags_assigned_total", mysql.connection)
             else:
-                debug_log(4, "Tag id %s already on puzzle %s" % (tag_id, id))
+                debug_log(4, f"Tag id {tag_id} already on puzzle {id}")
 
         elif "remove" in value:
             # Remove by tag name
@@ -1991,10 +1989,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     (json.dumps(current_tags), id),
                 )
                 conn.commit()
-                debug_log(3, "Removed tag %s from puzzle %s" % (tag_name, id))
+                debug_log(3, f"Removed tag {tag_name} from puzzle {id}")
                 tag_changed = True
             else:
-                debug_log(4, "Tag %s not on puzzle %s" % (tag_name, id))
+                debug_log(4, f"Tag {tag_name} not on puzzle {id}")
 
         elif "remove_id" in value:
             # Remove by tag ID - validate it's an integer first
@@ -2014,10 +2012,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     (json.dumps(current_tags), id),
                 )
                 conn.commit()
-                debug_log(3, "Removed tag id %s from puzzle %s" % (tag_id, id))
+                debug_log(3, f"Removed tag id {tag_id} from puzzle {id}")
                 tag_changed = True
             else:
-                debug_log(4, "Tag id %s not on puzzle %s" % (tag_id, id))
+                debug_log(4, f"Tag id {tag_id} not on puzzle {id}")
 
         else:
             raise Exception(
@@ -2027,21 +2025,20 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # Log tag change to activity table using system solver_id (100)
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
-            pblib.log_activity(id, "comment", 100, "puzzleboss", mysql.connection)
+            pblib.log_activity(id, "comment", 100, source, mysql.connection)
 
     elif part in ("chat_channel_id", "drive_uri"):
-        update_puzzle_part_in_db(id, part, value)
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        update_puzzle_part_in_db(id, part, value, source)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
     else:
         # For any other part, just try to update it directly
         # MySQL will reject invalid column names
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
     debug_log(
         3,
-        "puzzle name %s, id %s, part %s has been set to %s"
-        % (mypuzzle["puzzle"]["name"], id, part, value),
+        f"puzzle name {mypuzzle['puzzle']['name']}, id {id}, part {part} has been set to {value}",
     )
 
     return value
@@ -2051,15 +2048,18 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
 @swag_from("swag/postpuzzle.yaml", endpoint="post_puzzle", methods=["POST"])
 def update_puzzle_multi(id):
     """Update multiple puzzle parts in a single call."""
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     try:
         data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
 
     if not data or not isinstance(data, dict):
         raise Exception("Expected JSON object with puzzle parts to update")
+
+    # Get source for activity logging if provided
+    source = data.pop("source", "puzzleboss") if "source" in data else "puzzleboss"
 
     # Reject sensitive operations that should use single-part endpoint for safety
     if "answer" in data:
@@ -2073,7 +2073,7 @@ def update_puzzle_multi(id):
 
     # Check if this is a legit puzzle
     mypuzzle = get_one_puzzle(id)
-    debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
+    debug_log(5, f"return value from get_one_puzzle {id} is {mypuzzle}")
     if "status" not in mypuzzle or mypuzzle["status"] != "ok":
         raise Exception(f"Error looking up puzzle {id}")
 
@@ -2084,7 +2084,7 @@ def update_puzzle_multi(id):
         if part == "name":
             value = value.replace(" ", "")
 
-        updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
+        updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
         updated_parts[part] = updated_value
 
     # Invalidate cache once after all updates
@@ -2097,10 +2097,10 @@ def update_puzzle_multi(id):
 @swag_from("swag/putpuzzlepart.yaml", endpoint="post_puzzle_part", methods=["POST"])
 def update_puzzle_part(id, part):
     """Update a single puzzle part."""
-    debug_log(4, "start. id: %s, part: %s" % (id, part))
+    debug_log(4, f"start. id: {id}, part: {part}")
     try:
         data = request.get_json()
-        debug_log(5, "request data is - %s" % str(data))
+        debug_log(5, f"request data is - {data}")
         value = data[part]
         # Strip spaces if this is a name update
         if part == "name":
@@ -2110,13 +2110,16 @@ def update_puzzle_part(id, part):
     except KeyError:
         raise Exception(f"Expected {part} field missing")
 
+    # Get source for activity logging if provided
+    source = data.get("source", "puzzleboss")
+
     # Check if this is a legit puzzle
     mypuzzle = get_one_puzzle(id)
-    debug_log(5, "return value from get_one_puzzle %s is %s" % (id, mypuzzle))
+    debug_log(5, f"return value from get_one_puzzle {id} is {mypuzzle}")
     if "status" not in mypuzzle or mypuzzle["status"] != "ok":
         raise Exception(f"Error looking up puzzle {id}")
 
-    updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
+    updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
 
     # Invalidate cache
     invalidate_cache_with_stats()
@@ -2134,7 +2137,7 @@ def new_account():
         fullname = data["fullname"]
         email = data["email"]
         password = data["password"]
-        debug_log(5, "request data: username=%s fullname=%s email=%s password=REDACTED" % (username, fullname, email))
+        debug_log(5, f"request data: username={username} fullname={fullname} email={email} password=REDACTED")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
@@ -2145,7 +2148,7 @@ def new_account():
     if _solver_exists(username):
         debug_log(
             2,
-            "Account creation rejected: username %s already exists" % username,
+            f"Account creation rejected: username {username} already exists",
         )
         return {
             "status": "error",
@@ -2154,7 +2157,7 @@ def new_account():
 
     # Generate the code
     code = token_hex(4)
-    debug_log(4, "code picked: %s" % code)
+    debug_log(4, f"code picked: {code}")
 
     # Actually insert into the database
     try:
@@ -2177,15 +2180,13 @@ def new_account():
     if email_result == "OK":
         debug_log(
             3,
-            "unverified new user %s added to database with verification code %s. email sent."
-            % (username, code),
+            f"unverified new user {username} added to database with verification code {code}. email sent.",
         )
         return {"status": "ok", "code": code}
 
     debug_log(
         2,
-        "unverified new user %s added but email failed: %s"
-        % (username, email_result),
+        f"unverified new user {username} added but email failed: {email_result}",
     )
     return {"status": "ok", "code": code, "email_error": email_result}
 
@@ -2205,7 +2206,7 @@ def finish_account(code):
     If no step parameter, runs all steps at once (backward compatible).
     """
     step = request.args.get("step", None)
-    debug_log(4, "start. code %s, step %s" % (code, step))
+    debug_log(4, f"start. code {code}, step {step}")
 
     # Always validate code and get user info first
     try:
@@ -2224,7 +2225,7 @@ def finish_account(code):
         fullname = newuser["fullname"]
         email = newuser["email"]
         password = newuser["password"]
-        debug_log(5, "newuser lookup: username=%s fullname=%s email=%s password=REDACTED" % (username, fullname, email))
+        debug_log(5, f"newuser lookup: username={username} fullname={fullname} email={email} password=REDACTED")
 
         # Check code expiration (48 hours)
         import datetime
@@ -2243,8 +2244,7 @@ def finish_account(code):
 
     debug_log(
         4,
-        "valid code. username: %s fullname: %s email: %s password: REDACTED"
-        % (username, fullname, email),
+        f"valid code. username: {username} fullname: {fullname} email: {email} password: REDACTED",
     )
 
     firstname, lastname = fullname.split(maxsplit=1)
@@ -2252,7 +2252,7 @@ def finish_account(code):
     # If no step specified, run all steps (backward compatible)
     if step is None:
         debug_log(
-            4, "User %s: Running all steps at once (no step parameter)" % username
+            4, f"User {username}: Running all steps at once (no step parameter)"
         )
         result = add_user_to_google(username, firstname, lastname, password, email)
         if result != "OK":
@@ -2269,8 +2269,7 @@ def finish_account(code):
         conn.commit()
         debug_log(
             4,
-            "User %s: All steps complete, temporary newuser entry deleted"
-            % username,
+            f"User {username}: All steps complete, temporary newuser entry deleted",
         )
         return {"status": "ok"}
 
@@ -2278,26 +2277,24 @@ def finish_account(code):
     if step == "1":
         debug_log(
             4,
-            "User %s: Step 1 - Validation complete"
-            % username,
+            f"User {username}: Step 1 - Validation complete",
         )
         return {"status": "ok", "step": 1, "operation": "new", "username": username}
 
     # Step 2: Create Google Workspace account
     if step == "2":
         if configstruct.get("SKIP_GOOGLE_API") == "true":
-            debug_log(3, "User %s: Step 2 - Skipping Google account (SKIP_GOOGLE_API enabled)" % username)
+            debug_log(3, f"User {username}: Step 2 - Skipping Google account (SKIP_GOOGLE_API enabled)")
             return {"status": "ok", "step": 2, "message": "Google account creation skipped", "skipped": True}
         debug_log(
-            4, "User %s: Step 2 - Creating new Google Workspace account" % username
+            4, f"User {username}: Step 2 - Creating new Google Workspace account"
         )
         result = add_user_to_google(username, firstname, lastname, password, email)
         if result != "OK":
             raise Exception(f"Failed to create Google account: {result}")
         debug_log(
             4,
-            "User %s: Step 2 - Google Workspace account created successfully"
-            % username,
+            f"User {username}: Step 2 - Google Workspace account created successfully",
         )
         return {"status": "ok", "step": 2, "message": "Google account created"}
 
@@ -2305,14 +2302,12 @@ def finish_account(code):
     if step == "3":
         debug_log(
             4,
-            "User %s: Step 3 - Checking if solver already exists in Puzzleboss database"
-            % username,
+            f"User {username}: Step 3 - Checking if solver already exists in Puzzleboss database",
         )
         if _solver_exists(username):
             debug_log(
                 4,
-                "User %s: Step 3 - Solver already exists in database, skipping"
-                % username,
+                f"User {username}: Step 3 - Solver already exists in database, skipping",
             )
             return {
                 "status": "ok",
@@ -2322,8 +2317,7 @@ def finish_account(code):
             }
         debug_log(
             4,
-            "User %s: Step 3 - Adding to Puzzleboss solver database"
-            % username,
+            f"User {username}: Step 3 - Adding to Puzzleboss solver database",
         )
         conn, cursor = _cursor()
         cursor.execute(
@@ -2332,7 +2326,7 @@ def finish_account(code):
         )
         conn.commit()
         debug_log(
-            4, "User %s: Step 3 - Added to solver database successfully" % username
+            4, f"User {username}: Step 3 - Added to solver database successfully"
         )
         return {"status": "ok", "step": 3, "message": "Added to solver database"}
 
@@ -2341,16 +2335,14 @@ def finish_account(code):
     if step == "4":
         debug_log(
             4,
-            "User %s: Step 4 - Deleting temporary newuser entry from database"
-            % username,
+            f"User {username}: Step 4 - Deleting temporary newuser entry from database",
         )
         conn, cursor = _cursor()
         cursor.execute("""DELETE FROM newuser WHERE code = %s""", (code,))
         conn.commit()
         debug_log(
             4,
-            "User %s: Step 4 - Cleanup complete, account registration finished"
-            % username,
+            f"User {username}: Step 4 - Cleanup complete, account registration finished",
         )
         return {"status": "ok", "step": 4, "message": "Cleanup complete"}
 
@@ -2360,17 +2352,17 @@ def finish_account(code):
 @app.route("/deleteuser/<username>", endpoint="get_delete_account", methods=["GET"])
 @swag_from("swag/getdeleteaccount.yaml", endpoint="get_delete_account", methods=["GET"])
 def delete_account(username):
-    debug_log(4, "start. username %s" % username)
+    debug_log(4, f"start. username {username}")
 
     delete_pb_solver(username)
-    debug_log(3, "user %s deleted from solver db" % username)
+    debug_log(3, f"user {username} deleted from solver db")
 
     errmsg = delete_google_user(username)
 
     if errmsg != "OK":
         raise Exception(errmsg)
 
-    debug_log(3, "user %s deleted from Google Workspace" % username)
+    debug_log(3, f"user {username} deleted from Google Workspace")
     return {"status": "ok"}
 
 
@@ -2389,14 +2381,14 @@ def get_new_users():
 @swag_from("swag/deletenewuser.yaml", endpoint="delete_new_user", methods=["DELETE"])
 def delete_new_user(code):
     """Delete a pending account registration by verification code."""
-    debug_log(4, "start. code %s" % code)
+    debug_log(4, f"start. code {code}")
     conn, cursor = _cursor()
     cursor.execute("DELETE FROM newuser WHERE code = %s", (code,))
     conn.commit()
     deleted = cursor.rowcount
     if deleted == 0:
         raise Exception(f"No pending account found with code {code}")
-    debug_log(3, "pending account with code %s deleted" % code)
+    debug_log(3, f"pending account with code {code} deleted")
     return {"status": "ok"}
 
 
@@ -2409,10 +2401,10 @@ def get_all_privs():
         conn, cursor = _read_cursor()
         cursor.execute("SELECT uid, puzztech, puzzleboss FROM privs")
         rows = cursor.fetchall()
-    except Exception:
-        raise Exception("Exception fetching all privs from database")
+    except Exception as e:
+        raise Exception("Exception fetching all privs from database") from e
 
-    debug_log(4, "listed all privs (%d rows)" % len(rows))
+    debug_log(4, f"listed all privs ({len(rows)} rows)")
     return {"status": "ok", "privs": rows}
 
 
@@ -2464,28 +2456,27 @@ def get_google_users():
             if not page_token:
                 break
 
-        debug_log(4, "fetched %d Google Workspace users" % len(users))
+        debug_log(4, f"fetched {len(users)} Google Workspace users")
         return {"status": "ok", "users": users}
     except Exception as e:
-        debug_log(1, "Failed to fetch Google users: %s" % e)
+        debug_log(1, f"Failed to fetch Google users: {e}")
         return {"status": "ok", "users": [], "error": str(e)}
 
 
 @app.route("/deletepuzzle/<puzzlename>", endpoint="delete_puzzle", methods=["DELETE"])
 @swag_from("swag/deletepuzzle.yaml", endpoint="delete_puzzle", methods=["DELETE"])
 def delete_puzzle(puzzlename):
-    debug_log(4, "start. delete puzzle named %s" % puzzlename)
+    debug_log(4, f"start. delete puzzle named {puzzlename}")
     puzzid = get_puzzle_id_by_name(puzzlename)
     if puzzid == 0:
-        debug_log(2, "puzzle named %s not found in system!" % puzzlename)
+        debug_log(2, f"puzzle named {puzzlename} not found in system!")
         raise Exception("puzzle not found in system.")
     sheetid = get_puzzle_part(puzzid, "drive_id")["puzzle"]["drive_id"]
 
     if delete_puzzle_sheet(sheetid) != 0:
         debug_log(
             2,
-            "Puzzle id %s deletion request but sheet deletion failed! continuing. this may cause a mess!"
-            % puzzid,
+            f"Puzzle id {puzzid} deletion request but sheet deletion failed! continuing. this may cause a mess!",
         )
 
     clear_puzzle_solvers(puzzid, mysql.connection)
@@ -2494,12 +2485,12 @@ def delete_puzzle(puzzlename):
         conn, cursor = _cursor()
         cursor.execute("DELETE from puzzle where id = %s", (puzzid,))
         conn.commit()
-    except Exception:
+    except Exception as e:
         raise Exception(
             f"Puzzle deletion attempt for id {puzzid} name {puzzlename} failed in database operation."
-        )
+        ) from e
 
-    debug_log(2, "puzzle id %s named %s deleted from system!" % (puzzid, puzzlename))
+    debug_log(2, f"puzzle id {puzzid} named {puzzlename} deleted from system!")
 
     # Invalidate /allcached since puzzle was deleted
     invalidate_cache_with_stats()
@@ -2510,58 +2501,62 @@ def delete_puzzle(puzzlename):
 ############### END REST calls section
 
 
-
 def get_puzzle_id_by_name(name):
-    debug_log(4, "start, called with (name): %s" % name)
+    """Look up a puzzle ID by name. Returns 0 if not found."""
+    debug_log(4, f"start, called with (name): {name}")
 
     try:
         conn, cursor = _read_cursor()
         cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
         rv = cursor.fetchone()["id"]
-        debug_log(4, "rv = %s" % rv)
+        debug_log(4, f"rv = {rv}")
     except Exception:
-        debug_log(2, "Puzzle name %s not found in database." % name)
+        debug_log(2, f"Puzzle name {name} not found in database.")
         return 0
     return rv
 
 
 def update_puzzle_part_in_db(id, part, value, source="puzzleboss"):
+    """Update a single puzzle field in the database via pblib."""
     conn, cursor = _cursor()
     pblib.update_puzzle_field(id, part, value, conn, source=source)
-    debug_log(4, "puzzle %s %s updated in database" % (id, part))
+    debug_log(4, f"puzzle {id} {part} updated in database")
     return 0
 
 
 def get_puzzles_from_list(puzzle_ids):
-    debug_log(4, "start, called with: %s" % puzzle_ids)
+    """Convert a comma-separated string of puzzle IDs to a list of puzzle dicts."""
+    debug_log(4, f"start, called with: {puzzle_ids}")
     if not puzzle_ids:
         return []
 
     puzlist = puzzle_ids.split(",")
     puzarray = []
     for mypuz in puzlist:
-        debug_log(4, "fetching puzzle info for pid: %s" % mypuz)
+        debug_log(4, f"fetching puzzle info for pid: {mypuz}")
         puzarray.append(get_one_puzzle(mypuz)["puzzle"])
 
-    debug_log(4, "puzzle list assembled is: %s" % puzarray)
+    debug_log(4, f"puzzle list assembled is: {puzarray}")
     return puzarray
 
 
 def get_last_activity_for_puzzle(id):
-    debug_log(4, "start, called with: %s" % id)
+    """Get the most recent activity record for a puzzle."""
+    debug_log(4, f"start, called with: {id}")
     conn = mysql.connection
     return pblib.get_last_activity_for_puzzle(id, conn)
 
 
 def get_last_sheet_activity_for_puzzle(id):
     """Get the last 'revise' type activity for a puzzle (sheet edits only)."""
-    debug_log(4, "start, called with: %s" % id)
+    debug_log(4, f"start, called with: {id}")
     conn = mysql.connection
     return pblib.get_last_sheet_activity_for_puzzle(id, conn)
 
 
 def get_last_activity_for_solver(id):
-    debug_log(4, "start, called with: %s" % id)
+    """Get the most recent activity record for a solver."""
+    debug_log(4, f"start, called with: {id}")
     conn = mysql.connection
     return pblib.get_last_activity_for_solver(id, conn)
 
@@ -2573,26 +2568,26 @@ def set_new_activity_for_puzzle(id, actstruct):
     is the explicit "write an activity row" API — if it fails, the caller
     needs to know.
     """
-    debug_log(4, "start, called for puzzle id %s with: %s" % (id, actstruct))
+    debug_log(4, f"start, called for puzzle id {id} with: {actstruct}")
 
     try:
         solver_id = actstruct["solver_id"]
         source = actstruct["source"]
         activity_type = actstruct["type"]
-    except Exception:
+    except Exception as e:
         raise Exception(
-            "Malformed activity dict. Needs solver_id, source, type. Got: %s"
-            % actstruct
-        )
+            f"Malformed activity dict. Needs solver_id, source, type. Got: {actstruct}"
+        ) from e
 
     if not pblib.log_activity(id, activity_type, solver_id, source, mysql.connection):
-        raise Exception("Failed to log activity for puzzle %s" % id)
+        raise Exception(f"Failed to log activity for puzzle {id}")
 
-    debug_log(3, "Updated activity for puzzle id %s" % id)
+    debug_log(3, f"Updated activity for puzzle id {id}")
 
 
 def delete_pb_solver(username):
-    debug_log(4, "start, called with username %s" % username)
+    """Delete a solver from the database by username."""
+    debug_log(4, f"start, called with username {username}")
 
     conn, cursor = _cursor()
     cursor.execute("DELETE from solver where name = %s", (username,))
@@ -2625,7 +2620,7 @@ def _get_validated_history(puzzle_id):
     "swag/addsolvertohistory.yaml", endpoint="add_solver_to_history", methods=["POST"]
 )
 def add_solver_to_history(id):
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     solver_id, history, conn, cursor = _get_validated_history(id)
 
     existing_ids = [s["solver_id"] for s in history["solvers"]]
@@ -2636,9 +2631,9 @@ def add_solver_to_history(id):
             (json.dumps(history), id),
         )
         conn.commit()
-        debug_log(3, "Added solver %s to history for puzzle %s" % (solver_id, id))
+        debug_log(3, f"Added solver {solver_id} to history for puzzle {id}")
     else:
-        debug_log(3, "Solver %s already in history for puzzle %s" % (solver_id, id))
+        debug_log(3, f"Solver {solver_id} already in history for puzzle {id}")
 
     return {"status": "ok"}
 
@@ -2654,7 +2649,7 @@ def add_solver_to_history(id):
     methods=["POST"],
 )
 def remove_solver_from_history(id):
-    debug_log(4, "start. id: %s" % id)
+    debug_log(4, f"start. id: {id}")
     solver_id, history, conn, cursor = _get_validated_history(id)
 
     history["solvers"] = [s for s in history["solvers"] if s["solver_id"] != solver_id]
@@ -2663,7 +2658,7 @@ def remove_solver_from_history(id):
         (json.dumps(history), id),
     )
     conn.commit()
-    debug_log(3, "Removed solver %s from history for puzzle %s" % (solver_id, id))
+    debug_log(3, f"Removed solver {solver_id} from history for puzzle {id}")
 
     return {"status": "ok"}
 
@@ -2718,8 +2713,8 @@ def get_all_activities():
         # Get activity counts
         cursor.execute(
             """
-            SELECT type, COUNT(*) as count 
-            FROM activity 
+            SELECT type, COUNT(*) as count
+            FROM activity
             GROUP BY type
             """
         )
@@ -2728,7 +2723,7 @@ def get_all_activities():
         # Get puzzle solve timing information
         cursor.execute(
             """
-            SELECT 
+            SELECT
                 COUNT(DISTINCT a1.puzzle_id) as total_solves,
                 SUM(TIMESTAMPDIFF(SECOND, a2.time, a1.time)) as total_solve_time
             FROM activity a1
@@ -2741,7 +2736,7 @@ def get_all_activities():
         # Get open puzzles timing information
         cursor.execute(
             """
-            SELECT 
+            SELECT
                 COUNT(DISTINCT p.id) as total_open,
                 SUM(TIMESTAMPDIFF(SECOND, a.time, NOW())) as total_open_time
             FROM puzzle p
@@ -2784,7 +2779,7 @@ def get_all_activities():
                 else None,
             }
     except Exception as e:
-        debug_log(1, "Exception in getting activity counts: %s" % e)
+        debug_log(1, f"Exception in getting activity counts: {e}")
         return {"status": "error", "error": str(e)}, 500
 
 
@@ -2798,7 +2793,9 @@ def get_all_activities():
 def activity_search():
     """Search activity log with filters for type, source, solver, and puzzle."""
     VALID_TYPES = {"create", "revise", "comment", "interact", "solve", "change", "status", "assignment"}
-    VALID_SOURCES = {"puzzleboss", "bigjimmybot"}
+    VALID_SOURCES = set(
+        s.strip() for s in configstruct.get("ACTIVITY_SOURCES", "puzzleboss,bigjimmybot,discord").split(",") if s.strip()
+    )
 
     try:
         # Parse query parameters
@@ -2895,7 +2892,7 @@ def activity_search():
         return {"status": "ok", "activity": results, "count": len(results), "has_more": has_more}
 
     except Exception as e:
-        debug_log(1, "Exception in activity search: %s" % e)
+        debug_log(1, f"Exception in activity search: {e}")
         return {"status": "error", "error": str(e)}, 500
 
 
@@ -2984,7 +2981,7 @@ def get_hints():
     except Exception as e:
         raise Exception(f"Exception fetching hints from database: {e}")
 
-    debug_log(4, "fetched %d active hints" % len(hints))
+    debug_log(4, f"fetched {len(hints)} active hints")
     return {"status": "ok", "hints": hints}
 
 
@@ -3008,7 +3005,7 @@ def create_hint():
         conn, cursor = _cursor()
         cursor.execute("SELECT id FROM puzzle WHERE id = %s", (puzzle_id,))
         if not cursor.fetchone():
-            debug_log(3, "Puzzle %s not found for hint creation" % puzzle_id)
+            debug_log(3, f"Puzzle {puzzle_id} not found for hint creation")
             return {"status": "error", "error": f"Puzzle {puzzle_id} not found"}, 404
 
         cursor.execute(
@@ -3025,11 +3022,11 @@ def create_hint():
         conn.commit()
         new_id = cursor.lastrowid
     except Exception as e:
-        debug_log(1, "Error creating hint: %s" % e)
+        debug_log(1, f"Error creating hint: {e}")
         raise Exception(f"Exception creating hint: {e}")
 
     invalidate_cache_with_stats()
-    debug_log(3, "Created hint %d for puzzle %s at position %d" % (new_id, puzzle_id, next_pos))
+    debug_log(3, f"Created hint {new_id} for puzzle {puzzle_id} at position {next_pos}")
     return {"status": "ok", "hint": {"id": new_id, "queue_position": next_pos}}
 
 
@@ -3052,7 +3049,7 @@ def get_hint_count():
 @swag_from("swag/answerhint.yaml", endpoint="answerhint", methods=["POST"])
 def answer_hint(id):
     """Mark a hint as answered and promote remaining active hints"""
-    debug_log(4, "start with hint id: %d" % id)
+    debug_log(4, f"start with hint id: {id}")
     try:
         conn, cursor = _cursor()
         cursor.execute(
@@ -3061,7 +3058,7 @@ def answer_hint(id):
         )
         hint = cursor.fetchone()
         if not hint:
-            debug_log(3, "Hint %d not found or already answered" % id)
+            debug_log(3, f"Hint {id} not found or already answered")
             return {"status": "error", "error": f"Hint {id} not found or already answered"}, 404
 
         answered_pos = hint["queue_position"]
@@ -3078,11 +3075,11 @@ def answer_hint(id):
         _promote_top_hint(cursor)
         conn.commit()
     except Exception as e:
-        debug_log(1, "Error answering hint %d: %s" % (id, e))
+        debug_log(1, f"Error answering hint {id}: {e}")
         raise Exception(f"Exception answering hint {id}: {e}")
 
     invalidate_cache_with_stats()
-    debug_log(3, "Hint %d answered, remaining hints promoted" % id)
+    debug_log(3, f"Hint {id} answered, remaining hints promoted")
     return {"status": "ok", "message": f"Hint {id} answered"}
 
 
@@ -3090,7 +3087,7 @@ def answer_hint(id):
 @swag_from("swag/demotehint.yaml", endpoint="demotehint", methods=["POST"])
 def demote_hint(id):
     """Swap a hint with the one below it in the queue. Resets ready/submitted back to queued."""
-    debug_log(4, "start with hint id: %d" % id)
+    debug_log(4, f"start with hint id: {id}")
     try:
         conn, cursor = _cursor()
         cursor.execute(
@@ -3099,7 +3096,7 @@ def demote_hint(id):
         )
         hint = cursor.fetchone()
         if not hint:
-            debug_log(3, "Hint %d not found or already answered" % id)
+            debug_log(3, f"Hint {id} not found or already answered")
             return {"status": "error", "error": f"Hint {id} not found or already answered"}, 404
 
         current_pos = hint["queue_position"]
@@ -3110,7 +3107,7 @@ def demote_hint(id):
         )
         below = cursor.fetchone()
         if not below:
-            debug_log(3, "Hint %d is already at the bottom of the queue" % id)
+            debug_log(3, f"Hint {id} is already at the bottom of the queue")
             return {"status": "error", "error": f"Hint {id} is already at the bottom of the queue"}, 400
 
         cursor.execute(
@@ -3130,11 +3127,11 @@ def demote_hint(id):
         _promote_top_hint(cursor)
         conn.commit()
     except Exception as e:
-        debug_log(1, "Error demoting hint %d: %s" % (id, e))
+        debug_log(1, f"Error demoting hint {id}: {e}")
         raise Exception(f"Exception demoting hint {id}: {e}")
 
     invalidate_cache_with_stats()
-    debug_log(3, "Hint %d demoted from position %d to %d" % (id, current_pos, current_pos + 1))
+    debug_log(3, f"Hint {id} demoted from position {current_pos} to {current_pos + 1}")
     return {"status": "ok", "message": f"Hint {id} demoted"}
 
 
@@ -3142,7 +3139,7 @@ def demote_hint(id):
 @swag_from("swag/submithint.yaml", endpoint="submithint", methods=["POST"])
 def submit_hint(id):
     """Mark a ready hint as submitted to HQ"""
-    debug_log(4, "start with hint id: %d" % id)
+    debug_log(4, f"start with hint id: {id}")
     try:
         conn, cursor = _cursor()
         cursor.execute(
@@ -3151,7 +3148,7 @@ def submit_hint(id):
         )
         hint = cursor.fetchone()
         if not hint:
-            debug_log(3, "Hint %d not found or not in 'ready' state" % id)
+            debug_log(3, f"Hint {id} not found or not in 'ready' state")
             return {"status": "error", "error": f"Hint {id} not found or not in 'ready' state"}, 404
 
         cursor.execute(
@@ -3160,11 +3157,11 @@ def submit_hint(id):
         )
         conn.commit()
     except Exception as e:
-        debug_log(1, "Error submitting hint %d: %s" % (id, e))
+        debug_log(1, f"Error submitting hint {id}: {e}")
         raise Exception(f"Exception submitting hint {id}: {e}")
 
     invalidate_cache_with_stats()
-    debug_log(3, "Hint %d submitted to HQ" % id)
+    debug_log(3, f"Hint {id} submitted to HQ")
     return {"status": "ok", "message": f"Hint {id} submitted to HQ"}
 
 
@@ -3172,7 +3169,7 @@ def submit_hint(id):
 @swag_from("swag/deletehint.yaml", endpoint="deletehint", methods=["DELETE"])
 def delete_hint(id):
     """Remove a hint request from the queue and reorder remaining"""
-    debug_log(4, "start with hint id: %d" % id)
+    debug_log(4, f"start with hint id: {id}")
     try:
         conn, cursor = _cursor()
         cursor.execute(
@@ -3181,7 +3178,7 @@ def delete_hint(id):
         )
         hint = cursor.fetchone()
         if not hint:
-            debug_log(3, "Hint %d not found for deletion" % id)
+            debug_log(3, f"Hint {id} not found for deletion")
             return {"status": "error", "error": f"Hint {id} not found"}, 404
 
         deleted_pos = hint["queue_position"]
@@ -3197,11 +3194,11 @@ def delete_hint(id):
         _promote_top_hint(cursor)
         conn.commit()
     except Exception as e:
-        debug_log(1, "Error deleting hint %d: %s" % (id, e))
+        debug_log(1, f"Error deleting hint {id}: {e}")
         raise Exception(f"Exception deleting hint {id}: {e}")
 
     invalidate_cache_with_stats()
-    debug_log(3, "Hint %d deleted" % id)
+    debug_log(3, f"Hint {id} deleted")
     return {"status": "ok", "message": f"Hint {id} deleted"}
 
 
@@ -3212,7 +3209,6 @@ if __name__ == "__main__":
     else:
         debug_log(
             3,
-            "Authenticated to google drive. Existing drive folder %s found with id %s."
-            % (configstruct["HUNT_FOLDER_NAME"], pblib.huntfolderid),
+            f"Authenticated to google drive. Existing drive folder {configstruct['HUNT_FOLDER_NAME']} found with id {pblib.huntfolderid}.",
         )
     app.run()

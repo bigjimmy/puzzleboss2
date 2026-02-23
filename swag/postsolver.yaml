@@ -28,6 +28,13 @@ parameters:
       example:
         fullname: "John Doe"
         chat_name: "johndoe"
+        source: "puzzleboss"
+      properties:
+        source:
+          type: string
+          description: Optional source identifying the calling application (will not be treated as a solver field)
+          enum: [puzzleboss, bigjimmybot, discord]
+          default: puzzleboss
 responses:
   200:
     description: Solver parts updated successfully

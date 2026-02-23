@@ -112,8 +112,6 @@ def _get_solver_id(identifier: str, match_type: str = "name") -> int:
         return 0
 
 
-
-
 # ── Timestamp Parsing ───────────────────────────────────────────────────
 
 
@@ -129,8 +127,6 @@ def _parse_revision_timestamp(revision_time: str) -> float:
     """
     dt = datetime.datetime.strptime(revision_time, "%Y-%m-%dT%H:%M:%S.%fZ")
     return dt.timestamp()
-
-
 
 
 # ── Activity Recording ──────────────────────────────────────────────────
@@ -198,8 +194,6 @@ def _assign_solver_to_puzzle(
             f"[Thread: {threadname}] Failed to assign solver: {e}",
         )
         return False
-
-
 
 
 # ── Activity Processing ─────────────────────────────────────────────────
@@ -323,8 +317,6 @@ def _process_activity_records(
         # Pass edit_ts so the activity row's time matches the actual sheet edit,
         # not the server's current time — this is critical for duplicate detection.
         _record_solver_activity(puzzle["id"], solver_id, threadname, edit_ts=edit_ts)
-
-
 
 
 # ── Sheet Info & Metadata ───────────────────────────────────────────────
@@ -560,8 +552,6 @@ def _process_sheet_activity(
             f"[Thread: {threadname}] Processing {len(records)} revision records from Revisions API for {puzzle['name']}"
         )
         _process_activity_records(records, puzzle, last_sheet_act_ts, threadname, False)
-
-
 
 
 # ── Abandoned Puzzle Detection ──────────────────────────────────────────

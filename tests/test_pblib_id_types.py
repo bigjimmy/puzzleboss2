@@ -318,7 +318,6 @@ class TestGetLastActivityForPuzzleIdType:
         assert params == (287,)
 
 
-
 # NOTE: Assign/unassign JSON integrity tests (int storage in current_solvers
 # and solver_history) live in test_pblib_solver_assignment.py to avoid
 # duplication.  This file focuses on int() normalization at function boundaries.

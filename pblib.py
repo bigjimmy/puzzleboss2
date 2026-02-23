@@ -1,3 +1,5 @@
+"""PuzzleBoss core library — configuration, logging, database helpers, and email."""
+
 import yaml
 import sys
 import inspect
@@ -95,7 +97,7 @@ def maybe_refresh_config():
             _last_config_refresh = now
         except Exception as e:
             # Don't crash on refresh failure, just log it
-            print(f"[WARNING] Config refresh failed: {e}", flush=True)
+            debug_log(2, f"Config refresh failed: {e}")
 
 
 def debug_log(sev, message):
@@ -110,11 +112,10 @@ def debug_log(sev, message):
     if int(configstruct["LOGLEVEL"]) >= sev:
         timestamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
         print(
-            "[%s] [SEV%s] %s: %s"
-            % (timestamp, sev, inspect.currentframe().f_back.f_code.co_name, message),
+            f"[{timestamp}] [SEV{sev}] {inspect.currentframe().f_back.f_code.co_name}: {message}",
             flush=True,
         )
-    return
+    return None
 
 
 def refresh_config():
@@ -201,20 +202,20 @@ def refresh_config():
 refresh_config()
 
 
-def sanitize_puzzle_name(mystring):
+def sanitize_puzzle_name(text):
     import re
 
-    if mystring is None:
+    if text is None:
         return ""
     # Keep alphanumeric, emoji, and common punctuation
     # Remove spaces and problematic URL/filename chars
-    sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?* ]', "", mystring)
+    sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?* ]', "", text)
     # Trim whitespace
     return sanitized.strip()
 
 
 def email_user_verification(email, code, fullname, username):
-    debug_log(4, "start for email: %s" % email)
+    debug_log(4, f"start for email: {email}")
 
     verification_url = f"{configstruct['ACCT_URI']}/index.php?code={code}"
     team_name = configstruct["TEAMNAME"]
@@ -240,7 +241,7 @@ The {team_name} Puzzletech Team
 This is an automated message from {team_name} registration system.
 """
 
-    debug_log(4, "Email to be sent: %s" % messagecontent)
+    debug_log(4, f"Email to be sent: {messagecontent}")
 
     try:
         msg = EmailMessage()
@@ -254,7 +255,7 @@ This is an automated message from {team_name} registration system.
 
     except Exception as e:
         errmsg = str(e)
-        debug_log(2, "Exception sending email: %s" % errmsg)
+        debug_log(2, f"Exception sending email: {errmsg}")
         return errmsg
 
     return "OK"
@@ -284,7 +285,7 @@ def check_round_completion(round_id, conn):
             conn.commit()
             _invalidate_cache(conn)
             debug_log(
-                3, "Round %s marked as solved - all meta puzzles completed" % round_id
+                3, f"Round {round_id} marked as solved - all meta puzzles completed"
             )
         elif result["total"] > 0 and result["total"] != result["solved"]:
             # Not all meta puzzles are solved, ensure round is not marked as solved
@@ -295,10 +296,10 @@ def check_round_completion(round_id, conn):
                 conn.commit()
                 _invalidate_cache(conn)
                 debug_log(
-                    3, "Round %s unmarked as solved - not all meta puzzles completed" % round_id
+                    3, f"Round {round_id} unmarked as solved - not all meta puzzles completed"
                 )
-    except Exception:
-        debug_log(1, "Error checking round completion status for round %s" % round_id)
+    except Exception as e:
+        debug_log(1, f"Error checking round completion status for round {round_id}: {e}")
 
 
 def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
@@ -327,12 +328,12 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
     """
     solver_id = int(solver_id)  # Normalize: 101 whether caller passes 101 or "101"
     puzzle_id = int(puzzle_id)
-    debug_log(4, "Started with puzzle id %s" % puzzle_id)
+    debug_log(4, f"Started with puzzle id {puzzle_id}")
     cursor = conn.cursor()
 
     # Validate solver exists
     if not solver_exists(solver_id, conn):
-        raise ValueError("Solver %d does not exist" % solver_id)
+        raise ValueError(f"Solver {solver_id} does not exist")
 
     # Find and unassign from any other puzzle the solver is currently on.
     # JSON_TABLE with INT PATH extracts solver_ids as integers for comparison.
@@ -361,9 +362,9 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
     )
     row = cursor.fetchone()
     if row is None:
-        raise ValueError("Puzzle %d does not exist" % puzzle_id)
+        raise ValueError(f"Puzzle {puzzle_id} does not exist")
     if row["status"] == "Solved":
-        raise ValueError("Cannot assign solver to puzzle %d - puzzle is already solved" % puzzle_id)
+        raise ValueError(f"Cannot assign solver to puzzle {puzzle_id} - puzzle is already solved")
 
     current_solvers_str = row["current_solvers"] or json.dumps(
         {"solvers": []}
@@ -373,7 +374,7 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
     # Transition puzzle out of "New" or "Abandoned" when a solver is assigned.
     # Use update_puzzle_field so the status-change activity logging invariant fires.
     if row["status"] in ("New", "Abandoned"):
-        debug_log(3, "Auto-transitioning puzzle %s from '%s' to 'Being worked'" % (puzzle_id, row["status"]))
+        debug_log(3, f"Auto-transitioning puzzle {puzzle_id} from '{row['status']}' to 'Being worked'")
         update_puzzle_field(puzzle_id, "status", "Being worked", conn, source)
 
     if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
@@ -427,7 +428,7 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn, source="system"):
     )
     row = cursor.fetchone()
     if row is None:
-        raise ValueError("Puzzle %d does not exist" % puzzle_id)
+        raise ValueError(f"Puzzle {puzzle_id} does not exist")
 
     current_solvers_str = row["current_solvers"] or json.dumps(
         {"solvers": []}
@@ -444,7 +445,6 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn, source="system"):
     )
 
     conn.commit()
-
 
 
 def clear_puzzle_solvers(puzzle_id, conn):
@@ -506,8 +506,7 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=No
         conn.commit()
         return True
     except Exception as e:
-        debug_log(1, "CRITICAL: Failed to log activity (puzzle=%s, type=%s, solver=%s, source=%s): %s"
-                  % (puzzle_id, activity_type, solver_id, source, e))
+        debug_log(1, f"CRITICAL: Failed to log activity (puzzle={puzzle_id}, type={activity_type}, solver={solver_id}, source={source}): {e}")
         return False
 
 
@@ -568,7 +567,7 @@ def _invalidate_cache(conn):
     except ImportError:
         pass  # pbcachelib/pymemcache not installed — no cache to invalidate
     except Exception as e:
-        debug_log(3, "Cache invalidation failed: %s" % e)
+        debug_log(3, f"Cache invalidation failed: {e}")
 
 
 def update_puzzle_field(puzzle_id, field, value, conn, source="system"):

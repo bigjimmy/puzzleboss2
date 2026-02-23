@@ -31,6 +31,13 @@ parameters:
         status: "Being worked"
         xyzloc: "Room 123"
         comments: "Working on extraction"
+        source: "puzzleboss"
+      properties:
+        source:
+          type: string
+          description: Optional source identifying the calling application (will not be treated as a puzzle field)
+          enum: [puzzleboss, bigjimmybot, discord]
+          default: puzzleboss
 responses:
   200:
     description: Puzzle parts updated successfully

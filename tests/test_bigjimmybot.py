@@ -11,7 +11,6 @@ Run with: pytest tests/test_bigjimmybot.py -v
 """
 
 import pytest
-import json
 import os
 import sys
 from unittest.mock import Mock, patch, MagicMock
@@ -47,12 +46,7 @@ from bigjimmybot import (
     _process_activity_records,
 )
 
-
-def load_fixture(filename):
-    """Load a JSON fixture file."""
-    fixture_path = os.path.join(os.path.dirname(__file__), 'fixtures', filename)
-    with open(fixture_path) as f:
-        return json.load(f)
+from conftest import load_fixture
 
 
 def _make_solver_with_lastact(fixture_name, lastact_time=None):

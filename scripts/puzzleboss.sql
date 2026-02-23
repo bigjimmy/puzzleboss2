@@ -24,7 +24,7 @@ CREATE TABLE `activity` (
   `time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `solver_id` int(11) NOT NULL,
   `puzzle_id` int(11) DEFAULT NULL,
-  `source` enum('puzzleboss','bigjimmybot') DEFAULT NULL,
+  `source` enum('puzzleboss','bigjimmybot','discord') DEFAULT NULL,
   `type` enum('create','revise','comment','interact','solve','change','status','assignment') DEFAULT NULL,
   `uri` text,
   `source_version` int(11) DEFAULT NULL,
@@ -164,6 +164,7 @@ CREATE TABLE `config` (
 LOCK TABLES `config` WRITE;
 /*!40000 ALTER TABLE `config` DISABLE KEYS */;
 INSERT INTO `config` VALUES
+  ('ACTIVITY_SOURCES', 'puzzleboss,bigjimmybot,discord'),
   ('ACCT_PASSWORD', 'funkychicken'),
   ('ACCT_URI', 'https://yourdomain.org/account'),
   ('ACCT_USERNAME', 'hunt'),

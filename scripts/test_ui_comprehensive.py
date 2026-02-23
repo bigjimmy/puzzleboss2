@@ -2654,11 +2654,11 @@ def test_activity_page():
             assert pill.count() > 0, f"Missing type pill: {expected_type}"
         print("    ✓ All expected type pills present")
 
-        # Verify source filter pills
-        for expected_source in ["puzzleboss", "bigjimmybot"]:
+        # Verify source filter pills (loaded dynamically from config)
+        for expected_source in ["puzzleboss", "bigjimmybot", "discord"]:
             pill = page.locator(f".filter:has-text('{expected_source}')")
             assert pill.count() > 0, f"Missing source pill: {expected_source}"
-        print("    ✓ Source pills present")
+        print("    ✓ Source pills present (including discord)")
 
         # Verify Select All / Select None action pills exist
         select_all = page.locator(".filter-action:has-text('Select All')")
@@ -2694,7 +2694,7 @@ def test_activity_page():
 
         # All type and source pills should be active on initial load
         active_pills = page.locator(".controls-section .filter.active")
-        assert active_pills.count() >= 12, f"Expected 12+ active pills on load (8 types + 4 sources), got {active_pills.count()}"
+        assert active_pills.count() >= 11, f"Expected 11+ active pills on load (8 types + 3 sources), got {active_pills.count()}"
         print(f"    ✓ All types and sources selected on load ({active_pills.count()} active pills)")
 
         # Check for results table or no-results message
@@ -2776,6 +2776,131 @@ def test_activity_page():
 
 
 # ──────────────────────────────────────────────────────────
+# Test 29: Discord Source Activity Filter
+# ──────────────────────────────────────────────────────────
+
+def test_discord_source_activity():
+    """Test that discord-sourced activity appears in the activity page and can be filtered."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        # Setup: create discord-sourced activity via API
+        print("  Setting up discord-sourced activity via API...")
+        try:
+            rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+            if not rounds:
+                requests.post(f"{API_URL}/rounds", json={"name": "DiscordTestRound"})
+                rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+            round_id = rounds[0]["id"]
+
+            # Create a puzzle, then update it with source=discord
+            requests.post(f"{API_URL}/puzzles", json={"puzzle": {
+                "name": "DiscordFilterTest",
+                "round_id": round_id,
+                "puzzle_uri": "https://example.com/discordfilter"
+            }})
+            puzzles = requests.get(f"{API_URL}/puzzles").json().get("puzzles", [])
+            puz = next((p for p in puzzles if p["name"] == "DiscordFilterTest"), puzzles[-1])
+
+            # Generate discord-sourced activity
+            requests.post(f"{API_URL}/puzzles/{puz['id']}/xyzloc",
+                          json={"xyzloc": "Discord Voice 1", "source": "discord"})
+            requests.post(f"{API_URL}/puzzles/{puz['id']}/status",
+                          json={"status": "Needs eyes", "source": "discord"})
+            print("    ✓ Discord-sourced activity created")
+        except Exception as e:
+            print(f"    Warning: Could not set up discord test data: {e}")
+
+        # Navigate to activity page
+        print("  Navigating to activity page...")
+        page.goto(f"{BASE_URL}/activity.php?assumedid=testuser", wait_until="networkidle")
+        page.wait_for_selector("h1", timeout=5000)
+
+        # Verify discord source pill exists (loaded from config)
+        print("  Checking for discord source pill...")
+        discord_pill = page.locator(".filter:has-text('discord')")
+        assert discord_pill.count() > 0, "Discord source pill not found — config-driven sources may not be loading"
+        print("    ✓ Discord source pill present")
+
+        # Wait for initial auto-search to complete
+        page.wait_for_function(
+            "document.querySelector('.activity-table table') || document.querySelector('.activity-table em')",
+            timeout=10000
+        )
+        time.sleep(0.5)
+
+        # Clear all source filters, then activate only discord
+        print("  Testing discord-only source filter...")
+        # Find the Sources section and click Select None
+        source_sections = page.locator(".controls-section")
+        # The second controls-section is the Sources section (first is Types)
+        source_section = source_sections.nth(1)
+        source_none_btn = source_section.locator(".filter-action:has-text('Select None')")
+        if source_none_btn.count() > 0:
+            source_none_btn.click()
+            time.sleep(0.3)
+
+        # Click the discord pill to activate it
+        discord_pill.first.click()
+        time.sleep(0.3)
+
+        # Verify discord pill is active
+        discord_classes = discord_pill.first.get_attribute("class") or ""
+        assert "active" in discord_classes, "Discord pill should be active after clicking"
+        print("    ✓ Discord pill activated")
+
+        # Click Search
+        search_btn = page.locator("button:has-text('Search')")
+        search_btn.click()
+
+        # Wait for results
+        page.wait_for_function(
+            "document.querySelector('.activity-table table') || document.querySelector('.activity-table em')",
+            timeout=10000
+        )
+        time.sleep(0.5)
+
+        # Check results — we should have discord-sourced rows
+        table = page.locator(".activity-table table")
+        if table.count() > 0:
+            rows = page.locator(".activity-table tbody tr")
+            row_count = rows.count()
+            print(f"    ✓ Discord-only filter returned {row_count} result(s)")
+            assert row_count > 0, "Expected at least 1 discord-sourced activity row"
+        else:
+            # Might get no results if source column is hidden — check count text
+            count_text = page.locator("small:has-text('result(s) returned')")
+            if count_text.count() > 0:
+                print(f"    ✓ Results returned (count text visible)")
+            else:
+                print("    ✓ No results (may need source column visible)")
+
+        # Test URL-based filter: navigate with sources=discord
+        print("  Testing URL param sources=discord...")
+        page.goto(f"{BASE_URL}/activity.php?assumedid=testuser&sources=discord",
+                  wait_until="networkidle")
+        page.wait_for_function(
+            "document.querySelector('.activity-table table') || document.querySelector('em')",
+            timeout=10000
+        )
+        time.sleep(0.5)
+
+        # Verify discord pill is active from URL
+        discord_active = page.locator(".filter.active:has-text('discord')")
+        assert discord_active.count() > 0, "URL param sources=discord should activate discord pill"
+        print("    ✓ URL param correctly activated discord filter")
+
+        # Verify auto-search was executed
+        prompt = page.locator("em:has-text('Use the filters above')")
+        assert prompt.count() == 0, "Auto-search should have executed with URL params"
+        print("    ✓ Auto-search executed from URL params")
+
+        browser.close()
+        print("✓ Discord source activity filter test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
 # Main Entry Point
 # ──────────────────────────────────────────────────────────
 
@@ -2832,6 +2957,7 @@ def main():
         ('26', 'hintqueue', test_hint_queue, 'Hint Queue'),
         ('27', 'dashhint', test_dashboard_hint_dialog, 'Dashboard Hint Dialog'),
         ('28', 'activitypage', test_activity_page, 'Activity Log Page'),
+        ('29', 'discordsource', test_discord_source_activity, 'Discord Source Activity Filter'),
     ]
 
     if args.list:
