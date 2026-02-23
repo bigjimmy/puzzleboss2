@@ -9,4 +9,4 @@ ALTER TABLE activity
   MODIFY type ENUM('create','revise','comment','interact','solve','change','status','assignment') DEFAULT NULL;
 
 ALTER TABLE activity
-  MODIFY source ENUM('puzzleboss','bigjimmybot') DEFAULT NULL;
+  MODIFY source ENUM('puzzleboss','bigjimmybot','discord') DEFAULT NULL;

@@ -103,6 +103,9 @@ class TestRunner:
         "Hint Queue",
         "Activity Search",
         "Activity Type Verification",
+        "Discord Source Propagation",
+        "Activity Statistics Endpoint",
+        "Activity has_more and Comment Type",
     ]
 
     def __init__(self, base_url=BASE_URL):
@@ -2170,6 +2173,266 @@ class TestRunner:
 
         result.set_success("Activity type verification test completed successfully")
 
+    # ------------------------------------------------------------------
+    # Test 31: Discord Source Propagation
+    # ------------------------------------------------------------------
+    def test_discord_source_propagation(self, result: TestResult):
+        """Verify that source='discord' propagates correctly through puzzle update endpoints."""
+        rounds = self.get_all_rounds()
+        if not rounds:
+            rnd = self.create_round("DiscordSrcRnd")
+            rounds = [rnd]
+        round_id = rounds[0]["id"]
+
+        puz = self.create_puzzle(
+            self.get_emoji_string("DiscordSrcPuz", include_emoji=False),
+            round_id
+        )
+
+        def get_puzzle_activity(puzzle_id, expected_type=None):
+            data = self.api_get(f"/puzzles/{puzzle_id}/activity")
+            acts = data.get("activity", [])
+            if expected_type:
+                return [a for a in acts if a.get("type") == expected_type]
+            return acts
+
+        # 1. xyzloc change with source=discord
+        self.logger.log_operation("  Testing: xyzloc with source=discord")
+        self.api_post(f"/puzzles/{puz['id']}/xyzloc", {"xyzloc": "Discord Room", "source": "discord"})
+        acts = get_puzzle_activity(puz["id"], "change")
+        discord_acts = [a for a in acts if a.get("source") == "discord"]
+        if not discord_acts:
+            result.fail("No discord-sourced 'change' activity after xyzloc update")
+            return
+        self.logger.log_operation(f"    ✓ xyzloc change has source=discord ({len(discord_acts)} entry)")
+
+        # 2. Status change with source=discord
+        self.logger.log_operation("  Testing: status with source=discord")
+        self.api_post(f"/puzzles/{puz['id']}/status", {"status": "Needs eyes", "source": "discord"})
+        acts = get_puzzle_activity(puz["id"], "status")
+        discord_acts = [a for a in acts if a.get("source") == "discord"]
+        if not discord_acts:
+            result.fail("No discord-sourced 'status' activity after status update")
+            return
+        self.logger.log_operation(f"    ✓ status change has source=discord ({len(discord_acts)} entry)")
+
+        # 3. Multi-part update with source=discord
+        self.logger.log_operation("  Testing: multi-part update with source=discord")
+        self.api_post(f"/puzzles/{puz['id']}", {"xyzloc": "Room 2", "source": "discord"})
+        acts = get_puzzle_activity(puz["id"], "change")
+        discord_acts = [a for a in acts if a.get("source") == "discord"]
+        if len(discord_acts) < 2:
+            result.fail(f"Expected at least 2 discord-sourced 'change' entries, got {len(discord_acts)}")
+            return
+        self.logger.log_operation(f"    ✓ multi-part update has source=discord ({len(discord_acts)} entries)")
+
+        # 4. Solve with source=discord
+        self.logger.log_operation("  Testing: answer with source=discord")
+        self.api_post(f"/puzzles/{puz['id']}/answer", {"answer": "DISCORDTEST", "source": "discord"})
+        acts = get_puzzle_activity(puz["id"], "solve")
+        discord_acts = [a for a in acts if a.get("source") == "discord"]
+        if not discord_acts:
+            result.fail("No discord-sourced 'solve' activity after answering puzzle")
+            return
+        self.logger.log_operation(f"    ✓ solve has source=discord ({len(discord_acts)} entry)")
+
+        # 5. Activity search filtered by source=discord
+        self.logger.log_operation("  Testing: activitysearch with sources=discord")
+        data = self.api_get("/activitysearch?sources=discord")
+        if data.get("status") != "ok":
+            result.fail(f"activitysearch?sources=discord failed: {data}")
+            return
+        for act in data.get("activity", []):
+            if act["source"] != "discord":
+                result.fail(f"Source filter leaked: got source '{act['source']}' with sources=discord filter")
+                return
+        self.logger.log_operation(f"    ✓ activitysearch sources=discord returned {data['count']} results (all discord)")
+
+        # 6. Combined filter: sources=discord + puzzle_id
+        self.logger.log_operation("  Testing: combined filter sources=discord + puzzle_id")
+        data = self.api_get(f"/activitysearch?sources=discord&puzzle_id={puz['id']}")
+        if data.get("status") != "ok":
+            result.fail(f"Combined filter search failed: {data}")
+            return
+        if data["count"] < 3:
+            result.fail(f"Expected ≥3 discord activities for this puzzle, got {data['count']}")
+            return
+        self.logger.log_operation(f"    ✓ Combined filter returned {data['count']} results (≥3 expected)")
+
+        result.set_success("Discord source propagation test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 32: Activity Statistics Endpoint
+    # ------------------------------------------------------------------
+    def test_activity_statistics_endpoint(self, result: TestResult):
+        """Test GET /activity endpoint for activity counts and timing stats."""
+        # 1. Basic shape validation
+        self.logger.log_operation("  Testing: GET /activity response shape")
+        data = self.api_get("/activity")
+        if data.get("status") != "ok":
+            result.fail(f"GET /activity failed: {data}")
+            return
+
+        for field in ["activity", "puzzle_solves_timer", "open_puzzles_timer", "seconds_since_last_solve"]:
+            if field not in data:
+                result.fail(f"Missing top-level field '{field}' in /activity response")
+                return
+        self.logger.log_operation("    ✓ All top-level fields present")
+
+        # 2. Validate activity is a dict with int values
+        activity = data["activity"]
+        if not isinstance(activity, dict):
+            result.fail(f"activity should be a dict, got {type(activity).__name__}")
+            return
+        for k, v in activity.items():
+            if not isinstance(v, int):
+                result.fail(f"activity['{k}'] should be int, got {type(v).__name__}")
+                return
+        self.logger.log_operation(f"    ✓ Activity counts dict has {len(activity)} type(s): {list(activity.keys())}")
+
+        # 3. Validate timer sub-objects
+        self.logger.log_operation("  Testing: timer sub-objects")
+        solves_timer = data["puzzle_solves_timer"]
+        for field in ["total_solves", "total_solve_time_seconds"]:
+            if field not in solves_timer:
+                result.fail(f"Missing '{field}' in puzzle_solves_timer")
+                return
+        self.logger.log_operation(f"    ✓ puzzle_solves_timer: {solves_timer}")
+
+        open_timer = data["open_puzzles_timer"]
+        for field in ["total_open", "total_open_time_seconds"]:
+            if field not in open_timer:
+                result.fail(f"Missing '{field}' in open_puzzles_timer")
+                return
+        self.logger.log_operation(f"    ✓ open_puzzles_timer: {open_timer}")
+
+        # 4. Create a puzzle and verify create count increases
+        self.logger.log_operation("  Testing: create count increases after puzzle creation")
+        before_create = activity.get("create", 0)
+
+        rounds = self.get_all_rounds()
+        if not rounds:
+            rnd = self.create_round("ActivityStatsRnd")
+            rounds = [rnd]
+        round_id = rounds[0]["id"]
+
+        puz = self.create_puzzle(
+            self.get_emoji_string("ActivityStatsPuz", include_emoji=False),
+            round_id
+        )
+
+        data2 = self.api_get("/activity")
+        after_create = data2["activity"].get("create", 0)
+        if after_create <= before_create:
+            result.fail(f"Create count did not increase: {before_create} → {after_create}")
+            return
+        self.logger.log_operation(f"    ✓ Create count increased: {before_create} → {after_create}")
+
+        # 5. Solve the puzzle and verify solve stats update
+        self.logger.log_operation("  Testing: solve stats after puzzle solve")
+        before_solves = data2["puzzle_solves_timer"]["total_solves"]
+        self.api_post(f"/puzzles/{puz['id']}/answer", {"answer": "STATSTEST"})
+        time.sleep(0.3)  # Brief pause for DB update
+
+        data3 = self.api_get("/activity")
+        after_solves = data3["puzzle_solves_timer"]["total_solves"]
+        if after_solves <= before_solves:
+            result.fail(f"total_solves did not increase: {before_solves} → {after_solves}")
+            return
+        self.logger.log_operation(f"    ✓ total_solves increased: {before_solves} → {after_solves}")
+
+        # Verify seconds_since_last_solve is small (we just solved)
+        since_last = data3.get("seconds_since_last_solve")
+        if since_last is not None and since_last > 30:
+            result.fail(f"seconds_since_last_solve too large after recent solve: {since_last}")
+            return
+        self.logger.log_operation(f"    ✓ seconds_since_last_solve = {since_last} (recent)")
+
+        result.set_success("Activity statistics endpoint test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 33: Activity has_more and Comment Type
+    # ------------------------------------------------------------------
+    def test_activity_has_more_and_comment(self, result: TestResult):
+        """Test has_more pagination flag and comment activity type."""
+        rounds = self.get_all_rounds()
+        if not rounds:
+            rnd = self.create_round("CommentRnd")
+            rounds = [rnd]
+        round_id = rounds[0]["id"]
+
+        puz = self.create_puzzle(
+            self.get_emoji_string("CommentPuz", include_emoji=False),
+            round_id
+        )
+
+        # 1. Post a comment and verify it produces 'comment' activity
+        self.logger.log_operation("  Testing: POST comment produces 'comment' activity type")
+        self.api_post(f"/puzzles/{puz['id']}/comments", {"comments": "Test comment from API test"})
+        time.sleep(0.2)
+
+        data = self.api_get(f"/puzzles/{puz['id']}/activity")
+        acts = data.get("activity", [])
+        comment_acts = [a for a in acts if a.get("type") == "comment"]
+        if not comment_acts:
+            result.fail("No 'comment' activity found after posting comment")
+            return
+        self.logger.log_operation(f"    ✓ Found {len(comment_acts)} comment activity entry(ies)")
+
+        # 2. Verify comment is searchable via activitysearch
+        self.logger.log_operation("  Testing: comment type in activitysearch")
+        data = self.api_get(f"/activitysearch?types=comment&puzzle_id={puz['id']}")
+        if data.get("status") != "ok":
+            result.fail(f"activitysearch for comment type failed: {data}")
+            return
+        if data["count"] < 1:
+            result.fail(f"Expected ≥1 comment activity via search, got {data['count']}")
+            return
+        for act in data.get("activity", []):
+            if act["type"] != "comment":
+                result.fail(f"Type filter leaked: got type '{act['type']}' with types=comment filter")
+                return
+        self.logger.log_operation(f"    ✓ Comment searchable via activitysearch ({data['count']} results)")
+
+        # 3. Verify has_more=false for small result set
+        self.logger.log_operation("  Testing: has_more field for small result set")
+        data = self.api_get(f"/activitysearch?puzzle_id={puz['id']}&limit=50")
+        if data.get("status") != "ok":
+            result.fail(f"activitysearch failed: {data}")
+            return
+        has_more = data.get("has_more")
+        count = data.get("count", 0)
+        activity_len = len(data.get("activity", []))
+
+        if has_more is None:
+            result.fail("Missing 'has_more' field in activitysearch response")
+            return
+        # With a fresh puzzle, we should have few activities (< 50), so has_more should be false
+        if count <= 50 and has_more:
+            result.fail(f"has_more should be false when count ({count}) <= limit (50)")
+            return
+        self.logger.log_operation(f"    ✓ has_more={has_more} (count={count}, limit=50)")
+
+        # 4. Verify count matches activity array length
+        self.logger.log_operation("  Testing: count == len(activity)")
+        if count != activity_len:
+            result.fail(f"count ({count}) != len(activity) ({activity_len})")
+            return
+        self.logger.log_operation(f"    ✓ count ({count}) == len(activity) ({activity_len})")
+
+        # 5. Verify has_more is boolean and consistent with count vs limit
+        self.logger.log_operation("  Testing: has_more is boolean and logically consistent")
+        # With a small result set (< 50) and limit=50, has_more must be false
+        if not isinstance(has_more, bool):
+            result.fail(f"has_more should be bool, got {type(has_more).__name__}")
+            return
+        if count < 50 and has_more:
+            result.fail(f"has_more should be false when count ({count}) < limit (50)")
+            return
+        self.logger.log_operation(f"    ✓ has_more is bool ({has_more}), consistent with count={count} < limit=50")
+
+        result.set_success("Activity has_more and comment type test completed successfully")
+
     # ======================================================================
     # Test suite runner
     # ======================================================================
@@ -2206,6 +2469,9 @@ class TestRunner:
             self.test_hint_queue,
             self.test_activity_search,
             self.test_activity_type_verification,
+            self.test_discord_source_propagation,
+            self.test_activity_statistics_endpoint,
+            self.test_activity_has_more_and_comment,
         ]
         tests = list(zip(self.TEST_NAMES, test_funcs))
 

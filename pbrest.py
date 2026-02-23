@@ -1765,7 +1765,7 @@ def create_solver():
     return {"status": "ok", "solver": {"name": name, "fullname": fullname}}
 
 
-def _update_single_puzzle_part(id, part, value, mypuzzle):
+def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
     """
     Internal helper to update a single puzzle part.
     Returns the updated value (may be modified, e.g. uppercased answer).
@@ -1792,8 +1792,8 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     f"Puzzle id {id} name {mypuzzle['puzzle']['name']} has been Solved!!!",
                 )
                 clear_puzzle_solvers(id, mysql.connection)
-                update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
-                update_puzzle_part_in_db(id, part, value)
+                update_puzzle_part_in_db(id, "xyzloc", "", source)  # Clear location on solve
+                update_puzzle_part_in_db(id, part, value, source)
                 chat_announce_solved(mypuzzle["puzzle"]["name"])
 
                 # Check if this is a meta puzzle and if all metas in the round are solved
@@ -1801,26 +1801,26 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
                     check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
         elif value in ("Needs eyes", "Critical", "WTF"):
             # These statuses trigger an attention announcement
-            update_puzzle_part_in_db(id, part, value)
+            update_puzzle_part_in_db(id, part, value, source)
             chat_announce_attention(mypuzzle["puzzle"]["name"])
         else:
             # All other valid statuses (Being worked, Unnecessary, Under control, Waiting for HQ, Grind, etc.)
             # Activity logging handled by update_puzzle_field() for all non-Solved status changes
-            update_puzzle_part_in_db(id, part, value)
+            update_puzzle_part_in_db(id, part, value, source)
 
     elif part == "ismeta":
         # When setting a puzzle as meta, just update it directly
-        update_puzzle_part_in_db(id, part, value)
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        update_puzzle_part_in_db(id, part, value, source)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
         # Check round completion whenever metaness changes
         # This handles both marking rounds as solved AND unmarking them if a new unsolved meta is added
         check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
 
     elif part == "xyzloc":
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
         if (value is not None) and (value != ""):
             chat_say_something(
@@ -1833,34 +1833,34 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
     elif part == "answer":
         if value != "" and value is not None:
             # Mark puzzle as solved automatically when answer is filled in
-            update_puzzle_part_in_db(id, "status", "Solved")
+            update_puzzle_part_in_db(id, "status", "Solved", source)
             value = value.upper()
-            update_puzzle_part_in_db(id, part, value)
+            update_puzzle_part_in_db(id, part, value, source)
             debug_log(
                 3,
                 f"Puzzle id {id} name {mypuzzle['puzzle']['name']} has been Solved!!!",
             )
             clear_puzzle_solvers(id, mysql.connection)
-            update_puzzle_part_in_db(id, "xyzloc", "")  # Clear location on solve
+            update_puzzle_part_in_db(id, "xyzloc", "", source)  # Clear location on solve
             chat_announce_solved(mypuzzle["puzzle"]["name"])
 
-            pblib.log_activity(id, "solve", 100, "puzzleboss", mysql.connection)
+            pblib.log_activity(id, "solve", 100, source, mysql.connection)
 
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
                 check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
 
     elif part == "comments":
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
         chat_say_something(
             mypuzzle["puzzle"]["chat_channel_id"],
             f"**ATTENTION** new comment for puzzle {mypuzzle['puzzle']['name']}: {value}",
         )
 
-        pblib.log_activity(id, "comment", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "comment", 100, source, mysql.connection)
 
     elif part == "round":
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
         # This obviously needs some sanity checking
 
     elif part == "round_id":
@@ -1871,14 +1871,14 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
             raise Exception(f"Round ID {value} not found")
 
         # Update the puzzle's round
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
         # Notify Discord to move the channel to the new round category
         # Re-fetch puzzle to get current name (in case it was updated earlier in this request)
         updated_puzzle = get_one_puzzle(id)
         chat_announce_move(updated_puzzle["puzzle"]["name"])
 
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
     elif part == "name":
         # Update puzzle name (strip spaces like in create_puzzle)
@@ -1894,16 +1894,16 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         if cursor.fetchone():
             raise Exception(f"Duplicate puzzle name {sanitized_name} detected")
 
-        update_puzzle_part_in_db(id, part, sanitized_name)
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        update_puzzle_part_in_db(id, part, sanitized_name, source)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
     elif part == "puzzle_uri":
         # Update puzzle URI
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
     elif part == "sheetcount":
         # Simple integer update for sheet count (set by bigjimmybot)
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
     elif part == "tags":
         # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}} or {"tags": {"remove_id": 123}}
@@ -2025,16 +2025,16 @@ def _update_single_puzzle_part(id, part, value, mypuzzle):
         # Log tag change to activity table using system solver_id (100)
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
-            pblib.log_activity(id, "comment", 100, "puzzleboss", mysql.connection)
+            pblib.log_activity(id, "comment", 100, source, mysql.connection)
 
     elif part in ("chat_channel_id", "drive_uri"):
-        update_puzzle_part_in_db(id, part, value)
-        pblib.log_activity(id, "change", 100, "puzzleboss", mysql.connection)
+        update_puzzle_part_in_db(id, part, value, source)
+        pblib.log_activity(id, "change", 100, source, mysql.connection)
 
     else:
         # For any other part, just try to update it directly
         # MySQL will reject invalid column names
-        update_puzzle_part_in_db(id, part, value)
+        update_puzzle_part_in_db(id, part, value, source)
 
     debug_log(
         3,
@@ -2057,6 +2057,9 @@ def update_puzzle_multi(id):
 
     if not data or not isinstance(data, dict):
         raise Exception("Expected JSON object with puzzle parts to update")
+
+    # Get source for activity logging if provided
+    source = data.pop("source", "puzzleboss") if "source" in data else "puzzleboss"
 
     # Reject sensitive operations that should use single-part endpoint for safety
     if "answer" in data:
@@ -2081,7 +2084,7 @@ def update_puzzle_multi(id):
         if part == "name":
             value = value.replace(" ", "")
 
-        updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
+        updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
         updated_parts[part] = updated_value
 
     # Invalidate cache once after all updates
@@ -2107,13 +2110,16 @@ def update_puzzle_part(id, part):
     except KeyError:
         raise Exception(f"Expected {part} field missing")
 
+    # Get source for activity logging if provided
+    source = data.get("source", "puzzleboss")
+
     # Check if this is a legit puzzle
     mypuzzle = get_one_puzzle(id)
     debug_log(5, f"return value from get_one_puzzle {id} is {mypuzzle}")
     if "status" not in mypuzzle or mypuzzle["status"] != "ok":
         raise Exception(f"Error looking up puzzle {id}")
 
-    updated_value = _update_single_puzzle_part(id, part, value, mypuzzle)
+    updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
 
     # Invalidate cache
     invalidate_cache_with_stats()
@@ -2787,7 +2793,9 @@ def get_all_activities():
 def activity_search():
     """Search activity log with filters for type, source, solver, and puzzle."""
     VALID_TYPES = {"create", "revise", "comment", "interact", "solve", "change", "status", "assignment"}
-    VALID_SOURCES = {"puzzleboss", "bigjimmybot"}
+    VALID_SOURCES = set(
+        s.strip() for s in configstruct.get("ACTIVITY_SOURCES", "puzzleboss,bigjimmybot,discord").split(",") if s.strip()
+    )
 
     try:
         # Parse query parameters

@@ -101,6 +101,11 @@ parameters:
           ismeta:
             type: boolean
             description: Whether this puzzle is a meta puzzle
+          source:
+            type: string
+            description: Optional source identifying the calling application
+            enum: [puzzleboss, bigjimmybot, discord]
+            default: puzzleboss
           tags:
             type: object
             description: |

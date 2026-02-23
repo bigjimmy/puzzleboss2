@@ -82,8 +82,7 @@ if (!$allowed) {
         <tr><th>Source</th><th>Meaning</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>puzzleboss</code></td><td>Action taken through the Puzzleboss web UI or REST API</td></tr>
-        <tr><td><code>bigjimmybot</code></td><td>Automatic action by the BigJimmy polling bot (sheet edits, auto-assignments)</td></tr>
+        <tr v-for="s in allSources" :key="s"><td><code>{{ s }}</code></td><td>{{ sourceDescription(s) }}</td></tr>
       </tbody>
     </table>
 
@@ -206,7 +205,7 @@ createApp({
       showFilters: true,
       showColumnVisibility: false,
       allTypes: ['create', 'revise', 'comment', 'interact', 'solve', 'change', 'status', 'assignment'],
-      allSources: ['puzzleboss', 'bigjimmybot'],
+      allSources: [],
       selectedTypes: [],
       selectedSources: [],
       solverInput: '',
@@ -231,17 +230,27 @@ createApp({
   },
   mounted() {
     this.loadColumnVisibility();
-    if (this.hasUrlFilters()) {
-      this.restoreFiltersFromUrl();
-    } else {
-      this.selectedTypes = [...this.allTypes];
-      this.selectedSources = [...this.allSources];
-    }
-    // Load datalists; once both are ready, resolve names and auto-search
-    Promise.all([this.loadSolvers(), this.loadPuzzles()]).then(() => {
-      this.resolveNamesFromIds();
-      this.fetchActivity();
-    });
+    // Load config to get dynamic source list, then proceed
+    fetch('apicall.php?apicall=huntinfo')
+      .then(r => r.json())
+      .then(data => {
+        if (data.config && data.config.ACTIVITY_SOURCES) {
+          this.allSources = data.config.ACTIVITY_SOURCES.split(',').map(s => s.trim()).filter(Boolean);
+        } else {
+          this.allSources = ['puzzleboss', 'bigjimmybot', 'discord'];
+        }
+        if (this.hasUrlFilters()) {
+          this.restoreFiltersFromUrl();
+        } else {
+          this.selectedTypes = [...this.allTypes];
+          this.selectedSources = [...this.allSources];
+        }
+        return Promise.all([this.loadSolvers(), this.loadPuzzles()]);
+      })
+      .then(() => {
+        this.resolveNamesFromIds();
+        this.fetchActivity();
+      });
   },
   watch: {
     visibleColumns: {
@@ -250,6 +259,14 @@ createApp({
     },
   },
   methods: {
+    sourceDescription(s) {
+      const descriptions = {
+        'puzzleboss': 'Action taken through the Puzzleboss web UI or REST API',
+        'bigjimmybot': 'Automatic action by the BigJimmy polling bot (sheet edits, auto-assignments)',
+        'discord': 'Action taken via the Discord bot (puzzcord)',
+      };
+      return descriptions[s] || 'External source';
+    },
     loadSolvers() {
       return fetch('apicall.php?apicall=solvers')
         .then(r => r.json())

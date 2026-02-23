@@ -39,8 +39,8 @@ parameters:
                   description: Chat service name for solver
               source:
                   type: string
-                  description: Optional source of the activity (puzzleboss or bigjimmybot)
-                  enum: [puzzleboss, bigjimmybot]
+                  description: Optional source identifying the calling application
+                  enum: [puzzleboss, bigjimmybot, discord]
                   default: puzzleboss
                   
                   
