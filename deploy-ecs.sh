@@ -144,12 +144,47 @@ if [ "$BUILD_ONLY" = true ]; then
 fi
 
 # ── Force new deployment ────────────────────────────────────
+# Maps ECS service names to their Terraform task definition family names.
+declare -A TASK_DEF_FAMILY=(
+    [puzzleboss]="puzzleboss-web"
+    [bigjimmy]="puzzleboss-bigjimmy"
+    [mediawiki]="puzzleboss-mediawiki"
+)
+
 force_deploy() {
     local svc_name=$1
+    local family="${TASK_DEF_FAMILY[$svc_name]}"
+
+    # Always deploy the latest task definition revision so Terraform
+    # changes (health checks, env vars, etc.) are picked up automatically.
+    local latest_td
+    latest_td=$(aws ecs describe-task-definition \
+        --task-definition "${family}" \
+        --region "${AWS_REGION}" \
+        --output text --query 'taskDefinition.taskDefinitionArn' 2>/dev/null)
+
+    if [ -z "$latest_td" ]; then
+        error "Could not resolve latest task definition for family: ${family}"
+        return 1
+    fi
+
+    local current_td
+    current_td=$(aws ecs describe-services \
+        --cluster "${CLUSTER_NAME}" --services "${svc_name}" \
+        --region "${AWS_REGION}" \
+        --output text --query 'services[0].taskDefinition' 2>/dev/null)
+
+    if [ "$latest_td" != "$current_td" ]; then
+        local latest_rev="${latest_td##*:}"
+        local current_rev="${current_td##*:}"
+        info "Updating ${svc_name} task definition: rev ${current_rev} → ${latest_rev}"
+    fi
+
     info "Forcing new deployment for service: ${svc_name}..."
     aws ecs update-service \
         --cluster "${CLUSTER_NAME}" \
         --service "${svc_name}" \
+        --task-definition "${latest_td}" \
         --force-new-deployment \
         --region "${AWS_REGION}" \
         --output text --query 'service.serviceName' > /dev/null
