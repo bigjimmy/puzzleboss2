@@ -22,7 +22,7 @@ echo "✓ docker-compose is installed"
 
 # Check if required files exist
 REQUIRED_FILES=(
-    "Dockerfile"
+    "Dockerfile.dev"
     "docker-compose.yml"
     "puzzleboss-docker.yaml"
     "docker/apache-site.conf"

@@ -205,7 +205,7 @@ See `scripts/test_ui_playwright.py` for examples:
 - Advanced controls rendering
 - Puzzle creation flow
 
-**Note**: Playwright is installed with Chromium only to minimize image size. For Firefox/WebKit support, modify the Dockerfile to install additional browsers.
+**Note**: Playwright is installed with Chromium only to minimize image size. For Firefox/WebKit support, modify `Dockerfile.dev` to install additional browsers.
 
 ## Stopping and Cleaning Up
 

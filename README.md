@@ -19,12 +19,12 @@ See `docker/README.md` for details, or continue reading for production setup.
 
 ## Production (ECS Fargate)
 
-The production deployment runs on AWS ECS Fargate with Terraform-managed infrastructure. For deployment procedures, scaling, secrets management, monitoring, and troubleshooting, see:
+The production deployment runs on AWS ECS Fargate with Terraform-managed infrastructure.
 
-- **[OPERATIONS.md](OPERATIONS.md)** — Day-to-day operations guide (deploying code, secrets, logs, troubleshooting)
-- **[terraform/INFRASTRUCTURE_PLAN.md](terraform/INFRASTRUCTURE_PLAN.md)** — Infrastructure design rationale and Terraform structure
+- **Infrastructure (Terraform, dashboards, ops guide):** [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra) repo
+- **Quick deploy:** `./deploy-ecs.sh` (or `./deploy-ecs.sh --service puzzleboss` for a single service)
 
-Quick deploy: `./deploy-ecs.sh` (or `./deploy-ecs.sh --service puzzleboss` for a single service).
+The `deploy-ecs.sh` script builds Docker images from this repo and pushes them to ECR. It does not require Terraform to be co-located — it auto-detects ECR URLs from AWS.
 
 ## Legacy Production Setup (Native/EC2)
 

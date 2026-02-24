@@ -16,7 +16,7 @@ set -euo pipefail
 # Prerequisites:
 #   - AWS CLI configured (aws sts get-caller-identity should work)
 #   - Docker with buildx support (for ARM64 cross-compilation)
-#   - Terraform outputs available (run from repo root or terraform/ dir)
+#   - (Optional) Terraform outputs for reference — see puzzleboss2-infra repo
 # =============================================================================
 
 # ── Configuration (auto-detect from Terraform outputs) ──────

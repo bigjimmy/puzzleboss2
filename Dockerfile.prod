@@ -82,12 +82,10 @@ RUN rm -rf \
         scripts/test_*.py \
         scripts/loadtest*.py \
         scripts/loadtest*.yaml \
-        Dockerfile \
+        Dockerfile.dev \
         Dockerfile.prod \
         docker-compose.yml \
         .dockerignore \
-        INFRASTRUCTURE_PLAN.md \
-        terraform/ \
         __pycache__
 
 # ---------------------------------------------------------------------------
