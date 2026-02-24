@@ -4,6 +4,8 @@
 .project
 .pydevproject
 puzzleboss.yaml
+puzzleboss-ECS.yaml
+LocalSettings-ECS.php
 credentials.json
 token.json
 admintoken.json
@@ -26,3 +28,11 @@ scripts/migrations/
 htmlcov/
 .coverage
 *.pyc
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+terraform/*.tfplan
+terraform/.terraform.lock.hcl

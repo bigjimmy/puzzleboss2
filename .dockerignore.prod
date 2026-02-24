@@ -1,0 +1,60 @@
+# .dockerignore.prod — Exclusions for production image builds
+# Use with: docker buildx build -f Dockerfile.prod .
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Credentials (NEVER copy into Docker image)
+puzzleboss.yaml
+!puzzleboss-SAMPLE.yaml
+credentials.json
+service-account.json
+token.json
+admintoken.json
+oidc-secrets.conf
+*.pem
+*.key
+
+# Docker (don't include Docker files in the image)
+docker-compose.yml
+Dockerfile
+Dockerfile.prod
+.dockerignore
+.dockerignore.prod
+
+# Terraform
+terraform/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test data and scripts
+*.sql.backup
+scripts/test_*.py
+scripts/loadtest*.py
+scripts/loadtest_config*.yaml
+
+# Docs (not needed at runtime)
+INFRASTRUCTURE_PLAN.md
+CLAUDE.md

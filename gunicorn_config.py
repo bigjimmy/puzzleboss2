@@ -31,7 +31,7 @@ except ImportError:
 
 # Server socket
 bind = "0.0.0.0:5000"
-workers = 4
+workers = int(os.environ.get("GUNICORN_WORKERS", 4))
 
 # Worker timeout - increase from default 30s as safety margin
 # (With lazy imports, workers should start quickly, but allow extra time)

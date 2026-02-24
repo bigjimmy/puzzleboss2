@@ -1,0 +1,82 @@
+# =============================================================================
+# Dockerfile.mediawiki — MediaWiki for ECS Fargate (ARM64)
+# =============================================================================
+#
+# This image runs MediaWiki behind Apache with OIDC authentication.
+# The ALB routes /wiki* requests to this container.
+#
+# Build (ARM64 for Graviton):
+#   docker buildx build --platform linux/arm64 -f Dockerfile.mediawiki -t mediawiki .
+#
+# Runtime requirements:
+#   - LocalSettings.php must be provided (via bind mount, EFS, or env var)
+#   - RDS MySQL endpoint reachable from the container's security group
+#   - OIDC credentials injected via environment variables
+#   - Memcache service reachable at memcache.puzzleboss.local:11211
+#
+# The official MediaWiki image already includes Apache + PHP + MediaWiki core.
+# We add: mod_auth_openidc, Auth_remoteuser extension, S3 image support.
+# =============================================================================
+
+FROM mediawiki:1.43
+
+# Install OIDC module for Apache, git (extensions), unzip (composer)
+# Note: The official MediaWiki 1.43 image already includes apcu, intl,
+# mysqli, mbstring, etc. — compiled from source via docker-php-ext-install.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libapache2-mod-auth-openidc \
+        git \
+        unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Enable Apache modules
+RUN a2enmod auth_openidc remoteip rewrite headers
+
+# ---------------------------------------------------------------------------
+# Auth_remoteuser extension — trusts REMOTE_USER set by mod_auth_openidc
+# ---------------------------------------------------------------------------
+RUN cd /var/www/html/extensions && \
+    git clone --depth 1 --branch REL1_43 \
+        https://gerrit.wikimedia.org/r/mediawiki/extensions/Auth_remoteuser && \
+    rm -rf Auth_remoteuser/.git
+
+# ---------------------------------------------------------------------------
+# AWS extension — S3-backed file storage for uploads and thumbnails
+# ---------------------------------------------------------------------------
+# Replaces local filesystem with S3. Fargate containers have ephemeral
+# storage, so uploaded images would be lost without this.
+# Uses ECS task role for credentials (no keys in LocalSettings.php).
+RUN cd /var/www/html/extensions && \
+    git clone --depth 1 https://github.com/edwardspec/mediawiki-aws-s3.git AWS && \
+    rm -rf AWS/.git
+
+# Install composer and pull in the AWS extension's dependencies (AWS SDK)
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+RUN cd /var/www/html && \
+    echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"]}}}' > composer.local.json && \
+    composer config --no-interaction audit.block-insecure false && \
+    composer update --no-dev --no-interaction --prefer-dist && \
+    rm -f /usr/bin/composer
+
+# ---------------------------------------------------------------------------
+# Apache configuration for production (behind ALB)
+# ---------------------------------------------------------------------------
+COPY docker/mediawiki/apache-mediawiki.conf /etc/apache2/sites-available/000-default.conf
+
+# Trust ALB X-Forwarded-For headers
+RUN echo "RemoteIPHeader X-Forwarded-For" > /etc/apache2/conf-available/remoteip.conf \
+    && a2enconf remoteip
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+COPY docker/mediawiki/docker-entrypoint-mediawiki.sh /usr/local/bin/docker-entrypoint-mediawiki.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint-mediawiki.sh
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost/wiki/Main_Page || exit 1
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint-mediawiki.sh"]
+CMD ["apache2-foreground"]
