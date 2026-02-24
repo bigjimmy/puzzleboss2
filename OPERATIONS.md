@@ -16,14 +16,12 @@ Route 53 (importanthuntpoll.org) → ALB (ACM cert, HTTPS)
          │                           │                    /mailmanarchives*
          ▼                           ▼                         ▼
    ECS: puzzleboss            ECS: mediawiki            EC2: observability
-   (1 vCPU / 3 GB)           (0.5 vCPU / 1 GB)         (t4g.small)
    Apache+PHP+Gunicorn        Apache+PHP+MediaWiki 1.43  Prometheus+Loki+Grafana
                                                          Apache (legacy content)
    ---------------------- Backends ----------------------------
-                                     
+
    ECS: memcache        ECS: bigjimmy         AWS RDS MySQL
-   (0.25 vCPU/512MB)   (0.25 vCPU/512MB)     (db.t4g.small)
-   OIDC sessions +      Sheet activity
+   OIDC sessions +      Sheet activity        (db.t4g.small)
    puzzle cache          polling bot
 ```
 
@@ -122,22 +120,83 @@ curl -sk -o /dev/null -w '%{http_code}' https://importanthuntpoll.org/pb/   # �
 curl -sk -o /dev/null -w '%{http_code}' https://importanthuntpoll.org/      # → 302 (OIDC)
 ```
 
-## Scaling for Hunt
+## Resource Sizing & Scaling
+
+### Current Sizes (idle / non-hunt)
+
+| Service | CPU | Memory | Workers/Notes |
+|---------|-----|--------|---------------|
+| puzzleboss | 256 (0.25 vCPU) | 1024 MB | 2 gunicorn workers |
+| mediawiki | 256 (0.25 vCPU) | 512 MB | Apache prefork |
+| bigjimmy | 512 (0.5 vCPU) | 2048 MB | ~900 MB steady-state |
+| memcache | 256 (0.25 vCPU) | 512 MB | |
+| observability | t4g.micro | 1 GB | 6 services, ~460 MB used |
+
+### Scaling Up for Hunt
 
 Edit `terraform/terraform.tfvars` and apply:
 
 ```hcl
-# Scale up for January hunt
-puzzleboss_desired_count = 2       # 1 → 2 web tasks
-bigjimmy_cpu             = 512     # 256 → 512
-bigjimmy_memory          = 1024    # 512 → 1024
+# Scale up for hunt
+puzzleboss_cpu              = 1024   # 0.25 → 1 vCPU
+puzzleboss_memory           = 3072   # 1 GB → 3 GB
+puzzleboss_desired_count    = 2      # 1 → 2 web tasks
+puzzleboss_gunicorn_workers = 4      # 2 → 4 workers per task (8 total)
+
+mediawiki_cpu               = 512    # 0.25 → 0.5 vCPU
+mediawiki_memory            = 1024   # 512 MB → 1 GB
+
+observability_instance_type = "t4g.small"  # 1 GB → 2 GB (more scrape targets + log volume)
 ```
 
 ```bash
 cd terraform && terraform apply
+
+# Task defs update but services need explicit deploy (ignore_changes on task_definition)
+aws ecs update-service --cluster puzzleboss --service puzzleboss \
+  --task-definition puzzleboss-web:<NEW_REV> --force-new-deployment
+aws ecs update-service --cluster puzzleboss --service mediawiki \
+  --task-definition puzzleboss-mediawiki:<NEW_REV> --force-new-deployment
 ```
 
-Scale back down after hunt by reverting the values.
+### Scaling Back Down After Hunt
+
+Revert `terraform.tfvars` to idle values and redeploy:
+
+```hcl
+puzzleboss_cpu              = 256
+puzzleboss_memory           = 1024
+puzzleboss_desired_count    = 1
+puzzleboss_gunicorn_workers = 2
+
+mediawiki_cpu               = 256
+mediawiki_memory            = 512
+
+observability_instance_type = "t4g.micro"
+```
+
+### Gunicorn Workers
+
+Each gunicorn worker is a separate Python process (~120 MB each). The `puzzleboss_gunicorn_workers` variable in `terraform.tfvars` sets the `GUNICORN_WORKERS` env var in the ECS task definition.
+
+| Mode | Tasks | Workers/Task | Total Workers | Memory/Task |
+|------|-------|-------------|---------------|-------------|
+| Idle | 1 | 2 | 2 | ~300 MB |
+| Hunt | 2 | 4 | 8 | ~530 MB |
+
+Rule of thumb: `workers × 130 MB + 50 MB (Fluent Bit)` should be well under the task memory limit to avoid OOM kills.
+
+### Fargate CPU/Memory Constraints
+
+Valid Fargate combinations (relevant tiers):
+
+| CPU (units) | Valid Memory (MB) |
+|-------------|-------------------|
+| 256 | 512, 1024, 2048 |
+| 512 | 1024, 2048, 3072, 4096 |
+| 1024 | 2048, 3072, 4096, 5120, 6144, 7168, 8192 |
+
+Fargate bills per vCPU-hour + per GB-hour, so smaller tasks cost linearly less.
 
 ## Secrets Management
 
