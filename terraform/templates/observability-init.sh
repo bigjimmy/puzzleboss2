@@ -2,7 +2,8 @@
 # Cloud-init: Prometheus (with native ECS SD), Node Exporter, Loki, Grafana,
 #             Apache (phpMyAdmin, legacy scripts, mailman archives)
 # Template vars: loki_s3_bucket, aws_region, project_name, ecs_cluster,
-#                rds_endpoint, rds_username, rds_password, legacy_web_bucket
+#                rds_endpoint, rds_username, rds_password, legacy_web_bucket,
+#                ecs_events_sqs_url
 set -euo pipefail
 exec > /var/log/observability-init.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
@@ -304,12 +305,159 @@ mkdir -p /var/www/scripts /var/www/mailmanarchives
 aws s3 sync "s3://${legacy_web_bucket}/scripts/" /var/www/scripts/ --region "${aws_region}" || echo "WARN: scripts not yet uploaded to S3"
 aws s3 sync "s3://${legacy_web_bucket}/mailmanarchives/" /var/www/mailmanarchives/ --region "${aws_region}" || echo "WARN: mailmanarchives not yet uploaded to S3"
 
+# --- ECS Events → Loki daemon ---
+# Long-polls SQS for ECS state-change events and pushes to local Loki.
+# Requires: boto3 (installed via pip below), python3
+pip3 install boto3 2>/dev/null || apt-get install -y python3-boto3
+
+cat > /opt/ecs-events-to-loki.py <<'ECSEOF'
+#!/usr/bin/env python3
+"""ECS Events -> Loki bridge. Long-polls SQS for EventBridge ECS events."""
+import argparse, json, logging, signal, sys, time, urllib.request, urllib.error
+import boto3
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S")
+log = logging.getLogger("ecs-events-to-loki")
+RUNNING = True
+
+def _sigterm(s, f):
+    global RUNNING
+    log.info("Received signal, shutting down")
+    RUNNING = False
+signal.signal(signal.SIGTERM, _sigterm)
+signal.signal(signal.SIGINT, _sigterm)
+
+def push_to_loki(loki_url, labels, message, timestamp_ns):
+    payload = {"streams": [{"stream": labels, "values": [[str(timestamp_ns), message]]}]}
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(f"{loki_url}/loki/api/v1/push", data=body,
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status in (200, 204)
+    except urllib.error.URLError as e:
+        log.error("Loki push failed: %s", e)
+        return False
+
+def _short_arn(arn):
+    parts = arn.rsplit("/", 1)
+    return parts[-1][:8] if len(parts) > 1 else arn
+
+def format_task_state_change(detail):
+    cluster = detail.get("clusterArn", "").rsplit("/", 1)[-1]
+    task_id = _short_arn(detail.get("taskArn", ""))
+    task_def = detail.get("taskDefinitionArn", "").rsplit("/", 1)[-1]
+    last_status = detail.get("lastStatus", "?")
+    desired = detail.get("desiredStatus", "?")
+    stopped_reason = detail.get("stoppedReason", "")
+    group = detail.get("group", "")
+    service = group.split(":")[-1] if ":" in group else group
+    labels = {"job": "ecs_events", "event_type": "task_state_change", "cluster": cluster, "service": service or "unknown"}
+    parts = [f"task={task_id}", f"taskDef={task_def}", f"status={last_status}", f"desired={desired}"]
+    if last_status == "STOPPED":
+        for c in detail.get("containers", []):
+            name, ec, reason = c.get("name", "?"), c.get("exitCode"), c.get("reason", "")
+            if ec is not None or reason:
+                parts.append(f"container:{name}(exit={ec},reason={reason})")
+        if stopped_reason:
+            parts.append(f"stoppedReason={stopped_reason}")
+    return labels, " ".join(parts)
+
+def format_service_action(detail):
+    cluster = detail.get("clusterArn", "").rsplit("/", 1)[-1]
+    labels = {"job": "ecs_events", "event_type": "service_action", "cluster": cluster}
+    msg = f"action={detail.get('eventName', '?')}"
+    if detail.get("eventMessage"):
+        msg += f" {detail['eventMessage']}"
+    return labels, msg
+
+def format_deployment_state_change(detail):
+    cluster = detail.get("clusterArn", "").rsplit("/", 1)[-1]
+    labels = {"job": "ecs_events", "event_type": "deployment_state_change", "cluster": cluster}
+    msg = f"deployment={detail.get('deploymentId', '?')} status={detail.get('status', '?')}"
+    if detail.get("reason"):
+        msg += f" reason={detail['reason']}"
+    return labels, msg
+
+def process_message(body, loki_url):
+    try:
+        event = json.loads(body)
+    except json.JSONDecodeError:
+        return True
+    detail_type = event.get("detail-type", "")
+    detail = event.get("detail", {})
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(event.get("time", "").replace("Z", "+00:00"))
+        ts_ns = int(dt.timestamp() * 1e9)
+    except (ValueError, AttributeError):
+        ts_ns = int(time.time() * 1e9)
+    formatters = {
+        "ECS Task State Change": format_task_state_change,
+        "ECS Service Action": format_service_action,
+        "ECS Deployment State Change": format_deployment_state_change,
+    }
+    if detail_type not in formatters:
+        return True
+    labels, message = formatters[detail_type](detail)
+    for r in event.get("resources", []):
+        if ":service/" in r:
+            labels["service"] = r.rsplit("/", 1)[-1]
+            break
+    log.info("[%s] %s: %s", labels.get("service", "?"), detail_type, message[:120])
+    return push_to_loki(loki_url, labels, message, ts_ns)
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--queue-url", required=True)
+    p.add_argument("--loki-url", default="http://localhost:3100")
+    p.add_argument("--region", default="us-east-1")
+    args = p.parse_args()
+    sqs = boto3.client("sqs", region_name=args.region)
+    log.info("Starting ECS events bridge (queue=%s)", args.queue_url)
+    errs = 0
+    while RUNNING:
+        try:
+            resp = sqs.receive_message(QueueUrl=args.queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=20)
+            errs = 0
+        except Exception as e:
+            errs += 1
+            time.sleep(min(errs * 5, 60))
+            log.error("SQS error (backoff %ds): %s", min(errs * 5, 60), e)
+            continue
+        for msg in resp.get("Messages", []):
+            if process_message(msg["Body"], args.loki_url):
+                try:
+                    sqs.delete_message(QueueUrl=args.queue_url, ReceiptHandle=msg["ReceiptHandle"])
+                except Exception as e:
+                    log.error("Delete failed: %s", e)
+
+if __name__ == "__main__":
+    main()
+ECSEOF
+chmod +x /opt/ecs-events-to-loki.py
+
+cat > /etc/systemd/system/ecs-events-to-loki.service <<EOF
+[Unit]
+Description=ECS Events to Loki bridge
+Wants=network-online.target loki.service
+After=network-online.target loki.service
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/ecs-events-to-loki.py --queue-url ${ecs_events_sqs_url} --region ${aws_region}
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # --- Start all services ---
 systemctl daemon-reload
-systemctl enable --now prometheus node_exporter loki grafana-server apache2
+systemctl enable --now prometheus node_exporter loki grafana-server apache2 ecs-events-to-loki
 
 rm -rf /tmp/prometheus* /tmp/node_exporter* /tmp/loki*
 echo "=== Observability init complete ==="
 echo "Grafana: http://localhost:3000 (admin/admin) | Prometheus: :9090 | Loki: :3100"
 echo "Apache: http://localhost:80 (phpMyAdmin, /scripts, /mailmanarchives)"
 echo "Note: ECS logs reach Loki via Fluent Bit FireLens sidecars in each ECS task"
+echo "Note: ECS control-plane events reach Loki via SQS → ecs-events-to-loki daemon"

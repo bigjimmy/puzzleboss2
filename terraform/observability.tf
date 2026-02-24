@@ -55,6 +55,7 @@ resource "aws_instance" "observability" {
     rds_username       = var.rds_username
     rds_password       = var.rds_password
     legacy_web_bucket  = aws_s3_bucket.legacy_web.id
+    ecs_events_sqs_url = aws_sqs_queue.ecs_events.url
   }))
 
   tags = {
