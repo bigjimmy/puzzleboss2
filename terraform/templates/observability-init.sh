@@ -2,7 +2,7 @@
 # Cloud-init: Prometheus (with native ECS SD), Node Exporter, Loki, Grafana,
 #             Apache (phpMyAdmin, legacy scripts, mailman archives)
 # Template vars: loki_s3_bucket, aws_region, project_name, ecs_cluster,
-#                rds_endpoint, legacy_web_bucket
+#                rds_endpoint, rds_username, rds_password, legacy_web_bucket
 set -euo pipefail
 exec > /var/log/observability-init.log 2>&1
 export DEBIAN_FRONTEND=noninteractive
@@ -49,6 +49,10 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:3100']
   # Flask REST API metrics (prometheus_flask_exporter) — port 5000
+  # Uses ECS task ID for stable-but-unique instance labels so that:
+  #   - Multiple tasks (scale-up) produce distinct series
+  #   - Stale series from replaced tasks auto-expire (5min staleness)
+  #   - Dashboard queries should use sum/rate by (job) to aggregate across tasks
   - job_name: 'puzzleboss_api'
     aws_sd_configs:
       - role: ecs
@@ -66,7 +70,16 @@ scrape_configs:
         target_label: service
       - source_labels: [__meta_ecs_cluster]
         target_label: cluster
+      # Use short task ID (first 8 chars) for readable instance labels
+      # e.g. "puzzleboss-a1b2c3d4" instead of "172.31.41.47:5000"
+      - source_labels: [__meta_ecs_task_arn]
+        regex: '.*/(.{8}).*'
+        target_label: instance
+        replacement: 'puzzleboss-$${1}:5000'
   # PHP hunt metrics (puzzles, solves, activity, botstats) — port 80
+  # These are database-derived gauges identical across all instances,
+  # so a fixed instance label is fine — if scaled to 2+, Prometheus
+  # deduplicates targets and scrapes only one (no data loss).
   - job_name: 'puzzleboss_app'
     aws_sd_configs:
       - role: ecs
@@ -82,6 +95,9 @@ scrape_configs:
         target_label: service
       - source_labels: [__meta_ecs_cluster]
         target_label: cluster
+    metric_relabel_configs:
+      - target_label: instance
+        replacement: puzzleboss:80
 PROMEOF
 chown prometheus:prometheus /etc/prometheus/prometheus.yml
 
@@ -166,6 +182,7 @@ storage_config:
     region: ${aws_region}
 limits_config:
   retention_period: 90d
+  discover_log_levels: false
 compactor:
   working_directory: /var/lib/loki/compactor
   retention_enabled: true
@@ -199,32 +216,21 @@ sed -i 's|;serve_from_sub_path = .*|serve_from_sub_path = true|' /etc/grafana/gr
 # Enable anonymous access — visitors get read-only Viewer role, admin actions still require login
 sed -i '/^\[auth\.anonymous\]/,/^\[/ s/;enabled = false/enabled = true/' /etc/grafana/grafana.ini
 
-# Auto-provision data sources
+# Use RDS MySQL for Grafana state (dashboards, users, etc.) instead of local SQLite.
+# This preserves dashboards across instance rebuilds.
+RDS_HOST=$(echo "${rds_endpoint}" | cut -d: -f1)
+sed -i '/^\[database\]/,/^\[/ {
+  s/;type = sqlite3/type = mysql/
+  s/;host = .*/host = '"$${RDS_HOST}"':3306/
+  s/;name = grafana/name = grafana/
+  s/;user = root/user = ${rds_username}/
+  s/;password =/password = ${rds_password}/
+}' /etc/grafana/grafana.ini
+
+# Datasources (Prometheus, Loki, CloudWatch) are stored in the RDS grafana database.
+# No file-based provisioning — avoids conflicts with DB-stored datasource definitions.
+# To add/edit datasources, use the Grafana UI (admin login) or update RDS directly.
 mkdir -p /etc/grafana/provisioning/datasources
-cat > /etc/grafana/provisioning/datasources/default.yml <<DSEOF
-apiVersion: 1
-datasources:
-  - name: Prometheus
-    type: prometheus
-    access: proxy
-    url: http://localhost:9090
-    isDefault: true
-    editable: true
-  - name: CloudWatch
-    type: cloudwatch
-    access: proxy
-    jsonData:
-      authType: default
-      defaultRegion: ${aws_region}
-      customMetricsNamespaces: "ECS/ContainerInsights"
-      logsTimeout: "30m"
-    editable: true
-  - name: Loki
-    type: loki
-    access: proxy
-    url: http://localhost:3100
-    editable: true
-DSEOF
 chown -R grafana:grafana /etc/grafana/provisioning
 
 # Dashboard provisioning directory (import dashboards via UI or drop JSON files here)
@@ -250,8 +256,7 @@ echo "phpmyadmin phpmyadmin/reconfigure-webserver multiselect apache2" | debconf
 apt-get install -y apache2 libapache2-mod-php php-mysql php-mbstring php-json php-curl phpmyadmin
 a2enmod cgi
 
-# Point phpMyAdmin at RDS
-RDS_HOST=$(echo "${rds_endpoint}" | cut -d: -f1)
+# Point phpMyAdmin at RDS (RDS_HOST extracted earlier in Grafana database config)
 cat > /etc/phpmyadmin/conf.d/rds.php <<'PMAEOF'
 <?php
 $cfg['Servers'][1]['host'] = 'RDS_HOST_PLACEHOLDER';

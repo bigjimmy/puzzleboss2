@@ -52,6 +52,8 @@ resource "aws_instance" "observability" {
     project_name       = var.project_name
     ecs_cluster        = aws_ecs_cluster.main.name
     rds_endpoint       = aws_db_instance.main.endpoint
+    rds_username       = var.rds_username
+    rds_password       = var.rds_password
     legacy_web_bucket  = aws_s3_bucket.legacy_web.id
   }))
 

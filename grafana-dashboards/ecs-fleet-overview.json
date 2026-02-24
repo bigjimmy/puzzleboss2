@@ -1,0 +1,1149 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_CLOUDWATCH",
+      "label": "CloudWatch",
+      "description": "AWS CloudWatch datasource with ECS Container Insights",
+      "type": "datasource",
+      "pluginId": "cloudwatch",
+      "pluginName": "CloudWatch"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.0.0" },
+    { "type": "datasource", "id": "cloudwatch", "name": "CloudWatch", "version": "1.0.0" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" },
+    { "type": "panel", "id": "bargauge", "name": "Bar gauge", "version": "" }
+  ],
+  "annotations": { "list": [] },
+  "description": "ECS Fargate fleet health: task counts, CPU, memory, network per service",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Service Health",
+      "type": "row"
+    },
+    {
+      "id": 1,
+      "title": "puzzleboss",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "running",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "Running"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "DesiredTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "desired",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "Desired",
+          "hide": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "mappings": [],
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 2,
+      "title": "mediawiki",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "running",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "Running"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 3,
+      "title": "bigjimmy",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "running",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "Running"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+    {
+      "id": 4,
+      "title": "memcache",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "running",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "Running"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "wideLayout": true
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "Task Counts",
+      "type": "row"
+    },
+    {
+      "id": 5,
+      "title": "Running Tasks",
+      "description": "Running task count per ECS service over time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 6 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "A",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "puzzleboss"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "B",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "mediawiki"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "C",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "bigjimmy"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "RunningTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "D",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "memcache"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "Tasks",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": { "mode": "none" }
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Deployments & Pending",
+      "description": "Deployment count and pending tasks — spikes indicate deploys or instability",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 6 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "DeploymentCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "A",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "puzzleboss deploys"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "DeploymentCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "B",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "mediawiki deploys"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "PendingTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "C",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "puzzleboss pending"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true,
+          "metricEditorMode": 0,
+          "metricName": "PendingTaskCount",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60",
+          "queryMode": "Metrics",
+          "refId": "D",
+          "region": "us-east-1",
+          "statistic": "Average",
+          "label": "mediawiki pending"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": { "mode": "none" }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": ".*pending.*" },
+            "properties": [
+              { "id": "custom.drawStyle", "value": "bars" },
+              { "id": "custom.fillOpacity", "value": 50 },
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "CPU Utilization",
+      "type": "row"
+    },
+    {
+      "id": 7,
+      "title": "CPU Utilized",
+      "description": "CPU units consumed per service (1 vCPU = 1024 units)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 15 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "A",
+          "region": "us-east-1", "statistic": "Average", "label": "puzzleboss"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "B",
+          "region": "us-east-1", "statistic": "Average", "label": "mediawiki"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "C",
+          "region": "us-east-1", "statistic": "Average", "label": "bigjimmy"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "D",
+          "region": "us-east-1", "statistic": "Average", "label": "memcache"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "CPU Units",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": { "mode": "none" },
+            "gradientMode": "scheme"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max", "lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 8,
+      "title": "CPU Utilization %",
+      "description": "CPU utilization as percentage of reserved (utilized / reserved × 100)",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 15 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "pb_util",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuReserved",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "pb_res",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$pb_util / $pb_res * 100",
+          "type": "math",
+          "refId": "puzzleboss",
+          "hide": false
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mw_util",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuReserved",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mw_res",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$mw_util / $mw_res * 100",
+          "type": "math",
+          "refId": "mediawiki",
+          "hide": false
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "bj_util",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuReserved",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "bj_res",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$bj_util / $bj_res * 100",
+          "type": "math",
+          "refId": "bigjimmy",
+          "hide": false
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mc_util",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "CpuReserved",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mc_res",
+          "region": "us-east-1", "statistic": "Average", "label": "", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$mc_util / $mc_res * 100",
+          "type": "math",
+          "refId": "memcache",
+          "hide": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 95 }
+            ]
+          },
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "valueMode": "color"
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "Memory Utilization",
+      "type": "row"
+    },
+    {
+      "id": 9,
+      "title": "Memory Utilized",
+      "description": "Memory consumed per service in megabytes",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 24 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "MemoryUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "A",
+          "region": "us-east-1", "statistic": "Average", "label": "puzzleboss"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "MemoryUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "B",
+          "region": "us-east-1", "statistic": "Average", "label": "mediawiki"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "MemoryUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "C",
+          "region": "us-east-1", "statistic": "Average", "label": "bigjimmy"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "MemoryUtilized",
+          "metricQueryType": 0,
+          "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "D",
+          "region": "us-east-1", "statistic": "Average", "label": "memcache"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "MB",
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": { "mode": "none" },
+            "gradientMode": "scheme"
+          },
+          "unit": "decmbytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max", "lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 10,
+      "title": "Memory Utilization %",
+      "description": "Memory utilization as percentage of reserved",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 24 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryUtilized",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "pb_util",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryReserved",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "pb_res",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$pb_util / $pb_res * 100",
+          "type": "math", "refId": "puzzleboss"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryUtilized",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mw_util",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryReserved",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mw_res",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$mw_util / $mw_res * 100",
+          "type": "math", "refId": "mediawiki"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryUtilized",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "bj_util",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryReserved",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "bj_res",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$bj_util / $bj_res * 100",
+          "type": "math", "refId": "bigjimmy"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryUtilized",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mc_util",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0, "metricName": "MemoryReserved",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "300", "queryMode": "Metrics", "refId": "mc_res",
+          "region": "us-east-1", "statistic": "Average", "hide": true
+        },
+        {
+          "datasource": { "type": "__expr__", "uid": "__expr__" },
+          "expression": "$mc_util / $mc_res * 100",
+          "type": "math", "refId": "memcache"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 60 },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 95 }
+            ]
+          },
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16,
+        "namePlacement": "auto",
+        "valueMode": "color"
+      }
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "id": 104,
+      "title": "Network I/O",
+      "type": "row"
+    },
+    {
+      "id": 11,
+      "title": "Network Receive",
+      "description": "Bytes received per service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkRxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "A",
+          "region": "us-east-1", "statistic": "Average", "label": "puzzleboss"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkRxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "B",
+          "region": "us-east-1", "statistic": "Average", "label": "mediawiki"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkRxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "C",
+          "region": "us-east-1", "statistic": "Average", "label": "bigjimmy"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkRxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "D",
+          "region": "us-east-1", "statistic": "Average", "label": "memcache"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": { "mode": "none" },
+            "gradientMode": "scheme"
+          },
+          "unit": "decbytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 12,
+      "title": "Network Transmit",
+      "description": "Bytes transmitted per service",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+      "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+      "targets": [
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkTxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "A",
+          "region": "us-east-1", "statistic": "Average", "label": "puzzleboss"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkTxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "B",
+          "region": "us-east-1", "statistic": "Average", "label": "mediawiki"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkTxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "C",
+          "region": "us-east-1", "statistic": "Average", "label": "bigjimmy"
+        },
+        {
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["memcache"] },
+          "matchExact": true, "metricEditorMode": 0,
+          "metricName": "NetworkTxBytes",
+          "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+          "period": "60", "queryMode": "Metrics", "refId": "D",
+          "region": "us-east-1", "statistic": "Average", "label": "memcache"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "",
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": { "mode": "none" },
+            "gradientMode": "scheme"
+          },
+          "unit": "decbytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+
+    {
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 41 },
+      "id": 105,
+      "title": "Storage I/O",
+      "type": "row",
+      "panels": [
+        {
+          "id": 13,
+          "title": "Ephemeral Storage Utilized",
+          "description": "Ephemeral storage consumed per service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 42 },
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "targets": [
+            {
+              "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+              "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+              "matchExact": true, "metricEditorMode": 0,
+              "metricName": "EphemeralStorageUtilized",
+              "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+              "period": "300", "queryMode": "Metrics", "refId": "A",
+              "region": "us-east-1", "statistic": "Average", "label": "puzzleboss"
+            },
+            {
+              "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+              "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+              "matchExact": true, "metricEditorMode": 0,
+              "metricName": "EphemeralStorageUtilized",
+              "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+              "period": "300", "queryMode": "Metrics", "refId": "B",
+              "region": "us-east-1", "statistic": "Average", "label": "mediawiki"
+            },
+            {
+              "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+              "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["bigjimmy"] },
+              "matchExact": true, "metricEditorMode": 0,
+              "metricName": "EphemeralStorageUtilized",
+              "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+              "period": "300", "queryMode": "Metrics", "refId": "C",
+              "region": "us-east-1", "statistic": "Average", "label": "bigjimmy"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1, "spanNulls": true },
+              "unit": "decgbytes",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        },
+        {
+          "id": 14,
+          "title": "Storage Read / Write Bytes",
+          "description": "Block storage I/O per service",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 42 },
+          "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+          "targets": [
+            {
+              "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+              "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+              "matchExact": true, "metricEditorMode": 0,
+              "metricName": "StorageReadBytes",
+              "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+              "period": "300", "queryMode": "Metrics", "refId": "A",
+              "region": "us-east-1", "statistic": "Average", "label": "puzzleboss read"
+            },
+            {
+              "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+              "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["puzzleboss"] },
+              "matchExact": true, "metricEditorMode": 0,
+              "metricName": "StorageWriteBytes",
+              "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+              "period": "300", "queryMode": "Metrics", "refId": "B",
+              "region": "us-east-1", "statistic": "Average", "label": "puzzleboss write"
+            },
+            {
+              "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+              "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+              "matchExact": true, "metricEditorMode": 0,
+              "metricName": "StorageReadBytes",
+              "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+              "period": "300", "queryMode": "Metrics", "refId": "C",
+              "region": "us-east-1", "statistic": "Average", "label": "mediawiki read"
+            },
+            {
+              "datasource": { "type": "cloudwatch", "uid": "${DS_CLOUDWATCH}" },
+              "dimensions": { "ClusterName": ["puzzleboss"], "ServiceName": ["mediawiki"] },
+              "matchExact": true, "metricEditorMode": 0,
+              "metricName": "StorageWriteBytes",
+              "metricQueryType": 0, "namespace": "ECS/ContainerInsights",
+              "period": "300", "queryMode": "Metrics", "refId": "D",
+              "region": "us-east-1", "statistic": "Average", "label": "mediawiki write"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "spanNulls": true },
+              "unit": "decbytes",
+              "min": 0
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi", "sort": "desc" }
+          }
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["ecs", "aws", "infrastructure"],
+  "templating": { "list": [] },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {
+    "refresh_intervals": ["10s", "30s", "1m", "5m", "15m"]
+  },
+  "timezone": "browser",
+  "title": "ECS Fleet Overview",
+  "uid": "",
+  "version": 1
+}
