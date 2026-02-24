@@ -373,13 +373,17 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
     threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
 
     # Get revisions from Drive API (with retry on rate limit)
+    # Only fetch the fields the caller actually uses (emailAddress, me, modifiedTime).
+    # fields="*" previously fetched ~20 fields per revision including exportLinks,
+    # md5Checksum, size, etc. — wasting ~400-800 bytes/revision × hundreds of revisions.
+    revisions_fields = "revisions(lastModifyingUser(emailAddress,me),modifiedTime)"
     revisions_success = False
     for attempt in range(max_retries):
         try:
             _rate_limiter.acquire()
             retval = (
                 service.revisions()
-                .list(fileId=myfileid, fields="*")
+                .list(fileId=myfileid, fields=revisions_fields)
                 .execute(http=threadsafe_http)
             )
             if isinstance(retval, str):

@@ -13,6 +13,8 @@ import time
 import datetime
 import threading
 import queue
+import gc
+import resource
 from typing import Optional, Dict, Any, List
 
 # Explicit imports instead of wildcard
@@ -880,6 +882,13 @@ def main():
         # Reset for next iteration
         EXIT_FLAG = 0
         THREADS = []
+
+        # Force garbage collection and log memory usage for leak detection
+        gc.collect()
+        rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # macOS reports bytes, Linux reports KB
+        rss_mb = rss_kb / 1024 if sys.platform == "linux" else rss_kb / (1024 * 1024)
+        debug_log(3, f"Memory: RSS={rss_mb:.1f} MB after gc.collect() (iteration {LOOP_ITERATIONS_TOTAL})")
 
 
 if __name__ == "__main__":
