@@ -791,6 +791,12 @@ def main():
         if configstruct.get("SKIP_GOOGLE_API", "false") == "true":
             debug_log(3, "SKIP_GOOGLE_API is true, sleeping 5 seconds")
             time.sleep(5)
+            # Write health check timestamp — bot is alive, just idle
+            try:
+                with open("/tmp/bigjimmy-health", "w") as f:
+                    f.write(str(int(time.time())))
+            except Exception:
+                pass
             continue
 
         # Start timing setup phase
@@ -863,6 +869,13 @@ def main():
 
         # Post timing stats to database for Prometheus metrics
         _post_botstats_metrics(loop_elapsed, setup_elapsed, processing_elapsed, len(puzzles))
+
+        # Write health check timestamp (used by ECS container health check)
+        try:
+            with open("/tmp/bigjimmy-health", "w") as f:
+                f.write(str(int(time.time())))
+        except Exception:
+            pass  # Non-fatal — don't crash the bot over a health file
 
         # Reset for next iteration
         EXIT_FLAG = 0
