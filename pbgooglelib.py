@@ -243,8 +243,6 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
 
     for attempt in range(max_retries):
         try:
-            sheetsservice = build("sheets", "v4", credentials=creds)
-
             _rate_limiter.acquire()
             response = (
                 sheetsservice.spreadsheets()
@@ -430,7 +428,6 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
     sheetcount_success = False
     for attempt in range(max_retries):
         try:
-            sheetsservice = build("sheets", "v4", credentials=creds)
             _rate_limiter.acquire()
             spreadsheet = (
                 sheetsservice.spreadsheets()
@@ -496,9 +493,8 @@ def repair_activity_sheet(sheet_id: str, puzzlename: Optional[str] = None) -> bo
     activity_tab_id = None
     for attempt in range(max_retries):
         try:
-            sheets_service = build("sheets", "v4", credentials=creds)
             _rate_limiter.acquire()
-            spreadsheet = sheets_service.spreadsheets().get(
+            spreadsheet = sheetsservice.spreadsheets().get(
                 spreadsheetId=sheet_id,
                 fields="sheets.properties",
             ).execute(http=threadsafe_http)
@@ -526,7 +522,7 @@ def repair_activity_sheet(sheet_id: str, puzzlename: Optional[str] = None) -> bo
         for attempt in range(max_retries):
             try:
                 _rate_limiter.acquire()
-                sheets_service.spreadsheets().batchUpdate(
+                sheetsservice.spreadsheets().batchUpdate(
                     spreadsheetId=sheet_id,
                     body={"requests": [{
                         "deleteSheet": {"sheetId": activity_tab_id}
@@ -551,7 +547,7 @@ def repair_activity_sheet(sheet_id: str, puzzlename: Optional[str] = None) -> bo
     # ── Step 3: Recreate the tab (hidden + protected + headers) ───
     try:
         _rate_limiter.acquire()
-        add_result = sheets_service.spreadsheets().batchUpdate(
+        add_result = sheetsservice.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{
                 "addSheet": {
@@ -567,7 +563,7 @@ def repair_activity_sheet(sheet_id: str, puzzlename: Optional[str] = None) -> bo
 
         # Write headers
         _rate_limiter.acquire()
-        sheets_service.spreadsheets().values().update(
+        sheetsservice.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=f"{_ACTIVITY_SHEET_NAME}!A1:C1",
             valueInputOption="RAW",
@@ -576,7 +572,7 @@ def repair_activity_sheet(sheet_id: str, puzzlename: Optional[str] = None) -> bo
 
         # Add warning-only protection
         _rate_limiter.acquire()
-        sheets_service.spreadsheets().batchUpdate(
+        sheetsservice.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{
                 "addProtectedRange": {
