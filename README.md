@@ -17,7 +17,16 @@ Then visit http://localhost?assumedid=testuser
 
 See `docker/README.md` for details, or continue reading for production setup.
 
-## Production Setup
+## Production (ECS Fargate)
+
+The production deployment runs on AWS ECS Fargate with Terraform-managed infrastructure. For deployment procedures, scaling, secrets management, monitoring, and troubleshooting, see:
+
+- **[OPERATIONS.md](OPERATIONS.md)** — Day-to-day operations guide (deploying code, secrets, logs, troubleshooting)
+- **[terraform/INFRASTRUCTURE_PLAN.md](terraform/INFRASTRUCTURE_PLAN.md)** — Infrastructure design rationale and Terraform structure
+
+Quick deploy: `./deploy-ecs.sh` (or `./deploy-ecs.sh --service puzzleboss` for a single service).
+
+## Legacy Production Setup (Native/EC2)
 
 - git clone onto server
 - Server-side prerequisites:
