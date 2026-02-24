@@ -145,15 +145,19 @@ fi
 
 # ── Force new deployment ────────────────────────────────────
 # Maps ECS service names to their Terraform task definition family names.
-declare -A TASK_DEF_FAMILY=(
-    [puzzleboss]="puzzleboss-web"
-    [bigjimmy]="puzzleboss-bigjimmy"
-    [mediawiki]="puzzleboss-mediawiki"
-)
+task_def_family() {
+    case "$1" in
+        puzzleboss) echo "puzzleboss-web" ;;
+        bigjimmy)   echo "puzzleboss-bigjimmy" ;;
+        mediawiki)  echo "puzzleboss-mediawiki" ;;
+        *)          echo "" ;;
+    esac
+}
 
 force_deploy() {
     local svc_name=$1
-    local family="${TASK_DEF_FAMILY[$svc_name]}"
+    local family
+    family=$(task_def_family "$svc_name")
 
     # Always deploy the latest task definition revision so Terraform
     # changes (health checks, env vars, etc.) are picked up automatically.
