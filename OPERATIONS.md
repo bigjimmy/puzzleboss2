@@ -18,9 +18,9 @@ Route 53 (importanthuntpoll.org) → ALB (ACM cert, HTTPS)
    ECS: puzzleboss            ECS: mediawiki            EC2: observability
    (1 vCPU / 3 GB)           (0.5 vCPU / 1 GB)         (t4g.small)
    Apache+PHP+Gunicorn        Apache+PHP+MediaWiki 1.43  Prometheus+Loki+Grafana
-         │                           │                    Apache (legacy content)
-         │         ┌─────────────────┤
-         ▼         ▼                 ▼
+                                                         Apache (legacy content)
+   ---------------------- Backends ----------------------------
+                                     
    ECS: memcache        ECS: bigjimmy         AWS RDS MySQL
    (0.25 vCPU/512MB)   (0.25 vCPU/512MB)     (db.t4g.small)
    OIDC sessions +      Sheet activity
