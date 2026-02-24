@@ -31,6 +31,30 @@ data "aws_ami" "ubuntu_arm" {
   }
 }
 
+# Cloud-init config — gzip-compressed to stay well under the 16 KB user_data limit.
+# The init script embeds the ECS events daemon (terraform/files/ecs-events-to-loki.py)
+# via template variable, so the full payload is ~18 KB raw but ~9 KB after gzip.
+data "cloudinit_config" "observability" {
+  gzip          = true
+  base64_encode = true
+
+  part {
+    content_type = "text/x-shellscript"
+    content = templatefile("${path.module}/templates/observability-init.sh", {
+      loki_s3_bucket     = aws_s3_bucket.loki_storage.id
+      aws_region         = var.aws_region
+      project_name       = var.project_name
+      ecs_cluster        = aws_ecs_cluster.main.name
+      rds_endpoint       = aws_db_instance.main.endpoint
+      rds_username       = var.rds_username
+      rds_password       = var.rds_password
+      legacy_web_bucket  = aws_s3_bucket.legacy_web.id
+      ecs_events_sqs_url = aws_sqs_queue.ecs_events.url
+      ecs_events_script  = file("${path.module}/files/ecs-events-to-loki.py")
+    })
+  }
+}
+
 resource "aws_instance" "observability" {
   ami                    = data.aws_ami.ubuntu_arm.id
   instance_type          = var.observability_instance_type
@@ -46,17 +70,7 @@ resource "aws_instance" "observability" {
     delete_on_termination = false # preserve monitoring data
   }
 
-  user_data = base64encode(templatefile("${path.module}/templates/observability-init.sh", {
-    loki_s3_bucket     = aws_s3_bucket.loki_storage.id
-    aws_region         = var.aws_region
-    project_name       = var.project_name
-    ecs_cluster        = aws_ecs_cluster.main.name
-    rds_endpoint       = aws_db_instance.main.endpoint
-    rds_username       = var.rds_username
-    rds_password       = var.rds_password
-    legacy_web_bucket  = aws_s3_bucket.legacy_web.id
-    ecs_events_sqs_url = aws_sqs_queue.ecs_events.url
-  }))
+  user_data = data.cloudinit_config.observability.rendered
 
   tags = {
     Name = "${var.project_name}-observability"
