@@ -15,65 +15,56 @@ docker-compose up --build
 
 Then visit http://localhost?assumedid=testuser
 
-See `docker/README.md` for details, or continue reading for production setup.
+See `docker/README.md` for details.
 
-## Production (ECS Fargate)
+## Production Deployment
 
-The production deployment runs on AWS ECS Fargate with Terraform-managed infrastructure.
+This repo contains only application code. It is infrastructure-agnostic — you can deploy Puzzleboss to any environment that provides Apache+PHP, Python/Gunicorn, and a MySQL database.
 
-- **Infrastructure (Terraform, dashboards, ops guide):** [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra) repo
-- **Quick deploy:** `./deploy-ecs.sh` (or `./deploy-ecs.sh --service puzzleboss` for a single service)
+### What you need
 
-The `deploy-ecs.sh` script builds Docker images from this repo and pushes them to ECR. It does not require Terraform to be co-located — it auto-detects ECR URLs from AWS.
+- **Apache** with PHP, `mod_auth_openidc` (or another auth mechanism that sets `REMOTE_USER`)
+- **Python >= 3.8** with dependencies from `requirements.txt`
+- **MySQL 8.x** with the schema from `scripts/puzzleboss.sql`
+- **Configuration**: copy `puzzleboss-SAMPLE.yaml` → `puzzleboss.yaml` and edit for your environment
 
-## Legacy Production Setup (Native/EC2)
+### Key files for production
 
-- git clone onto server
-- Server-side prerequisites:
-    - php
-    - python >= 3.8
-    - Apache (see below for config)
-    - MySQL (see below for schema load and config instructions)
+| File | Purpose |
+|------|---------|
+| `Dockerfile.prod` | Multi-stage production image (Apache + Gunicorn in one container) |
+| `wsgi.py` + `gunicorn_config.py` | Gunicorn entrypoint and config |
+| `docker/prod/` | Production Apache config, supervisord config, entrypoint script |
+| `deploy-ecs.sh` | Example deploy script for AWS ECS Fargate (builds, pushes to ECR, restarts services) |
+| `deploy-legacy.sh` | Example deploy script for a single EC2/VM (git pull + systemd restart) |
+| `scripts/puzzleboss.sql` | Database schema |
+| `puzzleboss-SAMPLE.yaml` | Configuration template |
 
-- Copy puzzleboss-SAMPLE.yaml to puzzleboss.yaml and edit for production:
-    - Change MYSQL HOST from "mysql" to "127.0.0.1" (for native install)
-    - Update MYSQL PASSWORD to a secure password
-    - Update API endpoint if not using localhost:5000
+### Example: AWS ECS Fargate
 
-- Apache config:
-    - www subdir should be a web docroot or alias
-    - www subdir should have PHP execution enabled
-    - puzzleboss root dir should NOT be accessible via apache
-    - User authentication should be configured in apache (we just need the REMOTE_USER header to be set)
-    - Optionally proxy into swagger apidocs
+The ATTORNEY team runs Puzzleboss on ECS Fargate. The infrastructure (Terraform, dashboards, operations runbook) is in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
 
-- MySQL database:
-    - Create database for puzzleboss to use (enter name in MYSQL.DATABASE in puzzleboss.yaml)
-    - Create user with password for puzzleboss to use, and grant all permissions on above database
-    - Import puzzleboss.sql (in scripts subdir) using mysql with the username and database created in above two steps (e.g. `mysql -u puzzleboss puzzleboss < puzzleboss.sql`)
-    - IMPORTANT: above step will destroy previous database. If you'd like to preserve solvers table, use the reset-hunt script.
+`deploy-ecs.sh` is the deploy script for that setup — it builds Docker images and pushes them to ECR. It auto-detects AWS account details and does not require Terraform to be co-located.
 
-- Google Service Account Setup (optional):
-    - Create a service account with Domain-Wide Delegation in Google Cloud Console
-    - Download the JSON key file and place it in the app directory as `service-account.json`
-    - Authorize the service account's client ID in Google Workspace Admin Console (Security → API controls → Domain-wide delegation) with Drive, Sheets, and Admin SDK scopes
-    - Set `SERVICE_ACCOUNT_FILE` and `SERVICE_ACCOUNT_SUBJECT` in the config table
-    - Set `HUNT_FOLDER_NAME` in the config table to the Google Drive folder name for puzzle sheets
-    - Google integration can be disabled via `SKIP_GOOGLE_API` = `true` in the config table
+### Example: Standalone Server
 
-- Running the REST API Service:
-    - Start up pbrest.py: Will run on localhost:5000.
-    - For actual multi-client use, install gunicorn and use the wsgi.py app object provided. Is safe to run on multiple servers at once for scale.
+For a simpler deployment on a single server (EC2, VM, bare metal):
 
-- Initial Configuration:
-    - Make sure one solver is provisioned via normal account setup procedure and granted "puzztech" privileges via the admin UI or the privs table.
-    - Use /pb/config.php to configure settings via the admin UI.
-    - Alternatively use phpmyadmin or mysql access directly to update config values in the `config` table in the database.
-    - Restart puzzleboss to make new config take effect.
+1. Clone this repo onto the server
+2. Install prerequisites: Apache (with PHP), Python >= 3.8, MySQL
+3. `pip install -r requirements.txt`
+4. `mysql -u puzzleboss puzzleboss < scripts/puzzleboss.sql`
+5. Copy `puzzleboss-SAMPLE.yaml` → `puzzleboss.yaml`, configure MySQL connection
+6. Run the API: `gunicorn -c gunicorn_config.py wsgi:app` (or `python pbrest.py` for dev)
+7. Configure Apache: serve `www/` as docroot, set up user auth (`REMOTE_USER`), proxy `/api` to Gunicorn on port 5000
 
-- Swagger API Doc:
-    - Is accessible at localhost:5000/apidocs (or appropriate proxied URL if behind a proxy) by running pbrest.py.
-    - NOTE: if behind a proxy (e.g. in production), "try it out" functionality of swagger will not work
+`deploy-legacy.sh` automates step 1 (pulls latest code from GitHub and restarts services via systemd).
+
+### Optional integrations
+
+- **Google Sheets**: set up a service account with Domain-Wide Delegation, place `service-account.json` in the app directory, configure via the `config` table. Disable with `SKIP_GOOGLE_API=true`.
+- **Discord**: configure puzzcord connection in the `config` table. Disable with `SKIP_PUZZCORD=true`.
+- **Swagger API docs**: accessible at `localhost:5000/apidocs` when the API is running.
 
 ## Development/Testing Notes
 - For testing as a different user, set `ALLOW_USERNAME_OVERRIDE` to `true` in the config table, then use `?assumedid=username` in the URL. The Docker setup enables this automatically.
