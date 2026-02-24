@@ -10,6 +10,7 @@ set -euo pipefail
 #   ./deploy-ecs.sh --service puzzleboss  # Deploy only puzzleboss web tier
 #   ./deploy-ecs.sh --service bigjimmy    # Deploy only bigjimmy bot
 #   ./deploy-ecs.sh --service mediawiki   # Deploy only mediawiki
+#   ./deploy-ecs.sh --wait                # Build, deploy, and wait for stable
 #   ./deploy-ecs.sh --build-only          # Build and push images, don't restart
 #   ./deploy-ecs.sh --tag v1.2.3          # Tag the image (default: git SHA)
 #
@@ -44,6 +45,7 @@ SERVICE=""
 BUILD_ONLY=false
 IMAGE_TAG=""
 SKIP_BUILD=false
+WAIT=false
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -56,6 +58,7 @@ while [ $# -gt 0 ]; do
             ;;
         --build-only) BUILD_ONLY=true ;;
         --skip-build) SKIP_BUILD=true ;;
+        --wait) WAIT=true ;;
         --tag) shift; IMAGE_TAG="${1:-}" ;;
         -h|--help)
             sed -n '/^# Usage:/,/^# ====/p' "$0" | sed 's/^# \?//'; exit 0
@@ -153,31 +156,162 @@ force_deploy() {
     ok "Deployment triggered for ${svc_name}"
 }
 
+DEPLOYED_SERVICES=()
+
 case "$SERVICE" in
     puzzleboss)
         force_deploy "puzzleboss"
+        DEPLOYED_SERVICES+=("puzzleboss")
         ;;
     bigjimmy)
         force_deploy "bigjimmy"
+        DEPLOYED_SERVICES+=("bigjimmy")
         ;;
     mediawiki)
         force_deploy "mediawiki"
+        DEPLOYED_SERVICES+=("mediawiki")
         ;;
     "")
         # Deploy all services that use the puzzleboss image
         force_deploy "puzzleboss"
+        DEPLOYED_SERVICES+=("puzzleboss")
         force_deploy "bigjimmy"
+        DEPLOYED_SERVICES+=("bigjimmy")
         # Only deploy mediawiki if we built its image
         if [ -f "${SCRIPT_DIR}/Dockerfile.mediawiki" ]; then
             force_deploy "mediawiki"
+            DEPLOYED_SERVICES+=("mediawiki")
         fi
         ;;
 esac
 
-# ── Wait for deployment ─────────────────────────────────────
-echo ""
-info "Deployments triggered. Monitor progress:"
-info "  aws ecs describe-services --cluster ${CLUSTER_NAME} --services puzzleboss --query 'services[0].deployments'"
-info "  aws ecs wait services-stable --cluster ${CLUSTER_NAME} --services puzzleboss"
-echo ""
-ok "Deploy complete! Image tag: ${IMAGE_TAG}"
+# ── Wait for stable (optional) ───────────────────────────────
+wait_for_stable() {
+    local services=("$@")
+    local max_polls=40
+    local poll_interval=15
+    local poll=0
+
+    echo ""
+    info "Waiting for services to stabilize (polling every ${poll_interval}s, timeout ${max_polls} polls)..."
+    echo ""
+
+    while [ $poll -lt $max_polls ]; do
+        sleep $poll_interval
+        poll=$((poll + 1))
+        local elapsed=$((poll * poll_interval))
+
+        local all_stable=true
+        local any_failed=false
+        local status_line=""
+
+        for svc in "${services[@]}"; do
+            # Get deployment count, running/desired, and primary rollout state
+            local dep_count running desired rollout_state svc_status
+
+            dep_count=$(aws ecs describe-services \
+                --cluster "${CLUSTER_NAME}" --services "${svc}" \
+                --region "${AWS_REGION}" --output text \
+                --query 'services[0].deployments | length(@)' 2>/dev/null || echo "0")
+
+            running=$(aws ecs describe-services \
+                --cluster "${CLUSTER_NAME}" --services "${svc}" \
+                --region "${AWS_REGION}" --output text \
+                --query 'services[0].runningCount' 2>/dev/null || echo "?")
+
+            desired=$(aws ecs describe-services \
+                --cluster "${CLUSTER_NAME}" --services "${svc}" \
+                --region "${AWS_REGION}" --output text \
+                --query 'services[0].desiredCount' 2>/dev/null || echo "?")
+
+            rollout_state=$(aws ecs describe-services \
+                --cluster "${CLUSTER_NAME}" --services "${svc}" \
+                --region "${AWS_REGION}" --output text \
+                --query 'services[0].deployments[?status==`PRIMARY`].rolloutState | [0]' 2>/dev/null || echo "UNKNOWN")
+
+            if [ "$rollout_state" = "FAILED" ]; then
+                svc_status="${RED}FAILED${RESET}"
+                any_failed=true
+            elif [ "$dep_count" -gt 1 ] 2>/dev/null; then
+                svc_status="${YELLOW}rolling${RESET} (${running}/${desired})"
+                all_stable=false
+            elif [ "$rollout_state" = "COMPLETED" ] && [ "$running" = "$desired" ]; then
+                # Check container health for services with health checks (bigjimmy)
+                if [ "$svc" = "bigjimmy" ]; then
+                    local task_arn health_status
+                    task_arn=$(aws ecs list-tasks \
+                        --cluster "${CLUSTER_NAME}" --service-name "${svc}" \
+                        --region "${AWS_REGION}" --output text \
+                        --query 'taskArns[0]' 2>/dev/null || echo "")
+                    if [ -n "$task_arn" ] && [ "$task_arn" != "None" ]; then
+                        health_status=$(aws ecs describe-tasks \
+                            --cluster "${CLUSTER_NAME}" --tasks "${task_arn}" \
+                            --region "${AWS_REGION}" --output text \
+                            --query 'tasks[0].healthStatus' 2>/dev/null || echo "UNKNOWN")
+                    else
+                        health_status="UNKNOWN"
+                    fi
+
+                    if [ "$health_status" = "HEALTHY" ]; then
+                        svc_status="${GREEN}healthy${RESET} (${running}/${desired})"
+                    elif [ "$health_status" = "UNHEALTHY" ]; then
+                        svc_status="${RED}unhealthy${RESET} (${running}/${desired})"
+                        all_stable=false
+                    else
+                        svc_status="${YELLOW}starting${RESET} (${running}/${desired}, health: ${health_status})"
+                        all_stable=false
+                    fi
+                else
+                    svc_status="${GREEN}stable${RESET} (${running}/${desired})"
+                fi
+            else
+                svc_status="${YELLOW}deploying${RESET} (${running}/${desired})"
+                all_stable=false
+            fi
+
+            if [ -n "$status_line" ]; then
+                status_line="${status_line}  "
+            fi
+            status_line="${status_line}${BOLD}${svc}${RESET}: ${svc_status}"
+        done
+
+        # Print status line
+        if [ -t 1 ]; then
+            printf "\r\033[K[%3ds] %b" "$elapsed" "$status_line"
+        else
+            printf "[%3ds] %s\n" "$elapsed" "$status_line"
+        fi
+
+        if $any_failed; then
+            echo ""
+            error "Deployment failed! Check ECS console for details."
+            return 1
+        fi
+        if $all_stable; then
+            echo ""
+            ok "All services stable and healthy!"
+            return 0
+        fi
+    done
+
+    echo ""
+    error "Timeout after $((max_polls * poll_interval))s — services not yet stable"
+    warn "Services may still be converging. Check manually:"
+    warn "  aws ecs describe-services --cluster ${CLUSTER_NAME} --services ${services[*]} --query 'services[].{name:serviceName,deployments:deployments}'"
+    return 2
+}
+
+if [ "$WAIT" = true ]; then
+    wait_for_stable "${DEPLOYED_SERVICES[@]}"
+    exit_code=$?
+    echo ""
+    ok "Deploy finished. Image tag: ${IMAGE_TAG}"
+    exit $exit_code
+else
+    echo ""
+    info "Deployments triggered. Monitor progress:"
+    info "  aws ecs describe-services --cluster ${CLUSTER_NAME} --services ${DEPLOYED_SERVICES[*]} --query 'services[].{name:serviceName,deployments:deployments}'"
+    info "  Or re-run with --wait to watch automatically."
+    echo ""
+    ok "Deploy complete! Image tag: ${IMAGE_TAG}"
+fi
