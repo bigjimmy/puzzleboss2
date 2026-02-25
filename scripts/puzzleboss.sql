@@ -181,6 +181,8 @@ INSERT INTO `config` VALUES
   ('bookmarklet_js', 'javascript:puzzurl=location.href.split(''#'')[0];puzzid=(document.querySelector(''header h1 span'')?.innerText || document.title.replace(/ - Google Docs$/, ''''));roundname=Object.values(window.initialTeamState.rounds).find(r => Object.values(r.slots).some(p => p.slug===window.puzzleSlug))?.title?.replace(/[^A-Za-z0-9]+/g, '''');pbPath=`addpuzzle.php?puzzurl=${encodeURIComponent(puzzurl)}&puzzid=${encodeURIComponent(puzzid)}&roundname=${encodeURIComponent(roundname)}`;window.open(''<<>>''+pbPath);'),
   ('DISCORD_EMAIL_WEBHOOK', ''),
   ('DOMAINNAME', 'example.org'),
+  ('GOOGLE_APPS_SCRIPT_CODE', ''),
+  ('GOOGLE_APPS_SCRIPT_MANIFEST', ''),
   ('GEMINI_API_KEY', ''),
   ('GEMINI_MODEL', 'gemini-3-flash-preview'),
   ('GEMINI_SYSTEM_INSTRUCTION', 'You are a helpful assistant for a puzzle hunt team. You have access to tools to query hunt status, puzzle information, and solver activity. RULES: 1. Always use your tools proactively - never say you cannot answer without trying first. 2. Use get_all_data as a fallback when unsure which tool has the data. 3. Never ask for permission to use tools - just use them. 4. Give complete answers - if you mention something exists, identify it by name. 5. When recommending puzzles, always provide the actual puzzle name(s). When answering: Be concise and direct. Format lists clearly. The hunt has rounds containing puzzles. Statuses: New, Being worked, Needs eyes, Solved, Critical, WTF, Unnecessary, Under control, Waiting for HQ, Grind, Abandoned. Puzzles can have tags like conundrum, logic, wordplay.'),
