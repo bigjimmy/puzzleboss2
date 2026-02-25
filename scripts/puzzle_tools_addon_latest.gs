@@ -23,10 +23,9 @@ function onInstall(e) {
 
 function onOpen(e) {
   if (e?.authMode == 'NONE') {
-    let menu = SpreadsheetApp.getUi().createMenu('❗️ Puzzle Tools (click me!)')
-      .addItem('Enable for this spreadsheet', 'populateMenus');
-    menu = _maybeAddDebug(menu);
-    menu.addToUi();
+    SpreadsheetApp.getUi().createMenu('❗️ Puzzle Tools (click me!)')
+      .addItem('Enable for this spreadsheet', 'populateMenus')
+      .addToUi();
   } else {
     populateMenus();
   }
