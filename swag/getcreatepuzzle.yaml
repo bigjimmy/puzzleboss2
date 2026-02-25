@@ -11,10 +11,11 @@ description: |
   - step=1: Validate puzzle data and retrieve round information
   - step=2: Create Discord channel (skipped if SKIP_PUZZCORD enabled)
   - step=3: Create Google Sheet (skipped if SKIP_GOOGLE_API enabled)
-  - step=4: Insert puzzle into database and add activity entry
-  - step=5: Finalize - set speculative status if needed, announce puzzle, cleanup temp storage
+  - step=4: Enable sheet tracking via Apps Script (skipped if SKIP_GOOGLE_API enabled)
+  - step=5: Insert puzzle into database and add activity entry (sets sheetenabled=1 if step 4 succeeded)
+  - step=6: Finalize - set speculative status if needed, announce puzzle, cleanup temp storage
 
-  After step 5, the temp_puzzle_creation entry is deleted.
+  After step 6, the temp_puzzle_creation entry is deleted.
 parameters:
   - name: code
     in: path
@@ -26,8 +27,8 @@ parameters:
     in: query
     type: integer
     required: true
-    description: Step number (1-5) to execute
-    enum: [1, 2, 3, 4, 5]
+    description: Step number (1-6) to execute
+    enum: [1, 2, 3, 4, 5, 6]
     example: 1
 responses:
   200:
@@ -70,13 +71,17 @@ responses:
           type: string
           description: Google Sheets URL (step 3 only)
           example: "https://docs.google.com/spreadsheets/d/abc123xyz456/edit#gid=1"
+        addon_activated:
+          type: boolean
+          description: Whether Apps Script activation succeeded (step 4 only)
+          example: true
         puzzle_id:
           type: string
-          description: Database ID of created puzzle (steps 4-5 only)
+          description: Database ID of created puzzle (steps 5-6 only)
           example: "42"
         is_speculative:
           type: boolean
-          description: Whether puzzle was marked as speculative (step 5 only)
+          description: Whether puzzle was marked as speculative (step 6 only)
           example: false
   400:
     description: Invalid request (bad step number, etc.)
@@ -85,7 +90,7 @@ responses:
       properties:
         error:
           type: string
-          example: "Invalid step: 6. Must be 1-5"
+          example: "Invalid step: 7. Must be 1-6"
   404:
     description: Code not found or expired
     schema:

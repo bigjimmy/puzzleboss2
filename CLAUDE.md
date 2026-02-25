@@ -374,6 +374,36 @@ All database IDs (puzzle.id, solver.id, round.id, activity.id) are `INT(11)` in 
 - `/v1/query` - LLM natural language queries (requires google-genai)
 - `/metrics` - Prometheus metrics (requires prometheus_flask_exporter)
 
+## Observability Server
+
+The observability stack (Grafana, Loki, Prometheus) runs on a dedicated EC2 instance.
+
+**SSH Access:**
+```bash
+ssh -i ~/.ssh/mysteryhunt.pem -p 3748 ubuntu@100.50.206.174
+```
+- Instance: `i-0b0aa43cb06d067fc` (`puzzleboss-observability`)
+- Region: us-east-1
+
+**Services (accessible from the instance via localhost):**
+- Loki: `http://localhost:3100` — log aggregation, receives logs from ECS via FireLens/Fluent Bit
+- Grafana: dashboards and alerting
+- Prometheus: metrics scraping
+
+**Querying Loki logs from the obs server:**
+```bash
+# Example: bigjimmy logs from the last hour
+curl -sG 'http://localhost:3100/loki/api/v1/query_range' \
+  --data-urlencode 'query={service="bigjimmy"}' \
+  --data-urlencode 'start=<RFC3339 timestamp>' \
+  --data-urlencode 'end=<RFC3339 timestamp>' \
+  --data-urlencode 'limit=200'
+```
+
+**ECS log routing:**
+- BigJimmy container uses `awsfirelens` log driver → ships to Loki with labels `job=ecs, service=bigjimmy`
+- FireLens sidecar (`log_router`) logs go to CloudWatch `/ecs/puzzleboss`
+
 ## Security Notes
 
 - Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf`

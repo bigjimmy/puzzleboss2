@@ -23,6 +23,32 @@ sheetsservice = None
 creds = None
 admincreds = None
 
+# Thread-local storage for reusable AuthorizedHttp clients.
+# Each bigjimmy worker thread gets ONE http client that's reused across
+# all Google API calls in that thread, instead of creating a new one per call.
+_thread_local = threading.local()
+
+
+def _get_thread_http():
+    """Return a reusable AuthorizedHttp for the current thread.
+
+    Creates one on first call per thread; reuses it thereafter.
+    This avoids the memory leak of creating a new httplib2.Http() +
+    AuthorizedHttp wrapper on every API call (60-80 per iteration).
+    """
+    http = getattr(_thread_local, "authorized_http", None)
+    if http is None and creds is not None:
+        http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+        _thread_local.authorized_http = http
+    return http
+
+
+# Cached Apps Script API service client (created on first use).
+# build() downloads and parses the discovery document (~50-100 KB),
+# so we only want to do it once.
+_script_service = None
+_script_service_lock = threading.Lock()
+
 # Thread-safe counter for quota failures (read by bigjimmybot for metrics)
 quota_failure_count = 0
 quota_failure_lock = threading.Lock()
@@ -129,6 +155,10 @@ def initadmin():
     global admincreds
     global ADMINSCOPES
 
+    if admincreds is not None:
+        debug_log(5, "Admin credentials already initialized, skipping")
+        return
+
     sa_file = _get_service_account_file()
     subject = _get_impersonation_subject()
 
@@ -140,7 +170,12 @@ def initadmin():
 
 
 def initdrive():
-    """Initialize Drive and Sheets services; create hunt folder if needed. Returns 0."""
+    """Initialize Drive and Sheets services; create hunt folder if needed. Returns 0.
+
+    Safe to call multiple times — skips if already initialized.
+    Previously re-created credentials and service clients on every call,
+    leaking ~100 KB of parsed discovery documents each time.
+    """
     debug_log(4, "start")
 
     if configstruct["SKIP_GOOGLE_API"] == "true":
@@ -151,6 +186,12 @@ def initdrive():
     global sheetsservice
     global creds
     global SCOPES
+
+    # Skip if already initialized — avoids recreating credentials and
+    # build() service clients on every Google API operation.
+    if service is not None and sheetsservice is not None and creds is not None:
+        debug_log(5, "Drive/Sheets services already initialized, skipping")
+        return 0
 
     sa_file = _get_service_account_file()
     subject = _get_impersonation_subject()
@@ -239,7 +280,7 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
         debug_log(3, "google API skipped by config.")
         return result
 
-    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    threadsafe_http = _get_thread_http()
 
     for attempt in range(max_retries):
         try:
@@ -369,8 +410,7 @@ def get_puzzle_sheet_info_legacy(myfileid, puzzlename=None):
         debug_log(3, "google API skipped by config.")
         return result
 
-    # Create single threadsafe HTTP object for both API calls
-    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    threadsafe_http = _get_thread_http()
 
     # Get revisions from Drive API (with retry on rate limit)
     # Only fetch the fields the caller actually uses (emailAddress, me, modifiedTime).
@@ -491,7 +531,7 @@ def repair_activity_sheet(sheet_id: str, puzzlename: Optional[str] = None) -> bo
     max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
-    threadsafe_http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+    threadsafe_http = _get_thread_http()
 
     # ── Step 1: Find the _pb_activity tab's sheetId ───────────────
     activity_tab_id = None
@@ -1143,33 +1183,37 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
             debug_log(1, f"[{puzz_label}] GOOGLE_APPS_SCRIPT_MANIFEST is invalid JSON ({e}), using default")
             addon_manifest = _APPS_SCRIPT_MANIFEST
 
-    # Need script.projects scope — create new credentials with it
-    sa_file = _get_service_account_file()
-    subject = _get_impersonation_subject()
-    if not sa_file or not subject:
-        debug_log(1, f"[{puzz_label}] Cannot activate via API — service account not configured")
-        return False
-
-    try:
-        api_creds = service_account.Credentials.from_service_account_file(
-            sa_file,
-            scopes=[
-                "https://www.googleapis.com/auth/drive",
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/script.projects",
-            ],
-            subject=subject,
-        )
-        api_creds.refresh(Request())
-    except Exception as e:
-        debug_log(1, f"[{puzz_label}] Failed to create API credentials: {e}")
-        return False
+    # Get or create cached script service client (needs script.projects scope)
+    global _script_service
+    with _script_service_lock:
+        if _script_service is None:
+            sa_file = _get_service_account_file()
+            subject = _get_impersonation_subject()
+            if not sa_file or not subject:
+                debug_log(1, f"[{puzz_label}] Cannot activate via API — service account not configured")
+                return False
+            try:
+                api_creds = service_account.Credentials.from_service_account_file(
+                    sa_file,
+                    scopes=[
+                        "https://www.googleapis.com/auth/drive",
+                        "https://www.googleapis.com/auth/spreadsheets",
+                        "https://www.googleapis.com/auth/script.projects",
+                    ],
+                    subject=subject,
+                )
+                api_creds.refresh(Request())
+                _script_service = build("script", "v1", credentials=api_creds)
+                debug_log(3, f"[{puzz_label}] Created and cached Apps Script service client")
+            except Exception as e:
+                debug_log(1, f"[{puzz_label}] Failed to create API credentials: {e}")
+                return False
+    script_service = _script_service
 
     # ── Step 1: Create container-bound script project ──────────────
     script_id = None
     for attempt in range(max_retries):
         try:
-            script_service = build("script", "v1", credentials=api_creds)
             _rate_limiter.acquire()
             project = script_service.projects().create(body={
                 "title": "Puzzle Tools",
@@ -1220,12 +1264,11 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
         return False
 
     # ── Step 3: Pre-create _pb_activity sheet (hidden + protected) ─
+    # Reuse the module-level sheetsservice instead of build()ing a new one.
     try:
-        sheets_service = build("sheets", "v4", credentials=api_creds)
-
         # Add the hidden sheet
         _rate_limiter.acquire()
-        add_result = sheets_service.spreadsheets().batchUpdate(
+        add_result = sheetsservice.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{
                 "addSheet": {
@@ -1241,7 +1284,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
 
         # Write headers
         _rate_limiter.acquire()
-        sheets_service.spreadsheets().values().update(
+        sheetsservice.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=f"{_ACTIVITY_SHEET_NAME}!A1:C1",
             valueInputOption="RAW",
@@ -1250,7 +1293,7 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
 
         # Add warning-only protection
         _rate_limiter.acquire()
-        sheets_service.spreadsheets().batchUpdate(
+        sheetsservice.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{
                 "addProtectedRange": {
@@ -1334,9 +1377,7 @@ def _hex_to_rgb_triple(hex_color):
 def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
     """Write a bigjimmybot probe timestamp to cell A7 to trigger edit detection."""
     debug_log(4, f"start with driveid: {driveid}")
-    threadsafe_sheethttp = google_auth_httplib2.AuthorizedHttp(
-        creds, http=httplib2.Http()
-    )
+    threadsafe_sheethttp = _get_thread_http()
 
     datarange = "A7"
     datainputoption = "USER_ENTERED"

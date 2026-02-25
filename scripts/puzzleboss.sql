@@ -73,6 +73,7 @@ CREATE TABLE `temp_puzzle_creation` (
   `chat_channel_link` text DEFAULT NULL,
   `drive_id` varchar(255) DEFAULT NULL,
   `drive_uri` text DEFAULT NULL,
+  `addon_activated` tinyint(1) NOT NULL DEFAULT '0',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`code`),
   KEY `fk_temp_puzzle_round` (`round_id`)

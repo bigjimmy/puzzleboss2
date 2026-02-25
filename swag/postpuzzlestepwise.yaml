@@ -12,8 +12,9 @@ summary: |
   - step=1: Validate puzzle data and round
   - step=2: Create Discord channel
   - step=3: Create Google Sheet
-  - step=4: Insert puzzle into database
-  - step=5: Finalize (set status, announce, cleanup)
+  - step=4: Enable sheet tracking via Apps Script
+  - step=5: Insert puzzle into database
+  - step=6: Finalize (set status, announce, cleanup)
 consumes:
     - application/json
 parameters:

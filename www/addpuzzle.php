@@ -92,8 +92,9 @@ require('puzzlebosslib.php');
     { id: 'step1', num: 1, label: 'Validate puzzle data' },
     { id: 'step2', num: 2, label: 'Create Discord channel' },
     { id: 'step3', num: 3, label: 'Create Google Sheet' },
-    { id: 'step4', num: 4, label: 'Insert puzzle into database' },
-    { id: 'step5', num: 5, label: 'Finalize puzzle' }
+    { id: 'step4', num: 4, label: 'Enable sheet tracking' },
+    { id: 'step5', num: 5, label: 'Insert puzzle into database' },
+    { id: 'step6', num: 6, label: 'Finalize puzzle' }
   ];
 
   function setStepStatus(stepId, status, label) {
@@ -106,6 +107,8 @@ require('puzzlebosslib.php');
       el.querySelector('.status').textContent = '✅';
     } else if (status === 'skipped') {
       el.querySelector('.status').textContent = '⏭️';
+    } else if (status === 'warning') {
+      el.querySelector('.status').textContent = '⚠️';
     } else if (status === 'error') {
       el.querySelector('.status').textContent = '❌';
     }
@@ -132,9 +135,11 @@ require('puzzlebosslib.php');
 
       window.onFetchSuccess?.();
 
-      // Mark complete or skipped
+      // Mark complete, skipped, or warning
       if (data.skipped) {
         setStepStatus(step.id, 'skipped', data.message || step.label + ' (skipped)');
+      } else if (data.addon_activated === false && !data.skipped && stepNum === 4) {
+        setStepStatus(step.id, 'warning', data.message || 'Sheet tracking activation failed');
       } else {
         setStepStatus(step.id, 'complete', data.message || step.label + ' complete');
       }
@@ -149,11 +154,11 @@ require('puzzlebosslib.php');
   async function runAllSteps(code, puzzleName) {
     let puzzleId = null;
 
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 6; i++) {
       try {
         const result = await runStep(code, i);
-        // Step 4 returns the puzzle ID
-        if (i === 4 && result.puzzle_id) {
+        // Step 5 returns the puzzle ID
+        if (i === 5 && result.puzzle_id) {
           puzzleId = result.puzzle_id;
         }
       } catch (err) {
@@ -482,9 +487,13 @@ HTML;
   </div>
   <div class="step" id="step4">
     <span class="status">⏳</span>
-    <span class="label">Inserting puzzle into database...</span>
+    <span class="label">Enabling sheet tracking...</span>
   </div>
   <div class="step" id="step5">
+    <span class="status">⏳</span>
+    <span class="label">Inserting puzzle into database...</span>
+  </div>
+  <div class="step" id="step6">
     <span class="status">⏳</span>
     <span class="label">Finalizing puzzle...</span>
   </div>

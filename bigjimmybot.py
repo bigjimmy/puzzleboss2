@@ -773,6 +773,17 @@ def main():
 
     debug_log(3, f"google drive init succeeded. Hunt folder id: {pblib.huntfolderid}")
 
+    # Write health file immediately after init — signals to ECS that the
+    # container is alive before the first (potentially slow) iteration runs.
+    # Without this, a cold-start iteration can exceed the health check timeout
+    # and cause ECS to kill/restart the task repeatedly.
+    try:
+        with open("/tmp/bigjimmy-health", "w") as f:
+            f.write(str(int(time.time())))
+        debug_log(4, "Wrote initial health check file")
+    except Exception:
+        pass
+
     while True:
         # Reload config from database each loop
         try:

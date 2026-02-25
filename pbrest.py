@@ -1207,8 +1207,9 @@ def _run_creation_step(code, step):
     1. Validate puzzle data and get round info
     2. Create Discord channel (or skip if SKIP_PUZZCORD)
     3. Create Google Sheet (or skip if SKIP_GOOGLE_API)
-    4. Insert puzzle into database
-    5. Finalize: set metadata, announce, cleanup temp storage
+    4. Enable sheet tracking via Apps Script (or skip if SKIP_GOOGLE_API)
+    5. Insert puzzle into database (sets sheetenabled=1 if step 4 succeeded)
+    6. Finalize: set metadata, announce, cleanup temp storage
 
     Returns a dict with step results (always includes "status" and "step").
     """
@@ -1273,33 +1274,52 @@ def _run_creation_step(code, step):
         )
         conn.commit()
 
-        # Activate the Puzzle Tools add-on via Apps Script API (non-fatal)
+        debug_log(3, f"Step 3: Created Google Sheet for {name}")
+        return {"status": "ok", "step": 3, "message": f"Created Google Sheet for {name}", "drive_id": drive_id, "drive_uri": drive_uri}
+
+    elif step == 4:
+        if configstruct.get("SKIP_GOOGLE_API") == "true":
+            debug_log(3, f"Step 4: Skipping sheet tracking (SKIP_GOOGLE_API enabled)")
+            return {"status": "ok", "step": 4, "skipped": True, "message": "Google API integration disabled"}
+
+        drive_id = req.get("drive_id", "")
+        if not drive_id:
+            debug_log(2, f"Step 4: No drive_id found for {name}, skipping activation")
+            return {"status": "ok", "step": 4, "addon_activated": False, "message": f"No Google Sheet to activate for {name}"}
+
         addon_activated = False
         try:
             addon_activated = activate_puzzle_sheet_via_api(drive_id, name)
         except Exception as ae:
-            debug_log(2, f"Step 3: Apps Script activation failed for {name}, bigjimmy will fall back: {ae}")
+            debug_log(2, f"Step 4: Apps Script activation failed for {name}, bigjimmy will fall back: {ae}")
 
-        msg = f"Created Google Sheet for {name}"
         if addon_activated:
-            msg += " (add-on activated)"
+            cursor.execute(
+                "UPDATE temp_puzzle_creation SET addon_activated = 1 WHERE code = %s",
+                (code,),
+            )
+            conn.commit()
+            debug_log(3, f"Step 4: Sheet tracking enabled for {name}")
+            return {"status": "ok", "step": 4, "addon_activated": True, "message": f"Sheet tracking enabled for {name}"}
+        else:
+            debug_log(2, f"Step 4: Sheet tracking activation failed for {name}, bigjimmy will use legacy tracking")
+            return {"status": "ok", "step": 4, "addon_activated": False, "message": f"Sheet tracking activation failed for {name} — will use legacy tracking"}
 
-        debug_log(3, f"Step 3: {msg}")
-        return {"status": "ok", "step": 3, "message": msg, "drive_id": drive_id, "drive_uri": drive_uri, "addon_activated": addon_activated}
-
-    elif step == 4:
+    elif step == 5:
         chat_id = req.get("chat_channel_id", "")
         chat_link = req.get("chat_channel_link", "")
         drive_id = req.get("drive_id", "")
         drive_uri = req.get("drive_uri", "")
+        addon_activated = req.get("addon_activated", 0)
+        sheetenabled = 1 if addon_activated else 0
 
         cursor.execute(
             """
             INSERT INTO puzzle
-            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            (name, puzzle_uri, round_id, chat_channel_id, chat_channel_link, chat_channel_name, drive_id, drive_uri, ismeta, sheetenabled)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
-            (name, puzzle_uri, round_id, chat_id, chat_link, name, drive_id, drive_uri, ismeta),
+            (name, puzzle_uri, round_id, chat_id, chat_link, name, drive_id, drive_uri, ismeta, sheetenabled),
         )
         conn.commit()
 
@@ -1311,10 +1331,10 @@ def _run_creation_step(code, step):
         if ismeta:
             check_round_completion(round_id, conn)
 
-        debug_log(3, f"Step 4: Inserted puzzle {name} into database with ID {myid}")
-        return {"status": "ok", "step": 4, "message": f"Inserted puzzle {name} into database", "puzzle_id": myid}
+        debug_log(3, f"Step 5: Inserted puzzle {name} into database with ID {myid} (sheetenabled={sheetenabled})")
+        return {"status": "ok", "step": 5, "message": f"Inserted puzzle {name} into database", "puzzle_id": myid}
 
-    elif step == 5:
+    elif step == 6:
         cursor.execute("SELECT id FROM puzzle WHERE name = %s", (name,))
         puzzle = cursor.fetchone()
         if not puzzle:
@@ -1329,17 +1349,17 @@ def _run_creation_step(code, step):
         try:
             chat_announce_new(name)
         except Exception as e:
-            debug_log(2, f"Step 5: Discord announcement failed for {name}, continuing: {e}")
+            debug_log(2, f"Step 6: Discord announcement failed for {name}, continuing: {e}")
         invalidate_cache_with_stats()
 
         cursor.execute("DELETE FROM temp_puzzle_creation WHERE code = %s", (code,))
         conn.commit()
 
-        debug_log(3, f"Step 5: Finalized puzzle {name} (ID {myid}) - announced and cleaned up")
-        return {"status": "ok", "step": 5, "message": f"Puzzle {name} creation complete!", "puzzle_id": myid, "is_speculative": is_speculative}
+        debug_log(3, f"Step 6: Finalized puzzle {name} (ID {myid}) - announced and cleaned up")
+        return {"status": "ok", "step": 6, "message": f"Puzzle {name} creation complete!", "puzzle_id": myid, "is_speculative": is_speculative}
 
     else:
-        raise Exception(f"Invalid step: {step}. Must be 1-5")
+        raise Exception(f"Invalid step: {step}. Must be 1-6")
 
 
 @app.route("/puzzles", endpoint="post_puzzles", methods=["POST"])
@@ -1347,7 +1367,7 @@ def _run_creation_step(code, step):
 def create_puzzle():
     """
     One-shot puzzle creation (backwards compatible).
-    Validates, stores in temp table, runs all 5 creation steps, returns result.
+    Validates, stores in temp table, runs all 6 creation steps, returns result.
     """
     debug_log(4, "start")
     try:
@@ -1386,7 +1406,7 @@ def create_puzzle():
 
     try:
         results = {}
-        for step in range(1, 6):
+        for step in range(1, 7):
             results[step] = _run_creation_step(code, step)
     except Exception:
         # Clean up temp record on failure
@@ -1403,7 +1423,7 @@ def create_puzzle():
     return {
         "status": "ok",
         "puzzle": {
-            "id": results[4]["puzzle_id"],
+            "id": results[5]["puzzle_id"],
             "name": name,
             "chat_channel_id": results[2].get("chat_channel_id", ""),
             "chat_link": results[2].get("chat_link", ""),
@@ -1567,6 +1587,12 @@ def activate_all_sheets():
         try:
             success = activate_puzzle_sheet_via_api(puzzle["drive_id"], puzzle["name"])
             if success:
+                conn2, cursor2 = _cursor()
+                cursor2.execute(
+                    "UPDATE puzzle SET sheetenabled = 1 WHERE id = %s",
+                    (int(puzzle["id"]),),
+                )
+                conn2.commit()
                 activated += 1
                 results.append({"name": puzzle["name"], "status": "activated"})
             else:
