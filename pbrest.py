@@ -1326,7 +1326,10 @@ def _run_creation_step(code, step):
             conn.commit()
             debug_log(3, f"Set puzzle {name} status to Speculative")
 
-        chat_announce_new(name)
+        try:
+            chat_announce_new(name)
+        except Exception as e:
+            debug_log(2, f"Step 5: Discord announcement failed for {name}, continuing: {e}")
         invalidate_cache_with_stats()
 
         cursor.execute("DELETE FROM temp_puzzle_creation WHERE code = %s", (code,))
@@ -1482,6 +1485,17 @@ def create_puzzle_stepwise():
     }
 
 
+def _cleanup_temp_creation(code):
+    """Remove the temp_puzzle_creation record for a failed creation attempt."""
+    try:
+        conn, cursor = _cursor()
+        cursor.execute("DELETE FROM temp_puzzle_creation WHERE code = %s", (code,))
+        conn.commit()
+        debug_log(3, f"Cleaned up temp_puzzle_creation for code {code}")
+    except Exception as cleanup_err:
+        debug_log(2, f"Failed to clean up temp_puzzle_creation for code {code}: {cleanup_err}")
+
+
 @app.route("/createpuzzle/<code>", endpoint="get_createpuzzle", methods=["GET"])
 @swag_from("swag/getcreatepuzzle.yaml", endpoint="get_createpuzzle", methods=["GET"])
 def finish_puzzle_creation(code):
@@ -1503,9 +1517,11 @@ def finish_puzzle_creation(code):
     try:
         return _run_creation_step(code, step)
     except MySQLdb._exceptions.IntegrityError:
+        _cleanup_temp_creation(code)
         return {"status": "error", "error": "Duplicate puzzle detected"}, 400
     except Exception as e:
         debug_log(1, f"Step {step} error for code {code}: {e}")
+        _cleanup_temp_creation(code)
         return {"status": "error", "error": f"Step {step} failed: {e}"}, 500
 
 

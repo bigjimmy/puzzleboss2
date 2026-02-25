@@ -141,7 +141,6 @@ require('puzzlebosslib.php');
 
       return data;
     } catch (err) {
-      if (window.onFetchFailure?.()) return;
       setStepStatus(step.id, 'error', err.message);
       throw err;
     }

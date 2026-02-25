@@ -17,14 +17,20 @@ def chat_create_channel_for_puzzle(puzname, roundname, puzuri, puzdocuri):
 
     # Pass the full puzzle name with emojis directly to Discord
     debug_log(4, f"Creating Discord channel with name: {puzname}")
-    retval = call_puzzcord(f"create_json {puzname} {topic}")
+    try:
+        retval = call_puzzcord(f"create_json {puzname} {topic}")
+    except (socket.error, socket.timeout, OSError) as e:
+        raise RuntimeError(f"Discord (puzzcord) is unreachable: {e}. Set SKIP_PUZZCORD=true in config to disable.") from e
     debug_log(4, f"retval from call_puzzcord is {retval}")
 
     if configstruct["SKIP_PUZZCORD"] == "true":
         debug_log(3, "SKIP_PUZZCORD true. stubbing channel id/uri")
         retval = '{"id":"0xtestchannelid", "url":"http://testdiscordurl.com"}'
 
-    newchaninfo = json.loads(retval)
+    try:
+        newchaninfo = json.loads(retval)
+    except (json.JSONDecodeError, TypeError):
+        raise RuntimeError(f"Discord (puzzcord) returned invalid response: {retval!r}. Is puzzcord running?")
     return (newchaninfo["id"], newchaninfo["url"])
 
 
