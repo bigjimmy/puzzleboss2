@@ -22,6 +22,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Mock heavy dependencies BEFORE importing pbgooglelib
 sys.modules['MySQLdb'] = MagicMock()
 sys.modules['MySQLdb.cursors'] = MagicMock()
+sys.modules['googleapiclient'] = MagicMock()
+sys.modules['googleapiclient.discovery'] = MagicMock()
+sys.modules['google.auth'] = MagicMock()
+sys.modules['google.auth.transport'] = MagicMock()
+sys.modules['google.auth.transport.requests'] = MagicMock()
+sys.modules['google.oauth2'] = MagicMock()
+sys.modules['google.oauth2.service_account'] = MagicMock()
+sys.modules['google_auth_httplib2'] = MagicMock()
+sys.modules['httplib2'] = MagicMock()
 
 # Mock pblib module with minimal config
 pblib_mock = MagicMock()
