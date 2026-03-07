@@ -1,0 +1,167 @@
+name: CI
+
+# To fetch full logs for any run via gh CLI:
+#   gh run view <run-id> --log-failed          # failed steps only
+#   gh run view <run-id> --log                 # all steps
+#   gh run list --branch <branch>              # find recent run IDs
+#
+# One-liner to fetch the latest run on the current branch:
+#   gh run view $(gh run list --branch $(git branch --show-current) --limit 1 --json databaseId -q '.[0].databaseId') --log-failed
+
+on:
+  push:
+    branches: ["master", "claude/**"]
+  pull_request:
+    branches: ["master"]
+
+jobs:
+  # ── Job 1: Unit tests (no Docker needed) ──────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install test dependencies
+        run: pip install pytest pyyaml
+
+      - name: Run unit tests
+        run: pytest tests/ -v
+
+  # ── Job 2: API integration tests (full Docker stack) ──────────────────────
+  api-integration-tests:
+    name: API Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (with GHA layer cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dev
+          load: true
+          tags: puzzleboss-app:latest
+          cache-from: type=gha,scope=puzzleboss-app
+          cache-to: type=gha,mode=max,scope=puzzleboss-app
+
+      - name: Start services
+        run: docker compose up --no-build -d
+
+      - name: Wait for app to be healthy
+        run: |
+          echo "Waiting for app to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/apidocs > /dev/null 2>&1; then
+              echo "App is ready!"
+              break
+            fi
+            echo "Attempt $i/30 - not ready yet, waiting 5s..."
+            sleep 5
+          done
+          # Final check — fail loudly if still not up
+          curl -sf http://localhost:5000/apidocs > /dev/null || (echo "App failed to start" && docker compose logs && exit 1)
+
+      - name: Run API integration tests
+        run: |
+          docker exec puzzleboss-app python3 /app/scripts/test_api_coverage.py --allow-destructive \
+            2>&1 | tee /tmp/api-test-output.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "════════════════════════════════════════"
+          echo "  API TEST OUTPUT"
+          echo "════════════════════════════════════════"
+          cat /tmp/api-test-output.txt 2>/dev/null || echo "(no captured test output)"
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  DOCKER COMPOSE LOGS (app container)"
+          echo "════════════════════════════════════════"
+          docker compose logs app
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  FETCH FULL LOGS VIA gh CLI"
+          echo "════════════════════════════════════════"
+          echo "  gh run view ${{ github.run_id }} --log-failed"
+          echo "  gh run view ${{ github.run_id }} --log"
+
+  # ── Job 3: UI (Playwright) tests ──────────────────────────────────────────
+  ui-tests:
+    name: UI Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (with GHA layer cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dev
+          load: true
+          tags: puzzleboss-app:latest
+          cache-from: type=gha,scope=puzzleboss-app
+          cache-to: type=gha,mode=max,scope=puzzleboss-app
+
+      - name: Start services
+        run: docker compose up --no-build -d
+
+      - name: Wait for app to be healthy
+        run: |
+          echo "Waiting for app to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5000/apidocs > /dev/null 2>&1; then
+              echo "App is ready!"
+              break
+            fi
+            echo "Attempt $i/30 - not ready yet, waiting 5s..."
+            sleep 5
+          done
+          curl -sf http://localhost:5000/apidocs > /dev/null || (echo "App failed to start" && docker compose logs && exit 1)
+
+      - name: Run UI tests
+        run: |
+          docker exec puzzleboss-app python3 /app/scripts/test_ui_comprehensive.py --allow-destructive \
+            2>&1 | tee /tmp/ui-test-output.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "════════════════════════════════════════"
+          echo "  UI TEST OUTPUT"
+          echo "════════════════════════════════════════"
+          cat /tmp/ui-test-output.txt 2>/dev/null || echo "(no captured test output)"
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  DOCKER COMPOSE LOGS (app container)"
+          echo "════════════════════════════════════════"
+          docker compose logs app
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  FETCH FULL LOGS VIA gh CLI"
+          echo "════════════════════════════════════════"
+          echo "  gh run view ${{ github.run_id }} --log-failed"
+          echo "  gh run view ${{ github.run_id }} --log"

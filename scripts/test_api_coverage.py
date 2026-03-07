@@ -227,8 +227,8 @@ class TestRunner:
         if not code:
             raise Exception(f"Stepwise creation returned no code: {step_data}")
 
-        # Execute steps 1-5
-        for step in range(1, 6):
+        # Execute steps 1-6
+        for step in range(1, 7):
             try:
                 self.api_get(f"/createpuzzle/{code}?step={step}")
             except Exception:
