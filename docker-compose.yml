@@ -57,6 +57,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    image: puzzleboss-app:latest
     container_name: puzzleboss-app
     ports:
       - "80:80"
