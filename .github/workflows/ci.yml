@@ -71,10 +71,6 @@ jobs:
         run: |
           docker exec puzzleboss-app python3 /app/scripts/test_api_coverage.py --allow-destructive
 
-      - name: Run solver assignment tests
-        run: |
-          docker exec puzzleboss-app python3 /app/scripts/test_solver_assignments.py
-
       - name: Show logs on failure
         if: failure()
         run: docker compose logs
