@@ -1,5 +1,13 @@
 name: CI
 
+# To fetch full logs for any run via gh CLI:
+#   gh run view <run-id> --log-failed          # failed steps only
+#   gh run view <run-id> --log                 # all steps
+#   gh run list --branch <branch>              # find recent run IDs
+#
+# One-liner to fetch the latest run on the current branch:
+#   gh run view $(gh run list --branch $(git branch --show-current) --limit 1 --json databaseId -q '.[0].databaseId') --log-failed
+
 on:
   push:
     branches: ["master", "claude/**"]
@@ -68,11 +76,30 @@ jobs:
 
       - name: Run API integration tests
         run: |
-          docker exec puzzleboss-app python3 /app/scripts/test_api_coverage.py --allow-destructive
+          docker exec puzzleboss-app python3 /app/scripts/test_api_coverage.py --allow-destructive \
+            2>&1 | tee /tmp/api-test-output.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Show logs on failure
         if: failure()
-        run: docker compose logs
+        run: |
+          echo "════════════════════════════════════════"
+          echo "  API TEST OUTPUT"
+          echo "════════════════════════════════════════"
+          cat /tmp/api-test-output.txt 2>/dev/null || echo "(no captured test output)"
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  DOCKER COMPOSE LOGS (app container)"
+          echo "════════════════════════════════════════"
+          docker compose logs app
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  FETCH FULL LOGS VIA gh CLI"
+          echo "════════════════════════════════════════"
+          echo "  gh run view ${{ github.run_id }} --log-failed"
+          echo "  gh run view ${{ github.run_id }} --log"
 
   # ── Job 3: UI (Playwright) tests ──────────────────────────────────────────
   ui-tests:
@@ -114,8 +141,27 @@ jobs:
 
       - name: Run UI tests
         run: |
-          docker exec puzzleboss-app python3 /app/scripts/test_ui_comprehensive.py --allow-destructive
+          docker exec puzzleboss-app python3 /app/scripts/test_ui_comprehensive.py --allow-destructive \
+            2>&1 | tee /tmp/ui-test-output.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Show logs on failure
         if: failure()
-        run: docker compose logs
+        run: |
+          echo "════════════════════════════════════════"
+          echo "  UI TEST OUTPUT"
+          echo "════════════════════════════════════════"
+          cat /tmp/ui-test-output.txt 2>/dev/null || echo "(no captured test output)"
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  DOCKER COMPOSE LOGS (app container)"
+          echo "════════════════════════════════════════"
+          docker compose logs app
+
+          echo ""
+          echo "════════════════════════════════════════"
+          echo "  FETCH FULL LOGS VIA gh CLI"
+          echo "════════════════════════════════════════"
+          echo "  gh run view ${{ github.run_id }} --log-failed"
+          echo "  gh run view ${{ github.run_id }} --log"
