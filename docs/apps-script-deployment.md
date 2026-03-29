@@ -288,7 +288,8 @@ The following config values are now obsolete and can be removed from the databas
 
 ### API Endpoints
 
-- `POST /puzzles/stepwise` + `GET /createpuzzle/{code}?step=N` - Create puzzle (steps 3–4 deploy the add-on)
+- `POST /puzzles` - One-shot puzzle creation (runs all 6 steps internally, including sheet creation and add-on deployment)
+- `POST /puzzles/stepwise` + `GET /createpuzzle/{code}?step=N` - Step-by-step puzzle creation (UI uses this)
 - `POST /puzzles/activate_all` - Deploy add-on to all puzzles currently missing it
 
 ### Configuration Keys
