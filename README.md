@@ -1,7 +1,7 @@
 #Puzzleboss 2000
 ---
 
-**Description**: Puzzle solving team backend and interface developed by ATTORNEY for mystery hunts.
+**Description**: Puzzle solving team backend and interface developed by this team for mystery hunts.
 
 **Owner**: Benjamin O'Connor (benoc@alum.mit.edu)
 
@@ -42,7 +42,7 @@ This repo contains only application code. It is infrastructure-agnostic — you 
 
 ### Example: AWS ECS Fargate
 
-The ATTORNEY team runs Puzzleboss on ECS Fargate. The infrastructure (Terraform, dashboards, operations runbook) is in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
+This team runs Puzzleboss on ECS Fargate. The infrastructure (Terraform, dashboards, operations runbook) is in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
 
 `deploy-ecs.sh` is the deploy script for that setup — it builds Docker images and pushes them to ECR. It auto-detects AWS account details and does not require Terraform to be co-located.
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Puzzleboss 2000 is a puzzle hunt management system developed by ATTORNEY for mystery hunt teams. It provides a REST API backend (Python/Flask), web UI (PHP/JavaScript/Vue.js), Google Sheets integration, Discord bot integration, and an AI assistant bot (BigJimmy) for tracking solver activity.
+Puzzleboss 2000 is a puzzle hunt management system developed by this team for mystery hunt teams. It provides a REST API backend (Python/Flask), web UI (PHP/JavaScript/Vue.js), Google Sheets integration, Discord bot integration, and an AI assistant bot (BigJimmy) for tracking solver activity.
 
 Infrastructure (Terraform, Grafana dashboards, operations runbook) is managed in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
 
