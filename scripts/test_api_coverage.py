@@ -60,6 +60,7 @@ class TestRunner:
         "Solve Clears Location and Solvers",
         "Solver Reassignment",
         "Activity Tracking",
+        "lastact Response Embedding",
         "Puzzle Activity Endpoint",
         "Solver Activity Endpoint",
         "Solver History",
@@ -920,6 +921,85 @@ class TestRunner:
                         return
 
         result.set_success("Activity tracking test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 15b: lastact Response Embedding
+    # Verifies that lastact is embedded in full puzzle/solver pulls (not
+    # just the dedicated /lastact endpoint), and that /lastsheetact works.
+    # ------------------------------------------------------------------
+    def test_lastact_embedding(self, result: TestResult):
+        solvers = self.get_all_solvers()
+        puzzles = self.get_all_puzzles()
+
+        if not solvers or not puzzles:
+            result.fail("Need solvers and puzzles")
+            return
+
+        solver = solvers[0]
+        puzzle = puzzles[0]
+        pid = puzzle["id"]
+        sid = solver["id"]
+
+        # Trigger some activity so lastact is populated
+        self.assign_solver_to_puzzle(sid, pid)
+
+        # 1. GET /puzzles/<id> should embed lastact at the top level of the response
+        #    (not inside the puzzle dict — it's a sibling key)
+        data = self.api_get(f"/puzzles/{pid}")
+        if data.get("status") != "ok":
+            result.fail(f"GET /puzzles/{pid} failed: {data}")
+            return
+        if "lastact" not in data:
+            result.fail(
+                f"GET /puzzles/{pid} response missing top-level 'lastact' key — "
+                "this is the path used by editpuzzle.php and add-generic.js"
+            )
+            return
+        lastact = data["lastact"]
+        if lastact is None:
+            result.fail(f"GET /puzzles/{pid} lastact is null after assignment")
+            return
+        for key in ["time", "type", "solver_id"]:
+            if key not in lastact:
+                result.fail(f"GET /puzzles/{pid} lastact missing '{key}' field")
+                return
+        self.logger.log_operation(f"  ✓ GET /puzzles/<id> embeds lastact (type={lastact['type']})")
+
+        # 2. GET /puzzles/<id>/lastsheetact — valid endpoint, may be null for new puzzles
+        #    (sheet edits only come from bigjimmybot), but must return correct structure
+        data = self.api_get(f"/puzzles/{pid}/lastsheetact")
+        if data.get("status") != "ok":
+            result.fail(f"GET /puzzles/{pid}/lastsheetact failed: {data}")
+            return
+        if "puzzle" not in data:
+            result.fail(f"GET /puzzles/{pid}/lastsheetact missing 'puzzle' wrapper")
+            return
+        if "lastsheetact" not in data["puzzle"]:
+            result.fail(f"GET /puzzles/{pid}/lastsheetact missing 'lastsheetact' key in puzzle wrapper")
+            return
+        # lastsheetact can legitimately be null (no sheet edits yet)
+        self.logger.log_operation(
+            f"  ✓ GET /puzzles/<id>/lastsheetact returns correct structure "
+            f"(value={'null' if data['puzzle']['lastsheetact'] is None else 'present'})"
+        )
+
+        # 3. GET /solvers/<id> should embed lastact after activity
+        sdata = self.api_get(f"/solvers/{sid}")
+        if sdata.get("status") != "ok":
+            result.fail(f"GET /solvers/{sid} failed: {sdata}")
+            return
+        if "lastact" not in sdata.get("solver", {}):
+            result.fail(
+                f"GET /solvers/{sid} response missing 'lastact' key in solver dict"
+            )
+            return
+        slastact = sdata["solver"]["lastact"]
+        if slastact is None:
+            result.fail(f"GET /solvers/{sid} lastact is null after assignment activity")
+            return
+        self.logger.log_operation(f"  ✓ GET /solvers/<id> embeds lastact (type={slastact.get('type')})")
+
+        result.set_success("lastact embedding test completed successfully")
 
     # ------------------------------------------------------------------
     # Test 16: Puzzle Activity Endpoint
@@ -2485,6 +2565,7 @@ class TestRunner:
             self.test_solve_clears_location_and_solvers,
             self.test_solver_reassignment,
             self.test_activity_tracking,
+            self.test_lastact_embedding,
             self.test_puzzle_activity_endpoint,
             self.test_solver_activity_endpoint,
             self.test_solver_history,

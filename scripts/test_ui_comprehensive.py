@@ -848,9 +848,11 @@ def test_status_change_last_activity():
         time.sleep(0.5)
 
         modal_content = page2.locator("dialog").inner_text()
-        assert "Last activity:" in modal_content or "Being worked" in modal_content, \
-            f"Last activity not shown in modal: {modal_content}"
-        print(f"  [Browser 2] ✓ Last activity displayed in status modal")
+        assert "Last activity:" in modal_content, \
+            f"'Last activity:' label missing from status modal: {modal_content}"
+        assert "ago" in modal_content, \
+            f"'ago' timestamp missing from last activity display: {modal_content}"
+        print(f"  [Browser 2] ✓ Last activity displayed in status modal with timestamp")
 
         close_dialog(page2)
 
