@@ -32,14 +32,12 @@ fi
 # ──────────────────────────────────────────────────────────────
 # 2. Inject LocalSettings.php if provided via environment
 # ──────────────────────────────────────────────────────────────
-# LocalSettings.php can be provided in three ways:
-#   a) MEDIAWIKI_LOCAL_SETTINGS_B64 env var (base64-encoded)
-#   b) Mounted via EFS or bind mount at /var/www/html/LocalSettings.php
-#   c) Baked into a derived image
+# MEDIAWIKI_LOCAL_SETTINGS is injected as a plain-text env var from
+# Secrets Manager. Use printf to write it safely.
 
-if [ -n "$MEDIAWIKI_LOCAL_SETTINGS_B64" ]; then
-    echo "Decoding LocalSettings.php from MEDIAWIKI_LOCAL_SETTINGS_B64..."
-    echo "$MEDIAWIKI_LOCAL_SETTINGS_B64" | base64 -d > /var/www/html/LocalSettings.php
+if [ -n "$MEDIAWIKI_LOCAL_SETTINGS" ]; then
+    echo "Writing LocalSettings.php from MEDIAWIKI_LOCAL_SETTINGS..."
+    printf '%s' "$MEDIAWIKI_LOCAL_SETTINGS" > /var/www/html/LocalSettings.php
     chown www-data:www-data /var/www/html/LocalSettings.php
     echo "LocalSettings.php written."
 elif [ -f /var/www/html/LocalSettings.php ]; then
@@ -47,7 +45,7 @@ elif [ -f /var/www/html/LocalSettings.php ]; then
 else
     echo "WARNING: /var/www/html/LocalSettings.php not found!"
     echo "MediaWiki will show the installation wizard."
-    echo "Set MEDIAWIKI_LOCAL_SETTINGS_B64 or mount LocalSettings.php."
+    echo "Set MEDIAWIKI_LOCAL_SETTINGS or mount LocalSettings.php."
 fi
 
 # ──────────────────────────────────────────────────────────────

@@ -38,40 +38,25 @@ fi
 # ──────────────────────────────────────────────────────────────
 # 2. Write puzzleboss.yaml if provided via environment
 # ──────────────────────────────────────────────────────────────
-# If PUZZLEBOSS_YAML_B64 is set, decode it into puzzleboss.yaml.
-# This allows injecting the config via ECS task definition secrets.
-# Alternatively, puzzleboss.yaml can be baked into the image or
-# mounted via EFS.
+# PUZZLEBOSS_YAML is injected as a plain-text env var from Secrets Manager.
+# Use printf to write it safely (preserves newlines, no trailing-newline risk).
 
-if [ -n "$PUZZLEBOSS_YAML_B64" ]; then
-    echo "Decoding puzzleboss.yaml from PUZZLEBOSS_YAML_B64..."
-    echo "$PUZZLEBOSS_YAML_B64" | base64 -d > /app/puzzleboss.yaml
+if [ -n "$PUZZLEBOSS_YAML" ]; then
+    echo "Writing puzzleboss.yaml from PUZZLEBOSS_YAML..."
+    printf '%s' "$PUZZLEBOSS_YAML" > /app/puzzleboss.yaml
     echo "puzzleboss.yaml written."
 elif [ ! -f /app/puzzleboss.yaml ]; then
-    echo "ERROR: /app/puzzleboss.yaml not found and PUZZLEBOSS_YAML_B64 not set!"
+    echo "ERROR: /app/puzzleboss.yaml not found and PUZZLEBOSS_YAML not set!"
     echo "The application will fail to start without database configuration."
     exit 1
 fi
 
 # ──────────────────────────────────────────────────────────────
-# 3. Write Google service account JSON if provided via environment
+# 3. Google service account credentials
 # ──────────────────────────────────────────────────────────────
-# pbgooglelib.py loads credentials via from_service_account_file(),
-# which needs a real file on disk. Decode the base64 env var into
-# the default location that _get_service_account_file() expects.
-
-if [ -n "$GOOGLE_SA_JSON_B64" ]; then
-    echo "Decoding service-account.json from GOOGLE_SA_JSON_B64..."
-    echo "$GOOGLE_SA_JSON_B64" | base64 -d > /app/service-account.json
-    chmod 600 /app/service-account.json
-    echo "service-account.json written."
-elif [ -f /app/service-account.json ]; then
-    echo "Using existing service-account.json."
-else
-    echo "WARNING: No Google service account found."
-    echo "Google Sheets integration will not work."
-    echo "Set GOOGLE_SA_JSON_B64 or mount service-account.json."
-fi
+# Credentials are now stored in the puzzleboss config table as
+# SERVICE_ACCOUNT_JSON and read at runtime by pbgooglelib.py.
+# No file/env var needed here.
 
 # ──────────────────────────────────────────────────────────────
 # 4. Create ALB health check file
