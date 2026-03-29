@@ -4,8 +4,12 @@ summary: Get all rounds and puzzles (cached)
 description: |
   Returns all rounds with their puzzles, using memcache for performance.
   Falls back to direct database query if cache is unavailable or disabled.
-  
+
   Note: This is now equivalent to /all - both endpoints use caching.
+
+  Each puzzle in the response includes a lastactcached field — the most recent
+  activity for that puzzle, cached as part of the /all response (15s TTL).
+  Use this instead of calling /puzzles/<id>/lastact per puzzle to avoid N+1 queries.
   
   Configure caching via config values:
   - MEMCACHE_ENABLED: 'true' or 'false'

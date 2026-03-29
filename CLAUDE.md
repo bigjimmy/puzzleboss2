@@ -417,15 +417,17 @@ curl -sG 'http://localhost:3100/loki/api/v1/query_range' \
 
 ## TODO / Future Work
 
-### Promote `lastact` into `puzzle_view` and re-evaluate caching strategy
-**Context:** The `/all` and `/allcached` endpoints return data from `puzzle_view`, which currently does NOT include `lastact` (last activity timestamp). The frontend fetches this separately. Promoting `lastact` into `puzzle_view` would let the cached response include it, reducing extra queries.
+### `lastactcached` — cached last activity in `/all` response
 
-**Caching rule (current):** Cache is only invalidated for puzzle and round *structural* changes: status transitions, creation, deletion, round completion. Solver assignment/unassignment intentionally does NOT invalidate — the 15-second TTL (in `pbcachelib.py`) handles staleness for `cursolvers`. This keeps cache hit rates high during active solving (>90% observed during January 2026 hunt even with the old per-assignment invalidation).
+`lastactcached` is now included in every puzzle in the `/all` and `/allcached` responses, and in `GET /puzzles/<id>` responses. It provides a cached approximation of `lastact` for external utilities that consume `/all`, avoiding N+1 queries.
 
-**When `lastact` is added to `puzzle_view`:** The current simple single-key cache (`puzzleboss:all` in memcache) will need re-evaluation. Activity timestamps change constantly during a hunt. Options to consider:
-- Per-puzzle cache keys (invalidate only the affected puzzle)
-- Separate cache for static structure vs. volatile fields (lastact, cursolvers, sheetcount)
-- Server-sent events or websocket push instead of polling + cache
-- Hybrid: cache structural data with long TTL, overlay volatile fields from DB on each request
+**How it works:**
+- On the `/all` cache cold path (once per 15s TTL), a single bulk `SELECT ... MAX(time) GROUP BY puzzle_id` query fetches the most recent activity for all puzzles at once and injects `lastactcached` into each puzzle dict before caching.
+- On cache hit: `lastactcached` comes back in the cached blob with no DB query.
+- `GET /puzzles/<id>`: reads `lastactcached` from the `puzzleboss:all` cache key if warm; falls back to a DB query if cold (never returns null).
+- `time` in `lastactcached` is always an ISO 8601 string (e.g. `"2026-03-29T21:13:27"`).
+- The existing `lastact` field on `GET /puzzles/<id>` is unchanged — always fresh from DB.
+
+**Caching rule (current):** Cache is only invalidated for puzzle and round *structural* changes: status transitions, creation, deletion, round completion. Solver assignment/unassignment intentionally does NOT invalidate — the 15-second TTL (in `pbcachelib.py`) handles staleness for `cursolvers` and `lastactcached`. This keeps cache hit rates high during active solving (>90% observed during January 2026 hunt).
 
 **Data point:** January 2026 hunt had >90% cache hit rate with 60s TTL and per-assignment invalidation. Current TTL is 15s with structural-only invalidation — monitor hit rate in next hunt to compare.

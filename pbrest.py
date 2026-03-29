@@ -236,6 +236,40 @@ def _get_all_from_db():
     for puzzle in puzzle_view:
         all_puzzles[puzzle["id"]] = puzzle
 
+    # Fetch most recent activity per puzzle in one query and inject as
+    # lastactcached. This is included in the /all response so external
+    # utilities get a cached approximation of lastact without N+1 queries.
+    # time is serialized to ISO string here so json.dumps() can cache it.
+    try:
+        conn, cursor = _read_cursor()
+        cursor.execute(
+            """
+            SELECT a.*
+            FROM activity a
+            INNER JOIN (
+                SELECT puzzle_id, MAX(time) AS max_time
+                FROM activity
+                GROUP BY puzzle_id
+            ) latest ON a.puzzle_id = latest.puzzle_id
+                    AND a.time = latest.max_time
+            ORDER BY a.id DESC
+            """
+        )
+        for row in cursor.fetchall():
+            pid = row["puzzle_id"]
+            # ORDER BY a.id DESC means the first row per puzzle_id is the
+            # most recent; skip subsequent rows for the same puzzle.
+            if pid in all_puzzles and "lastactcached" not in all_puzzles[pid]:
+                row["time"] = row["time"].isoformat() if row.get("time") else None
+                all_puzzles[pid]["lastactcached"] = row
+    except Exception as e:
+        debug_log(2, f"Failed to fetch lastactcached: {e}")
+        # Non-fatal: puzzles without lastactcached will fall back in callers
+
+    # Ensure all puzzles have the key (None for puzzles with no activity yet)
+    for puzzle in all_puzzles.values():
+        puzzle.setdefault("lastactcached", None)
+
     try:
         conn, cursor = _read_cursor()
         cursor.execute("SELECT * from round_view")
@@ -532,11 +566,37 @@ def get_one_puzzle(id):
 
     debug_log(5, f"fetched puzzle {id}: {puzzle}")
 
-    # Include lastact to reduce HTTP round-trips for clients
+    # Include lastact (always fresh from DB) and lastactcached (from /all
+    # cache if warm, DB fallback if cold) to reduce HTTP round-trips.
+    lastact = get_last_activity_for_puzzle(id)
+
+    lastactcached = None
+    cached_blob = cache_get(MEMCACHE_CACHE_KEY)
+    if cached_blob:
+        try:
+            cached_data = json.loads(cached_blob)
+            for round_data in cached_data.get("rounds", []):
+                for p in round_data.get("puzzles", []):
+                    if p.get("id") == int(id):
+                        lastactcached = p.get("lastactcached")
+                        break
+                if lastactcached is not None:
+                    break
+        except Exception as e:
+            debug_log(3, f"Failed to read lastactcached from cache for puzzle {id}: {e}")
+
+    if lastactcached is None:
+        # Cache cold or puzzle not found — fall back to DB (never return null)
+        row = get_last_activity_for_puzzle(id)
+        if row and row.get("time"):
+            row["time"] = row["time"].isoformat()
+        lastactcached = row
+
     return {
         "status": "ok",
         "puzzle": puzzle,
-        "lastact": get_last_activity_for_puzzle(id),
+        "lastact": lastact,
+        "lastactcached": lastactcached,
     }
 
 

@@ -100,7 +100,7 @@ responses:
           lastact:
             type: object
             nullable: true
-            description: Most recent activity on this puzzle (null if none)
+            description: Most recent activity on this puzzle — always fresh from DB (null if no activity)
             properties:
               id:
                 type: integer
@@ -115,3 +115,25 @@ responses:
               time:
                 type: string
                 format: date-time
+          lastactcached:
+            type: object
+            nullable: true
+            description: |
+              Most recent activity on this puzzle — served from the /all cache (15s TTL) if warm,
+              falls back to a DB query if cold. time field is always an ISO 8601 string.
+              Intended for external utilities that need lastact data without N+1 queries.
+            properties:
+              id:
+                type: integer
+              puzzle_id:
+                type: integer
+              solver_id:
+                type: integer
+              source:
+                type: string
+              type:
+                type: string
+              time:
+                type: string
+                format: date-time
+                description: ISO 8601 string (e.g. "2026-03-29T21:13:27")

@@ -81,6 +81,28 @@ responses:
                     sheetcount:
                       type: integer
                       description: Number of sheets/tabs in the puzzle's Google spreadsheet
+                    lastactcached:
+                      type: object
+                      nullable: true
+                      description: |
+                        Most recent activity for this puzzle, cached as part of the /all response
+                        (15s TTL). Null only for puzzles that have never had any activity.
+                        time is an ISO 8601 string. Use this instead of calling /puzzles/<id>/lastact
+                        per puzzle to avoid N+1 queries.
+                      properties:
+                        id:
+                          type: integer
+                        puzzle_id:
+                          type: integer
+                        solver_id:
+                          type: integer
+                        source:
+                          type: string
+                        type:
+                          type: string
+                        time:
+                          type: string
+                          description: ISO 8601 string (e.g. "2026-03-29T21:13:27")
   500:
     description: Error retrieving data
     schema:

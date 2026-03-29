@@ -61,6 +61,7 @@ class TestRunner:
         "Solver Reassignment",
         "Activity Tracking",
         "lastact Response Embedding",
+        "lastactcached Behavior",
         "Puzzle Activity Endpoint",
         "Solver Activity Endpoint",
         "Solver History",
@@ -1000,6 +1001,137 @@ class TestRunner:
         self.logger.log_operation(f"  ✓ GET /solvers/<id> embeds lastact (type={slastact.get('type')})")
 
         result.set_success("lastact embedding test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 15c: lastactcached — /all and /puzzles/<id>
+    # Verifies lastactcached structure, consistency, ISO time format,
+    # and cache cold/hot behavior. TTL verification is skipped when
+    # memcache is not enabled (local dev without memcache).
+    # ------------------------------------------------------------------
+    def test_lastactcached(self, result: TestResult):
+        solvers = self.get_all_solvers()
+        puzzles = self.get_all_puzzles()
+        if not solvers or not puzzles:
+            result.fail("Need solvers and puzzles")
+            return
+
+        solver = solvers[0]
+        puzzle = puzzles[0]
+        pid = puzzle["id"]
+        sid = solver["id"]
+
+        # Trigger activity so lastactcached is non-null
+        self.assign_solver_to_puzzle(sid, pid)
+
+        # 1. /all includes lastactcached on every puzzle
+        all_data = self.api_get("/all")
+        found_puzzle = None
+        for rnd in all_data.get("rounds", []):
+            for p in rnd.get("puzzles", []):
+                if p.get("id") == pid:
+                    found_puzzle = p
+                    break
+            if found_puzzle:
+                break
+
+        if found_puzzle is None:
+            result.fail(f"Puzzle {pid} not found in /all response")
+            return
+        if "lastactcached" not in found_puzzle:
+            result.fail(f"Puzzle {pid} missing 'lastactcached' key in /all response")
+            return
+
+        lac_all = found_puzzle["lastactcached"]
+        if lac_all is None:
+            result.fail(f"Puzzle {pid} lastactcached is null in /all after assignment")
+            return
+
+        # Verify required fields
+        for key in ["id", "puzzle_id", "solver_id", "type", "time"]:
+            if key not in lac_all:
+                result.fail(f"/all lastactcached missing '{key}' field")
+                return
+
+        # time must be ISO 8601 string (not HTTP date, not datetime object)
+        t = lac_all["time"]
+        if not isinstance(t, str) or "T" not in t:
+            result.fail(f"/all lastactcached.time is not ISO 8601 string: {t!r}")
+            return
+        self.logger.log_operation(f"  ✓ /all lastactcached present (type={lac_all['type']}, time={t})")
+
+        # 2. GET /puzzles/<id> includes lastactcached
+        pdata = self.api_get(f"/puzzles/{pid}")
+        if "lastactcached" not in pdata:
+            result.fail(f"GET /puzzles/{pid} missing 'lastactcached' key")
+            return
+
+        lac_single = pdata["lastactcached"]
+        if lac_single is None:
+            result.fail(f"GET /puzzles/{pid} lastactcached is null (cache cold fallback should use DB)")
+            return
+
+        # time must also be ISO 8601 string
+        t2 = lac_single.get("time", "")
+        if not isinstance(t2, str) or "T" not in t2:
+            result.fail(f"GET /puzzles/<id> lastactcached.time is not ISO 8601 string: {t2!r}")
+            return
+        self.logger.log_operation(f"  ✓ GET /puzzles/<id> lastactcached present (type={lac_single['type']}, time={t2})")
+
+        # 3. lastactcached and lastact refer to the same activity record
+        la = pdata.get("lastact")
+        if la and lac_single:
+            if la.get("id") != lac_single.get("id"):
+                result.fail(
+                    f"lastact (id={la.get('id')}) and lastactcached (id={lac_single.get('id')}) "
+                    "disagree on most-recent activity — possible stale cache or tie-break bug"
+                )
+                return
+        self.logger.log_operation(f"  ✓ lastact and lastactcached agree (id={la.get('id')})")
+
+        # 4. After a new activity, lastactcached in /all eventually reflects it
+        #    (within TTL). We trigger new activity and verify /all updates
+        #    after cache expiry. Since local dev has no memcache, we just
+        #    verify the value changes on the next /all call (cache miss path).
+        ts = str(int(time.time()))
+        rounds = self.get_all_rounds()
+        if not rounds:
+            result.fail("No rounds found for new puzzle creation")
+            return
+        new_puzzle = self.create_puzzle(f"CachedLastactTest{ts}", rounds[0]["id"])
+        new_pid = new_puzzle["id"]
+
+        # New puzzle should have lastactcached from its creation activity
+        all_data2 = self.api_get("/all")
+        new_puz_in_all = None
+        for rnd in all_data2.get("rounds", []):
+            for p in rnd.get("puzzles", []):
+                if p.get("id") == new_pid:
+                    new_puz_in_all = p
+                    break
+            if new_puz_in_all:
+                break
+
+        if new_puz_in_all is None:
+            result.fail(f"New puzzle {new_pid} not in /all response")
+            return
+        if new_puz_in_all.get("lastactcached") is None:
+            result.fail(f"New puzzle {new_pid} has null lastactcached (should have 'create' activity)")
+            return
+        if new_puz_in_all["lastactcached"].get("type") != "create":
+            result.fail(
+                f"New puzzle lastactcached type={new_puz_in_all['lastactcached'].get('type')!r}, expected 'create'"
+            )
+            return
+        self.logger.log_operation(f"  ✓ Newly created puzzle has lastactcached type='create'")
+
+        # 5. GET /puzzles/<new_pid> also has lastactcached non-null (DB fallback)
+        new_pdata = self.api_get(f"/puzzles/{new_pid}")
+        if new_pdata.get("lastactcached") is None:
+            result.fail(f"GET /puzzles/{new_pid} lastactcached null (DB fallback should populate it)")
+            return
+        self.logger.log_operation(f"  ✓ GET /puzzles/<new_id> lastactcached non-null via DB fallback")
+
+        result.set_success("lastactcached test completed successfully")
 
     # ------------------------------------------------------------------
     # Test 16: Puzzle Activity Endpoint
@@ -2566,6 +2698,7 @@ class TestRunner:
             self.test_solver_reassignment,
             self.test_activity_tracking,
             self.test_lastact_embedding,
+            self.test_lastactcached,
             self.test_puzzle_activity_endpoint,
             self.test_solver_activity_endpoint,
             self.test_solver_history,
