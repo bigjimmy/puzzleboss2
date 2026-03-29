@@ -222,6 +222,23 @@ def _promote_top_hint(cursor):
         debug_log(3, f"Auto-promoted hint {top['id']} to 'ready'")
 
 
+# Sentinel for "puzzle not found in cache" — distinct from None (found, no activity).
+_CACHE_MISS = object()
+
+
+def _serialize_activity_for_cache(row):
+    """Return a copy of an activity row with time converted to ISO 8601 string.
+
+    MySQL returns time as a datetime object, which json.dumps() cannot serialize.
+    Used when injecting activity rows into data that will be stored in memcache.
+    """
+    if not row or not row.get("time"):
+        return row
+    row = dict(row)
+    row["time"] = row["time"].isoformat()
+    return row
+
+
 def _get_all_from_db():
     """Internal function to fetch all rounds/puzzles from database."""
     debug_log(4, "fetching all from database")
@@ -260,11 +277,10 @@ def _get_all_from_db():
             # ORDER BY a.id DESC means the first row per puzzle_id is the
             # most recent; skip subsequent rows for the same puzzle.
             if pid in all_puzzles and "lastactcached" not in all_puzzles[pid]:
-                row["time"] = row["time"].isoformat() if row.get("time") else None
-                all_puzzles[pid]["lastactcached"] = row
+                all_puzzles[pid]["lastactcached"] = _serialize_activity_for_cache(row)
     except Exception as e:
         debug_log(2, f"Failed to fetch lastactcached: {e}")
-        # Non-fatal: puzzles without lastactcached will fall back in callers
+        # Non-fatal: affected puzzles get lastactcached=None via setdefault below
 
     # Ensure all puzzles have the key (None for puzzles with no activity yet)
     for puzzle in all_puzzles.values():
@@ -570,8 +586,7 @@ def get_one_puzzle(id):
     # cache if warm, DB fallback if cold) to reduce HTTP round-trips.
     lastact = get_last_activity_for_puzzle(id)
 
-    _SENTINEL = object()  # distinguishes "not found in cache" from "found, value is None"
-    lastactcached = _SENTINEL
+    lastactcached = _CACHE_MISS
     cached_blob = cache_get(MEMCACHE_CACHE_KEY)
     if cached_blob:
         try:
@@ -581,19 +596,15 @@ def get_one_puzzle(id):
                     if p.get("id") == int(id):
                         lastactcached = p.get("lastactcached")  # may legitimately be None
                         break
-                if lastactcached is not _SENTINEL:
+                if lastactcached is not _CACHE_MISS:
                     break
         except Exception as e:
             debug_log(3, f"Failed to read lastactcached from cache for puzzle {id}: {e}")
 
-    if lastactcached is _SENTINEL:
-        # Cache cold or puzzle not found in cache — reuse already-fetched lastact
-        # (same DB row, no second query needed)
-        row = lastact
-        if row and row.get("time") and not isinstance(row["time"], str):
-            row = dict(row)  # copy before mutating — lastact is returned as-is
-            row["time"] = row["time"].isoformat()
-        lastactcached = row
+    if lastactcached is _CACHE_MISS:
+        # Cache cold or puzzle not found — reuse already-fetched lastact
+        # (avoids a second identical DB query; copy before mutating time)
+        lastactcached = _serialize_activity_for_cache(lastact)
 
     return {
         "status": "ok",
