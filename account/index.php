@@ -49,7 +49,7 @@ $recaptcha_secret_key = $config->RECAPTCHA_SECRET_KEY ?? '';
       height: 100vh;
       justify-items: center;
       margin: 0;
-      width: 100vw;
+      width: 100%;
     }
     h1 {
       line-height: 1em;
@@ -83,6 +83,7 @@ $recaptcha_secret_key = $config->RECAPTCHA_SECRET_KEY ?? '';
       background-color: lightpink;
       padding: 10px;
     }
+    .grecaptcha-badge { bottom: 14px !important; }
   </style>
 </head>
 <body>
