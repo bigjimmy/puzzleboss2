@@ -268,7 +268,11 @@ wait_for_stable() {
                 --region "${AWS_REGION}" --output text \
                 --query 'services[0].deployments[?status==`PRIMARY`].rolloutState | [0]' 2>/dev/null || echo "UNKNOWN")
 
-            if [ "$rollout_state" = "FAILED" ]; then
+            # Services scaled to zero are immediately stable — nothing to wait for
+            if [ "$desired" = "0" ]; then
+                svc_status="scaled to 0 (skipped)"
+                continue
+            elif [ "$rollout_state" = "FAILED" ]; then
                 svc_status="${RED}FAILED${RESET}"
                 any_failed=true
             elif [ "$dep_count" -gt 1 ] 2>/dev/null; then
