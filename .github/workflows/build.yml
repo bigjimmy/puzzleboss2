@@ -5,7 +5,8 @@ name: Build
 #
 # Runs on the utility server self-hosted runner (ARM64/Graviton) for
 # native builds. AWS credentials come from the EC2 instance profile —
-# no secrets needed in GitHub.
+# no secrets needed in GitHub. The PAT for checking out puzzleboss2-infra
+# (private repo) is fetched from SSM using the instance profile.
 
 on:
   push:
@@ -20,11 +21,19 @@ jobs:
       - name: Checkout app repo
         uses: actions/checkout@v4
 
+      - name: Get infra repo token from SSM
+        run: |
+          INFRA_PAT=$(aws ssm get-parameter --region us-east-1 \
+            --name /puzzleboss/utility/github_runner_pat \
+            --query 'Parameter.Value' --output text)
+          echo "INFRA_PAT=$INFRA_PAT" >> $GITHUB_ENV
+
       - name: Checkout infra repo
         uses: actions/checkout@v4
         with:
           repository: bigjimmy/puzzleboss2-infra
           path: puzzleboss2-infra
+          token: ${{ env.INFRA_PAT }}
 
       - name: Login to ECR
         run: |

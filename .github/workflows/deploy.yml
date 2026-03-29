@@ -22,11 +22,19 @@ jobs:
       - name: Checkout app repo
         uses: actions/checkout@v4
 
+      - name: Get infra repo token from SSM
+        run: |
+          INFRA_PAT=$(aws ssm get-parameter --region us-east-1 \
+            --name /puzzleboss/utility/github_runner_pat \
+            --query 'Parameter.Value' --output text)
+          echo "INFRA_PAT=$INFRA_PAT" >> $GITHUB_ENV
+
       - name: Checkout infra repo
         uses: actions/checkout@v4
         with:
           repository: bigjimmy/puzzleboss2-infra
           path: puzzleboss2-infra
+          token: ${{ env.INFRA_PAT }}
 
       - name: Login to ECR
         run: |
