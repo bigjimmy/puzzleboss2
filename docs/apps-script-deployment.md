@@ -62,15 +62,8 @@ When a new puzzle sheet is created via `addpuzzle.php` or the API, Puzzleboss au
 To deploy/update the add-on on existing sheets:
 
 ```bash
-# Deploy to a specific puzzle (by ID or name pattern)
-curl -X POST "http://localhost:5000/puzzles/activate-addons" \
-  -H "Content-Type: application/json" \
-  -d '{"puzzle_ids": [123, 456]}'
-
 # Deploy to all puzzles missing the add-on
-curl -X POST "http://localhost:5000/puzzles/activate-addons" \
-  -H "Content-Type: application/json" \
-  -d '{"filter": "missing_addon"}'
+curl -X POST "http://localhost:5000/puzzles/activate_all"
 ```
 
 ### Updating the Add-on Code
@@ -199,11 +192,11 @@ Track add-on deployment via:
 
 **Fix**:
 ```bash
-# Check logs for activation errors
-grep "activate_puzzle_sheet_via_api" /var/log/puzzleboss/pbrest.log
+# Check logs for activation errors (production: query Loki; local Docker: check gunicorn error log)
+docker exec puzzleboss-app grep "activate_puzzle_sheet_via_api" /var/log/gunicorn/error.log
 
-# Manually deploy to the sheet
-curl -X POST "http://localhost:5000/puzzles/{puzzle_id}/activate-addon"
+# Manually re-deploy to all sheets missing the add-on
+curl -X POST "http://localhost:5000/puzzles/activate_all"
 ```
 
 ### Activity Tracking Not Working
@@ -295,16 +288,15 @@ The following config values are now obsolete and can be removed from the databas
 
 ### API Endpoints
 
-- `POST /puzzles` - Create puzzle, automatically deploys add-on
-- `POST /puzzles/{id}/activate-addon` - Manually deploy to specific puzzle
-- `POST /puzzles/activate-addons` - Batch deploy to multiple puzzles
+- `POST /puzzles/stepwise` + `GET /createpuzzle/{code}?step=N` - Create puzzle (steps 3–4 deploy the add-on)
+- `POST /puzzles/activate_all` - Deploy add-on to all puzzles currently missing it
 
 ### Configuration Keys
 
 ```sql
 -- View current add-on config
 SELECT `key`, LENGTH(val) as size_bytes FROM config
-WHERE `key` LIKE 'APPS_SCRIPT%';
+WHERE `key` LIKE 'GOOGLE_APPS_SCRIPT%';
 
 -- Update add-on code (be careful with escaping!)
 UPDATE config SET val = '<new_code>' WHERE `key` = 'GOOGLE_APPS_SCRIPT_CODE';

@@ -129,14 +129,15 @@ When connecting to AWS RDS:
 Check if SSL is active:
 ```bash
 docker exec puzzleboss-app python3 -c "
-from pblib import config
-import MySQLdb
+from pblib import configstruct
+import MySQLdb, yaml
+cfg = yaml.safe_load(open('/app/puzzleboss.yaml'))['MYSQL']
 conn = MySQLdb.connect(
-    host=config['MYSQL']['HOST'],
-    user=config['MYSQL']['USERNAME'],
-    passwd=config['MYSQL']['PASSWORD'],
-    db=config['MYSQL']['DATABASE'],
-    ssl={'ca': config['MYSQL']['SSL']['CA']} if 'SSL' in config['MYSQL'] else None
+    host=cfg['HOST'],
+    user=cfg['USERNAME'],
+    passwd=cfg['PASSWORD'],
+    db=cfg['DATABASE'],
+    ssl={'ca': cfg['SSL']['CA']} if 'SSL' in cfg else None
 )
 cursor = conn.cursor()
 cursor.execute('SHOW STATUS LIKE \"Ssl_cipher\"')
@@ -170,8 +171,11 @@ The Docker image includes Playwright for headless browser testing. This is usefu
 ### Running UI Tests
 
 ```bash
-# Run the example UI tests
-docker exec puzzleboss-app python3 scripts/test_ui_playwright.py
+# Run the comprehensive UI test suite
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive
+
+# List available tests without running them
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --list
 ```
 
 ### Writing Custom Tests
@@ -200,7 +204,7 @@ with sync_playwright() as p:
 
 ### Available Tests
 
-See `scripts/test_ui_playwright.py` for examples:
+See `scripts/test_ui_comprehensive.py` for the full test suite:
 - Basic page load test
 - Advanced controls rendering
 - Puzzle creation flow
@@ -223,12 +227,18 @@ docker-compose up --build
 ## Enabling Optional Features
 
 ### BigJimmy Bot (Google Sheets Integration)
-1. Get Google API credentials and place in project root
-2. Update `puzzleboss-docker.yaml`:
-   - Set config variable `SKIP_GOOGLE_API: false`
-3. Edit `docker/supervisord.conf`:
-   - Set `autostart=true` for `[program:bigjimmybot]`
-4. Rebuild: `docker-compose up --build`
+1. Create a service account with Domain-Wide Delegation in Google Cloud Console and download the JSON key file
+2. Authorize it in Google Workspace Admin (Security → API controls → Domain-wide delegation)
+3. Paste the key file contents into the database:
+   ```bash
+   docker exec -it puzzleboss-mysql mysql -u puzzleboss -ppuzzleboss123 puzzleboss -e \
+     "UPDATE config SET val='<paste JSON here>' WHERE \`key\`='SERVICE_ACCOUNT_JSON';"
+   docker exec -it puzzleboss-mysql mysql -u puzzleboss -ppuzzleboss123 puzzleboss -e \
+     "UPDATE config SET val='admin@yourdomain.org' WHERE \`key\`='SERVICE_ACCOUNT_SUBJECT';
+      UPDATE config SET val='false' WHERE \`key\`='SKIP_GOOGLE_API';"
+   ```
+4. Edit `docker/supervisord.conf`: set `autostart=true` for `[program:bigjimmybot]`
+5. Rebuild: `docker-compose up --build`
 
 ### Discord Integration
 1. Set up puzzcord daemon separately

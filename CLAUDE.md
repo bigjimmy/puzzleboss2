@@ -53,7 +53,7 @@ Infrastructure (Terraform, Grafana dashboards, operations runbook) is managed in
 - Can be disabled via `SKIP_PUZZCORD=true` config flag
 
 **Optional Features**
-- Google API: Disable via `SKIP_GOOGLE_API=true` in puzzleboss.yaml
+- Google API: Disable via `SKIP_GOOGLE_API=true` in the database `config` table
 - Memcache: Enable via `MEMCACHE_ENABLED=true` in config table, caches `/allcached` endpoint
 - Prometheus metrics: Exposed at `/metrics` endpoint if prometheus_flask_exporter installed
 - LLM queries: Requires google-genai SDK, enabled at `/v1/query` endpoint
