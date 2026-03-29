@@ -1,0 +1,36 @@
+name: Build
+
+# Builds and pushes images to ECR on every push to master.
+# Does NOT update ECS services — use the Deploy workflow for that.
+#
+# Runs on the utility server self-hosted runner (ARM64/Graviton) for
+# native builds. AWS credentials come from the EC2 instance profile —
+# no secrets needed in GitHub.
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: [self-hosted, linux, arm64]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+        with:
+          repository: bigjimmy/puzzleboss2-infra
+          path: puzzleboss2-infra
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | \
+            docker login --username AWS --password-stdin \
+            $(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-1.amazonaws.com
+
+      - name: Build and push (parallel, with ECR cache)
+        run: PUZZLEBOSS_DIR=$PWD puzzleboss2-infra/scripts/deploy.sh --build-only
