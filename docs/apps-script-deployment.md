@@ -111,14 +111,10 @@ The Apps Script API deployment requires:
 
 ### Config Values
 
-In `puzzleboss.yaml`:
-```yaml
-SERVICE_ACCOUNT_FILE: service-account.json
-```
-
 In database `config` table:
 ```sql
-INSERT INTO config (`key`, val) VALUES ('SERVICE_ACCOUNT_SUBJECT', 'bigjimmy@importanthuntpoll.org');
+UPDATE config SET val='<paste full JSON key file contents here>' WHERE `key`='SERVICE_ACCOUNT_JSON';
+UPDATE config SET val='bigjimmy@importanthuntpoll.org' WHERE `key`='SERVICE_ACCOUNT_SUBJECT';
 ```
 
 ## How It Works

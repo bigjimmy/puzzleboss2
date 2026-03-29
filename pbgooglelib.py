@@ -123,17 +123,32 @@ SCOPES = [
 ADMINSCOPES = ["https://www.googleapis.com/auth/admin.directory.user"]
 
 
-def _get_service_account_file():
-    """Get the path to the service account JSON key file."""
-    # Check config table first, then fall back to default path
+def _get_service_account_info():
+    """Return service account credentials as a dict.
+
+    Prefers SERVICE_ACCOUNT_JSON from the config table (stores the full JSON
+    content of the key file).  Falls back to reading SERVICE_ACCOUNT_FILE from
+    disk so that existing deployments continue to work without changes.
+    """
+    sa_json = configstruct.get("SERVICE_ACCOUNT_JSON", "")
+    if sa_json:
+        try:
+            return json.loads(sa_json)
+        except json.JSONDecodeError as e:
+            debug_log(0, f"SERVICE_ACCOUNT_JSON is invalid JSON: {e}")
+            raise Exception(f"SERVICE_ACCOUNT_JSON in config table is not valid JSON: {e}")
+
+    # Fall back to file-based credential
     sa_file = configstruct.get("SERVICE_ACCOUNT_FILE", "service-account.json")
     if not os.path.exists(sa_file):
-        debug_log(0, f"Service account file not found: {sa_file}")
+        debug_log(0, f"Service account not configured: no SERVICE_ACCOUNT_JSON and file not found: {sa_file}")
         raise Exception(
-            f"Service account key file '{sa_file}' not found. "
-            "Download it from Google Cloud Console and place it in the app directory."
+            "Google service account not configured. Set SERVICE_ACCOUNT_JSON in the config table "
+            "with the full contents of your service account key file, or place the key file at "
+            f"the path in SERVICE_ACCOUNT_FILE (currently: {sa_file})."
         )
-    return sa_file
+    with open(sa_file) as f:
+        return json.load(f)
 
 
 def _get_impersonation_subject():
@@ -159,12 +174,12 @@ def initadmin():
         debug_log(5, "Admin credentials already initialized, skipping")
         return
 
-    sa_file = _get_service_account_file()
+    sa_info = _get_service_account_info()
     subject = _get_impersonation_subject()
 
-    debug_log(4, f"Loading admin credentials from service account: {sa_file} (subject: {subject})")
-    admincreds = service_account.Credentials.from_service_account_file(
-        sa_file, scopes=ADMINSCOPES, subject=subject
+    debug_log(4, f"Loading admin credentials from service account (subject: {subject})")
+    admincreds = service_account.Credentials.from_service_account_info(
+        sa_info, scopes=ADMINSCOPES, subject=subject
     )
     debug_log(3, "Admin credentials initialized via service account")
 
@@ -193,12 +208,12 @@ def initdrive():
         debug_log(5, "Drive/Sheets services already initialized, skipping")
         return 0
 
-    sa_file = _get_service_account_file()
+    sa_info = _get_service_account_info()
     subject = _get_impersonation_subject()
 
-    debug_log(4, f"Loading Drive/Sheets credentials from service account: {sa_file} (subject: {subject})")
-    creds = service_account.Credentials.from_service_account_file(
-        sa_file, scopes=SCOPES, subject=subject
+    debug_log(4, f"Loading Drive/Sheets credentials from service account (subject: {subject})")
+    creds = service_account.Credentials.from_service_account_info(
+        sa_info, scopes=SCOPES, subject=subject
     )
 
     service = build("drive", "v3", credentials=creds)
@@ -1187,14 +1202,14 @@ def activate_puzzle_sheet_via_api(sheet_id: str, puzzlename: Optional[str] = Non
     global _script_service
     with _script_service_lock:
         if _script_service is None:
-            sa_file = _get_service_account_file()
+            sa_info = _get_service_account_info()
             subject = _get_impersonation_subject()
-            if not sa_file or not subject:
+            if not sa_info or not subject:
                 debug_log(1, f"[{puzz_label}] Cannot activate via API — service account not configured")
                 return False
             try:
-                api_creds = service_account.Credentials.from_service_account_file(
-                    sa_file,
+                api_creds = service_account.Credentials.from_service_account_info(
+                    sa_info,
                     scopes=[
                         "https://www.googleapis.com/auth/drive",
                         "https://www.googleapis.com/auth/spreadsheets",

@@ -419,6 +419,7 @@ $keyCategoryMap = [
   'BIGJIMMY_THREADCOUNT' => 'bigjimmy',
 
   'SKIP_GOOGLE_API' => 'google',
+  'SERVICE_ACCOUNT_JSON' => 'google',
   'SERVICE_ACCOUNT_FILE' => 'google',
   'SERVICE_ACCOUNT_SUBJECT' => 'google',
   'SHEETS_TEMPLATE_ID' => 'google',
@@ -469,7 +470,8 @@ $keyDescriptions = [
   'BIGJIMMY_QUOTAFAIL_MAX_RETRIES' => 'Max retries after quota failures',
   'BIGJIMMY_THREADCOUNT' => 'Number of parallel threads for sheet polling',
   'SKIP_GOOGLE_API' => 'Disable all Google Sheets/Drive integration',
-  'SERVICE_ACCOUNT_FILE' => 'Path to Google service account JSON key file',
+  'SERVICE_ACCOUNT_JSON' => 'Full contents of the Google service account JSON key file (preferred over SERVICE_ACCOUNT_FILE)',
+  'SERVICE_ACCOUNT_FILE' => 'Path to Google service account JSON key file on disk (fallback if SERVICE_ACCOUNT_JSON is not set)',
   'SERVICE_ACCOUNT_SUBJECT' => 'Domain admin email for service account impersonation (e.g. admin@yourdomain.org)',
   'SHEETS_TEMPLATE_ID' => 'Google Sheet ID used as template for new puzzles',
   'SKIP_PUZZCORD' => 'Disable Discord integration',

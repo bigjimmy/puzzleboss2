@@ -207,11 +207,11 @@ docker exec puzzleboss-app tail -100 /var/log/gunicorn/error.log
 
 ### Enable BigJimmy Bot (requires Google service account):
 1. Create a service account with Domain-Wide Delegation in Google Cloud Console
-2. Download the JSON key file and place it in the project root as `service-account.json`
+2. Download the JSON key file
 3. Authorize the service account in Google Workspace Admin (Security → API controls → Domain-wide delegation)
-4. Update config in database:
+4. Paste the key file contents into the database config:
    ```sql
-   UPDATE config SET val='service-account.json' WHERE `key`='SERVICE_ACCOUNT_FILE';
+   UPDATE config SET val='<paste full JSON key file contents here>' WHERE `key`='SERVICE_ACCOUNT_JSON';
    UPDATE config SET val='admin@yourdomain.org' WHERE `key`='SERVICE_ACCOUNT_SUBJECT';
    UPDATE config SET val='false' WHERE `key`='SKIP_GOOGLE_API';
    ```

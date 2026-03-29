@@ -15,7 +15,7 @@ Infrastructure (Terraform, Grafana dashboards, operations runbook) is managed in
 **Backend (Python)**
 - `pbrest.py` - Flask REST API server with MySQL database. Main entry point for API operations. Uses Flasgger for Swagger/OpenAPI documentation.
 - `pblib.py` - Core library with configuration management, solver assignment/unassignment, activity logging, and email functions. Loads config from both `puzzleboss.yaml` (static) and database `config` table (dynamic). Config auto-refreshes every 30 seconds via `maybe_refresh_config()`. All functions that accept ID parameters normalize to `int()` at the boundary.
-- `pbgooglelib.py` - Google Drive/Sheets integration. Uses service account credentials (`service-account.json`) with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Supports hybrid metadata approach for sheet activity tracking.
+- `pbgooglelib.py` - Google Drive/Sheets integration. Uses service account credentials (stored as JSON in the `SERVICE_ACCOUNT_JSON` config key) with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Supports hybrid metadata approach for sheet activity tracking.
 - `pbdiscordlib.py` - Discord integration via socket connection to puzzcord daemon. Creates channels, announces solves/rounds.
 - `pbllmlib.py` - LLM-powered natural language queries via Google Gemini. Includes function calling for hunt data and RAG support for wiki content via ChromaDB.
 - `bigjimmybot.py` - Multi-threaded bot that polls Google Sheets for activity and updates puzzle metadata (sheetcount, lastsheetact). Uses hybrid approach: reads hidden `_pb_activity` sheet for sheets with add-on, falls back to legacy Revisions API for old sheets.
@@ -108,14 +108,14 @@ cp puzzleboss-SAMPLE.yaml puzzleboss.yaml
 ### Google Service Account Setup (Optional)
 ```bash
 # 1. Create a service account with Domain-Wide Delegation in Google Cloud Console
-# 2. Download the JSON key file and place it in the app directory as service-account.json
+# 2. Download the JSON key file
 # 3. Authorize the service account's client ID in Google Workspace Admin Console
 #    (Security → API controls → Domain-wide delegation) with these scopes:
 #    https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.file,
 #    https://www.googleapis.com/auth/drive.appdata,https://www.googleapis.com/auth/drive.metadata.readonly,
 #    https://www.googleapis.com/auth/spreadsheets,https://www.googleapis.com/auth/admin.directory.user
 # 4. Set config values in the database:
-#    SERVICE_ACCOUNT_FILE = service-account.json
+#    SERVICE_ACCOUNT_JSON = <full contents of the downloaded JSON key file>
 #    SERVICE_ACCOUNT_SUBJECT = admin@yourdomain.org  (domain admin email to impersonate)
 ```
 
@@ -347,6 +347,9 @@ All database IDs (puzzle.id, solver.id, round.id, activity.id) are `INT(11)` in 
 
 **Google API Settings**:
 - `SKIP_GOOGLE_API`: Disable Google Sheets integration
+- `SERVICE_ACCOUNT_JSON`: Full JSON contents of the Google service account key file (preferred)
+- `SERVICE_ACCOUNT_FILE`: Path to service account key file on disk (fallback if `SERVICE_ACCOUNT_JSON` not set)
+- `SERVICE_ACCOUNT_SUBJECT`: Domain admin email to impersonate via Domain-Wide Delegation
 - `GOOGLE_APPS_SCRIPT_CODE`: Apps Script code to deploy to puzzle sheets (defaults to simple onEdit tracker)
 - `GOOGLE_APPS_SCRIPT_MANIFEST`: Apps Script manifest JSON (defaults to V8 runtime config)
 
@@ -406,7 +409,7 @@ curl -sG 'http://localhost:3100/loki/api/v1/query_range' \
 
 ## Security Notes
 
-- Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf`
+- Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf` (service account credentials should be stored in the `SERVICE_ACCOUNT_JSON` config table entry, not on disk)
 - Use environment variables or secrets management for production credentials
 - Apache should restrict access to parent directory (only www/ should be web-accessible)
 - Database user should only have access to puzzleboss database
