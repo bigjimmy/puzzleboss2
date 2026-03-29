@@ -445,6 +445,8 @@ $keyCategoryMap = [
   'ACCT_URI' => 'signup',
   'REGEMAIL' => 'signup',
   'MAILRELAY' => 'signup',
+  'RECAPTCHA_SITE_KEY' => 'signup',
+  'RECAPTCHA_SECRET_KEY' => 'signup',
 
   'ACTIVITY_SOURCES' => 'general',
   'BIN_URI' => 'general',
@@ -494,6 +496,8 @@ $keyDescriptions = [
   'BIN_URI' => 'URL root for the Puzzleboss web UI',
   'REGEMAIL' => 'Admin email address for registration',
   'MAILRELAY' => 'SMTP relay server for outbound email',
+  'RECAPTCHA_SITE_KEY' => 'Google reCAPTCHA v3 site key (public — shown in browser). Leave empty to disable CAPTCHA.',
+  'RECAPTCHA_SECRET_KEY' => 'Google reCAPTCHA v3 secret key (server-side verification). Leave empty to disable CAPTCHA.',
   'ACTIVITY_SOURCES' => 'Comma-separated list of valid activity sources. ⚠️ Must match the ENUM values in the activity.source column in the database — adding a value here without a corresponding ALTER TABLE will cause inserts to fail.',
   'STATUS_METADATA' => 'JSON array defining puzzle statuses (emoji, text, order)',
   'METRICS_METADATA' => 'JSON object defining Prometheus metric definitions for botstats. Activity-table metrics (puzzleboss_activity_total) are automatically exported by type and source and are not configured here.',

@@ -1,10 +1,46 @@
-<?php ob_start(); ?>
+<?php
+ob_start();
+session_start();
+
+if (array_key_exists('debug', $_GET)) {
+  error_reporting(E_ALL);
+  ini_set('display_errors', 'On');
+}
+global $apiroot;
+
+$yaml = yaml_parse_file('../puzzleboss.yaml');
+$apiroot = $yaml['API']['APIURI'];
+$example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
+
+function readapi($apicall) {
+  $url  = $GLOBALS['apiroot'] . $apicall;
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_URL, $url);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  curl_setopt($curl, CURLOPT_HTTPHEADER, ["Accept: application/json"]);
+  $resp = curl_exec($curl);
+  curl_close($curl);
+  return json_decode($resp);
+}
+
+$config = readapi('/config')->config;
+$bookmarkuri = $config->bookmarklet_js;
+$pbroot = $config->BIN_URI;
+$regemail = $config->REGEMAIL;
+$google_domain = $config->DOMAINNAME;
+$teamname = htmlspecialchars($config->TEAMNAME ?? 'Our Team');
+$recaptcha_site_key   = $config->RECAPTCHA_SITE_KEY   ?? '';
+$recaptcha_secret_key = $config->RECAPTCHA_SECRET_KEY ?? '';
+?>
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Puzzleboss Accounts</title>
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;700&amp;family=Open+Sans:wght@400;700&amp;display=swap" rel="stylesheet">
+  <?php if (!empty($recaptcha_site_key)): ?>
+  <script src="https://www.google.com/recaptcha/api.js?render=<?= htmlspecialchars($recaptcha_site_key) ?>"></script>
+  <?php endif; ?>
   <style>
     body {
       background-color: aliceblue;
@@ -52,40 +88,6 @@
 <body>
 <main>
 <?php
-session_start();
-
-if (array_key_exists('debug', $_GET)) {
-  error_reporting(E_ALL);
-  ini_set('display_errors', 'On');
-}
-global $apiroot;
-
-$yaml = yaml_parse_file('../puzzleboss.yaml');
-$apiroot = $yaml['API']['APIURI'];
-$example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
-
-function readapi($apicall) {
-  $url  = $GLOBALS['apiroot'] . $apicall;
-  $curl = curl_init($url);
-  curl_setopt($curl, CURLOPT_URL, $url);
-  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-  $headers = array(
-    "Accept: application/json"
-  );
-  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-  $resp = curl_exec($curl);
-  curl_close($curl);
-  return json_decode($resp);
-}
-
-//TODO: add error handling here for mandatory config values. should direct user to admin page for config editing.
-$config = readapi('/config')->config;
-$bookmarkuri = $config->bookmarklet_js;
-$pbroot = $config->BIN_URI;
-$regemail = $config->REGEMAIL;
-$google_domain = $config->DOMAINNAME;
-$teamname = htmlspecialchars($config->TEAMNAME ?? 'Our Team');
-
 // --- Registration page access gate ---
 // Credentials managed via config table (ACCT_USERNAME / ACCT_PASSWORD).
 // If both are empty, registration is closed.
@@ -102,10 +104,26 @@ HTML;
   exit(0);
 }
 
+function verify_recaptcha($token, $secret_key, $min_score = 0.5) {
+  if (empty($secret_key) || empty($token)) return true; // dev mode: skip check
+  $curl = curl_init('https://www.google.com/recaptcha/api/siteverify');
+  curl_setopt($curl, CURLOPT_POST, true);
+  curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query([
+    'secret'   => $secret_key,
+    'response' => $token,
+  ]));
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $result = json_decode(curl_exec($curl), true);
+  curl_close($curl);
+  return !empty($result['success']) && ($result['score'] ?? 0) >= $min_score;
+}
+
 if (empty($_SESSION['acct_authenticated'])) {
   $gate_error = '';
   if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['gate_username'])) {
-    if ($_POST['gate_username'] === $gate_username && $_POST['gate_password'] === $gate_password) {
+    if (!verify_recaptcha($_POST['g-recaptcha-response'] ?? '', $recaptcha_secret_key)) {
+      $gate_error = '<div class="error">CAPTCHA verification failed. Please try again.</div>';
+    } elseif ($_POST['gate_username'] === $gate_username && $_POST['gate_password'] === $gate_password) {
       $_SESSION['acct_authenticated'] = true;
       // Redirect to GET to prevent form resubmission
       header('Location: ' . $_SERVER['REQUEST_URI']);
@@ -114,11 +132,26 @@ if (empty($_SESSION['acct_authenticated'])) {
       $gate_error = '<div class="error">Incorrect username or password.</div>';
     }
   }
+  $captcha_js = !empty($recaptcha_site_key) ? <<<JS
+    <script>
+      document.getElementById('gate-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var form = this;
+        grecaptcha.ready(function() {
+          grecaptcha.execute('{$recaptcha_site_key}', {action: 'gate_login'}).then(function(token) {
+            document.getElementById('g-recaptcha-response-gate').value = token;
+            form.submit();
+          });
+        });
+      });
+    </script>
+    JS : '';
   print <<<HTML
     <h1>Puzzleboss 2000 Account Registration<span class="team-name">$teamname</span></h1>
     <p>Enter the team credentials to access account registration.</p>
     $gate_error
-    <form action="?" method="POST">
+    <form action="?" method="POST" id="gate-form">
+      <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response-gate" value="">
       <table class="registration">
         <tr>
           <td><label for="gate_username">Username:</label></td>
@@ -134,6 +167,7 @@ if (empty($_SESSION['acct_authenticated'])) {
         </tr>
       </table>
     </form>
+    $captcha_js
   </main></body></html>
 HTML;
   exit(0);
@@ -193,6 +227,13 @@ function assert_api_success($responseobj) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  // CAPTCHA check on initial registration submission (not on the confirm step)
+  if (!array_key_exists('userok', $_POST)) {
+    if (!verify_recaptcha($_POST['g-recaptcha-response'] ?? '', $recaptcha_secret_key)) {
+      exit_with_error_message("CAPTCHA verification failed. Please go back and try again.");
+    }
+  }
+
   $username = $_POST['username'];
   $fullname = rtrim($_POST['fullname']);
   $email    = $_POST['email'];
@@ -474,7 +515,8 @@ HTML;
   If you're a returning solver and need to reset your password, use
   <a href="https://accounts.google.com/signin/recovery" target="_blank">Google's password recovery</a>.
 </p>
-<form action="?" method="POST">
+<form action="?" method="POST" id="reg-form">
+<input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response-reg" value="">
 <table class="registration">
   <tr>
     <td><label for="username">Username (alphanumeric only, max 20 chars):</label></td>
@@ -521,6 +563,20 @@ HTML;
   </tr>
 </table>
 </form>
+<?php if (!empty($recaptcha_site_key)): ?>
+<script>
+  document.getElementById('reg-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var form = this;
+    grecaptcha.ready(function() {
+      grecaptcha.execute('<?= htmlspecialchars($recaptcha_site_key) ?>', {action: 'register'}).then(function(token) {
+        document.getElementById('g-recaptcha-response-reg').value = token;
+        form.submit();
+      });
+    });
+  });
+</script>
+<?php endif; ?>
 </main>
 </body>
 </html>

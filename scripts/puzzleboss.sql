@@ -196,6 +196,8 @@ INSERT INTO `config` VALUES
   ('MEMCACHE_PORT', '11211'),
   ('PUZZCORD_HOST', 'puzzcord-server.example.org'),
   ('PUZZCORD_PORT', '3141'),
+  ('RECAPTCHA_SITE_KEY', ''),
+  ('RECAPTCHA_SECRET_KEY', ''),
   ('REGEMAIL', 'admin@yourdomain.org'),
   ('SERVICE_ACCOUNT_JSON', ''),
   ('SERVICE_ACCOUNT_FILE', ''),
