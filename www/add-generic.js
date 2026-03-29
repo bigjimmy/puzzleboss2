@@ -304,7 +304,7 @@ export default {
                     
                     // Fetch last activity information
                     try {
-                        const lastActUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=lastact`;
+                        const lastActUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}`;
                         let lastActData = await(await fetch(lastActUrl)).json();
                         if (lastActData.lastact && lastActData.lastact.time) {
                             const lastActDate = new Date(lastActData.lastact.time);
