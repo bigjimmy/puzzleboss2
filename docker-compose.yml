@@ -71,11 +71,14 @@ services:
       - ./pbgooglelib.py:/app/pbgooglelib.py
       - ./pbdiscordlib.py:/app/pbdiscordlib.py
       - ./pbllmlib.py:/app/pbllmlib.py
+      - ./pbcachelib.py:/app/pbcachelib.py
       - ./bigjimmybot.py:/app/bigjimmybot.py
       - ./wsgi.py:/app/wsgi.py
       - ./gunicorn_config.py:/app/gunicorn_config.py
       - ./scripts:/app/scripts
       - ./swag:/app/swag
+      - ./migrations:/app/migrations
+      - ./tests:/app/tests
       # MySQL SSL certificates
       - mysql_certs:/var/lib/mysql-certs:ro
       # Optional: Mount custom config (uncomment to use your own puzzleboss.yaml)

@@ -25,10 +25,10 @@ WORKDIR /app
 RUN pip install --upgrade pip>=25.3
 
 # Copy Python requirements and install
-COPY requirements.txt .
+COPY requirements.txt requirements-dev.txt ./
 # Suppress setuptools deprecation warnings during build (they're from the packages, not our code)
 ENV PYTHONWARNINGS="ignore::DeprecationWarning"
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
 ENV PYTHONWARNINGS=""
 
 # Install Playwright browsers (Chromium only) with system dependencies
