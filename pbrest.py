@@ -570,7 +570,8 @@ def get_one_puzzle(id):
     # cache if warm, DB fallback if cold) to reduce HTTP round-trips.
     lastact = get_last_activity_for_puzzle(id)
 
-    lastactcached = None
+    _SENTINEL = object()  # distinguishes "not found in cache" from "found, value is None"
+    lastactcached = _SENTINEL
     cached_blob = cache_get(MEMCACHE_CACHE_KEY)
     if cached_blob:
         try:
@@ -578,17 +579,19 @@ def get_one_puzzle(id):
             for round_data in cached_data.get("rounds", []):
                 for p in round_data.get("puzzles", []):
                     if p.get("id") == int(id):
-                        lastactcached = p.get("lastactcached")
+                        lastactcached = p.get("lastactcached")  # may legitimately be None
                         break
-                if lastactcached is not None:
+                if lastactcached is not _SENTINEL:
                     break
         except Exception as e:
             debug_log(3, f"Failed to read lastactcached from cache for puzzle {id}: {e}")
 
-    if lastactcached is None:
-        # Cache cold or puzzle not found — fall back to DB (never return null)
-        row = get_last_activity_for_puzzle(id)
-        if row and row.get("time"):
+    if lastactcached is _SENTINEL:
+        # Cache cold or puzzle not found in cache — reuse already-fetched lastact
+        # (same DB row, no second query needed)
+        row = lastact
+        if row and row.get("time") and not isinstance(row["time"], str):
+            row = dict(row)  # copy before mutating — lastact is returned as-is
             row["time"] = row["time"].isoformat()
         lastactcached = row
 
