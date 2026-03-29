@@ -222,10 +222,6 @@ def _promote_top_hint(cursor):
         debug_log(3, f"Auto-promoted hint {top['id']} to 'ready'")
 
 
-# Sentinel for "puzzle not found in cache" — distinct from None (found, no activity).
-_CACHE_MISS = object()
-
-
 def _serialize_activity_for_cache(row):
     """Return a copy of an activity row with time converted to ISO 8601 string.
 
@@ -586,25 +582,11 @@ def get_one_puzzle(id):
     # cache if warm, DB fallback if cold) to reduce HTTP round-trips.
     lastact = get_last_activity_for_puzzle(id)
 
-    lastactcached = _CACHE_MISS
-    cached_blob = cache_get(MEMCACHE_CACHE_KEY)
-    if cached_blob:
-        try:
-            cached_data = json.loads(cached_blob)
-            for round_data in cached_data.get("rounds", []):
-                for p in round_data.get("puzzles", []):
-                    if p.get("id") == int(id):
-                        lastactcached = p.get("lastactcached")  # may legitimately be None
-                        break
-                if lastactcached is not _CACHE_MISS:
-                    break
-        except Exception as e:
-            debug_log(3, f"Failed to read lastactcached from cache for puzzle {id}: {e}")
-
-    if lastactcached is _CACHE_MISS:
-        # Cache cold or puzzle not found — reuse already-fetched lastact
-        # (avoids a second identical DB query; copy before mutating time)
-        lastactcached = _serialize_activity_for_cache(lastact)
+    # lastactcached reuses the already-fetched lastact with time as ISO string.
+    # No cache lookup here — deserializing the full /all blob on every single-puzzle
+    # request is more expensive than the DB query already made for lastact.
+    # The caching benefit of lastactcached is for /all bulk consumers, not here.
+    lastactcached = _serialize_activity_for_cache(lastact)
 
     return {
         "status": "ok",
