@@ -687,7 +687,7 @@ def get_last_activity_for_puzzle(puzzle_id, conn):
     puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT * from activity where puzzle_id = %s ORDER BY time DESC LIMIT 1",
+        "SELECT * from activity where puzzle_id = %s ORDER BY time DESC, id DESC LIMIT 1",
         (puzzle_id,),
     )
     return cursor.fetchone()

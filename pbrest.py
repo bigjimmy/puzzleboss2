@@ -222,6 +222,19 @@ def _promote_top_hint(cursor):
         debug_log(3, f"Auto-promoted hint {top['id']} to 'ready'")
 
 
+def _serialize_activity_for_cache(row):
+    """Return a copy of an activity row with time converted to ISO 8601 string.
+
+    MySQL returns time as a datetime object, which json.dumps() cannot serialize.
+    Used when injecting activity rows into data that will be stored in memcache.
+    """
+    if not row or not row.get("time"):
+        return row
+    row = dict(row)
+    row["time"] = row["time"].isoformat()
+    return row
+
+
 def _get_all_from_db():
     """Internal function to fetch all rounds/puzzles from database."""
     debug_log(4, "fetching all from database")
@@ -235,6 +248,39 @@ def _get_all_from_db():
     all_puzzles = {}
     for puzzle in puzzle_view:
         all_puzzles[puzzle["id"]] = puzzle
+
+    # Fetch most recent activity per puzzle in one query and inject as
+    # lastactcached. This is included in the /all response so external
+    # utilities get a cached approximation of lastact without N+1 queries.
+    # time is serialized to ISO string here so json.dumps() can cache it.
+    try:
+        conn, cursor = _read_cursor()
+        cursor.execute(
+            """
+            SELECT a.*
+            FROM activity a
+            INNER JOIN (
+                SELECT puzzle_id, MAX(time) AS max_time
+                FROM activity
+                GROUP BY puzzle_id
+            ) latest ON a.puzzle_id = latest.puzzle_id
+                    AND a.time = latest.max_time
+            ORDER BY a.id DESC
+            """
+        )
+        for row in cursor.fetchall():
+            pid = row["puzzle_id"]
+            # ORDER BY a.id DESC means the first row per puzzle_id is the
+            # most recent; skip subsequent rows for the same puzzle.
+            if pid in all_puzzles and "lastactcached" not in all_puzzles[pid]:
+                all_puzzles[pid]["lastactcached"] = _serialize_activity_for_cache(row)
+    except Exception as e:
+        debug_log(2, f"Failed to fetch lastactcached: {e}")
+        # Non-fatal: affected puzzles get lastactcached=None via setdefault below
+
+    # Ensure all puzzles have the key (None for puzzles with no activity yet)
+    for puzzle in all_puzzles.values():
+        puzzle.setdefault("lastactcached", None)
 
     try:
         conn, cursor = _read_cursor()
@@ -532,11 +578,21 @@ def get_one_puzzle(id):
 
     debug_log(5, f"fetched puzzle {id}: {puzzle}")
 
-    # Include lastact to reduce HTTP round-trips for clients
+    # Include lastact (always fresh from DB) and lastactcached (from /all
+    # cache if warm, DB fallback if cold) to reduce HTTP round-trips.
+    lastact = get_last_activity_for_puzzle(id)
+
+    # lastactcached reuses the already-fetched lastact with time as ISO string.
+    # No cache lookup here — deserializing the full /all blob on every single-puzzle
+    # request is more expensive than the DB query already made for lastact.
+    # The caching benefit of lastactcached is for /all bulk consumers, not here.
+    lastactcached = _serialize_activity_for_cache(lastact)
+
     return {
         "status": "ok",
         "puzzle": puzzle,
-        "lastact": get_last_activity_for_puzzle(id),
+        "lastact": lastact,
+        "lastactcached": lastactcached,
     }
 
 
