@@ -18,10 +18,10 @@
 # We add: mod_auth_openidc, Auth_remoteuser extension, S3 image support.
 # =============================================================================
 
-FROM mediawiki:1.43
+FROM mediawiki:1.44
 
 # Install OIDC module for Apache, git (extensions), unzip (composer)
-# Note: The official MediaWiki 1.43 image already includes apcu, intl,
+# Note: The official MediaWiki image already includes apcu, intl,
 # mysqli, mbstring, etc. — compiled from source via docker-php-ext-install.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libapache2-mod-auth-openidc \
@@ -36,7 +36,7 @@ RUN a2enmod auth_openidc remoteip rewrite headers
 # Auth_remoteuser extension — trusts REMOTE_USER set by mod_auth_openidc
 # ---------------------------------------------------------------------------
 RUN cd /var/www/html/extensions && \
-    git clone --depth 1 --branch REL1_43 \
+    git clone --depth 1 --branch REL1_44 \
         https://gerrit.wikimedia.org/r/mediawiki/extensions/Auth_remoteuser && \
     rm -rf Auth_remoteuser/.git
 
@@ -51,14 +51,8 @@ RUN cd /var/www/html/extensions && \
     rm -rf AWS/.git
 
 # Install composer and pull in the AWS extension's dependencies (AWS SDK)
-# mediawiki:1.43 changed ownership of /var/www/html files to uid 1000;
-# make composer.json group-writable so composer can write to it.
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-# mediawiki:1.43 changed ownership of composer.json to uid 1000 so we can't
-# write to it directly. Set audit.block-insecure globally instead (writes to
-# ~/.config/composer/config.json which the current user owns).
-RUN composer config --global audit.block-insecure false && \
-    cd /var/www/html && \
+RUN cd /var/www/html && \
     echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"]}}}' > composer.local.json && \
     composer update --no-dev --no-interaction --prefer-dist && \
     rm -f /usr/bin/composer
