@@ -52,12 +52,15 @@ RUN cd /var/www/html/extensions && \
 
 # Install composer and pull in the AWS extension's dependencies (AWS SDK)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-# --no-audit: phpunit (dev dependency) has advisory PKSA-z3gr-8qht-p93v; block-insecure
-# fires during resolution even with --no-dev due to merge plugin. This is a test
-# tool we don't ship — suppressing audit for this build step is appropriate.
-RUN cd /var/www/html && \
+# phpunit (dev dep, advisory PKSA-z3gr-8qht-p93v) triggers block-insecure during
+# resolution even with --no-dev due to the merge plugin. It's not shipped.
+# COMPOSER_HOME points to a writable dir with config that disables block-insecure.
+ENV COMPOSER_HOME=/tmp/composer-home
+RUN mkdir -p /tmp/composer-home && \
+    echo '{"config":{"audit":{"block-insecure":false}}}' > /tmp/composer-home/config.json && \
+    cd /var/www/html && \
     echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"]}}}' > composer.local.json && \
-    composer update --no-dev --no-interaction --prefer-dist --no-audit && \
+    composer update --no-dev --no-interaction --prefer-dist && \
     rm -f /usr/bin/composer
 
 # ---------------------------------------------------------------------------
