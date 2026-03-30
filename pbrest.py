@@ -337,10 +337,8 @@ def _get_all_with_cache():
         cached = cache_get(MEMCACHE_CACHE_KEY)
         if cached:
             debug_log(4, "cache hit")
-            increment_botstat("cache_hits_total", mysql.connection)
             return json.loads(cached)
         debug_log(4, "cache miss")
-        increment_botstat("cache_misses_total", mysql.connection)
 
     # Fall back to database
     data = _get_all_from_db()
