@@ -52,13 +52,16 @@ RUN cd /var/www/html/extensions && \
 
 # Install composer and pull in the AWS extension's dependencies (AWS SDK)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-# phpunit (dev dep, advisory PKSA-z3gr-8qht-p93v) triggers block-insecure during
-# resolution even with --no-dev due to the merge plugin. It's not shipped.
-# COMPOSER_HOME points to a writable dir with config that disables block-insecure.
-RUN cd /var/www/html && \
-    echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"],"merge-dev":false}}}' > composer.local.json && \
-    composer update --no-dev --no-interaction --prefer-dist && \
-    rm -f /usr/bin/composer
+# phpunit is in MediaWiki's require-dev (not shipped, --no-dev skips install) but
+# Composer 2.7 block-insecure fires during resolution regardless. Ignoring advisory
+# PKSA-z3gr-8qht-p93v specifically (phpunit test-double exploit, irrelevant in prod).
+# COMPOSER_HOME scoped to this RUN only — not persisted as an image ENV.
+RUN mkdir -p /tmp/composer-home && \
+    echo '{"config":{"audit":{"ignore":["PKSA-z3gr-8qht-p93v"]}}}' > /tmp/composer-home/config.json && \
+    cd /var/www/html && \
+    echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"]}}}' > composer.local.json && \
+    COMPOSER_HOME=/tmp/composer-home composer update --no-dev --no-interaction --prefer-dist && \
+    rm -rf /usr/bin/composer /tmp/composer-home
 
 # ---------------------------------------------------------------------------
 # Apache configuration for production (behind ALB)
