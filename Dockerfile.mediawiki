@@ -51,6 +51,9 @@ RUN cd /var/www/html/extensions && \
     rm -rf AWS/.git
 
 # Install composer and pull in the AWS extension's dependencies (AWS SDK)
+# mediawiki:1.43 now sets ownership of /var/www/html files to uid 1000.
+# Ensure we run as root so composer can write to composer.json.
+USER root
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 RUN cd /var/www/html && \
     echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"]}}}' > composer.local.json && \
