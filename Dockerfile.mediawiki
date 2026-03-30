@@ -58,7 +58,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # which fails due to file ownership changes in mediawiki:1.43 base image.
 RUN cd /var/www/html && \
     echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"]}}}' > composer.local.json && \
-    COMPOSER_AUDIT_ABANDONED=ignore composer update --no-dev --no-interaction --prefer-dist && \
+    COMPOSER_NO_AUDIT=1 composer update --no-dev --no-interaction --prefer-dist && \
     rm -f /usr/bin/composer
 
 # ---------------------------------------------------------------------------
