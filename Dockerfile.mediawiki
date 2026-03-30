@@ -54,11 +54,13 @@ RUN cd /var/www/html/extensions && \
 # mediawiki:1.43 changed ownership of /var/www/html files to uid 1000;
 # make composer.json group-writable so composer can write to it.
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-# COMPOSER_AUDIT_ABANDONED=ignore avoids needing to write audit config to composer.json
-# which fails due to file ownership changes in mediawiki:1.43 base image.
-RUN cd /var/www/html && \
+# mediawiki:1.43 changed ownership of composer.json to uid 1000 so we can't
+# write to it directly. Set audit.block-insecure globally instead (writes to
+# ~/.config/composer/config.json which the current user owns).
+RUN composer config --global audit.block-insecure false && \
+    cd /var/www/html && \
     echo '{"extra":{"merge-plugin":{"include":["extensions/AWS/composer.json"]}}}' > composer.local.json && \
-    COMPOSER_NO_AUDIT=1 composer update --no-dev --no-interaction --prefer-dist && \
+    composer update --no-dev --no-interaction --prefer-dist && \
     rm -f /usr/bin/composer
 
 # ---------------------------------------------------------------------------
