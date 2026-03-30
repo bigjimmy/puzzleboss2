@@ -35,7 +35,7 @@ This repo contains only application code. It is infrastructure-agnostic — you 
 | `Dockerfile.prod` | Multi-stage production image (Apache + Gunicorn in one container) |
 | `wsgi.py` + `gunicorn_config.py` | Gunicorn entrypoint and config |
 | `docker/prod/` | Production Apache config, supervisord config, entrypoint script |
-| `deploy-ecs.sh` | Example deploy script for AWS ECS Fargate (builds, pushes to ECR, restarts services) |
+| `.github/workflows/` | GitHub Actions CI/CD: auto-build on push, manual deploy trigger |
 | `deploy-legacy.sh` | Example deploy script for a single EC2/VM (git pull + systemd restart) |
 | `scripts/puzzleboss.sql` | Database schema |
 | `puzzleboss-SAMPLE.yaml` | Configuration template |
@@ -44,7 +44,7 @@ This repo contains only application code. It is infrastructure-agnostic — you 
 
 This team runs Puzzleboss on ECS Fargate. The infrastructure (Terraform, dashboards, operations runbook) is in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
 
-`deploy-ecs.sh` is the deploy script for that setup — it builds Docker images and pushes them to ECR. It auto-detects AWS account details and does not require Terraform to be co-located.
+Builds are automated via GitHub Actions running on a self-hosted ARM64 runner (native Graviton builds). The deploy script lives in the infra repo at `scripts/deploy.sh`. Pushes to `master` automatically build and push images to ECR; deployment to ECS is triggered manually via the Deploy workflow.
 
 ### Example: Standalone Server
 
