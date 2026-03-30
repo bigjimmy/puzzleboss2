@@ -324,8 +324,13 @@ def _get_all_with_cache():
     """Get all rounds/puzzles, using cache if available."""
     debug_log(4, "start")
 
-    # Ensure memcache is initialized (lazy init on first request)
-    ensure_memcache_initialized(mysql.connection)
+    # Ensure memcache is initialized (lazy init on first request per worker).
+    # Guard mysql.connection access so it is only evaluated when initialization
+    # is actually needed — accessing mysql.connection triggers a new SSL MySQL
+    # connection (~40ms) even if ensure_memcache_initialized would return
+    # immediately, because Python evaluates arguments before calling the function.
+    if not pbcachelib._memcache_initialized:
+        ensure_memcache_initialized(mysql.connection)
 
     # Try cache first if memcache is enabled
     if pbcachelib.mc is not None:
