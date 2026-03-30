@@ -3,6 +3,10 @@ tags:
 summary: Update multiple bot statistics
 description: |
   Updates or inserts multiple bot statistics in a single call.
+  Used primarily by bigjimmybot and puzzcord to report metrics.
+
+  Note: cache_hits_total and cache_misses_total are no longer tracked (removed
+  2026-03-29). Do not write these keys; use the Prometheus memcached exporter instead.
 
   Accepts either format:
   - Array: [{"key": "k1", "val": "v1"}, {"key": "k2", "val": "v2"}]

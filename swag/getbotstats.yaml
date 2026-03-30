@@ -1,7 +1,14 @@
 tags:
   - Bot Stats
 summary: Get all bot statistics
-description: Returns all bot statistics from the botstats table
+description: |
+  Returns all bot statistics from the botstats table.
+
+  Active counters: cache_invalidations_total (on mutations), tags_assigned_total,
+  bigjimmy loop metrics, puzzcord member/activity metrics.
+
+  Note: cache_hits_total and cache_misses_total were removed (2026-03-29) — use
+  the Prometheus memcached exporter for cache hit-rate metrics instead.
 responses:
   200:
     description: Bot statistics retrieved successfully

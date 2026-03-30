@@ -415,19 +415,8 @@ curl -sG 'http://localhost:3100/loki/api/v1/query_range' \
 - Database user should only have access to puzzleboss database
 - REMOTE_USER authentication is required for production (disable test mode)
 
-## TODO / Future Work
+## Notes / Future Work
 
-### `lastactcached` — cached last activity in `/all` response
-
-`lastactcached` is now included in every puzzle in the `/all` and `/allcached` responses, and in `GET /puzzles/<id>` responses. It provides a cached approximation of `lastact` for external utilities that consume `/all`, avoiding N+1 queries.
-
-**How it works:**
-- On the `/all` cache cold path (once per 15s TTL), a single bulk `SELECT ... MAX(time) GROUP BY puzzle_id` query fetches the most recent activity for all puzzles at once and injects `lastactcached` into each puzzle dict before caching.
-- On cache hit: `lastactcached` comes back in the cached blob with no DB query.
-- `GET /puzzles/<id>`: reads `lastactcached` from the `puzzleboss:all` cache key if warm; falls back to a DB query if cold (never returns null).
-- `time` in `lastactcached` is always an ISO 8601 string (e.g. `"2026-03-29T21:13:27"`).
-- The existing `lastact` field on `GET /puzzles/<id>` is unchanged — always fresh from DB.
-
-**Caching rule (current):** Cache is only invalidated for puzzle and round *structural* changes: status transitions, creation, deletion, round completion. Solver assignment/unassignment intentionally does NOT invalidate — the 15-second TTL (in `pbcachelib.py`) handles staleness for `cursolvers` and `lastactcached`. This keeps cache hit rates high during active solving (>90% observed during January 2026 hunt).
+**Caching rule:** Cache is only invalidated for puzzle and round *structural* changes: status transitions, creation, deletion, round completion. Solver assignment/unassignment intentionally does NOT invalidate — the 15-second TTL (in `pbcachelib.py`) handles staleness for `cursolvers` and `lastactcached`. This keeps cache hit rates high during active solving (>90% observed during January 2026 hunt).
 
 **Data point:** January 2026 hunt had >90% cache hit rate with 60s TTL and per-assignment invalidation. Current TTL is 15s with structural-only invalidation — monitor hit rate in next hunt to compare.
