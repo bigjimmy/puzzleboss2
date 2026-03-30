@@ -21,24 +21,27 @@ jobs:
   deploy:
     runs-on: [self-hosted, linux, arm64]
     timeout-minutes: 20
+    if: github.repository == 'bigjimmy/puzzleboss2'
 
     steps:
       - name: Checkout app repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Get infra repo token from SSM
+        id: get-pat
         run: |
           INFRA_PAT=$(aws ssm get-parameter --region us-east-1 \
             --name /puzzleboss/utility/github_runner_pat \
             --query 'Parameter.Value' --output text)
-          echo "INFRA_PAT=$INFRA_PAT" >> $GITHUB_ENV
+          echo "::add-mask::$INFRA_PAT"
+          echo "infra_pat=$INFRA_PAT" >> $GITHUB_OUTPUT
 
       - name: Checkout infra repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           repository: bigjimmy/puzzleboss2-infra
           path: puzzleboss2-infra
-          token: ${{ env.INFRA_PAT }}
+          token: ${{ steps.get-pat.outputs.infra_pat }}
 
       - name: Login to ECR
         run: |
