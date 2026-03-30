@@ -3,6 +3,10 @@ name: Build
 # Builds and pushes images to ECR on every push to master.
 # Does NOT update ECS services — use the Deploy workflow for that.
 #
+# NOTE: This workflow is specific to the bigjimmy/puzzleboss2-infra AWS/ECS
+# deployment. If you're deploying puzzleboss2 on different infrastructure,
+# replace this file with whatever your build/push process looks like.
+#
 # Runs on the utility server self-hosted runner (ARM64/Graviton) for
 # native builds. AWS credentials come from the EC2 instance profile —
 # no secrets needed in GitHub. The PAT for checking out puzzleboss2-infra

@@ -4,6 +4,10 @@ name: Deploy
 # Uses the image already in ECR (built by the Build workflow on last push).
 # Trigger: GitHub UI → Actions → Deploy → Run workflow
 # or: gh workflow run deploy.yml
+#
+# NOTE: This workflow is specific to the bigjimmy/puzzleboss2-infra AWS/ECS
+# deployment. If you're deploying puzzleboss2 on different infrastructure,
+# replace this file with whatever your deploy process looks like.
 
 on:
   workflow_dispatch:
