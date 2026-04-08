@@ -28,3 +28,4 @@ scripts/migrations/
 htmlcov/
 .coverage
 *.pyc
+memory/
