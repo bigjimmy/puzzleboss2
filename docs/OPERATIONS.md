@@ -42,7 +42,7 @@ sequenceDiagram
 | BigJimmy bot | Long-running Python process | `[program:bigjimmybot]` in supervisord | Enabled in production; disabled in the local dev stack (flip `autostart=true` in `docker/supervisord.conf`) |
 | MySQL | The database | RDS in prod, container locally | Schema in [`scripts/puzzleboss.sql`](../scripts/puzzleboss.sql) |
 | OIDC cache | Session storage for mod_auth_openidc | currently memcache, [Redis migration planned](../REDIS_MIGRATION.md) | Hard failure = login broken |
-| Response cache | `/allcached` endpoint cache | same cache backend | Soft failure = falls through to DB |
+| Response cache | `/all` endpoint cache (the hot path) | same cache backend | Soft failure = falls through to DB. `/allcached` is a deprecated alias. |
 | MediaWiki | Team wiki | separate container, shares auth | Optional |
 | Observability stack | Loki + Grafana + Prometheus | separate EC2 in infra repo | See [observability](#observability) |
 
@@ -67,7 +67,7 @@ The admin UI at `/admin.php` is the operator's main tool. Config keys are groupe
 | `SKIP_GOOGLE_API` | Disables all Google Drive/Sheets — puzzles get no sheets |
 | `SKIP_PUZZCORD` | Disables Discord |
 | `ALLOW_USERNAME_OVERRIDE` | **Test mode** — `?assumedid=` works. Keep `false` in production. |
-| `MEMCACHE_ENABLED` | Enables the `/allcached` cache |
+| `MEMCACHE_ENABLED` | Enables the `/all` response cache |
 
 ### Bot tuning
 
@@ -200,7 +200,7 @@ Between hunts:
 - BigJimmy will occasionally hit 429s. As long as `bigjimmy_quota_failures` isn't climbing fast, it's fine — backoff handles it.
 - Sheet add-on deploys can rate-limit when many puzzles are created at once. Retries happen automatically; failed sheets can be retried with `POST /puzzles/activate_all`.
 - Some puzzles end up "Abandoned" when solvers idle on them. That's the `BIGJIMMY_ABANDONED_TIMEOUT_MINUTES` setting doing its job.
-- The `/allcached` endpoint is the hot path during heavy traffic; cache hit rate over 90% with the default 15s TTL is normal.
+- The `/all` endpoint is the hot path during heavy traffic; it caches transparently and a hit rate over 90% with the default 15s TTL is normal.
 
 ## What's not normal
 

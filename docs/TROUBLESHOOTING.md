@@ -162,9 +162,9 @@ s.quit()
 - Network blocked: outbound port 25 is blocked from your network. Many cloud providers (AWS, GCP) block this by default — open a support ticket or use a relay that accepts a different port.
 - Mail going to spam: check `REGEMAIL` is a real, deliverable `From:` address, and that the relay isn't filtering you.
 
-### `/allcached` is slow or returning stale data
+### `/all` is slow or returning stale data
 
-The cache layer (memcache today, [moving to Redis](../REDIS_MIGRATION.md)).
+The cache layer is memcache today, [moving to Redis](../REDIS_MIGRATION.md). `/all` is the hot-path endpoint and caches transparently; `/allcached` is a deprecated alias that hits the same code.
 
 - **Cache miss every time:** check that `MEMCACHE_ENABLED=true` and `MEMCACHE_HOST` / `MEMCACHE_PORT` are correct. If not, the endpoint falls through to a DB query (soft failure — slow but works).
 - **Cache hits but stale:** TTL is 15 seconds. Structural changes (status transitions, creation, deletion, round completion) invalidate the cache; solver assignment intentionally does not. See [CLAUDE.md → Caching rules](../CLAUDE.md#caching-rules).

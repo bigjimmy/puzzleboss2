@@ -210,7 +210,7 @@ Cache is invalidated **only** for puzzle and round *structural* changes: status 
 | `/migrate/<name>` (POST) | Run a migration |
 | `/v1/query` | LLM natural-language query |
 | `/metrics` | Prometheus metrics |
-| `/all`, `/allcached` | Full hunt state (cached version is the hot path) |
+| `/all` | Full hunt state. Caches transparently — the hot path during a hunt. `/allcached` is a deprecated alias kept for backwards compatibility. |
 
 ## Git workflow
 

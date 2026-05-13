@@ -8,7 +8,8 @@ See `puzzleboss2-infra/REDIS_MIGRATION.md` for the infrastructure side.
 Memcache serves two purposes in this system:
 1. **OIDC session storage** via `mod_auth_openidc` (`OIDCCacheType memcache`) — used by both
    the puzzleboss and mediawiki containers. Hard failure mode: users get 401/400 if unavailable.
-2. **API response cache** for `/allcached` endpoint via `pbcachelib.py`. Soft failure mode:
+2. **API response cache** for the `/all` endpoint via `pbcachelib.py` (`/allcached` is a
+   deprecated alias kept for backwards compatibility — same code path). Soft failure mode:
    cache miss falls through to DB query, higher latency but no outage.
 
 Both containers share the same cache backend so OIDC sessions are portable across ALB routing
@@ -77,7 +78,7 @@ Do NOT deploy Phase 1 until Phase 2 (infra: Redis ECS service up) is complete.
 ### Phase 0 — Local dev
 1. Update docker-compose.yml to add redis service
 2. `docker-compose up --build`
-3. Verify `/allcached` returns data and Redis has the key
+3. Verify `/all` returns data and Redis has the key
 4. Run unit tests: `python3 -m pytest tests/ -v`
 5. Run API tests: `docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive`
 
@@ -100,7 +101,7 @@ Migrate cache layer from memcache to Redis
 3. Verify:
    - Fresh Google SSO login succeeds
    - `/pb/` and `/wiki/` both work without re-auth (shared Redis session)
-   - `/allcached` returns data; second request shows cache hit in logs
+   - `/all` returns data; second request shows cache hit in logs
    - `redis-cli -h redis.puzzleboss.local keys '*'` shows `puzzleboss:all`
 
 **Note:** All users will be logged out once during cutover — OIDC sessions in memcache
@@ -108,7 +109,7 @@ cannot be migrated to Redis. Plan for off-hours.
 
 ## Testing checklist
 - [ ] `docker-compose up` works with Redis
-- [ ] `/allcached` endpoint caches and returns data
+- [ ] `/all` endpoint caches and returns data
 - [ ] Cache invalidation fires on: puzzle delete, round create, round update
 - [ ] OIDC login works end-to-end (if testing in an environment with OIDC configured)
 - [ ] `python3 -m pytest tests/ -v` passes
