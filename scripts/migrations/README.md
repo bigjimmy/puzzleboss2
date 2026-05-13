@@ -1,125 +1,50 @@
-# Production Database Migrations
+# Database migrations
 
-This directory contains SQL migration scripts for applying database schema changes to production without performing a full reset.
+Puzzleboss has **two** complementary places for migrations. Use the right one for the job.
 
-## Running Migrations
+## `migrations/` (Python, API-driven) — preferred
 
-### For PR #102 (Stepwise Puzzle Creation)
+Idiomatic location for schema and data changes that ship with application code.
 
-**Command:**
-```bash
-mysql -u puzzleboss -p puzzleboss < scripts/migrations/add_temp_puzzle_creation.sql
-```
+- Each migration is a Python module in [`/migrations/`](../../migrations/) exporting `name`, `description`, and `run(conn)`.
+- Discoverable via `GET /migrate`.
+- Executable via `POST /migrate/<name>`.
+- Must be **idempotent** — safe to re-run.
+- Intended to be **pruned** once they have been run everywhere they need to be run.
 
-**What it does:**
-- Creates the `temp_puzzle_creation` table
-- This table stores puzzle data during step-by-step creation process
-- Safe to run multiple times (uses `CREATE TABLE IF NOT EXISTS`)
-
-**Verification:**
-```sql
-USE puzzleboss;
-SHOW TABLES LIKE 'temp_puzzle_creation';
-DESCRIBE temp_puzzle_creation;
-```
-
-Expected output:
-```
-+-------------------+
-| Tables_in_puzzleboss (temp_puzzle_creation) |
-+-------------------+
-| temp_puzzle_creation |
-+-------------------+
-
-+-------------------+--------------+------+-----+-------------------+-------------------+
-| Field             | Type         | Null | Key | Default           | Extra             |
-+-------------------+--------------+------+-----+-------------------+-------------------+
-| code              | varchar(16)  | NO   | PRI | NULL              |                   |
-| name              | varchar(255) | NO   |     | NULL              |                   |
-| round_id          | int(11)      | NO   | MUL | NULL              |                   |
-| puzzle_uri        | text         | NO   |     | NULL              |                   |
-| ismeta            | tinyint(1)   | NO   |     | 0                 |                   |
-| is_speculative    | tinyint(1)   | NO   |     | 0                 |                   |
-| chat_channel_id   | varchar(255) | YES  |     | NULL              |                   |
-| chat_channel_link | text         | YES  |     | NULL              |                   |
-| drive_id          | varchar(255) | YES  |     | NULL              |                   |
-| drive_uri         | text         | YES  |     | NULL              |                   |
-| created_at        | timestamp    | NO   |     | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
-+-------------------+--------------+------+-----+-------------------+-------------------+
-```
-
-## Rollback (if needed)
-
-To remove the table if there's an issue:
-```sql
-DROP TABLE IF EXISTS temp_puzzle_creation;
-```
-
-**Note:** This table is ephemeral - rows are deleted after puzzle creation completes. Dropping it will only affect in-progress puzzle creations.
-
-### Integer ID Enforcement (JSON_TABLE + normalize_solver_ids)
-
-This migration has two parts: a SQL function rewrite and a data normalization.
-Run them **in order** after deploying the updated code.
-
-**Step 1: Deploy code** (git pull, restart gunicorn)
-
-The new Python code normalizes all IDs to `int()` at function boundaries and
-uses `JSON_TABLE` queries instead of `JSON_SEARCH`/`JSON_CONTAINS`. It is
-backwards-compatible with both int and string solver_ids in existing data,
-so deploying first is safe.
-
-**Step 2: Rewrite SQL functions**
+Example:
 
 ```bash
-mysql -u puzzleboss -p puzzleboss < scripts/migrations/rewrite_json_search_to_json_table.sql
-```
-
-What it does:
-- Rewrites `get_current_puzzle()` and `get_all_puzzles()` from `JSON_SEARCH` to `JSON_TABLE` with `INT PATH`
-- `JSON_TABLE` handles both int and string JSON values via coercion, so this is safe before or after data normalization
-- Safe to re-run (uses `DROP FUNCTION IF EXISTS`)
-
-Verify:
-```sql
--- Should return puzzle name if solver 101 is assigned, or '' if not
-SELECT get_current_puzzle(101);
-SELECT get_all_puzzles(101);
-```
-
-**Step 3: Normalize JSON data**
-
-```bash
+curl http://localhost:5000/migrate
 curl -X POST http://localhost:5000/migrate/normalize_solver_ids
 ```
 
-What it does:
-- Scans all puzzles with `current_solvers` or `solver_history` JSON columns
-- Converts any string solver_ids (`"101"`) to integers (`101`)
-- Idempotent: int values are left as-is, safe to re-run
+To add one, drop a new module in [`/migrations/`](../../migrations/) following the pattern of existing files — see [`migrations/add_recaptcha_config.py`](../../migrations/add_recaptcha_config.py) as a small template.
 
-Expected response:
-```json
-{"status": "ok", "message": "Normalized 3 puzzle(s) out of 15 total"}
-```
+## `scripts/migrations/` (raw SQL) — for things that don't fit the framework
 
-**Rollback:** Not needed — `JSON_TABLE` with `INT PATH` handles both int and string
-values, so the SQL functions work regardless of data state. The Python code also
-handles both types via `int()` normalization.
+This directory holds raw `.sql` files. Use it when:
 
----
+- The change is too low-level for a Python module (e.g. function/procedure rewrites, complex DDL).
+- The change has to run before the application can start (so an API-driven migration can't reach it).
+- You need to apply it manually during an upgrade with `mysql -u puzzleboss -p puzzleboss < file.sql`.
 
-## General Migration Guidelines
+Files here aren't auto-discovered — they're documentation for a one-time manual step. They should also be **idempotent** (use `IF NOT EXISTS`, `DROP ... IF EXISTS`, etc.).
 
-1. Always backup the database before running migrations:
+## Migration discipline
+
+Whichever directory you put it in:
+
+1. Always back up the database first:
+
    ```bash
    mysqldump -u puzzleboss -p puzzleboss > backup_$(date +%Y%m%d_%H%M%S).sql
    ```
 
-2. Test migrations in a staging environment first
+2. Test the migration in Docker / a staging environment before running it in production.
 
-3. Run migrations during low-traffic periods when possible
+3. Run during low-traffic periods when possible.
 
-4. Monitor application logs after deployment
+4. After it's been applied everywhere, **prune the file** in a follow-up commit. Migrations are not history — they accumulate noise and confuse future readers. The change is already permanently captured in the schema and the git log.
 
-5. Keep migrations idempotent (safe to run multiple times)
+5. Watch logs and metrics for at least a few minutes after running anything destructive.

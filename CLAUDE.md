@@ -1,198 +1,122 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Developer / agent guide for working on Puzzleboss 2000. Architecture, conventions, and workflows. Operator-facing docs live in [`docs/`](docs/):
+
+- [docs/SETUP.md](docs/SETUP.md) — first-time install
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — running it day-to-day
+- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — when it breaks
+- [docker/README.md](docker/README.md) — local Docker stack
+- [docs/apps-script-deployment.md](docs/apps-script-deployment.md) — Apps Script add-on
+
+Infrastructure (Terraform, ECS, Grafana dashboards, production runbook) is in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
 
 ## Overview
 
-Puzzleboss 2000 is a puzzle hunt management system developed by this team for mystery hunt teams. It provides a REST API backend (Python/Flask), web UI (PHP/JavaScript/Vue.js), Google Sheets integration, Discord bot integration, and an AI assistant bot (BigJimmy) for tracking solver activity.
-
-Infrastructure (Terraform, Grafana dashboards, operations runbook) is managed in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
+Puzzleboss 2000 is a puzzle hunt management system: REST API backend (Python/Flask), web UI (PHP + Vue.js), Google Sheets integration, Discord bot integration, and an AI assistant bot (BigJimmy) for tracking solver activity.
 
 ## Architecture
 
-### Core Components
+### Backend (Python)
 
-**Backend (Python)**
-- `pbrest.py` - Flask REST API server with MySQL database. Main entry point for API operations. Uses Flasgger for Swagger/OpenAPI documentation.
-- `pblib.py` - Core library with configuration management, solver assignment/unassignment, activity logging, and email functions. Loads config from both `puzzleboss.yaml` (static) and database `config` table (dynamic). Config auto-refreshes every 30 seconds via `maybe_refresh_config()`. All functions that accept ID parameters normalize to `int()` at the boundary.
-- `pbgooglelib.py` - Google Drive/Sheets integration. Uses service account credentials (stored as JSON in the `SERVICE_ACCOUNT_JSON` config key) with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Supports hybrid metadata approach for sheet activity tracking.
-- `pbdiscordlib.py` - Discord integration via socket connection to puzzcord daemon. Creates channels, announces solves/rounds.
-- `pbllmlib.py` - LLM-powered natural language queries via Google Gemini. Includes function calling for hunt data and RAG support for wiki content via ChromaDB.
-- `bigjimmybot.py` - Multi-threaded bot that polls Google Sheets for activity and updates puzzle metadata (sheetcount, lastsheetact). Uses hybrid approach: reads hidden `_pb_activity` sheet for sheets with add-on, falls back to legacy Revisions API for old sheets.
-- `migrations/` - Data migration framework. Each module has `name`, `description`, and `run(conn)`. Discoverable via `GET /migrate`, executable via `POST /migrate/<name>`. Migrations are idempotent and intended to be pruned after they've been run everywhere.
+| File | Purpose |
+|---|---|
+| `pbrest.py` | Flask REST API. Main entry point for API operations. Uses Flasgger for Swagger/OpenAPI docs. |
+| `pblib.py` | Core library: config management, solver assignment/unassignment, activity logging, email. Loads config from both `puzzleboss.yaml` (static) and database `config` table (dynamic). Config auto-refreshes every 30 seconds via `maybe_refresh_config()`. All functions that accept ID parameters normalize to `int()` at the boundary. |
+| `pbgooglelib.py` | Google Drive/Sheets integration. Service account with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Hybrid metadata approach for activity tracking. |
+| `pbdiscordlib.py` | Discord integration via socket connection to puzzcord daemon. |
+| `pbllmlib.py` | LLM-powered natural-language queries via Google Gemini. Function calling + RAG via ChromaDB. |
+| `pbcachelib.py` | Optional response cache (memcache today; [Redis migration planned](REDIS_MIGRATION.md)). Public API: `cache_get` / `cache_set` / `cache_delete` / `invalidate_all_cache`. |
+| `bigjimmybot.py` | Long-running multi-threaded process. Polls Google Sheets for activity, updates puzzle metadata. Reads hidden `_pb_activity` sheet for sheets with add-on; falls back to Revisions API for legacy sheets. |
+| `migrations/` | Data migration framework. See [scripts/migrations/README.md](scripts/migrations/README.md). |
 
-**Frontend (PHP + JavaScript)**
-- `www/puzzlebosslib.php` - Shared PHP library for API calls (`readapi`, `postapi`, `deleteapi`), authentication via `REMOTE_USER` header, and error handling.
-- `www/index.php` - Main Vue.js-based UI showing rounds and puzzles with real-time updates, filtering, and tagging.
-- `www/*.php` - Various UI pages for adding/editing puzzles, rounds, solvers, admin config, etc.
-- `www/*.js` - Vue.js components for round display, tag selection, solve sounds.
+### Frontend (PHP + JavaScript)
 
-**Database (MySQL)**
-- Schema defined in `scripts/puzzleboss.sql`
-- Key tables: `puzzle`, `round`, `solver`, `activity`, `tag`, `puzzle_tag`, `config`, `botstats`, `newuser`, `privs`
-- `config` table stores runtime configuration that can be modified via admin UI
-- `puzzle.sheetenabled` column indicates if sheet has add-on deployed (hybrid approach)
+| File | Purpose |
+|---|---|
+| `www/puzzlebosslib.php` | Shared PHP library: API calls (`readapi`, `postapi`, `deleteapi`), `REMOTE_USER` auth, error handling. |
+| `www/index.php` | Vue.js-based main UI: rounds, puzzles, real-time updates, filtering, tagging. |
+| `www/*.php` | Pages for adding/editing puzzles, rounds, solvers, admin config. |
+| `www/*.js` | Vue.js components: round display, tag selection, solve sounds. |
+| `www/config.php` | **Authoritative reference** for all config-table keys and their descriptions. Don't duplicate this list elsewhere. |
 
-### Key Integration Points
+### Database (MySQL)
 
-**Google Sheets Activity Tracking (Hybrid Approach)**
-- Old approach: `get_puzzle_sheet_info_legacy()` in pbgooglelib.py uses Revisions API (quota-heavy)
-- New approach: `get_puzzle_sheet_info_activity()` reads hidden `_pb_activity` sheet (quota-light)
-- bigjimmybot.py checks `puzzle.sheetenabled` column to decide which method to use
-- Sheets with Apps Script add-on deployed automatically write activity to hidden `_pb_activity` sheet
+Schema in [`scripts/puzzleboss.sql`](scripts/puzzleboss.sql). Key tables:
 
-**Configuration System**
-- Static config: `puzzleboss.yaml` (database credentials, API endpoints, feature flags)
-- Dynamic config: `config` table in database (team name, hunt settings, toggles)
-- Both loaded in `pblib.py` via `refresh_config()`, stored in global `configstruct` dict
-- Periodic refresh every 30 seconds via `maybe_refresh_config()` called on each API request
+- `puzzle`, `round`, `solver`, `activity`, `tag`, `puzzle_tag`
+- `config` — dynamic configuration (read every 30s)
+- `botstats` — historical bot metrics
+- `newuser` — pending signup records
+- `privs` — admin role grants
 
-**Discord Integration**
-- Puzzcord daemon listens on socket (host/port in config)
-- Commands: `create_json`, `_round`, `_new`, `_solve`, `_attention`, `message`
-- Can be disabled via `SKIP_PUZZCORD=true` config flag
+### Integration points
 
-**Optional Features**
-- Google API: Disable via `SKIP_GOOGLE_API=true` in the database `config` table
-- Memcache: Enable via `MEMCACHE_ENABLED=true` in config table, caches `/allcached` endpoint
-- Prometheus metrics: Exposed at `/metrics` endpoint if prometheus_flask_exporter installed
-- LLM queries: Requires google-genai SDK, enabled at `/v1/query` endpoint
-- Wiki RAG: Requires chromadb, configured via `WIKI_URL` and `WIKI_CHROMADB_PATH` in config table
+- **Google Sheets activity (hybrid):** sheets with the Apps Script add-on write to a hidden `_pb_activity` sheet (quota-light); legacy sheets fall back to the Revisions API (quota-heavy). bigjimmybot checks `puzzle.sheetenabled` to decide. Full details in [docs/apps-script-deployment.md](docs/apps-script-deployment.md).
+- **Configuration:** static bootstrap in `puzzleboss.yaml`, dynamic runtime in the `config` table. Both loaded in `pblib.refresh_config()`, stored in the global `configstruct` dict, refreshed periodically via `maybe_refresh_config()` on each API request.
+- **Discord:** puzzcord daemon listens on a socket (host/port in config). Commands: `create_json`, `_round`, `_new`, `_solve`, `_attention`, `message`. Disable via `SKIP_PUZZCORD=true`.
 
-## Development Setup
+### Optional features (toggled in `config` table)
 
-### Option 1: Docker (Recommended for Local Development)
+- Google API (`SKIP_GOOGLE_API`)
+- Memcache cache (`MEMCACHE_ENABLED`)
+- Prometheus metrics (exposed at `/metrics` if `prometheus_flask_exporter` installed — it is in the dev/prod images)
+- LLM queries (`/v1/query`, requires `google-genai`)
+- Wiki RAG (`WIKI_URL`, `WIKI_CHROMADB_PATH`, requires `chromadb`)
 
-The fastest way to get started is with Docker:
+## Development workflow
+
+### Quickest path
 
 ```bash
-# Build and start all services (MySQL + App)
 docker-compose up --build
-
-# Access the application
-# Web UI: http://localhost?assumedid=testuser
-# API/Swagger: http://localhost:5000/apidocs
-# MySQL: localhost:3306 (user: puzzleboss, pass: puzzleboss123)
+# Visit http://localhost?assumedid=testuser
 ```
 
-The Docker setup:
-- Automatically initializes the database with schema
-- Creates a test user (`testuser`) with admin privileges
-- Runs Apache (PHP frontend) + Gunicorn (Python API) in one container
-- Enables live code reloading via volume mounts
-- Disables optional integrations (Google, Discord) by default
+See [docker/README.md](docker/README.md) for the full Docker reference. For native installs, [docs/SETUP.md#standalone-deployment](docs/SETUP.md#standalone-deployment).
 
-See `docker/README.md` for detailed Docker documentation.
-
-### Option 2: Native Installation
-
-For native development without Docker:
+### Running services manually
 
 ```bash
-# System requirements
-# - Python >= 3.8
-# - MySQL server
-# - Apache with PHP (for www/ frontend)
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Database setup
-mysql -u puzzleboss -p puzzleboss < scripts/puzzleboss.sql
-
-# Configuration
-cp puzzleboss-SAMPLE.yaml puzzleboss.yaml
-# Edit puzzleboss.yaml with database credentials and API endpoints
-```
-
-### Google Service Account Setup (Optional)
-```bash
-# 1. Create a service account with Domain-Wide Delegation in Google Cloud Console
-# 2. Download the JSON key file
-# 3. Authorize the service account's client ID in Google Workspace Admin Console
-#    (Security → API controls → Domain-wide delegation) with these scopes:
-#    https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/drive.file,
-#    https://www.googleapis.com/auth/drive.appdata,https://www.googleapis.com/auth/drive.metadata.readonly,
-#    https://www.googleapis.com/auth/spreadsheets,https://www.googleapis.com/auth/admin.directory.user
-# 4. Set config values in the database:
-#    SERVICE_ACCOUNT_JSON = <full contents of the downloaded JSON key file>
-#    SERVICE_ACCOUNT_SUBJECT = admin@yourdomain.org  (domain admin email to impersonate)
-```
-
-### Running Services
-
-**REST API (Development)**
-```bash
-# Run on localhost:5000
+# API (dev)
 python pbrest.py
-```
 
-**REST API (Production)**
-```bash
-# Use gunicorn with wsgi.py
+# API (prod-style)
 gunicorn -c gunicorn_config.py wsgi:app
-```
 
-**BigJimmy Bot**
-```bash
-# Runs continuously, polling sheets for activity
+# BigJimmy bot
 python bigjimmybot.py
+
+# PHP frontend (dev only)
+cd www && php -S localhost:8080
 ```
 
-**PHP Frontend (Development)**
-```bash
-# Simple test server with CORS
-cd www
-python simple-server-w-cors.py
-
-# Or use PHP built-in server
-php -S localhost:8080
-```
-
-**Swagger API Documentation**
-- Accessible at http://localhost:5000/apidocs when pbrest.py is running
-- API specs defined in individual `swag/*.yaml` files
+Swagger UI is at <http://localhost:5000/apidocs> whenever the API is running.
 
 ## Testing
 
-**Unit Tests (pytest)**
-```bash
-# Run all unit tests (can run locally, no Docker needed — uses mocked DB)
-python3 -m pytest tests/ -v
+Run unit tests locally (no Docker needed — MySQL/Google APIs are mocked):
 
-# Run specific test file
-python3 -m pytest tests/test_pblib_id_types.py -v
+```bash
+python3 -m pytest tests/ -v
+python3 -m pytest tests/test_pblib_id_types.py -v   # specific file
 ```
 
-**IMPORTANT:** API and UI test suites should be run inside the Docker container to ensure consistent dependencies (PyYAML, Playwright, etc.) and clean database state.
+API and UI integration tests require the Docker stack (PyYAML, Playwright, real DB):
 
-**API Integration Tests**
 ```bash
-# Run comprehensive test suite covering all endpoints (ALWAYS USE DOCKER)
+# API tests
+docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --list
 docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive
-
-# Run specific API tests by number
 docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive --tests 1 5 10
 
-# List available API tests
-docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --list
-
-# Test solver assignment logic
+# Solver assignment tests
 docker exec puzzleboss-app python /app/scripts/test_solver_assignments.py
-```
 
-**UI Tests (Playwright)**
-```bash
-# Run all comprehensive UI tests (ALWAYS USE DOCKER)
+# UI tests (Playwright)
+docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --list
 docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive
 
-# Run specific UI tests by number
-docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive --tests 1 5 10
-
-# List available UI tests
-docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --list
-
-# Run ad-hoc Playwright scripts
+# Ad-hoc Playwright
 docker exec puzzleboss-app python -c "
 from playwright.sync_api import sync_playwright
 with sync_playwright() as p:
@@ -204,219 +128,126 @@ with sync_playwright() as p:
 "
 ```
 
-**Load Testing**
-```bash
-# Configure test parameters
-cp scripts/loadtest_config-EXAMPLE.yaml scripts/loadtest_config.yaml
+Test layout details in [`tests/README.md`](tests/README.md).
 
-# Run load tests (can run locally or in Docker)
+### Load testing
+
+```bash
+cp scripts/loadtest_config-EXAMPLE.yaml scripts/loadtest_config.yaml
 python scripts/loadtest.py
 ```
 
-## Common Operations
+## Conventions and rules
 
-### Reset Hunt for New Event
-```bash
-# Preserves solver accounts, wipes puzzles/rounds/activity
-python scripts/reset-hunt.py
-```
+### Integer ID convention
 
-### Database Schema Refresh
-```bash
-# WARNING: Destroys all data including solvers
-mysql -u puzzleboss -p puzzleboss < scripts/puzzleboss.sql
-```
+All database IDs (`puzzle.id`, `solver.id`, `round.id`, `activity.id`) are `INT(11)` and **must remain integers throughout the entire stack**: database → Python → JSON → API responses → frontend.
 
-### Email Inbox Monitoring
-```bash
-# Monitor IMAP inbox for hunt emails
-python scripts/pbmail_inbox.py
-```
+Rules:
 
-### Wiki Indexing for RAG
-```bash
-# Index wiki content for LLM queries
-python scripts/wiki_indexer.py
-```
+- Every `pblib.py` function that accepts an ID calls `int()` at the entry point — callers can pass either `int` or `str`.
+- JSON columns (`current_solvers`, `solver_history`) store `solver_id` as JSON number (`101`), never as JSON string (`"101"`). Same as tag storage (`[42, 15, 8]`).
+- SQL functions extracting IDs from JSON use `JSON_TABLE` with `INT PATH`, not `JSON_SEARCH` / `JSON_CONTAINS` (which are string-only).
+- API response dicts return `int(id)` for Flask route parameters (which arrive as strings): `{"id": int(id), ...}`.
+- MySQL's DictCursor returns native Python `int` for INT columns — don't `str()` them.
 
-## Git Workflow
+**Why:** Python's `101 == "101"` is `False`; `json.dumps({"id": 101})` produces `101` (number) but `{"id": "101"}` produces `"101"` (string); JavaScript's `===` is type-strict. Mixing types causes silent comparison failures and inconsistent serialization.
 
-### Committing Changes
-- Create commits with clear, descriptive messages
-- Use co-authorship footer: `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
-- Commit frequently with logical groupings of changes
-- Push to remote after each commit or set of related commits
+Guarded by `tests/test_pblib_id_types.py` and `tests/test_pblib_solver_assignment.py`. Legacy data can be normalized with `POST /migrate/normalize_solver_ids`.
 
-### Critical Rules
-**NEVER use `git reset` or `git rebase` unless absolutely necessary and with explicit user confirmation.**
+### API design
 
-These operations rewrite git history and can cause:
-- Loss of work if not used carefully
-- Confusion in collaboration with other developers
-- Complications with remote branches that have already been pushed
+- Success: `{"status": "ok", ...}`
+- Failure: `{"error": "message"}` with appropriate HTTP status code
+- Each endpoint references a `@swag_from('swag/<name>.yaml')` spec; Flasgger validates automatically.
+- All endpoints require `REMOTE_USER` (or `?assumedid=` in dev mode with `ALLOW_USERNAME_OVERRIDE=true`).
 
-**If you believe reset/rebase is necessary:**
-1. Explain in detail WHY it's needed
-2. Explain WHAT will happen
-3. Provide alternative approaches if available
-4. Wait for explicit user confirmation before proceeding
+### Database access
 
-**Preferred alternatives:**
-- New commits to fix mistakes (don't rewrite history)
-- `git revert` to undo specific commits
-- Create new branches instead of rebasing
-- Use `git commit --amend` ONLY for the most recent unpushed commit
-
-## Important Implementation Notes
-
-### Authentication
-- PHP frontend expects `REMOTE_USER` header from Apache (SSO/Kerberos/etc)
-- For development/testing: Set `$noremoteusertestmode = "true"` in puzzlebosslib.php and use `?assumedid=username` URL param
-- Ensure "testuser" exists in solvers table for dev mode
-
-### API Design
-- All endpoints return `{"status": "ok", ...}` on success
-- Errors return `{"error": "message"}` with appropriate HTTP status codes
-- Use `@swag_from` decorators in pbrest.py to reference API specs in `swag/` directory
-- Swagger validation is automatic via Flasgger
-
-### Integer ID Convention
-All database IDs (puzzle.id, solver.id, round.id, activity.id) are `INT(11)` in MySQL and **must remain integers throughout the entire stack**: database → Python → JSON → API responses → frontend.
-
-**Rules:**
-- Every `pblib.py` function that accepts an ID parameter calls `int()` at the entry point, so callers can safely pass either `int` or `str` (e.g., Flask route params are always strings)
-- JSON columns (`current_solvers`, `solver_history`) store `solver_id` as JSON number (`101`), never as JSON string (`"101"`). This matches how tags are stored in the `tags` column (`[42, 15, 8]`)
-- SQL functions that extract IDs from JSON use `JSON_TABLE` with `INT PATH` (not `JSON_SEARCH` or `JSON_CONTAINS`, which are string-only)
-- API response dicts must return `int(id)` for Flask route parameters (which arrive as strings), e.g., `{"id": int(id), ...}`
-- MySQL's DictCursor returns native Python `int` for INT columns — do not convert with `str()`
-
-**Why:** Python's `101 == "101"` is `False`, `json.dumps({"id": 101})` produces `101` (number) while `json.dumps({"id": "101"})` produces `"101"` (string), and JavaScript's `===` is type-strict. Mixing types causes silent comparison failures and inconsistent serialization.
-
-**Tests:** `tests/test_pblib_id_types.py` guards all pblib functions against type regression. `tests/test_pblib_solver_assignment.py` guards JSON structure integrity.
-
-**Migration:** Run `POST /migrate/normalize_solver_ids` to convert any legacy string solver_ids to integers in JSON columns.
-
-### Database Access Patterns
 - Use `mysql.connection` from Flask-MySQLdb (connection pooling built-in)
 - Always commit after writes: `conn.commit()`
 - Use parameterized queries: `cursor.execute("SELECT * FROM puzzle WHERE id=%s", (puzzle_id,))`
-- UTF-8 support: `MYSQL_CHARSET = "utf8mb4"` is configured
-
-### Google API Quota Management
-- Hybrid metadata approach reduces quota usage significantly
-- `pbgooglelib.py` tracks quota failures in `quota_failure_count` (thread-safe)
-- bigjimmybot uses `BIGJIMMY_PUZZLEPAUSETIME` config to throttle requests
-- Credentials auto-refresh via `creds.refresh(Request())`
+- UTF-8: `MYSQL_CHARSET = "utf8mb4"`
 
 ### Logging
-- Use `debug_log(severity, message)` from pblib.py
-- Severity levels: 0=emergency, 1=error, 2=warning, 3=info, 4=debug, 5=trace
-- Controlled via `LOGLEVEL` in config table
-- Logs include timestamp, severity, function name, and message
 
-### Memcache Integration
-- Optional caching for `/allcached` endpoint (full puzzle/round data)
-- Initialize via `init_memcache(configstruct)` after config is loaded
-- Use `cache_get(key)` and `cache_set(key, value, ttl)` helpers (fail-safe)
-- Default TTL: 60 seconds
+Use `debug_log(severity, message)` from `pblib.py`. Severity: 0=emergency, 1=error, 2=warning, 3=info, 4=debug, 5=trace. Controlled by `LOGLEVEL` in the config table. Logs include timestamp, severity, function name.
 
-### Multi-Process Considerations
-- Gunicorn uses multiple workers (configured in gunicorn_config.py)
-- Prometheus metrics use multiprocess mode via `prometheus_multiproc_dir`
-- Wiki indexing uses file locking to prevent duplicate work across workers
-- Config refresh is per-process but synchronized via database
+### Multi-process notes
 
-### File Naming Conventions
-- Python modules: lowercase with underscores (pb*.py for puzzleboss libraries)
-- PHP files: lowercase (*.php)
-- JavaScript: lowercase with hyphens (*.js)
-- Swagger specs: lowercase action + noun (getpuzzles.yaml, postround.yaml)
-- SQL schema: puzzleboss.sql
+- Gunicorn uses multiple workers (configured in `gunicorn_config.py`).
+- Prometheus metrics use multiprocess mode via `prometheus_multiproc_dir`.
+- Wiki indexing uses file locking to prevent duplicate work across workers.
+- Config refresh is per-process but synchronized via the database.
 
-## Configuration Reference
+### File naming
 
-### puzzleboss.yaml (Static)
-- `MYSQL`: Database connection parameters
-- `API.APIURI`: REST API endpoint (default: http://localhost:5000)
+| Type | Convention |
+|---|---|
+| Python | lowercase_with_underscores (`pb*.py` for puzzleboss libraries) |
+| PHP | lowercase (`*.php`) |
+| JavaScript | lowercase-with-hyphens (`*.js`) |
+| Swagger specs | `<verb><noun>.yaml` (`getpuzzles.yaml`) |
+| SQL schema | `puzzleboss.sql` |
 
-### config table (Dynamic)
+### Caching rules
 
-**Current Hunt Adjustments** (change every year):
-- `TEAMNAME`: Team display name
-- `HUNT_FOLDER_NAME`: Google Drive folder name for current hunt
+Cache is invalidated **only** for puzzle and round *structural* changes: status transitions, creation, deletion, round completion. Solver assignment/unassignment intentionally does NOT invalidate — the 15-second TTL in `pbcachelib.py` handles staleness for `cursolvers` and `lastactcached`. This keeps hit rates high during active solving (>90% observed during January 2026 hunt with 60s TTL; current TTL is 15s).
 
-**Google API Settings**:
-- `SKIP_GOOGLE_API`: Disable Google Sheets integration
-- `SERVICE_ACCOUNT_JSON`: Full JSON contents of the Google service account key file (preferred)
-- `SERVICE_ACCOUNT_FILE`: Path to service account key file on disk (fallback if `SERVICE_ACCOUNT_JSON` not set)
-- `SERVICE_ACCOUNT_SUBJECT`: Domain admin email to impersonate via Domain-Wide Delegation
-- `GOOGLE_APPS_SCRIPT_CODE`: Apps Script code to deploy to puzzle sheets (defaults to simple onEdit tracker)
-- `GOOGLE_APPS_SCRIPT_MANIFEST`: Apps Script manifest JSON (defaults to V8 runtime config)
+## API endpoint patterns
 
-**System Settings**:
-- `LOGLEVEL`: Logging verbosity (0-5)
-- `SKIP_PUZZCORD`: Disable Discord integration
-- `MEMCACHE_ENABLED`, `MEMCACHE_HOST`, `MEMCACHE_PORT`: Memcache settings
-- `PUZZCORD_HOST`, `PUZZCORD_PORT`: Discord bot connection
-- `BIGJIMMY_PUZZLEPAUSETIME`: Delay between sheet polls (seconds)
-- `WIKI_URL`, `WIKI_CHROMADB_PATH`: Wiki RAG configuration
+| Endpoint | Purpose |
+|---|---|
+| `/puzzles` | List / create puzzles |
+| `/puzzles/<id>` | Get / update a puzzle |
+| `/puzzles/<id>/<field>` | Update one field |
+| `/puzzles/stepwise` + `/createpuzzle/{code}?step=N` | Step-by-step creation (UI uses this) |
+| `/puzzles/activate_all` | Re-deploy Apps Script add-on |
+| `/rounds`, `/solvers`, `/activity`, `/tags` | Standard CRUD |
+| `/solvers/byname/<username>` | Efficient lookup by name |
+| `/huntinfo` | Combined config + statuses + tags (frontend bootstrap) |
+| `/migrate` (GET) | List available migrations |
+| `/migrate/<name>` (POST) | Run a migration |
+| `/v1/query` | LLM natural-language query |
+| `/metrics` | Prometheus metrics |
+| `/all`, `/allcached` | Full hunt state (cached version is the hot path) |
 
-## API Endpoint Patterns
+## Git workflow
 
-- `/puzzles` - List all puzzles
-- `/puzzles/<id>` - Get/update specific puzzle
-- `/puzzles/<id>/<field>` - Update specific field (answer, status, etc)
-- `/rounds` - List all rounds
-- `/solvers` - List all solvers
-- `/solvers/byname/<username>` - Lookup solver by username (efficient)
-- `/activity` - Puzzle activity feed
-- `/tags` - Tag management
-- `/huntinfo` - Combined endpoint for config + statuses + tags (used by frontend)
-- `/migrate` - List available data migrations (GET)
-- `/migrate/<name>` - Run a named data migration (POST)
-- `/v1/query` - LLM natural language queries (requires google-genai)
-- `/metrics` - Prometheus metrics (requires prometheus_flask_exporter)
+### Committing
 
-## Observability Server
+- Clear, descriptive commit messages.
+- Frequent commits with logical groupings.
+- Push after each commit or related set of commits.
 
-The observability stack (Grafana, Loki, Prometheus) runs on a dedicated EC2 instance.
+### Critical rules
 
-**SSH Access:**
-```bash
-ssh -i ~/.ssh/mysteryhunt.pem -p 3748 ubuntu@100.50.206.174
-```
-- Instance: `i-0b0aa43cb06d067fc` (`puzzleboss-observability`)
-- Region: us-east-1
+**NEVER use `git reset` or `git rebase` unless absolutely necessary and with explicit user confirmation.** History rewrites lose work, confuse collaborators, and break already-pushed branches.
 
-**Services (accessible from the instance via localhost):**
-- Loki: `http://localhost:3100` — log aggregation, receives logs from ECS via FireLens/Fluent Bit
-- Grafana: dashboards and alerting
-- Prometheus: metrics scraping
+If you believe a rewrite is necessary:
 
-**Querying Loki logs from the obs server:**
-```bash
-# Example: bigjimmy logs from the last hour
-curl -sG 'http://localhost:3100/loki/api/v1/query_range' \
-  --data-urlencode 'query={service="bigjimmy"}' \
-  --data-urlencode 'start=<RFC3339 timestamp>' \
-  --data-urlencode 'end=<RFC3339 timestamp>' \
-  --data-urlencode 'limit=200'
-```
+1. Explain why.
+2. Explain what will happen.
+3. Offer alternatives.
+4. Wait for explicit confirmation.
 
-**ECS log routing:**
-- BigJimmy container uses `awsfirelens` log driver → ships to Loki with labels `job=ecs, service=bigjimmy`
-- FireLens sidecar (`log_router`) logs go to CloudWatch `/ecs/puzzleboss`
+**Preferred alternatives:** new commits to fix mistakes; `git revert` to undo specific commits; new branches instead of rebasing; `git commit --amend` only for the most recent *unpushed* commit.
 
-## Security Notes
+## Configuration reference
 
-- Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf` (service account credentials should be stored in the `SERVICE_ACCOUNT_JSON` config table entry, not on disk)
-- Use environment variables or secrets management for production credentials
-- Apache should restrict access to parent directory (only www/ should be web-accessible)
-- Database user should only have access to puzzleboss database
-- REMOTE_USER authentication is required for production (disable test mode)
+### `puzzleboss.yaml` (static, on disk)
 
-## Notes / Future Work
+- `MYSQL.*` — DB connection parameters
+- `API.APIURI` — REST API endpoint
 
-**Caching rule:** Cache is only invalidated for puzzle and round *structural* changes: status transitions, creation, deletion, round completion. Solver assignment/unassignment intentionally does NOT invalidate — the 15-second TTL (in `pbcachelib.py`) handles staleness for `cursolvers` and `lastactcached`. This keeps cache hit rates high during active solving (>90% observed during January 2026 hunt).
+### `config` table (dynamic, refreshed every 30s)
 
-**Data point:** January 2026 hunt had >90% cache hit rate with 60s TTL and per-assignment invalidation. Current TTL is 15s with structural-only invalidation — monitor hit rate in next hunt to compare.
+The full reference lives in [`www/config.php`](www/config.php) (search for `$keyDescriptions`). Operator-facing summaries are in [docs/OPERATIONS.md](docs/OPERATIONS.md#the-config-table-tour). Don't duplicate the list here — it drifts.
+
+## Security notes
+
+- Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf`. Service account credentials should live in the `SERVICE_ACCOUNT_JSON` config-table entry, not on disk.
+- Use environment variables or secrets management for production credentials.
+- Apache should restrict access to the parent directory (only `www/` should be web-accessible).
+- The DB user should only have access to the `puzzleboss` database.
+- `REMOTE_USER` authentication is required for production. Disable `ALLOW_USERNAME_OVERRIDE` in production.
