@@ -232,7 +232,7 @@ Run through this list a few days before the hunt:
 
 ### Reset between hunts
 
-After a hunt ends, run `python scripts/reset-hunt.py`. This backs up the DB and wipes puzzles/rounds/activity while preserving solver accounts and config. **Solvers don't need to re-register year-over-year.**
+`scripts/reset-hunt.py` runs `mysqldump` against the production DB and wipes puzzles, rounds, and activity — preserving solver accounts and config so people don't have to re-register. It needs a host with DB reachability and `puzzleboss.yaml`. See [OPERATIONS.md → Reset for a new hunt](OPERATIONS.md#reset-for-a-new-hunt) for where to run it (this team uses the utility server, which the infra repo provisions for this purpose).
 
 <a id="rds"></a>
 

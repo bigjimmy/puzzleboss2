@@ -85,11 +85,17 @@ Below are the keys you'll actually touch, grouped:
 
 ### Reset for a new hunt
 
-```bash
-python scripts/reset-hunt.py
-```
+`scripts/reset-hunt.py` uses `mysqldump` against the production DB and reads credentials from `puzzleboss.yaml`. It must run somewhere with both: a route to the database, and that yaml file present. Developer laptops don't have network access to a production RDS; ephemeral app containers don't have a sensible home for backups.
 
-Backs up the database to `scripts/backups/`, then wipes puzzles, rounds, and activity. **Solvers, privileges, and config are preserved**, so you don't need to re-onboard people.
+**\[Prod, this team\]** The infra side provisions the utility server with both: it clones this repo to `/canadia/puzzleboss2/` and fetches `puzzleboss.yaml` from Secrets Manager on every boot. See [puzzleboss2-infra OPERATIONS.md → Reset Hunt for New Event](https://github.com/bigjimmy/puzzleboss2-infra/blob/main/OPERATIONS.md) for the exact invocation, IAM policy, and backup location — that's the canonical runbook.
+
+**\[Other teams\]** Run on whatever long-lived jump/admin host you maintain alongside production, with a `puzzleboss.yaml` containing the production DB credentials placed next to a checkout of this repo.
+
+What the script does:
+
+- Backs up the database to `scripts/backups/<timestamp>/` via `mysqldump`.
+- Wipes puzzles, rounds, and activity.
+- **Solvers, privileges, and config are preserved** — you don't need to re-onboard people year to year.
 
 Then in the **Configuration Management** UI (`/config.php`):
 
