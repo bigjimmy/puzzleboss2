@@ -47,7 +47,7 @@ OIDCRedisCacheServer     "redis.puzzleboss.local:6379"
 ```
 Remove `OIDCMemCacheServers` line.
 
-### `docker/mediawiki/apache-mediawiki.conf` (lines 44-45)
+### `puzzleboss2-infra/docker/mediawiki/apache-mediawiki.conf` (lines 44-45)
 ```apache
 OIDCCacheType            redis
 OIDCRedisCacheServer     "redis.puzzleboss.local:6379"
