@@ -68,20 +68,9 @@ curl -X POST "http://localhost:5000/puzzles/activate_all"
 
 ### Updating the Add-on Code
 
-To change the add-on code deployed to new sheets:
+To change the add-on code deployed to new sheets, open the **Configuration Management** page (`/config.php`, requires `puzztech` priv), find `GOOGLE_APPS_SCRIPT_CODE` (it's a textarea — long content is supported), and paste the new code.
 
-```bash
-# Method 1: Direct database update
-mysql -u puzzleboss -p puzzleboss << EOF
-UPDATE config SET val = '$(cat /path/to/new_code.gs | sed "s/'/''/g")'
-WHERE \`key\` = 'GOOGLE_APPS_SCRIPT_CODE';
-EOF
-
-# Method 2: Via pbtools.php UI
-# Go to pbtools.php → Config Editor → Edit GOOGLE_APPS_SCRIPT_CODE
-```
-
-**Important**: Updating the config only affects **new puzzle sheets**. Existing sheets retain their deployed version unless manually re-deployed.
+**Important**: Updating the config only affects **new puzzle sheets**. Existing sheets retain their deployed version unless re-deployed via `POST /puzzles/activate_all`.
 
 ## Requirements
 
@@ -104,11 +93,7 @@ The Apps Script API deployment requires:
 
 ### Config Values
 
-In database `config` table:
-```sql
-UPDATE config SET val='<paste full JSON key file contents here>' WHERE `key`='SERVICE_ACCOUNT_JSON';
-UPDATE config SET val='bigjimmy@importanthuntpoll.org' WHERE `key`='SERVICE_ACCOUNT_SUBJECT';
-```
+In the **Configuration Management** page (`/config.php`): paste the JSON key file contents into `SERVICE_ACCOUNT_JSON`, and set `SERVICE_ACCOUNT_SUBJECT` to the Workspace admin email the service account should impersonate.
 
 ## How It Works
 
@@ -219,15 +204,10 @@ curl -X POST "http://localhost:5000/puzzles/activate_all"
 
 **Symptoms**: Many sheets created at once, some fail activation
 
-**Solution**: The system has built-in retry logic with exponential backoff. Failed sheets will retry automatically. Configure retry behavior:
+**Solution**: The system has built-in retry logic with exponential backoff. Failed sheets retry automatically. To tune retry behavior, edit these keys in the **Configuration Management** page:
 
-```sql
--- Increase max retries (default: 10)
-INSERT INTO config (`key`, val) VALUES ('BIGJIMMY_QUOTAFAIL_MAX_RETRIES', '20');
-
--- Increase retry delay (default: 5 seconds)
-INSERT INTO config (`key`, val) VALUES ('BIGJIMMY_QUOTAFAIL_DELAY', '10');
-```
+- `BIGJIMMY_QUOTAFAIL_MAX_RETRIES` (default `10`) — raise this if many sheets are failing during bulk creation.
+- `BIGJIMMY_QUOTAFAIL_DELAY` (default `5` seconds) — raise this to back off harder between retries.
 
 ### Script Code Too Large
 
@@ -294,13 +274,13 @@ The following config values are now obsolete and can be removed from the databas
 
 ### Configuration Keys
 
-```sql
--- View current add-on config
-SELECT `key`, LENGTH(val) as size_bytes FROM config
-WHERE `key` LIKE 'GOOGLE_APPS_SCRIPT%';
+Edit `GOOGLE_APPS_SCRIPT_CODE` and `GOOGLE_APPS_SCRIPT_MANIFEST` via the **Configuration Management** page (see [Updating the Add-on Code](#updating-the-add-on-code) above).
 
--- Update add-on code (be careful with escaping!)
-UPDATE config SET val = '<new_code>' WHERE `key` = 'GOOGLE_APPS_SCRIPT_CODE';
+For diagnostic inspection only — check the deployed size:
+
+```sql
+SELECT `key`, LENGTH(val) AS size_bytes FROM config
+WHERE `key` LIKE 'GOOGLE_APPS_SCRIPT%';
 ```
 
 ## Future Enhancements

@@ -39,7 +39,7 @@ sequenceDiagram
 |---|---|---|---|
 | Web UI | Apache + PHP | inside the app container/server | What users see |
 | API | Gunicorn + Flask | same container as Apache, bound to localhost:5000 | Not exposed externally in prod — PHP mediates browser → API via `apicall.php` |
-| BigJimmy bot | Long-running Python process | `[program:bigjimmybot]` in supervisord | Enabled in production; disabled in the local dev stack (flip `autostart=true` in `docker/supervisord.conf`) |
+| BigJimmy bot | Watches every active puzzle's Google Sheet for edits, auto-assigns solvers to whichever puzzle they're working on, marks idle puzzles abandoned, and updates `sheetcount` / `lastsheetact` metadata used by the UI | `[program:bigjimmybot]` in supervisord | Enabled in production; disabled in the local dev stack (flip `autostart=true` in `docker/supervisord.conf`) |
 | MySQL | The database | RDS in prod, container locally | Schema in [`scripts/puzzleboss.sql`](../scripts/puzzleboss.sql) |
 | OIDC cache | Session storage for mod_auth_openidc | currently memcache, [Redis migration planned](../REDIS_MIGRATION.md) | Hard failure = login broken |
 | Response cache | `/all` endpoint cache (the hot path) | same cache backend | Soft failure = falls through to DB. `/allcached` is a deprecated alias. |
@@ -48,7 +48,9 @@ sequenceDiagram
 
 ## The config table tour
 
-The admin UI at `/admin.php` is the operator's main tool. Config keys are grouped by category — here are the ones you'll actually touch:
+Edit configuration through the **Configuration Management** page (`/config.php`, gated by the `puzztech` priv) — long values like `bookmarklet_js` and `GEMINI_SYSTEM_INSTRUCTION` are textareas there. There's no need to touch MySQL directly; the UI is the supported path. The full key list and descriptions are loaded from [`www/config.php`](../www/config.php) (the `$keyDescriptions` array) — that's the canonical reference.
+
+Below are the keys you'll actually touch, grouped:
 
 ### Annual / per-hunt
 
@@ -58,7 +60,7 @@ The admin UI at `/admin.php` is the operator's main tool. Config keys are groupe
 | `HUNT_FOLDER_NAME` | Drive folder for this year's puzzle sheets |
 | `BIGJIMMY_AUTOASSIGN` | Set `true` for hunts where you want auto-assignment |
 | `hunt_domain` | Domain of the hunt website (for the bookmarklet) |
-| `bookmarklet_js` | The bookmarklet itself — sometimes needs DOM tweaks if the hunt site has unusual markup |
+| `bookmarklet_js` | The bookmarklet itself. **Expect to rewrite this every hunt** — it scrapes puzzle title, slug, and round name out of the hunt site's DOM, and every hunt's site is different (different selectors, different window globals like `window.initialTeamState`, sometimes a totally different framework). Test as soon as the hunt site is up. Edit via the **Configuration Management** page (the `bookmarklet_js` field is a textarea). |
 
 ### Integration toggles
 
@@ -79,8 +81,6 @@ The admin UI at `/admin.php` is the operator's main tool. Config keys are groupe
 | `BIGJIMMY_QUOTAFAIL_DELAY` / `BIGJIMMY_QUOTAFAIL_MAX_RETRIES` | Backoff on 429s |
 | `BIGJIMMY_ABANDONED_TIMEOUT_MINUTES` | When to mark idle puzzles abandoned |
 
-The full key list and descriptions live in [`www/config.php`](../www/config.php) (the `$keyDescriptions` array). That's the canonical reference — don't duplicate it.
-
 ## Common admin tasks
 
 ### Reset for a new hunt
@@ -91,25 +91,15 @@ python scripts/reset-hunt.py
 
 Backs up the database to `scripts/backups/`, then wipes puzzles, rounds, and activity. **Solvers, privileges, and config are preserved**, so you don't need to re-onboard people.
 
-Update for the new hunt:
+Then in the **Configuration Management** UI (`/config.php`):
 
-```sql
-UPDATE config SET val='Hunt 2027'  WHERE `key`='HUNT_FOLDER_NAME';
-UPDATE config SET val='puzzlehunt.example.com' WHERE `key`='hunt_domain';
-```
-
-Test the bookmarklet against the new hunt site as soon as it's available.
+- Update `HUNT_FOLDER_NAME` to the new Drive folder (e.g. `Hunt 2027`).
+- Update `hunt_domain` to the new hunt site domain.
+- Rewrite `bookmarklet_js` to match the new hunt site's DOM — see the per-hunt config table above. This almost always needs to change. Test it against the new hunt site as soon as the site is up.
 
 ### Add an admin
 
-```sql
-INSERT INTO privs (solver_id, priv) VALUES (
-  (SELECT id FROM solver WHERE name='username'),
-  'puzzleboss'
-);
-```
-
-`puzzleboss` = admin; `puzztech` = config-editor.
+Open the **Accounts Management** page (`/accounts.php`, requires `puzztech` priv). Each solver has clickable **PT** (puzztech) and **PB** (puzzleboss) priv columns — click to toggle. `puzzleboss` is the admin role for puzzle/round operations; `puzztech` is the technical-admin role for editing config, managing users, and granting privs.
 
 ### Bulk-import solvers
 

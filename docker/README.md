@@ -123,32 +123,27 @@ For RDS connections (production setups outside this Docker stack), see [docs/SET
 
 These integrations are wired up but disabled in the default Docker config. Turn them on when you need them.
 
+All of these are configured through the **Configuration Management** page at <http://localhost/config.php?assumedid=testuser>. (Direct SQL works too, but the UI is the supported path and handles long values like the service account JSON cleanly.)
+
 ### Google Drive / Sheets (BigJimmy + sheet creation)
 
 1. Create a Google Cloud service account with **Domain-Wide Delegation** enabled.
 2. Authorize it in Google Workspace Admin (Security → API controls → Domain-wide delegation) for the scopes listed in [docs/SETUP.md](../docs/SETUP.md#google).
-3. Paste the JSON key contents into the DB config, set the subject, and flip `SKIP_GOOGLE_API` to `false`:
-
-   ```sql
-   UPDATE config SET val='<paste full JSON key>' WHERE `key`='SERVICE_ACCOUNT_JSON';
-   UPDATE config SET val='admin@yourdomain.org'  WHERE `key`='SERVICE_ACCOUNT_SUBJECT';
-   UPDATE config SET val='false'                 WHERE `key`='SKIP_GOOGLE_API';
-   ```
-
+3. In the **Configuration Management** page: paste the JSON key into `SERVICE_ACCOUNT_JSON`, set `SERVICE_ACCOUNT_SUBJECT` to your Workspace admin email, and flip `SKIP_GOOGLE_API` to `false`.
 4. Edit `docker/supervisord.conf` and set `autostart=true` for `[program:bigjimmybot]`.
 5. Rebuild: `docker-compose up --build`.
 
 ### Discord (puzzcord)
 
-Set `SKIP_PUZZCORD=false` and fill in `PUZZCORD_HOST` / `PUZZCORD_PORT` in the `config` table. Requires a separately-running puzzcord daemon — see the puzzcord repo.
+In the **Configuration Management** page: set `SKIP_PUZZCORD=false` and fill in `PUZZCORD_HOST` / `PUZZCORD_PORT`. Requires a separately-running puzzcord daemon — see the puzzcord repo.
 
 ### LLM queries (Gemini)
 
-Set `GEMINI_API_KEY` in the `config` table. Endpoint becomes available at `POST /v1/query`.
+Set `GEMINI_API_KEY` in the **Configuration Management** page. Endpoint becomes available at `POST /v1/query`.
 
 ### Wiki RAG
 
-Set `WIKI_URL` and `WIKI_CHROMADB_PATH` in the `config` table, then run `python scripts/wiki_indexer.py` (inside or outside the container).
+Set `WIKI_URL` and `WIKI_CHROMADB_PATH` in the **Configuration Management** page, then run `python scripts/wiki_indexer.py` (inside or outside the container).
 
 ## UI testing with Playwright
 

@@ -132,15 +132,11 @@ Skip this section if `SKIP_GOOGLE_API=true`. The system runs fine without Google
 
 ### Store the credentials
 
-```sql
-UPDATE config SET val='<paste full JSON contents of the key file>'
-  WHERE `key`='SERVICE_ACCOUNT_JSON';
-UPDATE config SET val='admin@yourdomain.org'
-  WHERE `key`='SERVICE_ACCOUNT_SUBJECT';
-UPDATE config SET val='false' WHERE `key`='SKIP_GOOGLE_API';
-```
+In the **Configuration Management** page (`/config.php`, gated by `puzztech` priv):
 
-`SERVICE_ACCOUNT_SUBJECT` is the email of a Workspace admin the service account will impersonate via DWD.
+- Paste the full JSON contents of the key file into `SERVICE_ACCOUNT_JSON` (it's a textarea).
+- Set `SERVICE_ACCOUNT_SUBJECT` to the email of a Workspace admin the service account will impersonate via DWD (e.g. `admin@yourdomain.org`).
+- Set `SKIP_GOOGLE_API` to `false`.
 
 ### Pick the sheets template
 
@@ -161,14 +157,7 @@ Skip this section if `SKIP_PUZZCORD=true`.
 Discord integration runs through a separate daemon called **puzzcord** (not in this repo). Puzzleboss connects to it via a TCP socket.
 
 1. Stand up puzzcord according to its own docs.
-2. Set in the config table:
-
-   ```sql
-   UPDATE config SET val='false'              WHERE `key`='SKIP_PUZZCORD';
-   UPDATE config SET val='puzzcord.your.host' WHERE `key`='PUZZCORD_HOST';
-   UPDATE config SET val='3141'               WHERE `key`='PUZZCORD_PORT';
-   ```
-
+2. In the **Configuration Management** page, set `SKIP_PUZZCORD=false`, `PUZZCORD_HOST` to the daemon's hostname, and `PUZZCORD_PORT` (default `3141`).
 3. (Optional) Set `DISCORD_EMAIL_WEBHOOK` to a Discord webhook URL if you want hunt emails forwarded.
 
 ## 6. Email
@@ -207,13 +196,10 @@ Admins can also create solvers directly via the API (`POST /solvers`) or via the
 
 ### Privileges
 
-The `privs` table grants admin-class permissions. The seed user `testuser` has `puzztech` and `puzzleboss`. Grant these via the admin UI or directly:
+Manage privileges via the **Accounts Management** page (`/accounts.php`, requires `puzztech` priv). Each solver row has clickable **PT** (puzztech) and **PB** (puzzleboss) columns — click to toggle. The seed user `testuser` has both.
 
-```sql
-INSERT INTO privs (solver_id, priv) VALUES (<id>, 'puzzleboss');
-```
-
-`puzzleboss` is the admin role; `puzztech` is for people who can edit the config table.
+- `puzzleboss` is the admin role for puzzle/round operations (creating rounds, editing puzzles, etc.).
+- `puzztech` is the technical-admin role: editing config, managing users, granting privs. **Grant sparingly** — anyone with `puzztech` can edit credentials and create admins.
 
 ## 9. Pre-hunt readiness check
 
