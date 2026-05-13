@@ -22,23 +22,24 @@ sequenceDiagram
     participant Google
     Browser->>Apache: GET /index.php
     Apache->>PHP: REMOTE_USER header set by OIDC
-    PHP->>Apache: HTML page
-    Apache-->>Browser: rendered page
-    Browser->>Apache: fetch /api/all
-    Apache->>Gunicorn: proxy_pass /api/* -> :5000
+    PHP->>Gunicorn: curl APIURI (server-side, localhost)
     Gunicorn->>MySQL: SELECT ...
     MySQL-->>Gunicorn: rows
-    Gunicorn-->>Browser: JSON
-    Note over Browser,Google: BigJimmy bot runs separately,<br/>polls Google Sheets and writes<br/>activity back through the API
+    Gunicorn-->>PHP: JSON
+    PHP-->>Apache: rendered HTML
+    Apache-->>Browser: rendered page
+    Browser->>Apache: fetch apicall.php?apicall=...
+    Apache->>PHP: same flow, PHP curls API
+    Note over Browser,Google: The Flask API is never reached directly<br/>from the browser in production — PHP<br/>(apicall.php) mediates every call.<br/>BigJimmy bot runs separately, polls<br/>Google Sheets and writes activity via the API.
 ```
 
 ## The components you operate
 
 | Component | What it is | Where it lives | Notes |
 |---|---|---|---|
-| Web UI | Apache + PHP | inside the app container/server | `www/` is the docroot |
-| API | Gunicorn + Flask | same container as Apache, port 5000 | Apache reverse-proxies `/api/*` to it |
-| BigJimmy bot | Long-running Python process | `[program:bigjimmybot]` in supervisord | Disabled by default in Docker; enabled in prod |
+| Web UI | Apache + PHP | inside the app container/server | What users see |
+| API | Gunicorn + Flask | same container as Apache, bound to localhost:5000 | Not exposed externally in prod — PHP mediates browser → API via `apicall.php` |
+| BigJimmy bot | Long-running Python process | `[program:bigjimmybot]` in supervisord | Enabled in production; disabled in the local dev stack (flip `autostart=true` in `docker/supervisord.conf`) |
 | MySQL | The database | RDS in prod, container locally | Schema in [`scripts/puzzleboss.sql`](../scripts/puzzleboss.sql) |
 | OIDC cache | Session storage for mod_auth_openidc | currently memcache, [Redis migration planned](../REDIS_MIGRATION.md) | Hard failure = login broken |
 | Response cache | `/allcached` endpoint cache | same cache backend | Soft failure = falls through to DB |

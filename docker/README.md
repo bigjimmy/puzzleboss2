@@ -37,14 +37,16 @@ The schema seed creates one user, `testuser`, with full admin privileges (`puzzt
 ```mermaid
 flowchart LR
     Browser -->|http :80| Apache
-    Apache -->|PHP| Frontend[www/*.php]
-    Apache -->|reverse proxy :5000| Gunicorn
+    Apache -->|PHP| Frontend[PHP frontend]
+    Frontend -->|server-side curl<br/>to APIURI| Gunicorn
     Gunicorn -->|Flask| API[pbrest.py]
     API --> MySQL[(MySQL 8 + SSL)]
-    Frontend -->|fetch /api| Apache
-    BigJimmy[BigJimmy bot<br/>opt-in] -->|HTTP| API
+    Browser -.->|:5000 dev only| Gunicorn
+    BigJimmy[BigJimmy bot<br/>off by default in dev] -->|HTTP| API
     BigJimmy -->|Sheets API| Google[(Google Drive)]
 ```
+
+PHP mediates every API call — the browser never talks to Flask directly in the normal flow. In this dev stack, port `5000` is also published so you can hit Swagger and `/metrics` directly without going through PHP; in production that port stays inside the container.
 
 `app` container = Apache + Gunicorn + (optionally) BigJimmy under supervisord. `mysql` container = MySQL with auto-generated TLS certs. One short-lived `ssl-setup` container copies certs to a shared volume on first boot.
 
