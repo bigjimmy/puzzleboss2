@@ -196,10 +196,24 @@ Admins can also create solvers directly via the API (`POST /solvers`) or via the
 
 ### Privileges
 
-Manage privileges via the **Accounts Management** page (`/accounts.php`, requires `puzztech` priv). Each solver row has clickable **PT** (puzztech) and **PB** (puzzleboss) columns — click to toggle. The seed user `testuser` has both.
+Once at least one solver has `puzztech`, manage privileges via the **Accounts Management** page (`/accounts.php`, requires `puzztech` priv). Each solver row has clickable **PT** (puzztech) and **PB** (puzzleboss) columns — click to toggle.
 
 - `puzzleboss` is the admin role for puzzle/round operations (creating rounds, editing puzzles, etc.).
 - `puzztech` is the technical-admin role: editing config, managing users, granting privs. **Grant sparingly** — anyone with `puzztech` can edit credentials and create admins.
+
+### Bootstrapping the first admin
+
+On a fresh native install (the Docker dev image grants `testuser` both privs automatically — production schema does not), the `privs` table starts empty. The first `puzztech` grant has to happen directly in MySQL — there is no UI path until one exists:
+
+```sql
+-- Find the solver's numeric id
+SELECT id, name FROM solver WHERE name='your-username';
+
+-- Grant both privs (one row per solver; columns are ENUM YES/NO)
+INSERT INTO privs (uid, puzztech, puzzleboss) VALUES (<id>, 'YES', 'YES');
+```
+
+After this, all further priv management can go through the Accounts Management UI. Treat this credential like a root password — only the people who need to bootstrap should know the MySQL credentials.
 
 ## 9. Pre-hunt readiness check
 

@@ -101,6 +101,21 @@ Then in the **Configuration Management** UI (`/config.php`):
 
 Open the **Accounts Management** page (`/accounts.php`, requires `puzztech` priv). Each solver has clickable **PT** (puzztech) and **PB** (puzzleboss) priv columns — click to toggle. `puzzleboss` is the admin role for puzzle/round operations; `puzztech` is the technical-admin role for editing config, managing users, and granting privs.
 
+### Recover from a lost / departed admin account
+
+If every `puzztech` admin has left the team (or was deactivated upstream in OIDC), nobody can use the Accounts Management UI to grant a new one. You need direct MySQL access:
+
+```sql
+-- Find the solver who should become the new admin
+SELECT id, name, fullname FROM solver WHERE name='new-admin-username';
+
+-- Promote them (upsert: works whether they already had a privs row or not)
+INSERT INTO privs (uid, puzztech, puzzleboss) VALUES (<id>, 'YES', 'YES')
+  ON DUPLICATE KEY UPDATE puzztech='YES', puzzleboss='YES';
+```
+
+The same approach works if a former admin's account needs to be **demoted** for hygiene (set both columns to `'NO'`) — though that can also be done from the UI by any remaining `puzztech` admin.
+
 ### Bulk-import solvers
 
 `POST /solvers` with a JSON body — see Swagger at `/apidocs` for the schema. For bigger imports, write a one-off script that hits the API.
@@ -134,7 +149,6 @@ The production observability stack runs on a dedicated EC2 instance, configured 
 | **Grafana** | Dashboards, alerting | served from the obs host |
 | **Loki** | Centralized logs, queried via LogQL | ECS containers ship via FireLens + Fluent Bit |
 | **Prometheus** | Metrics, scraped from `/metrics` | scrapes the app container |
-| **Sift / oncall** | Optional, see Grafana docs | |
 
 ### Log labels to know
 
