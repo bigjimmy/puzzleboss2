@@ -224,37 +224,6 @@ SHOW CREATE TABLE config;
 -- Should show: `val` MEDIUMTEXT DEFAULT NULL
 ```
 
-## Migration from Cookie-Based System
-
-The old cookie-based `/scripts/invoke` system has been **completely removed**. Key differences:
-
-| Feature | Cookie-Based (DEPRECATED) | Apps Script API (CURRENT) |
-|---------|--------------------------|---------------------------|
-| **Method** | POST to `/scripts/invoke` with browser cookies | Apps Script API with service account |
-| **Code Source** | Published add-on (external) | Configurable, stored in database |
-| **Credentials** | Browser session cookies (expire frequently) | Service account with DWD (stable) |
-| **Updates** | Requires cookie refresh via pbtools.php | Edit config and re-deploy |
-| **Maintenance** | High (cookie rotation, health checks) | Low (API-based, no session management) |
-| **Function** | `activate_puzzle_sheet_extension()` ❌ DELETED | `activate_puzzle_sheet_via_api()` |
-
-### What Was Removed
-
-The following have been deleted from the codebase:
-- ❌ `activate_puzzle_sheet_extension()` in pbgooglelib.py
-- ❌ `check_addon_invoke_health()` in pbgooglelib.py
-- ❌ `rotate_addon_cookies()` in pbgooglelib.py and bigjimmybot.py
-- ❌ `_build_invoke_url()` in pbgooglelib.py
-- ❌ `scripts/build_addon_config.py`
-- ❌ `scripts/test_cookie_auth.py`
-- ❌ `scripts/extract_addon_code.py`
-- ❌ `scripts/import_puzzle_tools.py`
-- ❌ `scripts/migrate_expand_config_val.sql`
-
-The following config values are now obsolete and can be removed from the database:
-- ⚠️ `SHEETS_ADDON_COOKIES`
-- ⚠️ `SHEETS_ADDON_INVOKE_PARAMS`
-
-
 ## Reference
 
 ### Key Files
