@@ -89,6 +89,11 @@ mysql -h mysql -u puzzleboss -ppuzzleboss123 --skip-ssl puzzleboss <<-EOSQL
     UPDATE config SET val = 'localhost' WHERE \`key\` = 'MAILRELAY';
     UPDATE config SET val = 'noreply@localhost' WHERE \`key\` = 'REGEMAIL';
     UPDATE config SET val = 'Puzzleboss Docker Test Team' WHERE \`key\` = 'TEAMNAME';
+    UPDATE config SET val = 'true' WHERE \`key\` = 'REDIS_ENABLED';
+    UPDATE config SET val = 'redis' WHERE \`key\` = 'REDIS_HOST';
+    UPDATE config SET val = '6379' WHERE \`key\` = 'REDIS_PORT';
+    INSERT IGNORE INTO config (\`key\`, val) VALUES
+        ('REDIS_ENABLED', 'true'), ('REDIS_HOST', 'redis'), ('REDIS_PORT', '6379');
 EOSQL
 echo "Config values updated for Docker!"
 

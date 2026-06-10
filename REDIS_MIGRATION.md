@@ -282,14 +282,20 @@ no persistence across restarts. Redis hashes + `SET NX` + RDB snapshots are
 the natural fit.
 
 ### Phase 4 testing checklist
-- [ ] Activity insert (API + bigjimmybot paths) updates `puzzleboss:lastact` hash
-- [ ] `/all` lastactcached matches latest activity row immediately after insert (no 15s lag)
-- [ ] Blob invalidation fires ONLY on: puzzle create/delete, round create/update/delete, status change
-- [x] `lastact` POST does NOT invalidate (shipped as an interim fix, June 2026)
-- [ ] `xyzloc` and `sheetcount` updates do NOT invalidate
-- [ ] Redis flush → next `/all` rebuilds blob and backfills hash from DB (indexed GROUP BY)
-- [ ] Concurrent miss storm produces a single rebuild (lock held)
-- [ ] `python3 -m pytest tests/ -v` passes
+- [x] Activity insert (API + bigjimmybot paths) updates `puzzleboss:lastact` hash (`log_activity` write-through)
+- [x] `/all` lastact matches latest activity row immediately after insert (no 15s lag) — attached per request
+- [x] Blob invalidation fires ONLY on structural fields (`STRUCTURAL_PUZZLE_FIELDS` allowlist in `update_puzzle_field`)
+- [x] `lastact` POST does NOT invalidate
+- [x] `xyzloc` / `comments` / `sheetcount` updates do NOT invalidate (not in the allowlist)
+- [x] Redis flush → next `/all` rebuilds blob and backfills hash from DB (indexed GROUP BY, `_get_lastact_map`)
+- [x] Concurrent miss storm produces a single rebuild (`SET NX` lock in `_get_all_with_cache`)
+- [x] `lastactcached` retired from API responses, swagger specs, and tests
+
+**Implemented on branch `redis-lastact-writethrough`.** Deploy is gated on
+infra Phase 2 (Redis ECS service). Until then the app falls back to the DB
+on every `/all` (REDIS_ENABLED defaults false in prod config), so the branch
+is safe to merge ahead of the infra work but should not flip REDIS_ENABLED
+until Redis is reachable at `redis.puzzleboss.local:6379`.
 
 ## Testing checklist (Phases 0–3)
 - [ ] `docker-compose up` works with Redis

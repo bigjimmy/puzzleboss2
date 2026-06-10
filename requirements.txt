@@ -21,7 +21,7 @@ urllib3>=2.6.3  # CVE-2026-21441 fix
 
 # Optional dependencies
 pandas
-pymemcache
+redis
 prometheus_flask_exporter
 google-genai
 chromadb

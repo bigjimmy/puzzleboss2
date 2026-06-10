@@ -76,14 +76,20 @@ from pbllmlib import GEMINI_AVAILABLE, process_query as llm_process_query
 
 # Cache support (via pbcachelib)
 from pbcachelib import (
-    init_memcache,
+    init_cache,
     cache_get,
     cache_set,
     cache_delete,
     invalidate_all_cache,
-    ensure_memcache_initialized,
-    MEMCACHE_CACHE_KEY,
-    MEMCACHE_TTL,
+    ensure_cache_initialized,
+    lastact_get,
+    lastact_get_all,
+    lastact_delete,
+    lastact_set_many,
+    try_acquire_rebuild_lock,
+    release_rebuild_lock,
+    CACHE_KEY,
+    CACHE_TTL,
 )
 import pbcachelib
 
@@ -220,19 +226,6 @@ def _promote_top_hint(cursor):
         debug_log(3, f"Auto-promoted hint {top['id']} to 'ready'")
 
 
-def _serialize_activity_for_cache(row):
-    """Return a copy of an activity row with time converted to ISO 8601 string.
-
-    MySQL returns time as a datetime object, which json.dumps() cannot serialize.
-    Used when injecting activity rows into data that will be stored in memcache.
-    """
-    if not row or not row.get("time"):
-        return row
-    row = dict(row)
-    row["time"] = row["time"].isoformat()
-    return row
-
-
 def _get_all_from_db():
     """Internal function to fetch all rounds/puzzles from database."""
     debug_log(4, "fetching all from database")
@@ -247,38 +240,9 @@ def _get_all_from_db():
     for puzzle in puzzle_view:
         all_puzzles[puzzle["id"]] = puzzle
 
-    # Fetch most recent activity per puzzle in one query and inject as
-    # lastactcached. This is included in the /all response so external
-    # utilities get a cached approximation of lastact without N+1 queries.
-    # time is serialized to ISO string here so json.dumps() can cache it.
-    try:
-        conn, cursor = _read_cursor()
-        cursor.execute(
-            """
-            SELECT a.*
-            FROM activity a
-            INNER JOIN (
-                SELECT puzzle_id, MAX(time) AS max_time
-                FROM activity
-                GROUP BY puzzle_id
-            ) latest ON a.puzzle_id = latest.puzzle_id
-                    AND a.time = latest.max_time
-            ORDER BY a.id DESC
-            """
-        )
-        for row in cursor.fetchall():
-            pid = row["puzzle_id"]
-            # ORDER BY a.id DESC means the first row per puzzle_id is the
-            # most recent; skip subsequent rows for the same puzzle.
-            if pid in all_puzzles and "lastactcached" not in all_puzzles[pid]:
-                all_puzzles[pid]["lastactcached"] = _serialize_activity_for_cache(row)
-    except Exception as e:
-        debug_log(2, f"Failed to fetch lastactcached: {e}")
-        # Non-fatal: affected puzzles get lastactcached=None via setdefault below
-
-    # Ensure all puzzles have the key (None for puzzles with no activity yet)
-    for puzzle in all_puzzles.values():
-        puzzle.setdefault("lastactcached", None)
+    # Note: lastact is NOT part of this blob. It changes on every activity
+    # write, so it lives in the write-through Redis hash and gets attached
+    # fresh per request in _attach_lastact().
 
     try:
         conn, cursor = _read_cursor()
@@ -318,37 +282,101 @@ def _get_all_from_db():
     return {"rounds": rounds, "hints": hints}
 
 
+def _get_lastact_map():
+    """Return {puzzle_id (int): latest activity row} for all puzzles.
+
+    Prefers the write-through Redis hash (O(1), always current — updated by
+    pblib.log_activity on every activity insert). Falls back to the indexed
+    GROUP BY when Redis is down or the hash is empty (cold start after a
+    flush), backfilling the hash from the result.
+    """
+    lastact = lastact_get_all()
+    if lastact:
+        return lastact
+
+    # Redis down (None) or hash empty ({}) — build from the database.
+    # Cheap: loose index scan over idx_puzzle_time, ~1ms per 275 puzzles.
+    rows = {}
+    try:
+        conn, cursor = _read_cursor()
+        cursor.execute(
+            """
+            SELECT a.*
+            FROM activity a
+            INNER JOIN (
+                SELECT puzzle_id, MAX(time) AS max_time
+                FROM activity
+                GROUP BY puzzle_id
+            ) latest ON a.puzzle_id = latest.puzzle_id
+                    AND a.time = latest.max_time
+            ORDER BY a.id DESC
+            """
+        )
+        for row in cursor.fetchall():
+            pid = row["puzzle_id"]
+            # ORDER BY a.id DESC means the first row per puzzle_id is the
+            # most recent; skip subsequent rows for the same puzzle.
+            if pid not in rows:
+                rows[pid] = pblib.serialize_activity(row)
+    except Exception as e:
+        debug_log(2, f"Failed to fetch lastact map from DB: {e}")
+        return {}
+
+    if lastact == {}:
+        # Redis is up but the hash is empty — backfill so subsequent
+        # requests are O(1) again.
+        lastact_set_many(rows)
+    return rows
+
+
+def _attach_lastact(data):
+    """Graft current lastact onto every puzzle in an /all response dict."""
+    lastact = _get_lastact_map()
+    for rnd in data.get("rounds", []):
+        for puzzle in rnd.get("puzzles", []):
+            puzzle["lastact"] = lastact.get(puzzle["id"])
+    return data
+
+
 def _get_all_with_cache():
-    """Get all rounds/puzzles, using cache if available."""
+    """Get all rounds/puzzles plus current lastact per puzzle.
+
+    The blob (structural data) comes from cache when warm — it carries a 15s
+    TTL and is invalidated only on structural changes. lastact is attached
+    fresh from the write-through hash on every request, so it is current
+    regardless of the blob's age.
+    """
     debug_log(4, "start")
 
-    # Ensure memcache is initialized (lazy init on first request per worker).
-    # Guard mysql.connection access so it is only evaluated when initialization
-    # is actually needed — accessing mysql.connection triggers a new SSL MySQL
-    # connection (~40ms) even if ensure_memcache_initialized would return
-    # immediately, because Python evaluates arguments before calling the function.
-    if not pbcachelib._memcache_initialized:
-        ensure_memcache_initialized(mysql.connection)
+    # Lazy cache init on first request per worker. Guard mysql.connection
+    # access so it is only evaluated when initialization is actually needed —
+    # accessing mysql.connection triggers a new SSL MySQL connection (~40ms)
+    # even if ensure_cache_initialized would return immediately, because
+    # Python evaluates arguments before calling the function.
+    if not pbcachelib._cache_initialized:
+        ensure_cache_initialized(mysql.connection)
 
-    # Try cache first if memcache is enabled
-    if pbcachelib.mc is not None:
-        cached = cache_get(MEMCACHE_CACHE_KEY)
+    if pbcachelib.rc is not None:
+        cached = cache_get(CACHE_KEY)
         if cached:
             debug_log(4, "cache hit")
-            return json.loads(cached)
+            return _attach_lastact(json.loads(cached))
         debug_log(4, "cache miss")
 
-    # Fall back to database
+    # Cache miss (or cache disabled): rebuild from the database. The lock
+    # makes one worker rebuild-and-cache; concurrent missers serve straight
+    # from the DB without caching, instead of stampeding redundant rebuilds.
+    got_lock = try_acquire_rebuild_lock()
     data = _get_all_from_db()
-
-    # Store in cache for next time (if enabled)
-    if pbcachelib.mc is not None:
+    if pbcachelib.rc is not None and got_lock:
         try:
-            cache_set(MEMCACHE_CACHE_KEY, json.dumps(data), ttl=MEMCACHE_TTL)
+            cache_set(CACHE_KEY, json.dumps(data), ttl=CACHE_TTL)
         except Exception as e:
             debug_log(3, f"failed to cache: {e}")
+        finally:
+            release_rebuild_lock()
 
-    return data
+    return _attach_lastact(data)
 
 
 @app.route("/all", endpoint="all", methods=["GET"])
@@ -579,21 +607,19 @@ def get_one_puzzle(id):
 
     debug_log(5, f"fetched puzzle {id}: {puzzle}")
 
-    # Include lastact (always fresh from DB) and lastactcached (from /all
-    # cache if warm, DB fallback if cold) to reduce HTTP round-trips.
-    lastact = get_last_activity_for_puzzle(id)
-
-    # lastactcached reuses the already-fetched lastact with time as ISO string.
-    # No cache lookup here — deserializing the full /all blob on every single-puzzle
-    # request is more expensive than the DB query already made for lastact.
-    # The caching benefit of lastactcached is for /all bulk consumers, not here.
-    lastactcached = _serialize_activity_for_cache(lastact)
+    # lastact: write-through Redis hash first (O(1), always current); DB
+    # fallback when Redis is down or the puzzle has no entry yet. Time is
+    # ISO 8601 in both paths.
+    if not pbcachelib._cache_initialized:
+        ensure_cache_initialized(mysql.connection)
+    lastact = lastact_get(id)
+    if lastact is None:
+        lastact = pblib.serialize_activity(get_last_activity_for_puzzle(id))
 
     return {
         "status": "ok",
         "puzzle": puzzle,
         "lastact": lastact,
-        "lastactcached": lastactcached,
     }
 
 
@@ -602,7 +628,12 @@ def get_one_puzzle(id):
 def get_puzzle_part(id, part):
     debug_log(4, f"start. id: {id}, part: {part}")
     if part == "lastact":
-        rv = get_last_activity_for_puzzle(id)
+        # Write-through hash first; DB fallback (ISO time in both paths).
+        if not pbcachelib._cache_initialized:
+            ensure_cache_initialized(mysql.connection)
+        rv = lastact_get(id)
+        if rv is None:
+            rv = pblib.serialize_activity(get_last_activity_for_puzzle(id))
     elif part == "lastsheetact":
         rv = get_last_sheet_activity_for_puzzle(id)
     else:
@@ -2185,13 +2216,10 @@ def update_puzzle_multi(id):
         updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
         updated_parts[part] = updated_value
 
-    # Invalidate cache once after all updates. lastact is exempt: it's an
-    # activity INSERT that never touches the puzzle row, and lastactcached
-    # staleness rides the 15s TTL (same policy as solver assignment).
-    # Temporary special case until the Redis write-through migration
-    # (REDIS_MIGRATION.md Phase 4) decouples activity from the blob cache.
-    if any(part != "lastact" for part in data):
-        invalidate_cache_with_stats()
+    # No handler-level invalidation: every part update routes through
+    # pblib.update_puzzle_field, which invalidates the blob iff the field
+    # is in STRUCTURAL_PUZZLE_FIELDS. Non-structural fields ride the TTL;
+    # lastact is a pure activity INSERT handled by write-through.
 
     return {"status": "ok", "puzzle": {"id": int(id), **updated_parts}}
 
@@ -2224,9 +2252,7 @@ def update_puzzle_part(id, part):
 
     updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
 
-    # Invalidate cache — except for lastact; see the multi-part handler note.
-    if part != "lastact":
-        invalidate_cache_with_stats()
+    # No handler-level invalidation — see the multi-part handler note.
 
     return {"status": "ok", "puzzle": {"id": int(id), part: updated_value}}
 
@@ -2596,8 +2622,10 @@ def delete_puzzle(puzzlename):
 
     debug_log(2, f"puzzle id {puzzid} named {puzzlename} deleted from system!")
 
-    # Invalidate /allcached since puzzle was deleted
+    # Invalidate the blob (structural change) and drop the puzzle's entry
+    # from the write-through lastact hash.
     invalidate_cache_with_stats()
+    lastact_delete(puzzid)
 
     return {"status": "ok"}
 

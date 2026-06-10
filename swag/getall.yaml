@@ -81,14 +81,15 @@ responses:
                     sheetcount:
                       type: integer
                       description: Number of sheets/tabs in the puzzle's Google spreadsheet
-                    lastactcached:
+                    lastact:
                       type: object
                       nullable: true
                       description: |
-                        Most recent activity for this puzzle, cached as part of the /all response
-                        (15s TTL). Null only for puzzles that have never had any activity.
-                        time is an ISO 8601 string. Use this instead of calling /puzzles/<id>/lastact
-                        per puzzle to avoid N+1 queries.
+                        Most recent activity for this puzzle, always current — served from the
+                        write-through Redis lastact hash (DB fallback), attached fresh on every
+                        request regardless of the cached blob's age. Null only for puzzles that
+                        have never had any activity. time is an ISO 8601 string. Use this instead
+                        of calling /puzzles/<id>/lastact per puzzle to avoid N+1 queries.
                       properties:
                         id:
                           type: integer
