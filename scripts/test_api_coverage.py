@@ -11,6 +11,7 @@ Usage:
     docker exec puzzleboss-app python3 scripts/test_api_coverage.py --list
 """
 
+import json
 import random
 import string
 import sys
@@ -92,6 +93,25 @@ class TestRunner:
         # Emoji set for name generation
         self.emojis = ["🧩", "🔍", "🎯", "💡", "🗝️", "🎲", "📐", "🔮",
                        "🌟", "⚡", "🔑", "🎪", "🎭", "🎨", "🏆"]
+        # Optional direct Redis handle for cache-internals tests. Tests that
+        # need it skip gracefully when Redis is unreachable (e.g. running the
+        # suite against a deployment with REDIS_ENABLED=false), so the rest of
+        # the suite is unaffected.
+        self.redis = self._connect_redis()
+
+    @staticmethod
+    def _connect_redis():
+        try:
+            import os
+            import redis
+            host = os.environ.get("REDIS_TEST_HOST", "redis")
+            port = int(os.environ.get("REDIS_TEST_PORT", "6379"))
+            client = redis.Redis(host=host, port=port, decode_responses=True,
+                                 socket_timeout=1, socket_connect_timeout=1)
+            client.ping()
+            return client
+        except Exception:
+            return None
 
     # ------------------------------------------------------------------
     # API helpers
@@ -1160,6 +1180,165 @@ class TestRunner:
                     self.logger.log_operation("  ✓ POSTed activity visible in the very next /all (write-through)")
 
         result.set_success("lastact write-through test completed successfully")
+
+    # ------------------------------------------------------------------
+    # Test 15d: lastact cold-start consistency (Redis backfill == DB)
+    # After FLUSHALL, the first /all rebuilds the lastact hash from the DB.
+    # Every backfilled entry must equal the per-puzzle DB lastact, and the
+    # hash must agree with the same-second tie-break (ORDER BY time DESC,
+    # id DESC) used by get_last_activity_for_puzzle.
+    # ------------------------------------------------------------------
+    def test_lastact_cold_start_consistency(self, result: TestResult):
+        if self.redis is None:
+            result.set_success("skipped — Redis not reachable from test context")
+            return
+
+        # Create a fresh puzzle and log two activities in the same second so
+        # the tie-break (highest id wins) is exercised, not just MAX(time).
+        ts = str(int(time.time()))
+        rounds = self.get_all_rounds()
+        if not rounds:
+            result.fail("No rounds for puzzle creation")
+            return
+        puzzle = self.create_puzzle(f"ColdStartTie{ts}", rounds[0]["id"])
+        pid = puzzle["id"]
+        sid = self.get_all_solvers()[0]["id"]
+        # Two activities, no sleep — same wall-clock second, ascending id.
+        self.api_post(f"/puzzles/{pid}/lastact",
+                      {"lastact": {"solver_id": sid, "source": "puzzleboss", "type": "comment"}})
+        self.api_post(f"/puzzles/{pid}/lastact",
+                      {"lastact": {"solver_id": sid, "source": "puzzleboss", "type": "interact"}})
+
+        # The authoritative answer: the dedicated endpoint (hash, then DB).
+        authoritative = self.api_get(f"/puzzles/{pid}/lastact")["puzzle"]["lastact"]
+
+        # Wipe Redis and force a cold rebuild via /all.
+        self.redis.flushall()
+        if self.redis.hlen("puzzleboss:lastact") != 0:
+            result.fail("FLUSHALL did not clear the lastact hash")
+            return
+        all_data = self.api_get("/all")  # triggers blob rebuild + hash backfill
+
+        # The hash should now be repopulated.
+        hlen = self.redis.hlen("puzzleboss:lastact")
+        if hlen == 0:
+            result.fail("lastact hash not backfilled after cold-start /all")
+            return
+        self.logger.log_operation(f"  ✓ cold-start backfilled {hlen} puzzles into the hash")
+
+        # Backfilled entry for our puzzle must match the authoritative row,
+        # including the tie-break (the 'interact' was logged last → higher id).
+        raw = self.redis.hget("puzzleboss:lastact", str(pid))
+        if raw is None:
+            result.fail(f"puzzle {pid} missing from backfilled hash")
+            return
+        backfilled = json.loads(raw)
+        if backfilled.get("id") != authoritative.get("id"):
+            result.fail(
+                f"cold-start hash disagrees with DB lastact for puzzle {pid}: "
+                f"hash id={backfilled.get('id')} vs authoritative id={authoritative.get('id')}"
+            )
+            return
+        if backfilled.get("type") != "interact":
+            result.fail(
+                f"tie-break wrong: expected last-logged 'interact', got "
+                f"{backfilled.get('type')!r} (ORDER BY time DESC, id DESC)"
+            )
+            return
+        self.logger.log_operation("  ✓ cold-start hash matches DB lastact incl. same-second tie-break")
+
+        # /all must serve that same fresh lastact.
+        for rnd in all_data.get("rounds", []):
+            for p in rnd.get("puzzles", []):
+                if p.get("id") == pid:
+                    if (p.get("lastact") or {}).get("id") != authoritative.get("id"):
+                        result.fail("/all lastact disagrees with the hash after cold start")
+                        return
+
+        result.set_success("lastact cold-start consistency verified")
+
+    # ------------------------------------------------------------------
+    # Test 15e: /all lastact agrees with the dedicated endpoint (data
+    # contract). Whatever the cache state, the lastact /all serves for a
+    # puzzle must equal what GET /puzzles/<id>/lastact returns — this is the
+    # invariant the DB-fallback path must preserve when Redis is off.
+    # ------------------------------------------------------------------
+    def test_lastact_all_matches_dedicated(self, result: TestResult):
+        ts = str(int(time.time()))
+        rounds = self.get_all_rounds()
+        if not rounds:
+            result.fail("No rounds for puzzle creation")
+            return
+        puzzle = self.create_puzzle(f"AllMatchDedicated{ts}", rounds[0]["id"])
+        pid = puzzle["id"]
+        sid = self.get_all_solvers()[0]["id"]
+
+        # POST must not error.
+        self.api_post(f"/puzzles/{pid}/lastact",
+                      {"lastact": {"solver_id": sid, "source": "puzzleboss", "type": "comment"}})
+
+        dedicated = self.api_get(f"/puzzles/{pid}/lastact")["puzzle"]["lastact"]
+        if dedicated is None:
+            result.fail("dedicated lastact null after POST")
+            return
+
+        all_data = self.api_get("/all")
+        found = None
+        for rnd in all_data.get("rounds", []):
+            for p in rnd.get("puzzles", []):
+                if p.get("id") == pid:
+                    found = p.get("lastact")
+                    break
+        if found is None:
+            result.fail("/all lastact null for new puzzle")
+            return
+        if found.get("id") != dedicated.get("id"):
+            result.fail(
+                f"/all lastact (id={found.get('id')}) != dedicated "
+                f"(id={dedicated.get('id')}) — endpoints inconsistent"
+            )
+            return
+        self.logger.log_operation("  ✓ /all lastact matches GET /puzzles/<id>/lastact")
+
+        result.set_success("lastact /all-vs-dedicated consistency verified")
+
+    # ------------------------------------------------------------------
+    # Test 15f: deleted puzzle is removed from the lastact hash (no leak)
+    # ------------------------------------------------------------------
+    def test_lastact_delete_hdel(self, result: TestResult):
+        if self.redis is None:
+            result.set_success("skipped — Redis not reachable from test context")
+            return
+
+        ts = str(int(time.time()))
+        rounds = self.get_all_rounds()
+        if not rounds:
+            result.fail("No rounds for puzzle creation")
+            return
+        puzzle = self.create_puzzle(f"DeleteHdel{ts}", rounds[0]["id"])
+        pid = puzzle["id"]
+        pname = puzzle["name"]
+
+        # Force a hash entry via a lastact POST (write-through).
+        sid = self.get_all_solvers()[0]["id"]
+        self.api_post(f"/puzzles/{pid}/lastact",
+                      {"lastact": {"solver_id": sid, "source": "puzzleboss", "type": "comment"}})
+        if self.redis.hget("puzzleboss:lastact", str(pid)) is None:
+            result.fail(f"puzzle {pid} never got a lastact hash entry to delete")
+            return
+
+        # Delete the puzzle.
+        r = requests.delete(f"{self.base_url}/deletepuzzle/{pname}")
+        if not r.ok:
+            result.fail(f"DELETE /deletepuzzle/{pname} failed: {r.status_code} - {r.text[:160]}")
+            return
+
+        if self.redis.hget("puzzleboss:lastact", str(pid)) is not None:
+            result.fail(f"puzzle {pid} still in lastact hash after deletion (hdel leak)")
+            return
+        self.logger.log_operation("  ✓ deleted puzzle removed from lastact hash")
+
+        result.set_success("lastact hdel-on-delete verified")
 
     # ------------------------------------------------------------------
     # Test 16: Puzzle Activity Endpoint
@@ -2740,6 +2919,9 @@ class TestRunner:
             self.test_activity_tracking,
             self.test_lastact_embedding,
             self.test_lastact_writethrough,
+            self.test_lastact_cold_start_consistency,
+            self.test_lastact_all_matches_dedicated,
+            self.test_lastact_delete_hdel,
             self.test_puzzle_activity_endpoint,
             self.test_solver_activity_endpoint,
             self.test_solver_history,

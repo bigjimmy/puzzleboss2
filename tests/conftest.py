@@ -1,4 +1,4 @@
-"""Shared test helpers for bigjimmybot unit tests."""
+"""Shared test helpers for unit tests."""
 
 import json
 import os
