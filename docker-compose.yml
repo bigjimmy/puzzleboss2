@@ -53,6 +53,19 @@ services:
       - puzzleboss
     restart: "no"
 
+  redis:
+    image: redis:7-alpine
+    container_name: puzzleboss-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - puzzleboss
+
   app:
     build:
       context: .
@@ -88,6 +101,8 @@ services:
       - prometheus_multiproc_dir=/dev/shm/puzzleboss_prometheus
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       ssl-setup:
         condition: service_completed_successfully

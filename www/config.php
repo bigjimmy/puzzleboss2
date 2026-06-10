@@ -393,7 +393,7 @@ $categories = [
   'bigjimmy' => ['BigJimmy Bot', 'Sheet activity polling bot configuration'],
   'google' => ['Google Sheets & Drive', 'Google API and sheet template settings'],
   'discord' => ['Discord (Puzzcord)', 'Discord bot integration'],
-  'memcache' => ['Memcache', 'Response caching layer'],
+  'redis' => ['Redis', 'Response caching layer'],
   'llm' => ['LLM & AI', 'Gemini AI, natural language queries, and wiki RAG'],
   'metadata' => ['Status & Metrics Metadata', 'JSON definitions for puzzle statuses and bot metrics'],
   'other' => ['Other', 'Uncategorized configuration values'],
@@ -428,9 +428,9 @@ $keyCategoryMap = [
   'PUZZCORD_PORT' => 'discord',
   'DISCORD_EMAIL_WEBHOOK' => 'discord',
 
-  'MEMCACHE_ENABLED' => 'memcache',
-  'MEMCACHE_HOST' => 'memcache',
-  'MEMCACHE_PORT' => 'memcache',
+  'REDIS_ENABLED' => 'redis',
+  'REDIS_HOST' => 'redis',
+  'REDIS_PORT' => 'redis',
 
   'GEMINI_API_KEY' => 'llm',
   'GEMINI_MODEL' => 'llm',
@@ -480,9 +480,9 @@ $keyDescriptions = [
   'PUZZCORD_HOST' => 'Hostname of the puzzcord daemon',
   'PUZZCORD_PORT' => 'Port of the puzzcord daemon',
   'DISCORD_EMAIL_WEBHOOK' => 'Webhook URL for email-to-Discord forwarding',
-  'MEMCACHE_ENABLED' => 'Enable memcache for /allcached endpoint',
-  'MEMCACHE_HOST' => 'Memcache server hostname',
-  'MEMCACHE_PORT' => 'Memcache server port',
+  'REDIS_ENABLED' => 'Enable Redis caching (/all blob + write-through lastact)',
+  'REDIS_HOST' => 'Redis server hostname',
+  'REDIS_PORT' => 'Redis server port',
   'GEMINI_API_KEY' => 'Google Gemini API key for LLM queries',
   'GEMINI_MODEL' => 'Gemini model name (e.g. gemini-3-flash-preview)',
   'GEMINI_SYSTEM_INSTRUCTION' => 'System prompt for the Gemini LLM assistant',
@@ -504,12 +504,12 @@ $keyDescriptions = [
 ];
 
 // Known boolean keys (values are "true"/"false" strings)
-$booleanKeys = ['ALLOW_USERNAME_OVERRIDE', 'BIGJIMMY_AUTOASSIGN', 'SKIP_GOOGLE_API', 'SKIP_PUZZCORD', 'MEMCACHE_ENABLED'];
+$booleanKeys = ['ALLOW_USERNAME_OVERRIDE', 'BIGJIMMY_AUTOASSIGN', 'SKIP_GOOGLE_API', 'SKIP_PUZZCORD', 'REDIS_ENABLED'];
 
 // Known numeric keys
 $numericKeys = ['LOGLEVEL', 'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', 'BIGJIMMY_PUZZLEPAUSETIME',
                 'BIGJIMMY_QUOTAFAIL_DELAY', 'BIGJIMMY_QUOTAFAIL_MAX_RETRIES', 'BIGJIMMY_THREADCOUNT',
-                'PUZZCORD_PORT', 'MEMCACHE_PORT'];
+                'PUZZCORD_PORT', 'REDIS_PORT'];
 
 // Keys with long/JSON values that need textareas
 $textareaKeys = ['GEMINI_SYSTEM_INSTRUCTION', 'bookmarklet_js', 'debugging_usernames'];

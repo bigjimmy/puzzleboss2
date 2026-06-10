@@ -19,7 +19,22 @@ from unittest.mock import patch, MagicMock
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Mock heavy dependencies BEFORE importing pbgooglelib
+# Mock heavy dependencies BEFORE importing pbgooglelib. Snapshot the originals
+# so we can restore them after the import — leaving the pblib mock in
+# sys.modules globally poisons later/earlier-collected modules that import the
+# real pblib (e.g. test_pblib_cache: serialize_activity would return a Mock).
+# These tests don't reference pblib at runtime; the mock is only needed during
+# the pbgooglelib import below.
+_saved_modules = {
+    name: sys.modules.get(name)
+    for name in (
+        'MySQLdb', 'MySQLdb.cursors', 'googleapiclient', 'googleapiclient.discovery',
+        'google.auth', 'google.auth.transport', 'google.auth.transport.requests',
+        'google.oauth2', 'google.oauth2.service_account', 'google_auth_httplib2',
+        'httplib2', 'pblib',
+    )
+}
+
 sys.modules['MySQLdb'] = MagicMock()
 sys.modules['MySQLdb.cursors'] = MagicMock()
 sys.modules['googleapiclient'] = MagicMock()
@@ -56,6 +71,14 @@ if 'pbgooglelib' in sys.modules and isinstance(sys.modules['pbgooglelib'], Magic
 import pbgooglelib
 importlib.reload(pbgooglelib)
 from pbgooglelib import _GoogleApiRateLimiter, _DEFAULT_QPM
+
+# Restore the original sys.modules entries so the mocks don't leak into other
+# test modules (drop the key if there was no prior entry).
+for _name, _orig in _saved_modules.items():
+    if _orig is None:
+        sys.modules.pop(_name, None)
+    else:
+        sys.modules[_name] = _orig
 
 
 class TestRateLimiterBasics:

@@ -25,7 +25,7 @@ Puzzleboss 2000 is a puzzle hunt management system: REST API backend (Python/Fla
 | `pbgooglelib.py` | Google Drive/Sheets integration. Service account with Domain-Wide Delegation. Creates puzzle sheets, tracks sheet revisions. Hybrid metadata approach for activity tracking. |
 | `pbdiscordlib.py` | Discord integration via socket connection to puzzcord daemon. |
 | `pbllmlib.py` | LLM-powered natural-language queries via Google Gemini. Function calling + RAG via ChromaDB. |
-| `pbcachelib.py` | Optional response cache (memcache today; [Redis migration planned](REDIS_MIGRATION.md)). Public API: `cache_get` / `cache_set` / `cache_delete` / `invalidate_all_cache`. |
+| `pbcachelib.py` | Optional Redis cache: the `/all` blob (15s TTL) plus the write-through `lastact` hash and the rebuild lock. Public API: `cache_get` / `cache_set` / `cache_delete` / `invalidate_all_cache` / `lastact_*` / rebuild-lock helpers. See [REDIS_MIGRATION.md](REDIS_MIGRATION.md). |
 | `bigjimmybot.py` | Long-running multi-threaded process. Polls Google Sheets for activity, updates puzzle metadata. Reads hidden `_pb_activity` sheet for sheets with add-on; falls back to Revisions API for legacy sheets. |
 | `migrations/` | Data migration framework. See [scripts/migrations/README.md](scripts/migrations/README.md). |
 
@@ -58,7 +58,7 @@ Schema in [`scripts/puzzleboss.sql`](scripts/puzzleboss.sql). Key tables:
 ### Optional features (toggled in `config` table)
 
 - Google API (`SKIP_GOOGLE_API`)
-- Memcache cache (`MEMCACHE_ENABLED`)
+- Redis cache (`REDIS_ENABLED`, `REDIS_HOST`, `REDIS_PORT`)
 - Prometheus metrics (exposed at `/metrics` if `prometheus_flask_exporter` installed — it is in the dev/prod images)
 - LLM queries (`/v1/query`, requires `google-genai`)
 - Wiki RAG (`WIKI_URL`, `WIKI_CHROMADB_PATH`, requires `chromadb`)
@@ -192,7 +192,9 @@ Use `debug_log(severity, message)` from `pblib.py`. Severity: 0=emergency, 1=err
 
 ### Caching rules
 
-Cache is invalidated **only** for puzzle and round *structural* changes: status transitions, creation, deletion, round completion. Solver assignment/unassignment intentionally does NOT invalidate — the 15-second TTL in `pbcachelib.py` handles staleness for `cursolvers` and `lastactcached`. This keeps hit rates high during active solving (>90% observed during January 2026 hunt with 60s TTL; current TTL is 15s).
+The `/all` blob is invalidated **only** for *structural* changes — enforced by the `STRUCTURAL_PUZZLE_FIELDS` allowlist in `pblib.update_puzzle_field` (status, name, round_id, answer, ismeta) plus create/delete and round operations. Everything else (xyzloc, comments, sheetcount, solver assignment) rides the 15-second TTL. This keeps hit rates high during active solving (>90% observed during January 2026 hunt).
+
+Per-puzzle `lastact` is NOT cached in the blob: it lives in a write-through Redis hash (`puzzleboss:lastact`), updated by `pblib.log_activity()` on every activity insert and attached fresh to every `/all` response — always current, never invalidated. Cold-start fallback is the indexed GROUP BY over `activity(puzzle_id, time)`. A `SET NX` rebuild lock prevents miss stampedes.
 
 ## API endpoint patterns
 

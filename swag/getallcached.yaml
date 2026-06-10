@@ -2,19 +2,19 @@ tags:
   - Puzzles
 summary: Get all rounds and puzzles (cached)
 description: |
-  Returns all rounds with their puzzles, using memcache for performance.
+  Returns all rounds with their puzzles, using Redis for performance.
   Falls back to direct database query if cache is unavailable or disabled.
 
-  Note: This is now equivalent to /all - both endpoints use caching.
+  Deprecated alias for /all — both endpoints are identical.
 
-  Each puzzle in the response includes a lastactcached field — the most recent
-  activity for that puzzle, cached as part of the /all response (15s TTL).
+  Each puzzle in the response includes a lastact field — the most recent
+  activity for that puzzle, always current via the write-through Redis hash.
   Use this instead of calling /puzzles/<id>/lastact per puzzle to avoid N+1 queries.
-  
+
   Configure caching via config values:
-  - MEMCACHE_ENABLED: 'true' or 'false'
-  - MEMCACHE_HOST: hostname of memcache server
-  - MEMCACHE_PORT: port (default 11211)
+  - REDIS_ENABLED: 'true' or 'false'
+  - REDIS_HOST: hostname of Redis server
+  - REDIS_PORT: port (default 6379)
 responses:
   200:
     description: All rounds with puzzles

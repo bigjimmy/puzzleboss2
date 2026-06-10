@@ -504,10 +504,55 @@ def log_activity(puzzle_id, activity_type, solver_id, source, conn, timestamp=No
                 (puzzle_id, solver_id, source, activity_type),
             )
         conn.commit()
+        _write_through_lastact(puzzle_id, conn)
         return True
     except Exception as e:
         debug_log(1, f"CRITICAL: Failed to log activity (puzzle={puzzle_id}, type={activity_type}, solver={solver_id}, source={source}): {e}")
         return False
+
+
+def serialize_activity(row):
+    """Return a copy of an activity row with time converted to ISO 8601 string.
+
+    MySQL returns time as a datetime object, which json.dumps() cannot
+    serialize. Used for activity rows headed into the Redis lastact hash
+    or JSON API responses.
+    """
+    if not row or not row.get("time"):
+        return row
+    row = dict(row)
+    row["time"] = row["time"].isoformat()
+    return row
+
+
+def _write_through_lastact(puzzle_id, conn):
+    """Refresh a puzzle's entry in the Redis lastact hash after an activity
+    insert.
+
+    Re-queries the canonical latest row (indexed, sub-ms) instead of assuming
+    the just-inserted row is the latest: bigjimmybot logs sheet edits with
+    historical timestamps that can be older than the current entry.
+
+    Fail-safe: a miss leaves the entry stale until the puzzle's next
+    activity; /all readers also self-heal via their DB fallback.
+
+    No-op when Redis is unavailable/disabled — checked before any DB work,
+    so a logging insert with caching off costs nothing extra (the common
+    case: prod before cutover, and every bigjimmybot revise).
+    """
+    try:
+        import pbcachelib
+
+        pbcachelib.ensure_cache_initialized(conn)
+        if pbcachelib.rc is None:
+            return
+        row = get_last_activity_for_puzzle(puzzle_id, conn)
+        if row:
+            pbcachelib.lastact_set(puzzle_id, serialize_activity(row))
+    except ImportError:
+        pass  # pbcachelib/redis not installed — no cache to write through
+    except Exception as e:
+        debug_log(3, f"lastact write-through failed for puzzle {puzzle_id}: {e}")
 
 
 def get_solver_by_name_from_db(name, conn):
@@ -555,8 +600,15 @@ def solver_exists(identifier, conn):
         return False
 
 
+# Puzzle fields whose changes alter the /all blob's structural content and
+# therefore invalidate it. Everything else (xyzloc, comments, sheetcount,
+# lastact, ...) rides the blob's 15s TTL — high-churn fields must not blow
+# the cache. See REDIS_MIGRATION.md "Invalidation allowlist".
+STRUCTURAL_PUZZLE_FIELDS = {"status", "name", "round_id", "answer", "ismeta"}
+
+
 def _invalidate_cache(conn):
-    """Invalidate the puzzle/round cache after a database mutation.
+    """Invalidate the puzzle/round cache after a structural database mutation.
 
     Uses a lazy import to avoid circular dependency (pbcachelib imports pblib).
     Fails silently if cache is not available — cache misses are safe, stale data is not.
@@ -565,7 +617,7 @@ def _invalidate_cache(conn):
         from pbcachelib import invalidate_all_cache
         invalidate_all_cache(conn)
     except ImportError:
-        pass  # pbcachelib/pymemcache not installed — no cache to invalidate
+        pass  # pbcachelib/redis not installed — no cache to invalidate
     except Exception as e:
         debug_log(3, f"Cache invalidation failed: {e}")
 
@@ -586,7 +638,7 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
         - 'status' field: Auto-logs "status" activity (except for "Solved",
           which is logged as "solve" by the answer handler in pbrest.py)
         - Other fields: Direct UPDATE query
-        - All mutations invalidate the /allcached memcache entry.
+        - Structural mutations (STRUCTURAL_PUZZLE_FIELDS) invalidate the /all blob.
 
     Raises:
         Exception: If database update fails
@@ -610,10 +662,12 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
         if field == "status" and value != "Solved":
             log_activity(puzzle_id, "status", 100, source, conn)
 
-    # Invariant: any puzzle mutation must invalidate the cached /allcached response.
-    # This ensures all callers (pbrest, bigjimmybot, future processes) get automatic
-    # cache invalidation without needing to remember to call it explicitly.
-    _invalidate_cache(conn)
+    # Invariant: structural puzzle mutations invalidate the cached /all blob,
+    # automatically for all callers (pbrest, bigjimmybot, future processes).
+    # Non-structural fields ride the blob's 15s TTL — invalidating for them
+    # couples cache lifetime to high-churn writes (see REDIS_MIGRATION.md).
+    if field in STRUCTURAL_PUZZLE_FIELDS:
+        _invalidate_cache(conn)
 
 
 def get_solver_by_id_from_db(solver_id, conn):
