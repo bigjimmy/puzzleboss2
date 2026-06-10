@@ -1,7 +1,17 @@
 # Redis Migration Plan — puzzleboss2 (App Side)
 
-This document covers the app-side changes for migrating from memcache to Redis.
+This document covers the app-side changes for migrating from memcache to Redis,
+plus the performance work that motivates it: serving fresh per-puzzle `lastact`
+inside `/all` without the invalidation churn that design would otherwise cause.
 See `puzzleboss2-infra/REDIS_MIGRATION.md` for the infrastructure side.
+
+Phases:
+
+- **Phase A — activity composite index.** Standalone, deployable immediately,
+  no Redis dependency. Do this first.
+- **Phases 0–3 — the backend swap** (memcache → Redis, like-for-like).
+- **Phase 4 — write-through lastact.** The payoff: fresh `lastact` in every
+  `/all` response with near-zero invalidations. Requires Redis.
 
 ## Background
 
@@ -17,9 +27,57 @@ Both containers share the same cache backend so OIDC sessions are portable acros
 
 `mod_auth_openidc` on Debian supports `OIDCCacheType redis` natively (hiredis compiled in).
 The public API of `pbcachelib.py` (`cache_get`, `cache_set`, `cache_delete`,
-`invalidate_all_cache`) is unchanged — only the internals swap.
+`invalidate_all_cache`) is unchanged by the swap — only the internals change.
 
-## Files to change
+### Performance findings (June 2026, prod + local simulation)
+
+Measured against January 2026 hunt data (30.7K activity rows, 275 puzzles,
+86% bigjimmybot `revise`) and a local simulation reseeded at 4x/16x scale
+(`scripts/perf_sim_activity.py`):
+
+| Quantity | Value |
+|---|---|
+| Peak activity write rate (hunt) | 22.5/min — one every **2.7s** (p90 every 4s) |
+| `/all` poll rate | 5s per client (`index.php`) → ~8–10 req/s at 40–50 solvers |
+| Cache invalidations last hunt | **31.8K** — ≈1:1 with activity rows, because bigjimmybot's `sheetcount` updates invalidate via `update_puzzle_field` |
+| `/all` rebuild, 30K rows | ~20ms |
+| `/all` rebuild, 400K rows (16x), current indexes | **272ms** |
+| `/all` rebuild, 400K rows, with `(puzzle_id, time)` index | **27ms** |
+| `lastactcached` GROUP BY alone, 25K → 400K rows | 12ms → 240ms (O(total activity)); **1.1ms flat** with the index |
+| Per-puzzle lastact, puzzle with old last activity, 400K rows | 184ms (backward `time`-index scan); **0.1ms** with the index |
+
+Two structural conclusions:
+
+1. **The cache is already in the "invalidated a LOT" regime** (sheetcount churn),
+   and survives because request rate (~9/s) far exceeds invalidation rate
+   (~0.4/s) and rebuilds are cheap at 30K rows. What breaks at the next hunt's
+   activity volume is rebuild *cost* (272ms) × stampede width (2–3 concurrent
+   misses per invalidation, no lock), not hit rate.
+2. **Invalidation-based caching couples write frequency to read cost.** Putting
+   fresh lastact into `/all` by invalidating on every activity write forces
+   readers to redo O(everything) per write. Write-through (Phase 4) decouples
+   them: each write does O(1) work for the thing that changed.
+
+## Phase A — activity composite index (do this now)
+
+Standalone commit, deployable to prod immediately, independent of all Redis work.
+
+- `scripts/puzzleboss.sql`: add `KEY idx_puzzle_time (puzzle_id, time)` to `activity`
+- `migrations/add_activity_puzzle_time_index.py`: idempotent prod migration
+  (`POST /migrate/add_activity_puzzle_time_index`; online DDL, doesn't block traffic)
+
+What it fixes, regardless of cache backend:
+
+- The `lastactcached` GROUP BY becomes a loose index scan — cost scales with
+  puzzle count (~275 groups), not activity count. `/all` rebuild stays ~27ms
+  even at 16x activity volume.
+- `get_last_activity_for_puzzle` stops falling into the backward `time`-index
+  scan trap (the optimizer walks the whole table backwards for puzzles whose
+  last activity is old — exactly the late-hunt steady state).
+- It is the safety net under every Phase 4 fallback path: cold start, Redis
+  flush, cache disabled. With the index, the worst case is always ~27ms.
+
+## Files to change (backend swap, Phases 0–1)
 
 ### `requirements.txt`
 - Remove `pymemcache`
@@ -74,6 +132,7 @@ New idempotent migration:
 
 This repo's changes are **Phase 0** (dev) and **Phase 1** (app code commit) in the overall plan.
 Do NOT deploy Phase 1 until Phase 2 (infra: Redis ECS service up) is complete.
+Phase A (index) deploys ahead of everything.
 
 ### Phase 0 — Local dev
 1. Update docker-compose.yml to add redis service
@@ -107,7 +166,113 @@ Migrate cache layer from memcache to Redis
 **Note:** All users will be logged out once during cutover — OIDC sessions in memcache
 cannot be migrated to Redis. Plan for off-hours.
 
-## Testing checklist
+## Phase 4 — write-through lastact (the motivation)
+
+Goal: every `/all` response carries the *current* last activity for every
+puzzle, without invalidating the blob on activity writes. The backend swap
+(Phases 0–3) is the prerequisite; this phase is why Redis specifically.
+
+### Data design
+
+One Redis hash alongside the blob key:
+
+| Key | Type | Contents |
+|---|---|---|
+| `puzzleboss:all` | string | the `/all` JSON blob (as today), structural data only |
+| `puzzleboss:lastact` | hash | field = puzzle id, value = JSON activity row (`time` as ISO 8601, same shape as `_serialize_activity_for_cache`) |
+
+No TTL on the hash — it's write-through, never stale, updated in place.
+
+### Write path
+
+`pblib.log_activity()` is the single chokepoint for **all** activity inserts —
+pbrest and bigjimmybot both go through it. After the DB commit:
+
+```python
+# in log_activity, after conn.commit()
+cache_hset("puzzleboss:lastact", str(puzzle_id), json.dumps(serialized_row))
+```
+
+- New `pbcachelib` helpers: `cache_hset(key, field, value)`,
+  `cache_hgetall(key)` — same fail-silent convention as the existing ops.
+- HSET after commit, never before: the hash may briefly *trail* the DB
+  (fail-safe), never lead it.
+- A failed HSET leaves that puzzle's entry stale until its next activity.
+  Acceptable: the reader-side fallback (below) self-heals on blob rebuilds.
+
+### Read path (`/all` serving)
+
+```python
+blob = cache_get(CACHE_KEY)            # structural data, as today
+lastact = cache_hgetall(LASTACT_KEY)   # ~0.5ms for 275 fields
+# attach and serve
+```
+
+Measured serving cost of attaching lastact to a 186KB cached blob:
+
+- Graft into each puzzle dict (`loads` → set `lastactcached` per puzzle →
+  `dumps`): **1.2ms**. Keeps the response shape identical — consumers keep
+  reading `puzzle.lastactcached`.
+- Alternative: append as a sibling top-level key (`"lastact": {pid: {...}}`)
+  by string concatenation: **0.2ms**, but changes the response contract.
+
+Start with the graft (zero consumer changes); revisit only if profiling says so.
+
+On rebuild (blob miss), `_get_all_from_db()` drops its GROUP BY query and
+instead reads the hash; any puzzle missing from the hash falls back to the
+indexed GROUP BY (~1.1ms thanks to Phase A) and backfills the hash. This is
+also the cold-start path after a Redis flush.
+
+`get_one_puzzle` / `get_puzzle_part(lastact)` can read the hash first and fall
+back to the DB — eliminates the worst per-puzzle latency (~92ms observed in
+prod), though these endpoints are nearly unused (the UI rides `/all`).
+
+### Invalidation allowlist
+
+With lastact decoupled, blob invalidation must become an explicit allowlist —
+**only structural changes**: puzzle create/delete, round create/delete/update,
+puzzle status transitions.
+
+Required change: `update_puzzle_field` currently invalidates on *every* field
+update, so bigjimmybot's `sheetcount` writes blow the cache at activity
+frequency (the 31.8K invalidations last hunt). `sheetcount` (and any other
+high-churn non-structural field) must stop invalidating and ride the TTL
+instead. Without this, Phase 4 only fixes half the churn.
+
+Expected effect: invalidations drop from ~30K/hunt to a few hundred.
+
+### Stampede lock
+
+Concurrent misses currently all rebuild independently (2–3 wasted rebuilds per
+invalidation at hunt-peak request rates). With Redis:
+
+```python
+if r.set("puzzleboss:all:lock", "1", nx=True, ex=5):
+    rebuild_and_set()
+else:
+    serve_from_db_directly()  # or brief retry-loop on the cache key
+```
+
+Worst case under the lock is one rebuild per invalidation; with Phase A that's
+~27ms even at 16x activity volume.
+
+### Why memcache can't do this
+
+275 independent keys with independent eviction (partial-data risk), no atomic
+per-field update, no key enumeration, a 275-key `get_multi` per request, and
+no persistence across restarts. Redis hashes + `SET NX` + RDB snapshots are
+the natural fit.
+
+### Phase 4 testing checklist
+- [ ] Activity insert (API + bigjimmybot paths) updates `puzzleboss:lastact` hash
+- [ ] `/all` lastactcached matches latest activity row immediately after insert (no 15s lag)
+- [ ] Blob invalidation fires ONLY on: puzzle create/delete, round create/update/delete, status change
+- [ ] `sheetcount` update does NOT invalidate
+- [ ] Redis flush → next `/all` rebuilds blob and backfills hash from DB (indexed GROUP BY)
+- [ ] Concurrent miss storm produces a single rebuild (lock held)
+- [ ] `python3 -m pytest tests/ -v` passes
+
+## Testing checklist (Phases 0–3)
 - [ ] `docker-compose up` works with Redis
 - [ ] `/all` endpoint caches and returns data
 - [ ] Cache invalidation fires on: puzzle delete, round create, round update
