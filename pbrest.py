@@ -346,7 +346,7 @@ def _get_all_with_cache():
     fresh from the write-through hash on every request, so it is current
     regardless of the blob's age.
     """
-    debug_log(4, "start")
+    debug_log(5, "start")
 
     # Lazy cache init on first request per worker. Guard mysql.connection
     # access so it is only evaluated when initialization is actually needed —
@@ -359,24 +359,37 @@ def _get_all_with_cache():
     if pbcachelib.rc is not None:
         cached = cache_get(CACHE_KEY)
         if cached:
-            debug_log(4, "cache hit")
+            debug_log(5, "cache hit")
+            _count_cache("cache_hits_total")
             return _attach_lastact(json.loads(cached))
-        debug_log(4, "cache miss")
+        debug_log(5, "cache miss")
+        _count_cache("cache_misses_total")
 
     # Cache miss (or cache disabled): rebuild from the database. The lock
     # makes one worker rebuild-and-cache; concurrent missers serve straight
     # from the DB without caching, instead of stampeding redundant rebuilds.
     got_lock = try_acquire_rebuild_lock()
+    if pbcachelib.rc is not None and not got_lock:
+        # Another worker is rebuilding; we serve from DB without caching.
+        debug_log(3, "rebuild lock contended — serving /all from DB without caching")
+        _count_cache("cache_rebuild_lock_contentions_total")
     data = _get_all_from_db()
     if pbcachelib.rc is not None and got_lock:
         try:
             cache_set(CACHE_KEY, json.dumps(data), ttl=CACHE_TTL)
-        except Exception as e:
-            debug_log(3, f"failed to cache: {e}")
         finally:
             release_rebuild_lock()
 
     return _attach_lastact(data)
+
+
+def _count_cache(stat):
+    """Increment a cache botstat without raising. /all is the hot path, so a
+    counter failure must never affect the response."""
+    try:
+        increment_botstat(stat, mysql.connection)
+    except Exception as e:
+        debug_log(3, f"failed to increment {stat}: {e}")
 
 
 @app.route("/all", endpoint="all", methods=["GET"])
