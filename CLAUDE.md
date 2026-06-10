@@ -192,7 +192,7 @@ Use `debug_log(severity, message)` from `pblib.py`. Severity: 0=emergency, 1=err
 
 ### Caching rules
 
-The `/all` blob is invalidated **only** for *structural* changes — enforced by the `STRUCTURAL_PUZZLE_FIELDS` allowlist in `pblib.update_puzzle_field` (status, name, round_id, answer, ismeta) plus create/delete and round operations. Everything else (xyzloc, comments, sheetcount, solver assignment) rides the 15-second TTL. This keeps hit rates high during active solving (>90% observed during January 2026 hunt).
+The `/all` blob is invalidated **only** for *structural* changes — enforced by the `STRUCTURAL_PUZZLE_FIELDS` allowlist in `pblib.update_puzzle_field` (status, name, round_id, answer, ismeta) plus create/delete, round operations, and puzzle tag add/remove/delete (which write `puzzle.tags` directly and invalidate explicitly, since the UI filters on tags immediately). Everything else (xyzloc, comments, sheetcount, solver assignment) rides the 15-second TTL. This keeps hit rates high during active solving (>90% observed during January 2026 hunt).
 
 Per-puzzle `lastact` is NOT cached in the blob: it lives in a write-through Redis hash (`puzzleboss:lastact`), updated by `pblib.log_activity()` on every activity insert and attached fresh to every `/all` response — always current, never invalidated. Cold-start fallback is the indexed GROUP BY over `activity(puzzle_id, time)`. A `SET NX` rebuild lock prevents miss stampedes.
 

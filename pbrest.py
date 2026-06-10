@@ -1285,6 +1285,11 @@ def delete_tag(tag):
         cursor.execute("DELETE FROM tag WHERE id = %s", (tag_id,))
         conn.commit()
 
+        # Removing the tag rewrote puzzle.tags on every affected puzzle, which
+        # changes what /all serves and what the UI filters on — invalidate.
+        if puzzles_updated:
+            invalidate_cache_with_stats()
+
         debug_log(
             3,
             f"Deleted tag '{tag_name}' (id: {tag_id}), removed from {puzzles_updated} puzzle(s)",
@@ -2168,6 +2173,11 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
         if tag_changed:
             pblib.log_activity(id, "comment", 100, source, mysql.connection)
+            # Tags appear in puzzle_view and the UI filters on them, so a tag
+            # change is structural for the /all blob — invalidate (this handler
+            # updates puzzle.tags directly, bypassing update_puzzle_field's
+            # STRUCTURAL_PUZZLE_FIELDS allowlist).
+            invalidate_cache_with_stats()
 
     elif part in ("chat_channel_id", "drive_uri"):
         update_puzzle_part_in_db(id, part, value, source)
