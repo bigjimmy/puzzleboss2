@@ -32,7 +32,8 @@ CREATE TABLE `activity` (
   KEY `fk_google_activity_solver1_idx` (`solver_id`),
   KEY `fk_google_activity_puzzle1_idx` (`puzzle_id`),
   KEY `time` (`time`),
-  KEY `puzzle_id` (`puzzle_id`)
+  KEY `puzzle_id` (`puzzle_id`),
+  KEY `idx_puzzle_time` (`puzzle_id`,`time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
