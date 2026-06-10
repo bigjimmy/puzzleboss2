@@ -1,5 +1,12 @@
 # Redis Migration Plan — puzzleboss2 (App Side)
 
+> **Status (June 2026):** Phases A / 0 / 1 / 2 / 3 / 4 are **COMPLETE and live in
+> production.** Redis is the active cache backend; REDIS_ENABLED is true in prod;
+> write-through lastact is deployed; the Phases 0–3 and Phase 4 checklists below
+> are fully checked off. The only remaining work is **Phase 4-infra** (removing the
+> now-idle memcache ECS service — memcache still runs in the cluster but nothing
+> connects to it).
+
 This document covers the app-side changes for migrating from memcache to Redis,
 plus the performance work that motivates it: serving fresh per-puzzle `lastact`
 inside `/all` without the invalidation churn that design would otherwise cause.
@@ -132,8 +139,10 @@ New idempotent migration:
 
 ## Rollout sequence
 
+> **Historical — all phases below are complete.** Preserved for reference.
+
 This repo's changes are **Phase 0** (dev) and **Phase 1** (app code commit) in the overall plan.
-Do NOT deploy Phase 1 until Phase 2 (infra: Redis ECS service up) is complete.
+~~Do NOT deploy Phase 1 until Phase 2 (infra: Redis ECS service up) is complete.~~
 Phase A (index) deploys ahead of everything.
 
 ### Phase 0 — Local dev
@@ -220,6 +229,12 @@ Measured serving cost of attaching lastact to a 186KB cached blob:
 
 Start with the graft (zero consumer changes); revisit only if profiling says so.
 
+> **Implementation note:** On deployment the per-puzzle field was named `lastact`
+> (not `lastactcached` as the design draft above used). `lastactcached` is retired
+> from API responses, Swagger specs, and tests. The design text above is preserved
+> for historical context; the live field name and the key used in the Redis hash is
+> `lastact`.
+
 On rebuild (blob miss), `_get_all_from_db()` drops its GROUP BY query and
 instead reads the hash; any puzzle missing from the hash falls back to the
 indexed GROUP BY (~1.1ms thanks to Phase A) and backfills the hash. This is
@@ -291,16 +306,15 @@ the natural fit.
 - [x] Concurrent miss storm produces a single rebuild (`SET NX` lock in `_get_all_with_cache`)
 - [x] `lastactcached` retired from API responses, swagger specs, and tests
 
-**Implemented on branch `redis-lastact-writethrough`.** Deploy is gated on
-infra Phase 2 (Redis ECS service). Until then the app falls back to the DB
-on every `/all` (REDIS_ENABLED defaults false in prod config), so the branch
-is safe to merge ahead of the infra work but should not flip REDIS_ENABLED
-until Redis is reachable at `redis.puzzleboss.local:6379`.
+**Deployed and live in production.** Branch `redis-lastact-writethrough` has been
+merged. REDIS_ENABLED is true in prod; Redis is reachable at
+`redis.puzzleboss.local:6379`. The remaining infra task is decommissioning the
+now-idle memcache ECS service (nothing connects to it).
 
 ## Testing checklist (Phases 0–3)
-- [ ] `docker-compose up` works with Redis
-- [ ] `/all` endpoint caches and returns data
-- [ ] Cache invalidation fires on: puzzle delete, round create, round update
-- [ ] OIDC login works end-to-end (if testing in an environment with OIDC configured)
-- [ ] `python3 -m pytest tests/ -v` passes
-- [ ] API integration tests pass in Docker
+- [x] `docker-compose up` works with Redis
+- [x] `/all` endpoint caches and returns data
+- [x] Cache invalidation fires on: puzzle delete, round create, round update
+- [x] OIDC login works end-to-end (if testing in an environment with OIDC configured)
+- [x] `python3 -m pytest tests/ -v` passes
+- [x] API integration tests pass in Docker

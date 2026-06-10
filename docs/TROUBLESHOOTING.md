@@ -38,7 +38,7 @@ The first question is always: **can I reach the API?** Hit `/apidocs` (or `GET /
 
 | Symptom area | First place to look |
 |---|---|
-| Login / SSO broken | OIDC cache (memcache), Apache error log, IdP status |
+| Login / SSO broken | OIDC cache (Redis), Apache error log, IdP status |
 | Web UI 502 / 504 | Gunicorn process alive? container restart loop? |
 | API errors | `/var/log/gunicorn/error.log` inside the container, or your aggregated log stream (this team: `service=puzzleboss` in Loki) |
 | Bot not assigning | bot logs (this team: `service=bigjimmy` in Loki), `bigjimmy_quota_failures` metric |
@@ -94,9 +94,9 @@ Common causes:
 
 This is a **\[Prod\]**-only symptom — the local dev stack doesn't run OIDC. If you're using `?assumedid=` and it's not working, look at `ALLOW_USERNAME_OVERRIDE` and the URL parameter spelling.
 
-In production, the OIDC session cache is a hard dependency for `mod_auth_openidc`. If memcache (or Redis post-migration) is down, every login fails with 401 or 400.
+In production, the OIDC session cache is a hard dependency for `mod_auth_openidc`. If Redis is down, every login fails with 401 or 400.
 
-- Verify the cache service is running and reachable from **both** the puzzleboss app and the mediawiki container (they share sessions). The port and hostname depend on your deployment — typically `11211` for memcache, `6379` for Redis, on the service-discovery name you configured.
+- Verify the cache service is running and reachable from **both** the puzzleboss app and the mediawiki container (they share sessions). The port is `6379` (Redis) on the service-discovery name you configured (`redis.puzzleboss.local` in this team's deployment).
 - Check Apache OIDC error output in your log aggregator. With Loki: `{service="puzzleboss"} |= "oidc"`. With other aggregators: filter the app's stderr/access logs by "oidc".
 - If users are randomly logged out, the cache may be evicting sessions. Check cache memory pressure.
 - If only the wiki is broken but Puzzleboss works (or vice versa), the cache backend is up but one container can't reach it. Check networking between containers and the cache service.
@@ -165,10 +165,10 @@ s.quit()
 
 ### `/all` is slow or returning stale data
 
-The cache layer is memcache today, [moving to Redis](../REDIS_MIGRATION.md). `/all` is the hot-path endpoint and caches transparently; `/allcached` is a deprecated alias that hits the same code.
+The cache layer is Redis. `/all` is the hot-path endpoint and caches transparently; `/allcached` is a deprecated alias that hits the same code.
 
-- **Cache miss every time:** check that `MEMCACHE_ENABLED=true` and `MEMCACHE_HOST` / `MEMCACHE_PORT` are correct. If not, the endpoint falls through to a DB query (soft failure — slow but works).
-- **Cache hits but stale:** TTL is 15 seconds. Structural changes (status transitions, creation, deletion, round completion) invalidate the cache; solver assignment intentionally does not. See [CLAUDE.md → Caching rules](../CLAUDE.md#caching-rules).
+- **Cache miss every time:** check that `REDIS_ENABLED=true` and `REDIS_HOST` / `REDIS_PORT` are correct. If not, the endpoint falls through to a DB query (soft failure — slow but works).
+- **Cache hits but stale:** TTL is 15 seconds for the `/all` blob. Invalidation is allowlist-gated: only structural field changes (`STRUCTURAL_PUZZLE_FIELDS`: status, name, round_id, answer, ismeta) plus create/delete/round operations invalidate the blob; xyzloc, comments, sheetcount, and solver assignment intentionally ride the TTL. The `lastact` field per puzzle is always current — it comes from the write-through `puzzleboss:lastact` Redis hash and is never stale regardless of TTL. A `SET NX` rebuild lock prevents stampedes on concurrent misses. See [CLAUDE.md → Caching rules](../CLAUDE.md#caching-rules).
 
 ### Web UI loads but data looks wrong
 
