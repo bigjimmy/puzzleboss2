@@ -39,7 +39,7 @@ Measured against January 2026 hunt data (30.7K activity rows, 275 puzzles,
 |---|---|
 | Peak activity write rate (hunt) | 22.5/min — one every **2.7s** (p90 every 4s) |
 | `/all` poll rate | 5s per client (`index.php`) → ~8–10 req/s at 40–50 solvers |
-| Cache invalidations (lifetime counter) | **31.8K** — all from REST mutations: puzzle PATCHes invalidate unconditionally for *any* part (status, answer, xyzloc, comments, puzzcord's `lastact` POSTs ≈3.5K/hunt), plus round/hint/create/delete ops |
+| Cache invalidations (lifetime counter) | **31.8K** — all from REST mutations (puzzle PATCHes invalidate unconditionally for *any* part, plus round/hint/create/delete ops). Hunt-time volume was only ~4–5K (~1/min: UI edits logged as legacy `interact` + creates/solves/comments); the counter is likely dominated by load testing |
 | `/all` rebuild, 30K rows | ~20ms |
 | `/all` rebuild, 400K rows (16x), current indexes | **272ms** |
 | `/all` rebuild, 400K rows, with `(puzzle_id, time)` index | **27ms** |
@@ -48,9 +48,9 @@ Measured against January 2026 hunt data (30.7K activity rows, 275 puzzles,
 
 Two structural conclusions:
 
-1. **Today's invalidation rate is moderate** (a few per minute at hunt peak —
-   human actions plus puzzcord `lastact` POSTs, which hit the unconditional
-   PATCH invalidation). Serving *fresh* lastact by invalidating on every
+1. **Today's invalidation rate is low** (~1/min during the hunt — human
+   actions through the UI, which hit the unconditional PATCH invalidation
+   regardless of which field changed). Serving *fresh* lastact by invalidating on every
    activity write would raise that ~10x to the activity write rate (peak one
    per 2.7s) — and at the same time the rebuild each miss pays grows with
    activity volume (272ms at 16x, unindexed) and stampedes (2–3 concurrent
@@ -238,11 +238,13 @@ puzzle status transitions.
 Two unconditional invalidation paths must become selective:
 
 - The REST PATCH/POST puzzle-part handlers (`update_puzzle_parts`,
-  `update_puzzle_part` in pbrest.py) invalidate for *any* part. Notably,
-  puzzcord's `POST /puzzles/<id>/lastact` (Discord interaction logging,
-  ≈3.5K/hunt) blows the blob to record activity — with the Phase 4 hash,
-  lastact writes must not invalidate at all. Same for `xyzloc`/`comments`:
-  TTL staleness is fine.
+  `update_puzzle_part` in pbrest.py) invalidate for *any* part — including
+  `lastact`, which is a pure activity-row INSERT that never touches the
+  puzzle row. No production caller POSTs `lastact` today (puzzcord's
+  `post_puzzle_parts` helper has no callers; only loadtest.py and the API
+  test suite hit it), but it's the endpoint any future activity-writer
+  would use, so with the Phase 4 hash it must not invalidate at all. Same
+  for `xyzloc`/`comments`: TTL staleness is fine.
 - `update_puzzle_field` (pblib.py) invalidates on every field update by
   invariant ("any puzzle mutation"). Its bigjimmybot-driven writes are
   low-frequency (`sheetcount` is the spreadsheet's *tab count* — it changes
@@ -282,7 +284,7 @@ the natural fit.
 - [ ] Activity insert (API + bigjimmybot paths) updates `puzzleboss:lastact` hash
 - [ ] `/all` lastactcached matches latest activity row immediately after insert (no 15s lag)
 - [ ] Blob invalidation fires ONLY on: puzzle create/delete, round create/update/delete, status change
-- [ ] `lastact` POST (puzzcord), `xyzloc`, and `sheetcount` updates do NOT invalidate
+- [ ] `lastact` POST, `xyzloc`, and `sheetcount` updates do NOT invalidate
 - [ ] Redis flush → next `/all` rebuilds blob and backfills hash from DB (indexed GROUP BY)
 - [ ] Concurrent miss storm produces a single rebuild (lock held)
 - [ ] `python3 -m pytest tests/ -v` passes
