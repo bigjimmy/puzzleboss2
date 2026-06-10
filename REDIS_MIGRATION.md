@@ -39,7 +39,7 @@ Measured against January 2026 hunt data (30.7K activity rows, 275 puzzles,
 |---|---|
 | Peak activity write rate (hunt) | 22.5/min — one every **2.7s** (p90 every 4s) |
 | `/all` poll rate | 5s per client (`index.php`) → ~8–10 req/s at 40–50 solvers |
-| Cache invalidations last hunt | **31.8K** — ≈1:1 with activity rows, because bigjimmybot's `sheetcount` updates invalidate via `update_puzzle_field` |
+| Cache invalidations (lifetime counter) | **31.8K** — all from REST mutations: puzzle PATCHes invalidate unconditionally for *any* part (status, answer, xyzloc, comments, puzzcord's `lastact` POSTs ≈3.5K/hunt), plus round/hint/create/delete ops |
 | `/all` rebuild, 30K rows | ~20ms |
 | `/all` rebuild, 400K rows (16x), current indexes | **272ms** |
 | `/all` rebuild, 400K rows, with `(puzzle_id, time)` index | **27ms** |
@@ -48,11 +48,13 @@ Measured against January 2026 hunt data (30.7K activity rows, 275 puzzles,
 
 Two structural conclusions:
 
-1. **The cache is already in the "invalidated a LOT" regime** (sheetcount churn),
-   and survives because request rate (~9/s) far exceeds invalidation rate
-   (~0.4/s) and rebuilds are cheap at 30K rows. What breaks at the next hunt's
-   activity volume is rebuild *cost* (272ms) × stampede width (2–3 concurrent
-   misses per invalidation, no lock), not hit rate.
+1. **Today's invalidation rate is moderate** (a few per minute at hunt peak —
+   human actions plus puzzcord `lastact` POSTs, which hit the unconditional
+   PATCH invalidation). Serving *fresh* lastact by invalidating on every
+   activity write would raise that ~10x to the activity write rate (peak one
+   per 2.7s) — and at the same time the rebuild each miss pays grows with
+   activity volume (272ms at 16x, unindexed) and stampedes (2–3 concurrent
+   misses per invalidation, no lock). That combination is what Phase 4 avoids.
 2. **Invalidation-based caching couples write frequency to read cost.** Putting
    fresh lastact into `/all` by invalidating on every activity write forces
    readers to redo O(everything) per write. Write-through (Phase 4) decouples
@@ -233,13 +235,26 @@ With lastact decoupled, blob invalidation must become an explicit allowlist —
 **only structural changes**: puzzle create/delete, round create/delete/update,
 puzzle status transitions.
 
-Required change: `update_puzzle_field` currently invalidates on *every* field
-update, so bigjimmybot's `sheetcount` writes blow the cache at activity
-frequency (the 31.8K invalidations last hunt). `sheetcount` (and any other
-high-churn non-structural field) must stop invalidating and ride the TTL
-instead. Without this, Phase 4 only fixes half the churn.
+Two unconditional invalidation paths must become selective:
 
-Expected effect: invalidations drop from ~30K/hunt to a few hundred.
+- The REST PATCH/POST puzzle-part handlers (`update_puzzle_parts`,
+  `update_puzzle_part` in pbrest.py) invalidate for *any* part. Notably,
+  puzzcord's `POST /puzzles/<id>/lastact` (Discord interaction logging,
+  ≈3.5K/hunt) blows the blob to record activity — with the Phase 4 hash,
+  lastact writes must not invalidate at all. Same for `xyzloc`/`comments`:
+  TTL staleness is fine.
+- `update_puzzle_field` (pblib.py) invalidates on every field update by
+  invariant ("any puzzle mutation"). Its bigjimmybot-driven writes are
+  low-frequency (`sheetcount` is the spreadsheet's *tab count* — it changes
+  on tab add/delete, not on edits; `sheetenabled` is once per puzzle), so
+  this path is not a hot source today, but it should adopt the same
+  allowlist so a future high-churn field doesn't silently recreate the
+  problem.
+
+Expected effect: invalidations drop from "every puzzle mutation" to a few
+hundred structural events per hunt, and — critically — adding fresh lastact
+to `/all` adds zero invalidations instead of coupling the blob's lifetime to
+the activity write rate (peak: one write per 2.7s).
 
 ### Stampede lock
 
@@ -267,7 +282,7 @@ the natural fit.
 - [ ] Activity insert (API + bigjimmybot paths) updates `puzzleboss:lastact` hash
 - [ ] `/all` lastactcached matches latest activity row immediately after insert (no 15s lag)
 - [ ] Blob invalidation fires ONLY on: puzzle create/delete, round create/update/delete, status change
-- [ ] `sheetcount` update does NOT invalidate
+- [ ] `lastact` POST (puzzcord), `xyzloc`, and `sheetcount` updates do NOT invalidate
 - [ ] Redis flush → next `/all` rebuilds blob and backfills hash from DB (indexed GROUP BY)
 - [ ] Concurrent miss storm produces a single rebuild (lock held)
 - [ ] `python3 -m pytest tests/ -v` passes
