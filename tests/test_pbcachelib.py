@@ -263,6 +263,19 @@ class TestLastactHash:
         mock_rc.hgetall.return_value = {}
         assert pbcachelib.lastact_get_all() == {}
 
+    def test_get_all_skips_corrupt_entry(self, mock_rc):
+        # One malformed value must degrade only that puzzle (caller falls back
+        # to DB for it), not return None for the whole map. Redis being up,
+        # this is a data-quality issue, not a connectivity one.
+        mock_rc.hgetall.return_value = {
+            "1": json.dumps({"id": 5, "type": "create"}),
+            "2": "}{ not json",
+            "3": json.dumps({"id": 9, "type": "revise"}),
+        }
+        result = pbcachelib.lastact_get_all()
+        assert result == {1: {"id": 5, "type": "create"}, 3: {"id": 9, "type": "revise"}}
+        assert 2 not in result  # corrupt entry skipped, not fatal
+
     def test_get_single_decodes(self, mock_rc):
         mock_rc.hget.return_value = json.dumps({"id": 9, "type": "revise"})
         assert pbcachelib.lastact_get(42) == {"id": 9, "type": "revise"}

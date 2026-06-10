@@ -4,7 +4,7 @@ tags:
   - Cache
 summary: Force invalidation of all caches
 description: |
-  Invalidates the /allcached memcache entry, forcing the next request to 
+  Invalidates the /allcached Redis cache entry, forcing the next request to 
   fetch fresh data from the database. Useful after bulk operations like 
   hunt reset.
 responses:

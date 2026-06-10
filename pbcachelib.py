@@ -28,9 +28,11 @@ except ImportError:
     REDIS_AVAILABLE = False
     debug_log(3, "redis-py not installed - caching disabled")
 
-# Tracks whether the last Redis operation succeeded, so we log a single SEV2
-# line on the working→down transition (and a SEV3 line on recovery) instead of
-# a SEV-flood of identical per-request errors. None = no op attempted yet.
+# Tracks whether the last Redis operation succeeded, so we log one SEV2 line
+# per worker on the working→down transition (and a SEV3 line on recovery)
+# instead of a flood of identical per-request errors. None = no op attempted
+# yet. Per-process state (Gunicorn sync workers): expect up to one transition
+# log per worker, not one per cluster.
 _redis_healthy = None
 
 
@@ -67,6 +69,7 @@ def _incr(stat):
             conn.close()
     except Exception as e:
         debug_log(3, f"failed to increment {stat}: {e}")
+
 
 # Redis client (initialized later after config is available)
 rc = None
@@ -188,10 +191,19 @@ def lastact_get_all():
     try:
         raw = rc.hgetall(LASTACT_KEY)
         _note_redis_ok()
-        return {int(pid): json.loads(val) for pid, val in raw.items()}
     except Exception as e:
         _note_redis_error("lastact_get_all", e)
         return None
+    # Decode per-item so one corrupt entry degrades only that puzzle (to a DB
+    # fallback in pbrest), not all of them. A malformed value here is a
+    # data-quality issue, not a Redis-down condition, so don't return None.
+    result = {}
+    for pid, val in raw.items():
+        try:
+            result[int(pid)] = json.loads(val)
+        except (ValueError, TypeError) as e:
+            debug_log(2, f"lastact_get_all: skipping corrupt entry for pid {pid!r}: {e}")
+    return result
 
 
 def lastact_get(puzzle_id):
@@ -306,8 +318,10 @@ def ensure_cache_initialized(conn):
     flipping REDIS_ENABLED=true during a cutover) take effect without a
     worker restart.
     """
-    # Note: No lock needed — concurrent initialization is harmless since both
-    # workers would read the same config and create equivalent clients.
+    # No lock needed: Gunicorn sync workers are separate processes, so these
+    # module globals are per-process and never contended. (If ever switching to
+    # gevent/eventlet workers, where coroutines share a process, add a
+    # threading.Lock around the global mutations below.)
     global _cache_initialized, _last_init_attempt
     if _cache_initialized:
         return

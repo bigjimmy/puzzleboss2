@@ -385,7 +385,12 @@ def _get_all_with_cache():
 
 def _count_cache(stat):
     """Increment a cache botstat without raising. /all is the hot path, so a
-    counter failure must never affect the response."""
+    counter failure must never affect the response.
+
+    Uses the request's mysql.connection. The parallel pbcachelib._incr helper
+    does the same thing but opens its own connection — that split is forced
+    because pbcachelib runs on paths without a Flask request context (e.g.
+    bigjimmybot's write-through), where mysql.connection is unavailable."""
     try:
         increment_botstat(stat, mysql.connection)
     except Exception as e:

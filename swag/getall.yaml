@@ -1,7 +1,7 @@
 summary: Get all puzzles and rounds
 description: |
   Get all puzzles organized by rounds with their complete information.
-  Uses memcache for performance if available, falls back to database.
+  Uses Redis for performance if available, falls back to database.
   
   Note: /all and /allcached are now equivalent endpoints.
 tags:
