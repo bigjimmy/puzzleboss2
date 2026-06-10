@@ -243,6 +243,21 @@ class TestLastactHash:
         # Keys are ints, not strings (so callers can match puzzle["id"]).
         assert all(isinstance(k, int) for k in result)
 
+    def test_get_all_is_single_hgetall_no_per_field_reads(self, mock_rc):
+        # The whole lastact map is fetched in ONE HGETALL — never one read per
+        # puzzle. This is the structural guard against an N+1 in the /all attach
+        # path (which the integration latency test can't catch at small scale):
+        # _attach_lastact calls _get_lastact_map → lastact_get_all once, and
+        # the per-puzzle graft is pure in-memory dict access.
+        mock_rc.hgetall.return_value = {
+            str(i): json.dumps({"id": i, "type": "revise"}) for i in range(1, 300)
+        }
+        pbcachelib.lastact_get_all()
+        assert mock_rc.hgetall.call_count == 1
+        mock_rc.hgetall.assert_called_once_with(pbcachelib.LASTACT_KEY)
+        # No per-field hget calls — the map comes from the single hgetall.
+        mock_rc.hget.assert_not_called()
+
     def test_get_all_empty_returns_empty_dict_not_none(self, mock_rc):
         # Redis up but hash empty → {} (distinct from None = Redis down).
         mock_rc.hgetall.return_value = {}
