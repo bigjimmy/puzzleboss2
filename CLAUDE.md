@@ -49,6 +49,8 @@ Schema in [`scripts/puzzleboss.sql`](scripts/puzzleboss.sql). Key tables:
 - `newuser` — pending signup records
 - `privs` — admin role grants
 
+**Key index:** `activity` has a composite index `idx_puzzle_time (puzzle_id, time)`. It turns the per-puzzle "latest activity" query (and the `/all` cold-start `GROUP BY puzzle_id` that rebuilds the lastact hash) into a loose index scan — cost scales with puzzle count, not total activity rows. Added by [`migrations/add_activity_puzzle_time_index.py`](migrations/add_activity_puzzle_time_index.py) and present in the schema. Critical for lastact performance as activity grows during a hunt.
+
 ### Integration points
 
 - **Google Sheets activity (hybrid):** sheets with the Apps Script add-on write to a hidden `_pb_activity` sheet (quota-light); legacy sheets fall back to the Revisions API (quota-heavy). bigjimmybot checks `puzzle.sheetenabled` to decide. Full details in [docs/apps-script-deployment.md](docs/apps-script-deployment.md).
@@ -195,6 +197,8 @@ Use `debug_log(severity, message)` from `pblib.py`. Severity: 0=emergency, 1=err
 The `/all` blob is invalidated **only** for *structural* changes — enforced by the `STRUCTURAL_PUZZLE_FIELDS` allowlist in `pblib.update_puzzle_field` (status, name, round_id, answer, ismeta) plus create/delete, round operations, and puzzle tag add/remove/delete (which write `puzzle.tags` directly and invalidate explicitly, since the UI filters on tags immediately). Everything else (xyzloc, comments, sheetcount, solver assignment) rides the 15-second TTL. This keeps hit rates high during active solving (>90% observed during January 2026 hunt).
 
 Per-puzzle `lastact` is NOT cached in the blob: it lives in a write-through Redis hash (`puzzleboss:lastact`), updated by `pblib.log_activity()` on every activity insert and attached fresh to every `/all` response — always current, never invalidated. Cold-start fallback is the indexed GROUP BY over `activity(puzzle_id, time)`. A `SET NX` rebuild lock prevents miss stampedes.
+
+Cache behavior is observable via botstats counters (in `METRICS_METADATA`, exposed through `metrics.php` → Prometheus → the `redis-cache` Grafana dashboard): `cache_hits_total`, `cache_misses_total`, `cache_invalidations_total`, `cache_rebuild_lock_contentions_total`, `cache_write_through_failures_total`, `cache_cold_start_backfills_total`.
 
 ## API endpoint patterns
 

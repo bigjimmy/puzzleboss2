@@ -41,6 +41,7 @@ flowchart LR
     Frontend -->|server-side curl<br/>to APIURI| Gunicorn
     Gunicorn -->|Flask| API[pbrest.py]
     API --> MySQL[(MySQL 8 + SSL)]
+    API -->|cache + lastact hash| Redis[(Redis 7)]
     Browser -.->|:5000 dev only| Gunicorn
     BigJimmy[BigJimmy bot<br/>off by default in dev] -->|HTTP| API
     BigJimmy -->|Sheets API| Google[(Google Drive)]
@@ -48,7 +49,7 @@ flowchart LR
 
 PHP mediates every API call — the browser never talks to Flask directly in the normal flow. In this dev stack, port `5000` is also published so you can hit Swagger and `/metrics` directly without going through PHP; in production that port stays inside the container.
 
-`app` container = Apache + Gunicorn + (optionally) BigJimmy under supervisord. `mysql` container = MySQL with auto-generated TLS certs. One short-lived `ssl-setup` container copies certs to a shared volume on first boot.
+`app` container = Apache + Gunicorn + (optionally) BigJimmy under supervisord. `mysql` container = MySQL with auto-generated TLS certs. `redis` container = Redis 7 (`redis:7-alpine`), the `/all` response cache and the write-through `lastact` hash; the dev entrypoint seeds `REDIS_ENABLED=true`/`REDIS_HOST=redis`/`REDIS_PORT=6379`. One short-lived `ssl-setup` container copies certs to a shared volume on first boot.
 
 ## Working with the running stack
 

@@ -71,6 +71,17 @@ pytest --cov=bigjimmybot --cov-report=html
   - `TestRateLimiterConfig`: QPM configuration
   - `TestRateLimiterThreadSafety`: Concurrent access
 
+- **tests/test_pbcachelib.py**: Redis cache library tests (MagicMock client, no Redis needed)
+  - Fail-safe contract (cache disabled / Redis raising → safe no-op/None)
+  - lastact hash semantics, single-HGETALL guard, corrupt-entry resilience
+  - `SET NX` rebuild lock, invalidate-counts-botstat, init retry/latch
+  - Transition logging (working→down→recovered) and the new cache counters
+
+- **tests/test_pblib_cache.py**: pblib cache-facing logic
+  - `STRUCTURAL_PUZZLE_FIELDS` invalidation allowlist
+  - `log_activity` write-through (no-op when Redis off; serialized row when live)
+  - `serialize_activity` (datetime → ISO)
+
 - **tests/fixtures/**: JSON fixtures for test data
   - `solver_*.json`: Sample solver API responses
   - `puzzle_data.json`: Sample puzzle data

@@ -42,12 +42,12 @@ definitions:
               example: "2025-04-12T13:55:27-04:00"
             type:
               type: string
-              enum: [create, open, revise, comment, interact]
+              enum: [create, revise, comment, interact, solve, change, status, assignment]
               example: "interact"
             source:
               type: string
-              enum: [google, pb_auto, pb_manual, bigjimmy, twiki, squid, apache, xmpp]
-              example: "apache"
+              enum: [puzzleboss, bigjimmybot, discord]
+              example: "puzzleboss"
             uri:
               type: string
               example: "https://example.com/activity/123"

@@ -4,9 +4,12 @@ tags:
   - Cache
 summary: Force invalidation of all caches
 description: |
-  Invalidates the /allcached Redis cache entry, forcing the next request to 
-  fetch fresh data from the database. Useful after bulk operations like 
-  hunt reset.
+  Invalidates the /all Redis cache blob (key puzzleboss:all), forcing the next
+  request to rebuild it from the database. Useful after bulk operations like
+  hunt reset. Increments cache_invalidations_total.
+
+  Only the /all blob is invalidated. The write-through lastact hash
+  (puzzleboss:lastact) is always current and is not affected.
 responses:
   200:
     description: Cache invalidated successfully
@@ -27,7 +30,7 @@ responses:
         status:
           type: string
           example: error
-        message:
+        error:
           type: string
           description: Error message
 

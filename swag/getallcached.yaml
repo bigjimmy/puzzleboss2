@@ -32,6 +32,10 @@ responses:
                 type: string
               puzzles:
                 type: array
+                description: |
+                  Each puzzle object is identical to the /all response — see
+                  getall.yaml for the full schema, including the per-puzzle
+                  `lastact` object (always current via the write-through hash).
                 items:
                   type: object
 

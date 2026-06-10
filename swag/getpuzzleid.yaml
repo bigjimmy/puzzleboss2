@@ -118,4 +118,3 @@ responses:
               time:
                 type: string
                 description: ISO 8601 string (e.g. "2026-03-29T21:13:27")
-                description: ISO 8601 string (e.g. "2026-03-29T21:13:27")
