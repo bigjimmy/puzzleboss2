@@ -226,7 +226,13 @@ def invalidate_all_cache(conn):
     """
     ensure_cache_initialized(conn)
     cache_delete(CACHE_KEY)
-    increment_botstat("cache_invalidations_total", conn)
+    # The delete is the job; the counter is best-effort. Guard locally so the
+    # "stats failure never blocks the invalidation" contract holds here rather
+    # than depending on increment_botstat's internal error handling.
+    try:
+        increment_botstat("cache_invalidations_total", conn)
+    except Exception as e:
+        debug_log(3, f"cache invalidation stat increment failed: {e}")
 
 
 def ensure_cache_initialized(conn):

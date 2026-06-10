@@ -20,7 +20,15 @@ from datetime import datetime as dt
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Mock MySQL and Google API dependencies BEFORE importing bigjimmybot
+# Mock MySQL and Google API dependencies BEFORE importing bigjimmybot.
+# Snapshot the originals so we can restore them after the import — leaving the
+# mocks in sys.modules globally poisons later-collected test modules that
+# import the real pblib (e.g. test_pblib_cache).
+_saved_modules = {
+    name: sys.modules.get(name)
+    for name in ('MySQLdb', 'MySQLdb.cursors', 'pbgooglelib', 'pblib')
+}
+
 sys.modules['MySQLdb'] = MagicMock()
 sys.modules['MySQLdb.cursors'] = MagicMock()
 sys.modules['pbgooglelib'] = MagicMock()
@@ -58,6 +66,13 @@ from bigjimmybot import (
     _REPAIR_AFTER_FAILURES,
     _SKIP_AFTER_FAILURES,
 )
+
+# Restore original sys.modules entries so the mocks don't leak.
+for _name, _orig in _saved_modules.items():
+    if _orig is None:
+        sys.modules.pop(_name, None)
+    else:
+        sys.modules[_name] = _orig
 
 from conftest import load_fixture
 
