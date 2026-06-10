@@ -61,7 +61,7 @@ class TestRunner:
         "Solver Reassignment",
         "Activity Tracking",
         "lastact Response Embedding",
-        "lastactcached Behavior",
+        "lastact Write-through Freshness",
         "Puzzle Activity Endpoint",
         "Solver Activity Endpoint",
         "Solver History",
@@ -145,6 +145,16 @@ class TestRunner:
 
     def get_all_puzzles(self):
         return self.api_get("/puzzles").get("puzzles", [])
+
+    def _first_unsolved_puzzle_id(self):
+        """Return the id of any non-Solved puzzle (or None). The /puzzles list
+        omits status, so resolve it from /all, which carries it."""
+        all_data = self.api_get("/all")
+        for rnd in all_data.get("rounds", []):
+            for p in rnd.get("puzzles", []):
+                if p.get("status") != "Solved":
+                    return p["id"]
+        return None
 
     def get_all_rounds(self):
         return self.api_get("/rounds").get("rounds", [])
@@ -937,8 +947,13 @@ class TestRunner:
             return
 
         solver = solvers[0]
-        puzzle = puzzles[0]
-        pid = puzzle["id"]
+        # Pick an unsolved puzzle — assignment is rejected on solved puzzles,
+        # which would leave no activity row and a null solver lastact. The
+        # /puzzles list omits status, so resolve it from /all.
+        pid = self._first_unsolved_puzzle_id()
+        if pid is None:
+            result.fail("No unsolved puzzle available for assignment")
+            return
         sid = solver["id"]
 
         # Trigger some activity so lastact is populated
@@ -1003,12 +1018,14 @@ class TestRunner:
         result.set_success("lastact embedding test completed successfully")
 
     # ------------------------------------------------------------------
-    # Test 15c: lastactcached — /all and /puzzles/<id>
-    # Verifies lastactcached structure, consistency, ISO time format,
-    # and cache cold/hot behavior. TTL verification is skipped when
-    # memcache is not enabled (local dev without memcache).
+    # Test 15c: lastact in /all — write-through freshness
+    # Verifies lastact structure in /all and /puzzles/<id>, ISO time
+    # format, agreement between endpoints, and write-through freshness:
+    # new activity must be visible in the very next /all response (no
+    # TTL lag — lastact is attached fresh per request from the Redis
+    # hash, with DB fallback when Redis is disabled).
     # ------------------------------------------------------------------
-    def test_lastactcached(self, result: TestResult):
+    def test_lastact_writethrough(self, result: TestResult):
         solvers = self.get_all_solvers()
         puzzles = self.get_all_puzzles()
         if not solvers or not puzzles:
@@ -1016,14 +1033,18 @@ class TestRunner:
             return
 
         solver = solvers[0]
-        puzzle = puzzles[0]
-        pid = puzzle["id"]
+        # Unsolved puzzle: assignment (the initial activity trigger) is
+        # rejected on solved puzzles. /puzzles omits status; use /all.
+        pid = self._first_unsolved_puzzle_id()
+        if pid is None:
+            result.fail("No unsolved puzzle available for assignment")
+            return
         sid = solver["id"]
 
-        # Trigger activity so lastactcached is non-null
+        # Trigger activity so lastact is non-null
         self.assign_solver_to_puzzle(sid, pid)
 
-        # 1. /all includes lastactcached on every puzzle
+        # 1. /all includes lastact on every puzzle
         all_data = self.api_get("/all")
         found_puzzle = None
         for rnd in all_data.get("rounds", []):
@@ -1037,70 +1058,65 @@ class TestRunner:
         if found_puzzle is None:
             result.fail(f"Puzzle {pid} not found in /all response")
             return
-        if "lastactcached" not in found_puzzle:
-            result.fail(f"Puzzle {pid} missing 'lastactcached' key in /all response")
+        if "lastact" not in found_puzzle:
+            result.fail(f"Puzzle {pid} missing 'lastact' key in /all response")
             return
 
-        lac_all = found_puzzle["lastactcached"]
-        if lac_all is None:
-            result.fail(f"Puzzle {pid} lastactcached is null in /all after assignment")
+        la_all = found_puzzle["lastact"]
+        if la_all is None:
+            result.fail(f"Puzzle {pid} lastact is null in /all after assignment")
             return
 
         # Verify required fields
         for key in ["id", "puzzle_id", "solver_id", "type", "time"]:
-            if key not in lac_all:
-                result.fail(f"/all lastactcached missing '{key}' field")
+            if key not in la_all:
+                result.fail(f"/all lastact missing '{key}' field")
                 return
 
         # time must be ISO 8601 string (not HTTP date, not datetime object)
-        t = lac_all["time"]
+        t = la_all["time"]
         if not isinstance(t, str) or "T" not in t:
-            result.fail(f"/all lastactcached.time is not ISO 8601 string: {t!r}")
+            result.fail(f"/all lastact.time is not ISO 8601 string: {t!r}")
             return
-        self.logger.log_operation(f"  ✓ /all lastactcached present (type={lac_all['type']}, time={t})")
+        self.logger.log_operation(f"  ✓ /all lastact present (type={la_all['type']}, time={t})")
 
-        # 2. GET /puzzles/<id> includes lastactcached
+        # 2. GET /puzzles/<id> includes lastact with ISO time
         pdata = self.api_get(f"/puzzles/{pid}")
-        if "lastactcached" not in pdata:
-            result.fail(f"GET /puzzles/{pid} missing 'lastactcached' key")
+        if "lastact" not in pdata:
+            result.fail(f"GET /puzzles/{pid} missing 'lastact' key")
             return
 
-        lac_single = pdata["lastactcached"]
-        if lac_single is None:
-            result.fail(f"GET /puzzles/{pid} lastactcached is null (cache cold fallback should use DB)")
+        la_single = pdata["lastact"]
+        if la_single is None:
+            result.fail(f"GET /puzzles/{pid} lastact is null (DB fallback should populate it)")
             return
 
-        # time must also be ISO 8601 string
-        t2 = lac_single.get("time", "")
+        t2 = la_single.get("time", "")
         if not isinstance(t2, str) or "T" not in t2:
-            result.fail(f"GET /puzzles/<id> lastactcached.time is not ISO 8601 string: {t2!r}")
+            result.fail(f"GET /puzzles/<id> lastact.time is not ISO 8601 string: {t2!r}")
             return
-        self.logger.log_operation(f"  ✓ GET /puzzles/<id> lastactcached present (type={lac_single['type']}, time={t2})")
+        self.logger.log_operation(f"  ✓ GET /puzzles/<id> lastact present (type={la_single['type']}, time={t2})")
 
-        # 3. lastactcached and lastact refer to the same activity record
-        la = pdata.get("lastact")
-        if la and lac_single:
-            if la.get("id") != lac_single.get("id"):
-                result.fail(
-                    f"lastact (id={la.get('id')}) and lastactcached (id={lac_single.get('id')}) "
-                    "disagree on most-recent activity — possible stale cache or tie-break bug"
-                )
-                return
-        self.logger.log_operation(f"  ✓ lastact and lastactcached agree (id={la.get('id')})")
+        # 3. /all and /puzzles/<id> agree on the most-recent activity
+        if la_all.get("id") != la_single.get("id"):
+            result.fail(
+                f"/all lastact (id={la_all.get('id')}) and GET /puzzles/<id> lastact "
+                f"(id={la_single.get('id')}) disagree — possible stale hash or tie-break bug"
+            )
+            return
+        self.logger.log_operation(f"  ✓ /all and /puzzles/<id> lastact agree (id={la_all.get('id')})")
 
-        # 4. After a new activity, lastactcached in /all eventually reflects it
-        #    (within TTL). We trigger new activity and verify /all updates
-        #    after cache expiry. Since local dev has no memcache, we just
-        #    verify the value changes on the next /all call (cache miss path).
+        # 4. Write-through freshness: a new puzzle's creation activity must
+        #    be visible in the IMMEDIATELY following /all call, even while
+        #    the blob is cached — lastact is attached per request.
         ts = str(int(time.time()))
         rounds = self.get_all_rounds()
         if not rounds:
             result.fail("No rounds found for new puzzle creation")
             return
-        new_puzzle = self.create_puzzle(f"CachedLastactTest{ts}", rounds[0]["id"])
+        new_puzzle = self.create_puzzle(f"WriteThroughTest{ts}", rounds[0]["id"])
         new_pid = new_puzzle["id"]
 
-        # New puzzle should have lastactcached from its creation activity
         all_data2 = self.api_get("/all")
         new_puz_in_all = None
         for rnd in all_data2.get("rounds", []):
@@ -1114,24 +1130,36 @@ class TestRunner:
         if new_puz_in_all is None:
             result.fail(f"New puzzle {new_pid} not in /all response")
             return
-        if new_puz_in_all.get("lastactcached") is None:
-            result.fail(f"New puzzle {new_pid} has null lastactcached (should have 'create' activity)")
+        if new_puz_in_all.get("lastact") is None:
+            result.fail(f"New puzzle {new_pid} has null lastact (should have 'create' activity)")
             return
-        if new_puz_in_all["lastactcached"].get("type") != "create":
+        if new_puz_in_all["lastact"].get("type") != "create":
             result.fail(
-                f"New puzzle lastactcached type={new_puz_in_all['lastactcached'].get('type')!r}, expected 'create'"
+                f"New puzzle lastact type={new_puz_in_all['lastact'].get('type')!r}, expected 'create'"
             )
             return
-        self.logger.log_operation(f"  ✓ Newly created puzzle has lastactcached type='create'")
+        self.logger.log_operation(f"  ✓ Newly created puzzle immediately shows lastact type='create' in /all")
 
-        # 5. GET /puzzles/<new_pid> also has lastactcached non-null (DB fallback)
-        new_pdata = self.api_get(f"/puzzles/{new_pid}")
-        if new_pdata.get("lastactcached") is None:
-            result.fail(f"GET /puzzles/{new_pid} lastactcached null (DB fallback should populate it)")
-            return
-        self.logger.log_operation(f"  ✓ GET /puzzles/<new_id> lastactcached non-null via DB fallback")
+        # 5. Write-through freshness on an existing puzzle: POST a lastact
+        #    activity, then verify the very next /all reflects it.
+        self.api_post(
+            f"/puzzles/{new_pid}/lastact",
+            {"lastact": {"solver_id": sid, "source": "puzzleboss", "type": "interact"}},
+        )
+        all_data3 = self.api_get("/all")
+        for rnd in all_data3.get("rounds", []):
+            for p in rnd.get("puzzles", []):
+                if p.get("id") == new_pid:
+                    la3 = p.get("lastact") or {}
+                    if la3.get("type") != "interact":
+                        result.fail(
+                            f"lastact not write-through fresh: expected type='interact' "
+                            f"immediately after POST, got {la3.get('type')!r}"
+                        )
+                        return
+                    self.logger.log_operation("  ✓ POSTed activity visible in the very next /all (write-through)")
 
-        result.set_success("lastactcached test completed successfully")
+        result.set_success("lastact write-through test completed successfully")
 
     # ------------------------------------------------------------------
     # Test 16: Puzzle Activity Endpoint
@@ -1327,24 +1355,37 @@ class TestRunner:
             if not self.verify_puzzle_field(result, pid, "sheetcount", new_count):
                 return
 
-            # Verify sheetcount in /all endpoint
-            all_data = self.api_get("/all")
+            # Verify sheetcount in /all endpoint. sheetcount is a blob field
+            # that rides the 15s cache TTL — it is deliberately NOT in the
+            # invalidation allowlist (it's a cosmetic tab counter; invalidating
+            # on it would couple the cache to bigjimmybot's churn). So /all may
+            # lag by up to one TTL. Poll until the cached blob refreshes.
+            deadline = time.time() + 20
             found = None
-            for rd in all_data.get("rounds", []):
-                for p in rd.get("puzzles", []):
-                    if p.get("id") == pid:
-                        found = p
+            while time.time() < deadline:
+                all_data = self.api_get("/all")
+                found = None
+                for rd in all_data.get("rounds", []):
+                    for p in rd.get("puzzles", []):
+                        if p.get("id") == pid:
+                            found = p
+                            break
+                    if found:
                         break
-                if found:
+                if found is not None and found.get("sheetcount") == new_count:
                     break
+                time.sleep(2)
             if not found:
                 result.fail(f"Puzzle {puzzle['name']} not found in /all endpoint")
                 return
             if found.get("sheetcount") != new_count:
-                result.fail(f"Sheetcount in /all: expected {new_count}, got {found.get('sheetcount')}")
+                result.fail(
+                    f"Sheetcount in /all still {found.get('sheetcount')} (expected "
+                    f"{new_count}) after TTL window — blob not refreshing"
+                )
                 return
 
-        result.set_success("Sheetcount test completed successfully")
+        result.set_success("Sheetcount test completed successfully (TTL-bounded freshness)")
 
     # ------------------------------------------------------------------
     # Test 20: Tagging
@@ -2698,7 +2739,7 @@ class TestRunner:
             self.test_solver_reassignment,
             self.test_activity_tracking,
             self.test_lastact_embedding,
-            self.test_lastactcached,
+            self.test_lastact_writethrough,
             self.test_puzzle_activity_endpoint,
             self.test_solver_activity_endpoint,
             self.test_solver_history,

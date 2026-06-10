@@ -89,27 +89,32 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None, puzzle_
     cursor = MagicMock()
     conn.cursor.return_value = cursor
 
-    # Track what queries have been executed so we can return different
-    # results for different SELECT queries
-    fetchone_count = {"n": 0}
-
-    # Call sequence in assign_solver_to_puzzle:
-    # 1. solver_exists() → SELECT id FROM solver → fetchone (returns solver row)
-    # 2. JSON_TABLE lookup for current puzzle → fetchall (returns [] = not assigned)
-    # 3. SELECT current_solvers, status → fetchone
-    # 4. SELECT solver_history → fetchone
-    # 5. log_activity() → INSERT INTO activity (uses execute, no fetchone)
+    # Dispatch fetchone on the *last executed SQL* rather than a call ordinal.
+    # The assign/unassign paths issue a variable number of queries (status
+    # transitions re-enter log_activity, and log_activity does a lastact
+    # write-through re-query when Redis is enabled), so a positional counter
+    # is too brittle. We key on distinctive fragments of each SELECT instead.
+    # cursor.execute stays the MagicMock (tests inspect its call_args_list);
+    # we just read the most recent call to route fetchone.
     cursor.fetchall.return_value = []  # Not currently assigned to any puzzle
 
+    def _last_sql():
+        if not cursor.execute.call_args_list:
+            return ""
+        return str(cursor.execute.call_args_list[-1][0][0])
+
     def mock_fetchone():
-        fetchone_count["n"] += 1
-        n = fetchone_count["n"]
-        if n == 1:
+        sql = _last_sql()
+        if "FROM solver" in sql:
             return {"id": 101}  # solver_exists check
-        elif n == 2:
+        if "current_solvers" in sql and "status" in sql:
             return {"current_solvers": current_solvers_json, "status": puzzle_status}
-        elif n == 3:
+        if "solver_history" in sql:
             return {"solver_history": solver_history_json}
+        if "FROM activity" in sql or "from activity" in sql:
+            # lastact write-through re-query (only runs when Redis enabled)
+            return {"id": 1, "puzzle_id": 287, "solver_id": 101,
+                    "source": "puzzleboss", "type": "assignment", "time": None}
         return None
 
     cursor.fetchone = mock_fetchone

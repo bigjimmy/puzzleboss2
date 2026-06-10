@@ -133,9 +133,13 @@ class TestLogActivityIdType:
 
         pblib.log_activity("287", "create", "101", "puzzleboss", conn)
 
+        # The activity INSERT is always the first execute call. (log_activity
+        # may issue further queries for the Redis lastact write-through when
+        # caching is enabled; we only assert the INSERT's id coercion here.)
         execute_calls = cursor.execute.call_args_list
-        assert len(execute_calls) == 1
-        params = execute_calls[0][0][1]
+        assert len(execute_calls) >= 1
+        insert_sql, params = execute_calls[0][0]
+        assert insert_sql.startswith("INSERT INTO activity")
         # Should be (287, 101, 'puzzleboss', 'create')
         assert params[0] == 287, f"puzzle_id should be int 287, got {params[0]!r}"
         assert params[1] == 101, f"solver_id should be int 101, got {params[1]!r}"
