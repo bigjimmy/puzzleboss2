@@ -47,6 +47,66 @@ def quiet_logs():
         yield
 
 
+# ── ensure_cache_initialized: latch only on success, retry otherwise ──────
+
+
+class TestEnsureCacheInitialized:
+    """The init must not latch when the cache is disabled/unreachable, so a
+    later config change (REDIS_ENABLED=true during a cutover) is picked up
+    without a worker restart — but retries are rate-limited."""
+
+    def _reset(self):
+        pbcachelib._cache_initialized = False
+        pbcachelib._last_init_attempt = None
+
+    def _config_rows(self, enabled):
+        # Mimic the DictCursor rows ensure_cache_initialized reads.
+        return [
+            {"key": "REDIS_ENABLED", "val": enabled},
+            {"key": "REDIS_HOST", "val": "redis"},
+            {"key": "REDIS_PORT", "val": "6379"},
+        ]
+
+    def test_does_not_latch_when_disabled(self):
+        self._reset()
+        conn = MagicMock()
+        conn.cursor.return_value.fetchall.return_value = self._config_rows("false")
+        with patch.object(pbcachelib, "rc", None), patch("pbcachelib.init_cache"):
+            pbcachelib.ensure_cache_initialized(conn)
+        # rc stayed None → not latched → a future attempt is allowed.
+        assert pbcachelib._cache_initialized is False
+
+    def test_latches_once_connected(self):
+        self._reset()
+        conn = MagicMock()
+        conn.cursor.return_value.fetchall.return_value = self._config_rows("true")
+
+        def fake_init(cfg):
+            pbcachelib.rc = MagicMock()  # simulate a successful connect
+
+        with patch.object(pbcachelib, "rc", None), patch(
+            "pbcachelib.init_cache", side_effect=fake_init
+        ):
+            try:
+                pbcachelib.ensure_cache_initialized(conn)
+                assert pbcachelib._cache_initialized is True
+            finally:
+                pbcachelib.rc = None
+                self._reset()
+
+    def test_retry_is_rate_limited(self):
+        self._reset()
+        conn = MagicMock()
+        conn.cursor.return_value.fetchall.return_value = self._config_rows("false")
+        with patch.object(pbcachelib, "rc", None), patch(
+            "pbcachelib.init_cache"
+        ) as init:
+            pbcachelib.ensure_cache_initialized(conn)   # attempt 1 runs
+            pbcachelib.ensure_cache_initialized(conn)   # within interval → skipped
+            assert init.call_count == 1
+        self._reset()
+
+
 # ── Fail-safe: caching disabled (rc is None) ──────────────────────────────
 
 

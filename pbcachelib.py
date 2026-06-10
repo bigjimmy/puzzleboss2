@@ -36,8 +36,11 @@ LASTACT_KEY = "puzzleboss:lastact"
 LOCK_KEY = "puzzleboss:all:lock"
 LOCK_TTL = 5  # seconds — bounds how long a crashed rebuilder blocks others
 
-# Flag to track if the cache client has been initialized
+# Flag to track if the cache client has been successfully initialized.
+# Latched only on a working connection; see ensure_cache_initialized.
 _cache_initialized = False
+_last_init_attempt = None
+_INIT_RETRY_INTERVAL = 30  # seconds — retry cadence while cache is disabled/down
 
 
 def init_cache(configstruct):
@@ -236,13 +239,26 @@ def invalidate_all_cache(conn):
 
 
 def ensure_cache_initialized(conn):
-    """Initialize the Redis client from DB config on first use."""
+    """Initialize the Redis client from DB config.
+
+    Latches only on a *successful* connection (rc is not None). If the cache
+    is disabled or Redis is unreachable, a later call retries — but no more
+    than once per _INIT_RETRY_INTERVAL seconds, so a disabled cache doesn't
+    re-query config on every request. This lets a config change (e.g.
+    flipping REDIS_ENABLED=true during a cutover) take effect without a
+    worker restart.
+    """
     # Note: No lock needed — concurrent initialization is harmless since both
     # workers would read the same config and create equivalent clients.
-    global _cache_initialized
+    global _cache_initialized, _last_init_attempt
     if _cache_initialized:
         return
-    _cache_initialized = True
+
+    import time
+    now = time.time()
+    if _last_init_attempt is not None and (now - _last_init_attempt) < _INIT_RETRY_INTERVAL:
+        return
+    _last_init_attempt = now
 
     try:
         # Query config from database
@@ -253,3 +269,8 @@ def ensure_cache_initialized(conn):
         init_cache(cache_config)
     except Exception as e:
         debug_log(2, f"Failed to load Redis config from database: {e}")
+
+    # Latch only once we actually have a working client; otherwise allow a
+    # retry on a later call (rate-limited above).
+    if rc is not None:
+        _cache_initialized = True

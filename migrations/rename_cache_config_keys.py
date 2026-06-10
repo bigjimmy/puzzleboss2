@@ -55,5 +55,15 @@ def run(conn):
     if cursor.rowcount:
         actions.append("REDIS_PORT 11211 -> 6379")
 
+    # The renamed REDIS_HOST still holds the memcache service hostname; point
+    # it at the Redis service. Match any 'memcache' host so this works whether
+    # the value is the FQDN or a bare name.
+    cursor.execute(
+        "UPDATE config SET val = 'redis.puzzleboss.local' "
+        "WHERE `key` = 'REDIS_HOST' AND val LIKE '%memcache%'"
+    )
+    if cursor.rowcount:
+        actions.append("REDIS_HOST memcache -> redis.puzzleboss.local")
+
     conn.commit()
     return True, "; ".join(actions)
