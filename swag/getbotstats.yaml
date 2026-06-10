@@ -4,11 +4,16 @@ summary: Get all bot statistics
 description: |
   Returns all bot statistics from the botstats table.
 
-  Active counters: cache_invalidations_total (on mutations), tags_assigned_total,
-  bigjimmy loop metrics, puzzcord member/activity metrics.
+  Active cache counters (written by the /all path in pbrest and the
+  write-through path in pbcachelib): cache_hits_total, cache_misses_total,
+  cache_invalidations_total, cache_rebuild_lock_contentions_total,
+  cache_write_through_failures_total, cache_cold_start_backfills_total.
+  Other counters: tags_assigned_total, bigjimmy loop metrics, puzzcord
+  member/activity metrics.
 
-  Note: cache_hits_total and cache_misses_total were removed (2026-03-29) — use
-  the redis_exporter / redis-cache Grafana dashboard for cache hit-rate metrics instead.
+  All of the above are also exposed to Prometheus via metrics.php and surfaced
+  on the redis-cache Grafana dashboard (alongside redis_exporter native
+  metrics).
 responses:
   200:
     description: Bot statistics retrieved successfully

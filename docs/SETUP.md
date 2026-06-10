@@ -179,6 +179,10 @@ For production, you need something in front of Apache that sets `REMOTE_USER`. T
 
 For development and testing, set `ALLOW_USERNAME_OVERRIDE=true` in the config table — this enables the `?assumedid=<username>` URL parameter, which substitutes for real auth. **Turn this off in production**, or anyone can become anyone.
 
+### Redis cache (optional but recommended)
+
+The `/all` response cache and the write-through `lastact` hash use Redis. Set `REDIS_ENABLED=true`, `REDIS_HOST`, and `REDIS_PORT` (default 6379) in the config table to enable it; leave `REDIS_ENABLED=false` to run cache-disabled (every `/all` falls through to the DB — correct but slower). For a standalone deploy, run a Redis instance reachable from the app host. In production, `mod_auth_openidc` can also use this Redis as its OIDC session store (`OIDCCacheType redis`); if so, Redis becomes login-critical. The Docker stack provisions Redis automatically.
+
 ### reCAPTCHA on signup (optional)
 
 Set `RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_KEY` in the config table to enable reCAPTCHA v3 on the account-signup page. Leave both empty to disable.

@@ -13,6 +13,12 @@ description: |
     POST /puzzles/123/tags with {"tags": {"remove": "logic"}}   - remove tag by name
   
   To read a puzzle's tags, use GET /puzzles/<id>/tags which returns comma-separated tag names.
+
+  Cache behavior: updating a structural field (status, name, round_id, answer,
+  ismeta) or a tag operation invalidates the /all cache blob. Non-structural
+  fields (xyzloc, comments, sheetcount) ride the 15s TTL and do not invalidate.
+  Setting the "lastact" part inserts an activity row (write-through to the
+  lastact hash) and does NOT invalidate the blob.
 consumes:
     - application/json
 parameters:

@@ -176,7 +176,7 @@ A typical query:
 - `bigjimmy_loop_time_seconds` — total time for last bot iteration
 - `bigjimmy_quota_failures` — counter for Google 429s
 - `bigjimmy_loop_puzzle_count` — puzzles processed last loop
-- `cache_invalidations_total` — counter
+- Cache counters — `cache_hits_total`, `cache_misses_total` (hit rate during a hunt should be >90%), `cache_invalidations_total` (structural mutations), `cache_rebuild_lock_contentions_total`, `cache_write_through_failures_total`, `cache_cold_start_backfills_total`. See the **redis-cache** Grafana dashboard, which also shows Redis-native metrics (memory, evictions, keyspace hit rate) from `redis_exporter`.
 - `puzzcord_members_active_anywhere` — gauge of currently-active solvers
 
 The `botstats` table also holds historical metric data — `METRICS_METADATA` in the config table defines what's exposed.
