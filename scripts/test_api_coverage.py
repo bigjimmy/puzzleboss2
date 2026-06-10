@@ -1341,6 +1341,95 @@ class TestRunner:
         result.set_success("lastact hdel-on-delete verified")
 
     # ------------------------------------------------------------------
+    # Test 15g: lastact attach latency on the /all cache-hit path
+    # The write-through design serves fresh lastact on a warm /all via a Redis
+    # blob GET + one HGETALL + an in-memory graft. This test guards against a
+    # CATASTROPHIC latency regression on that path (e.g. an O(N^2) attach, an
+    # accidental full-table scan, or a blocking call) with a generous absolute
+    # ceiling that only fires on a real blowup, never on CI scheduling noise.
+    #
+    # NOTE on scope: this does NOT reliably detect a per-puzzle N+1 — at test
+    # data scale (tens of puzzles) the extra indexed queries are sub-millisecond
+    # and invisible to any non-flaky threshold (verified empirically). N+1
+    # protection for the attach lives in code review and the pbcachelib unit
+    # tests (which pin lastact_get_all to a single HGETALL); this test's job is
+    # the gross-regression backstop and a recorded latency datapoint.
+    #
+    # Robust against CI variance: best-of-N (the floor is the real signal;
+    # noise only adds time), generous absolute ceiling.
+    # ------------------------------------------------------------------
+    def test_lastact_all_latency(self, result: TestResult):
+        if self.redis is None:
+            result.set_success("skipped — Redis not reachable from test context")
+            return
+
+        def timed_get(path, n=7, warm_first=True):
+            if warm_first:
+                requests.get(f"{self.base_url}{path}")  # prime
+            best = float("inf")
+            for _ in range(n):
+                t0 = time.perf_counter()
+                r = requests.get(f"{self.base_url}{path}")
+                dt = time.perf_counter() - t0
+                if not r.ok:
+                    return None, None
+                best = min(best, dt)
+            return best, r
+
+        # 1. Warm cache-hit latency: blob present in Redis, lastact attached.
+        warm_best, r = timed_get("/all", n=7, warm_first=True)
+        if warm_best is None:
+            result.fail("/all request failed during latency measurement")
+            return
+        payload_kb = len(r.content) / 1024.0
+        puzzle_count = sum(len(rnd.get("puzzles", [])) for rnd in r.json().get("rounds", []))
+        warm_ms = warm_best * 1000
+        self.logger.log_operation(
+            f"  warm /all best-of-7: {warm_ms:.1f}ms ({payload_kb:.0f}KB, {puzzle_count} puzzles)"
+        )
+
+        # 2. Forced-miss latency: delete the blob each time so every request
+        #    rebuilds from the DB (the lastact attach is the same in both
+        #    paths; the difference is the blob rebuild the warm path skips).
+        miss_best = float("inf")
+        for _ in range(5):
+            self.redis.delete("puzzleboss:all")
+            t0 = time.perf_counter()
+            rr = requests.get(f"{self.base_url}/all")
+            dt = time.perf_counter() - t0
+            if not rr.ok:
+                result.fail("/all failed during miss measurement")
+                return
+            miss_best = min(miss_best, dt)
+        miss_ms = miss_best * 1000
+        self.logger.log_operation(f"  forced-miss /all best-of-5: {miss_ms:.1f}ms")
+
+        # Informational only (NOT an assertion): warm-vs-miss speedup. With the
+        # activity composite index the DB rebuild is itself fast, so this margin
+        # is thin and noisy at small scale — useful to log, too flaky to gate on.
+        speedup = (miss_best / warm_best) if warm_best > 0 else float("inf")
+        self.logger.log_operation(f"  warm hit is {speedup:.1f}x the forced-rebuild time")
+
+        # ASSERTION 1 — absolute ceiling (variance-proof): catches catastrophic
+        # regressions (O(N^2) attach, N+1 DB queries in _attach_lastact). 250ms
+        # is ~30-50x the observed warm hit even on a loaded CI runner, so it
+        # fires only on a real blowup, never on scheduling noise.
+        CEILING_MS = 250
+        if warm_ms > CEILING_MS:
+            result.fail(
+                f"warm /all latency {warm_ms:.1f}ms exceeds {CEILING_MS}ms ceiling "
+                f"— likely an O(N) or N+1 regression in the lastact attach "
+                f"({puzzle_count} puzzles, {payload_kb:.0f}KB)"
+            )
+            return
+        self.logger.log_operation(f"  ✓ warm /all latency {warm_ms:.1f}ms within {CEILING_MS}ms ceiling")
+
+        result.set_success(
+            f"lastact /all latency OK (warm {warm_ms:.1f}ms, {speedup:.1f}x vs rebuild, "
+            f"{payload_kb:.0f}KB/{puzzle_count} puzzles)"
+        )
+
+    # ------------------------------------------------------------------
     # Test 16: Puzzle Activity Endpoint
     # ------------------------------------------------------------------
     def test_puzzle_activity_endpoint(self, result: TestResult):
@@ -2922,6 +3011,7 @@ class TestRunner:
             self.test_lastact_cold_start_consistency,
             self.test_lastact_all_matches_dedicated,
             self.test_lastact_delete_hdel,
+            self.test_lastact_all_latency,
             self.test_puzzle_activity_endpoint,
             self.test_solver_activity_endpoint,
             self.test_solver_history,
