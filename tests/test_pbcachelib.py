@@ -321,3 +321,49 @@ class TestInvalidateAllCache:
             except RuntimeError:
                 pytest.fail("invalidate_all_cache let a stats error escape")
         mock_rc.delete.assert_called_once_with(pbcachelib.CACHE_KEY)
+
+
+# ── observability: transition logging + new counters ──────────────────────
+
+
+class TestObservability:
+    def _reset_health(self):
+        pbcachelib._redis_healthy = None
+
+    def test_error_logs_warning_then_info_on_repeat(self, mock_rc):
+        # First failure after health → SEV2 (warning); subsequent → SEV3.
+        self._reset_health()
+        pbcachelib._redis_healthy = True
+        mock_rc.get.side_effect = RuntimeError("down")
+        with patch("pbcachelib.debug_log") as log:
+            pbcachelib.cache_get("k")   # first failure
+            pbcachelib.cache_get("k")   # second failure
+        sevs = [c.args[0] for c in log.call_args_list]
+        assert 2 in sevs  # warned on transition
+        assert sevs.count(2) == 1  # only once
+        self._reset_health()
+
+    def test_recovery_logged_once(self, mock_rc):
+        self._reset_health()
+        pbcachelib._redis_healthy = False
+        mock_rc.get.return_value = "v"
+        with patch("pbcachelib.debug_log") as log:
+            pbcachelib.cache_get("k")
+        # A SEV3 "recovered" line is emitted on down→up.
+        assert any("recovered" in str(c.args[1]).lower() for c in log.call_args_list)
+        self._reset_health()
+
+    def test_write_through_failure_increments_counter(self, mock_rc):
+        self._reset_health()
+        mock_rc.hset.side_effect = RuntimeError("down")
+        with patch("pbcachelib._incr") as incr:
+            pbcachelib.lastact_set(1, {"type": "create"})
+        incr.assert_called_once_with("cache_write_through_failures_total")
+        self._reset_health()
+
+    def test_cold_start_backfill_increments_counter(self, mock_rc):
+        self._reset_health()
+        with patch("pbcachelib._incr") as incr:
+            pbcachelib.lastact_set_many({1: {"type": "create"}, 2: {"type": "revise"}})
+        incr.assert_called_once_with("cache_cold_start_backfills_total")
+        self._reset_health()

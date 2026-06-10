@@ -28,6 +28,46 @@ except ImportError:
     REDIS_AVAILABLE = False
     debug_log(3, "redis-py not installed - caching disabled")
 
+# Tracks whether the last Redis operation succeeded, so we log a single SEV2
+# line on the working→down transition (and a SEV3 line on recovery) instead of
+# a SEV-flood of identical per-request errors. None = no op attempted yet.
+_redis_healthy = None
+
+
+def _note_redis_error(where, exc):
+    """Log a Redis I/O error. Warn (SEV2) on the first failure after health,
+    then drop to SEV3 for subsequent failures to avoid flooding while down."""
+    global _redis_healthy
+    if _redis_healthy is not False:
+        debug_log(2, f"Redis unavailable ({where}): {exc} — falling back to DB")
+        _redis_healthy = False
+    else:
+        debug_log(3, f"{where} error: {exc}")
+
+
+def _note_redis_ok():
+    """Mark a successful Redis op; log recovery once on down→working."""
+    global _redis_healthy
+    if _redis_healthy is False:
+        debug_log(3, "Redis recovered — cache operations succeeding again")
+    _redis_healthy = True
+
+
+def _incr(stat):
+    """Fail-safe counter bump that opens its own short-lived DB connection.
+    Used for cache metrics on paths that don't already hold a conn. Never
+    raises — a stats failure must not affect the cache operation."""
+    try:
+        from pblib import create_db_connection
+
+        conn = create_db_connection()
+        try:
+            increment_botstat(stat, conn)
+        finally:
+            conn.close()
+    except Exception as e:
+        debug_log(3, f"failed to increment {stat}: {e}")
+
 # Redis client (initialized later after config is available)
 rc = None
 CACHE_KEY = "puzzleboss:all"
@@ -47,7 +87,7 @@ def init_cache(configstruct):
     """Initialize Redis client from config. Call after DB config is loaded."""
     global rc
     if not REDIS_AVAILABLE:
-        debug_log(3, "Cache: redis-py not installed")
+        # Already logged once at import; stay quiet here to avoid duplication.
         return
 
     try:
@@ -84,11 +124,11 @@ def cache_get(key):
         return None
     try:
         value = rc.get(key)
-        if value:
-            debug_log(5, f"cache_get: hit for {key}")
+        debug_log(5, f"cache_get: {'hit' if value else 'miss'} for {key}")
+        _note_redis_ok()
         return value
     except Exception as e:
-        debug_log(3, f"cache_get error: {e}")
+        _note_redis_error("cache_get", e)
         return None
 
 
@@ -99,8 +139,9 @@ def cache_set(key, value, ttl=CACHE_TTL):
     try:
         rc.set(key, value, ex=ttl)
         debug_log(5, f"cache_set: stored {key}")
+        _note_redis_ok()
     except Exception as e:
-        debug_log(3, f"cache_set error: {e}")
+        _note_redis_error("cache_set", e)
 
 
 def cache_delete(key):
@@ -110,8 +151,9 @@ def cache_delete(key):
     try:
         rc.delete(key)
         debug_log(5, f"cache_delete: deleted {key}")
+        _note_redis_ok()
     except Exception as e:
-        debug_log(3, f"cache_delete error: {e}")
+        _note_redis_error("cache_delete", e)
 
 
 # ── lastact write-through hash ────────────────────────────────────────────
@@ -129,8 +171,10 @@ def lastact_set(puzzle_id, activity_row):
     try:
         rc.hset(LASTACT_KEY, str(int(puzzle_id)), json.dumps(activity_row))
         debug_log(5, f"lastact_set: puzzle {puzzle_id}")
+        _note_redis_ok()
     except Exception as e:
-        debug_log(3, f"lastact_set error: {e}")
+        _note_redis_error("lastact_set", e)
+        _incr("cache_write_through_failures_total")
 
 
 def lastact_get_all():
@@ -143,9 +187,10 @@ def lastact_get_all():
         return None
     try:
         raw = rc.hgetall(LASTACT_KEY)
+        _note_redis_ok()
         return {int(pid): json.loads(val) for pid, val in raw.items()}
     except Exception as e:
-        debug_log(3, f"lastact_get_all error: {e}")
+        _note_redis_error("lastact_get_all", e)
         return None
 
 
@@ -155,9 +200,10 @@ def lastact_get(puzzle_id):
         return None
     try:
         raw = rc.hget(LASTACT_KEY, str(int(puzzle_id)))
+        _note_redis_ok()
         return json.loads(raw) if raw else None
     except Exception as e:
-        debug_log(3, f"lastact_get error: {e}")
+        _note_redis_error("lastact_get", e)
         return None
 
 
@@ -167,12 +213,19 @@ def lastact_delete(puzzle_id):
         return
     try:
         rc.hdel(LASTACT_KEY, str(int(puzzle_id)))
+        debug_log(5, f"lastact_delete: puzzle {puzzle_id}")
+        _note_redis_ok()
     except Exception as e:
-        debug_log(3, f"lastact_delete error: {e}")
+        _note_redis_error("lastact_delete", e)
 
 
 def lastact_set_many(rows_by_pid):
-    """Bulk-populate the lastact hash (cold-start backfill from the DB)."""
+    """Bulk-populate the lastact hash (cold-start backfill from the DB).
+
+    A cold-start backfill means the hash was empty (Redis flushed/restarted or
+    freshly deployed) and the /all read fell back to the DB GROUP BY. Logged at
+    SEV3 and counted so the recovery is visible in production.
+    """
     if rc is None or not rows_by_pid:
         return
     try:
@@ -180,9 +233,11 @@ def lastact_set_many(rows_by_pid):
             LASTACT_KEY,
             mapping={str(int(pid)): json.dumps(row) for pid, row in rows_by_pid.items()},
         )
-        debug_log(4, f"lastact_set_many: backfilled {len(rows_by_pid)} puzzles")
+        debug_log(3, f"lastact cold-start backfill: {len(rows_by_pid)} puzzles from DB")
+        _note_redis_ok()
+        _incr("cache_cold_start_backfills_total")
     except Exception as e:
-        debug_log(3, f"lastact_set_many error: {e}")
+        _note_redis_error("lastact_set_many", e)
 
 
 # ── rebuild stampede lock ─────────────────────────────────────────────────
@@ -198,9 +253,12 @@ def try_acquire_rebuild_lock():
     if rc is None:
         return True
     try:
-        return bool(rc.set(LOCK_KEY, "1", nx=True, ex=LOCK_TTL))
+        acquired = bool(rc.set(LOCK_KEY, "1", nx=True, ex=LOCK_TTL))
+        _note_redis_ok()
+        return acquired
     except Exception as e:
-        debug_log(3, f"rebuild lock error: {e}")
+        # Redis errored — fail open (caller rebuilds without the lock).
+        _note_redis_error("rebuild lock", e)
         return True
 
 
@@ -210,7 +268,7 @@ def release_rebuild_lock():
     try:
         rc.delete(LOCK_KEY)
     except Exception as e:
-        debug_log(3, f"rebuild lock release error: {e}")
+        _note_redis_error("rebuild lock release", e)
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────
