@@ -240,11 +240,12 @@ Two unconditional invalidation paths must become selective:
 - The REST PATCH/POST puzzle-part handlers (`update_puzzle_parts`,
   `update_puzzle_part` in pbrest.py) invalidate for *any* part — including
   `lastact`, which is a pure activity-row INSERT that never touches the
-  puzzle row. No production caller POSTs `lastact` today (puzzcord's
-  `post_puzzle_parts` helper has no callers; only loadtest.py and the API
-  test suite hit it), but it's the endpoint any future activity-writer
-  would use, so with the Phase 4 hash it must not invalidate at all. Same
-  for `xyzloc`/`comments`: TTL staleness is fine.
+  puzzle row. **Done (interim, June 2026):** the handlers now skip
+  invalidation for `lastact`-only updates. No production caller POSTs
+  `lastact` today (puzzcord's `post_puzzle_parts` helper has no callers;
+  only loadtest.py and the API test suite hit it), but it's the endpoint
+  any future activity-writer would use. Still to do here: `xyzloc` /
+  `comments` — TTL staleness is fine for those too.
 - `update_puzzle_field` (pblib.py) invalidates on every field update by
   invariant ("any puzzle mutation"). Its bigjimmybot-driven writes are
   low-frequency (`sheetcount` is the spreadsheet's *tab count* — it changes
@@ -284,7 +285,8 @@ the natural fit.
 - [ ] Activity insert (API + bigjimmybot paths) updates `puzzleboss:lastact` hash
 - [ ] `/all` lastactcached matches latest activity row immediately after insert (no 15s lag)
 - [ ] Blob invalidation fires ONLY on: puzzle create/delete, round create/update/delete, status change
-- [ ] `lastact` POST, `xyzloc`, and `sheetcount` updates do NOT invalidate
+- [x] `lastact` POST does NOT invalidate (shipped as an interim fix, June 2026)
+- [ ] `xyzloc` and `sheetcount` updates do NOT invalidate
 - [ ] Redis flush → next `/all` rebuilds blob and backfills hash from DB (indexed GROUP BY)
 - [ ] Concurrent miss storm produces a single rebuild (lock held)
 - [ ] `python3 -m pytest tests/ -v` passes

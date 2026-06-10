@@ -111,14 +111,12 @@ if PROMETHEUS_AVAILABLE:
         debug_log(0, f"Failed to initialize Prometheus metrics: {e}")
         PROMETHEUS_AVAILABLE = False
 
-# Helper to invalidate cache with optional stats tracking
+# Helper to invalidate cache
 def invalidate_cache_with_stats():
-    """Invalidate cache and track stats (with error handling for stats)."""
+    """Invalidate the /all cache. Stats counting happens inside
+    invalidate_all_cache (the deletion chokepoint), so all invalidation
+    paths are counted, not just pbrest's."""
     invalidate_all_cache(mysql.connection)
-    try:
-        increment_botstat("cache_invalidations_total", mysql.connection)
-    except Exception as e:
-        debug_log(3, f"Failed to increment cache stats: {e}")
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────
@@ -2187,8 +2185,13 @@ def update_puzzle_multi(id):
         updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
         updated_parts[part] = updated_value
 
-    # Invalidate cache once after all updates
-    invalidate_cache_with_stats()
+    # Invalidate cache once after all updates. lastact is exempt: it's an
+    # activity INSERT that never touches the puzzle row, and lastactcached
+    # staleness rides the 15s TTL (same policy as solver assignment).
+    # Temporary special case until the Redis write-through migration
+    # (REDIS_MIGRATION.md Phase 4) decouples activity from the blob cache.
+    if any(part != "lastact" for part in data):
+        invalidate_cache_with_stats()
 
     return {"status": "ok", "puzzle": {"id": int(id), **updated_parts}}
 
@@ -2221,8 +2224,9 @@ def update_puzzle_part(id, part):
 
     updated_value = _update_single_puzzle_part(id, part, value, mypuzzle, source)
 
-    # Invalidate cache
-    invalidate_cache_with_stats()
+    # Invalidate cache — except for lastact; see the multi-part handler note.
+    if part != "lastact":
+        invalidate_cache_with_stats()
 
     return {"status": "ok", "puzzle": {"id": int(id), part: updated_value}}
 

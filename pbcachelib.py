@@ -5,7 +5,7 @@ This module provides memcache functionality for caching API responses.
 Uses pymemcache with fail-safe operations (silently fails if cache unavailable).
 """
 
-from pblib import debug_log
+from pblib import debug_log, increment_botstat
 
 # Optional memcache support
 try:
@@ -93,11 +93,17 @@ def cache_delete(key):
 def invalidate_all_cache(conn):
     """Invalidate the /all cache. Call when puzzle/round data changes.
 
-    Note: This only invalidates the cache. If you want to track cache invalidation
-    stats, call increment_botstat() from pblib separately with proper error handling.
+    Counts every call in the cache_invalidations_total botstat. This is the
+    single chokepoint for cache deletion, so all invalidation paths are
+    counted — pbrest handlers, pblib's update_puzzle_field invariant, and
+    bigjimmybot alike. Because it counts deletions (not request-level
+    events), a puzzle part update that invalidates both via the pblib
+    invariant and its REST handler counts twice. increment_botstat is
+    fail-safe: a stats failure never blocks the invalidation.
     """
     ensure_memcache_initialized(conn)
     cache_delete(MEMCACHE_CACHE_KEY)
+    increment_botstat("cache_invalidations_total", conn)
 
 
 def ensure_memcache_initialized(conn):
