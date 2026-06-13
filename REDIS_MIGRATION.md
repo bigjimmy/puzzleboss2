@@ -1,11 +1,11 @@
 # Redis Migration Plan — puzzleboss2 (App Side)
 
-> **Status (June 2026):** Phases A / 0 / 1 / 2 / 3 / 4 are **COMPLETE and live in
-> production.** Redis is the active cache backend; REDIS_ENABLED is true in prod;
-> write-through lastact is deployed; the Phases 0–3 and Phase 4 checklists below
-> are fully checked off. The only remaining work is **Phase 4-infra** (removing the
-> now-idle memcache ECS service — memcache still runs in the cluster but nothing
-> connects to it).
+> **Status (June 2026):** The migration is **fully COMPLETE** — Phases A / 0 / 1 /
+> 2 / 3 / 4 and Phase 4-infra are all live in production. Redis is the active
+> cache backend; REDIS_ENABLED is true in prod; write-through lastact is
+> deployed; the checklists below are fully checked off; the memcache ECS service
+> has been removed from the cluster. This document is retained as a historical
+> record of the migration design and rollout.
 
 This document covers the app-side changes for migrating from memcache to Redis,
 plus the performance work that motivates it: serving fresh per-puzzle `lastact`
