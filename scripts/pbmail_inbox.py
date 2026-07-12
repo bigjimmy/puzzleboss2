@@ -47,8 +47,20 @@ def load_config():
 
     api_uri = yaml_config.get("API_URI", "http://localhost:5000")
 
+    # Internal token for unredacted /config — this script needs the webhook
+    # URLs, which the API redacts for unauthenticated callers. Env var wins
+    # over yaml (same precedence as pblib.get_internal_token).
+    internal_token = os.environ.get("INTERNAL_TOKEN") or (
+        (yaml_config.get("API") or {}).get("INTERNAL_TOKEN") or ""
+    )
+    headers = {"X-Remote-User": "pbmail_inbox"}
+    if internal_token:
+        headers["X-PB-Internal-Token"] = internal_token
+    else:
+        log("WARN", "No INTERNAL_TOKEN configured; /config secrets will be redacted")
+
     try:
-        response = requests.get(f"{api_uri}/config", timeout=10)
+        response = requests.get(f"{api_uri}/config", headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
 

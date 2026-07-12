@@ -158,6 +158,11 @@ DROP TABLE IF EXISTS `config`;
 CREATE TABLE `config` (
   `key` varchar(100) NOT NULL,
   `val` MEDIUMTEXT DEFAULT NULL,
+  -- Marks the value as a secret: redacted in API responses unless the caller
+  -- presents the internal token. Authoritative flag; pblib's name-pattern
+  -- heuristic (is_secret_config_key) remains as a fallback safety net.
+  -- Added by migrations/add_config_secret_flag.py for existing databases.
+  `secret` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`key`),
   UNIQUE KEY `key_UNIQUE` (`key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -165,7 +170,7 @@ CREATE TABLE `config` (
 
 LOCK TABLES `config` WRITE;
 /*!40000 ALTER TABLE `config` DISABLE KEYS */;
-INSERT INTO `config` VALUES
+INSERT INTO `config` (`key`, `val`) VALUES
   ('ACTIVITY_SOURCES', 'puzzleboss,bigjimmybot,discord'),
   ('ACCT_PASSWORD', 'funkychicken'),
   ('ACCT_URI', 'https://yourdomain.org/account'),
@@ -215,6 +220,12 @@ INSERT INTO `config` VALUES
   ('WIKI_EXCLUDE_PREFIXES', ''),
   ('WIKI_PRIORITY_PAGES', 'Main Page'),
   ('WIKI_URL', 'https://localhost/wiki/');
+-- Flag the seeded secrets. The name-pattern heuristic would catch most of
+-- these anyway, but the flag is the authority (see CLAUDE.md security notes).
+UPDATE `config` SET `secret` = 1 WHERE `key` IN
+  ('ACCT_PASSWORD', 'DISCORD_EMAIL_WEBHOOK', 'GEMINI_API_KEY',
+   'RECAPTCHA_SECRET_KEY', 'SERVICE_ACCOUNT_JSON',
+   'SHEETS_ADDON_COOKIES', 'SHEETS_ADDON_INVOKE_PARAMS');
 /*!40000 ALTER TABLE `config` ENABLE KEYS */;
 UNLOCK TABLES;
 

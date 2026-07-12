@@ -7,6 +7,9 @@ global $huntinfo;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 $apiroot = $yaml['API']['APIURI'];
+// Internal token for privileged API reads (unredacted /config).
+// Env var wins over yaml; both are deploy-time channels.
+$pbinternaltoken = getenv('INTERNAL_TOKEN') ?: ($yaml['API']['INTERNAL_TOKEN'] ?? '');
 $phproot = "http://localhost:8080/puzzleboss/www/";
 
 function readapi($apicall) {
@@ -16,6 +19,26 @@ function readapi($apicall) {
   curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
   $headers = array(
     "Accept: application/json",
+  );
+  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+  $resp = curl_exec($curl);
+  curl_close($curl);
+  return json_decode($resp);
+}
+
+// Privileged read: attaches the internal token so the API returns config
+// secrets unredacted. Callers MUST have already verified authorization
+// (puzztech) — the token authenticates this server-side tier, not the end
+// user. X-Remote-User is forwarded for the API's audit log only.
+function readapi_internal($apicall) {
+  $url = $GLOBALS['apiroot'] . $apicall;
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_URL, $url);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $headers = array(
+    "Accept: application/json",
+    "X-PB-Internal-Token: " . $GLOBALS['pbinternaltoken'],
+    "X-Remote-User: " . ($_SERVER['REMOTE_USER'] ?? ''),
   );
   curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
   $resp = curl_exec($curl);

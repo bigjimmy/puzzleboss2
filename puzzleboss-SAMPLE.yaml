@@ -10,6 +10,7 @@
 #   3. Update PASSWORD to a secure password
 #   4. Update APIURI to your production API endpoint
 #   5. Set SKIP_GOOGLE_API and SKIP_PUZZCORD to "false" if using those features
+#   6. Generate a real INTERNAL_TOKEN:  openssl rand -hex 32
 
 MYSQL:
     USERNAME: puzzleboss
@@ -27,6 +28,13 @@ MYSQL:
 
 API:
     APIURI: http://localhost:5000
+    # Shared internal token: lets trusted server-side consumers (config.php
+    # admin page, account signup page, pbmail_inbox) read /config with secrets
+    # unredacted. Without it the API fails closed: GET /config and /huntinfo
+    # still work, but secret values come back as "********".
+    # Generate a real one for production:  openssl rand -hex 32
+    # Can also be supplied via the INTERNAL_TOKEN env var (env wins over file).
+    INTERNAL_TOKEN: dev-internal-token-change-me
 
 # Google Service Account (optional - for Drive/Sheets/Admin integration)
 # 1. Create a service account in Google Cloud Console

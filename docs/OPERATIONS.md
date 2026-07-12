@@ -6,7 +6,7 @@ If you're standing it up for the first time, see [SETUP.md](SETUP.md) first. If 
 
 ## What you need to know first
 
-- **Configuration lives in two places.** `puzzleboss.yaml` on disk holds bootstrap info (MySQL connection, API URL). The `config` table in MySQL holds everything else — team name, integration toggles, credentials, feature settings. The dynamic config refreshes every 30 seconds, so changes via the admin UI take effect within a minute without a restart.
+- **Configuration lives in two places.** `puzzleboss.yaml` on disk holds bootstrap info (MySQL connection, API URL, the internal API token). The `config` table in MySQL holds everything else — team name, integration toggles, credentials, feature settings. The dynamic config refreshes every 30 seconds, so changes via the admin UI take effect within a minute without a restart. Config secrets are redacted in API responses; trusted server-side pages present the internal token to read them (see [the config table tour](#the-config-table-tour)).
 - **The infra is in a separate repo.** Terraform, Grafana dashboards, ECS task definitions, deploy scripts, and the production-operations runbook live in [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra). This repo only contains application code.
 - **Most issues during a hunt are integration issues, not application bugs.** Google quota, Discord rate limits, sheets-add-on failures. Watch [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -49,6 +49,8 @@ sequenceDiagram
 ## The config table tour
 
 Edit configuration through the **Configuration Management** page (`/config.php`, gated by the `puzztech` priv) — long values like `bookmarklet_js` and `GEMINI_SYSTEM_INSTRUCTION` are textareas there. There's no need to touch MySQL directly; the UI is the supported path. The full key list and descriptions are loaded from [`www/config.php`](../www/config.php) (the `$keyDescriptions` array) — that's the canonical reference.
+
+**Secrets are protected API-side.** Secret values come back as `********` from `GET /config` and `GET /huntinfo`. Which keys count as secret: any key with its **🔒 secret flag** set (the checkbox next to each key on the Configuration Management page — use it when you add a sensitive key whose name doesn't scream "secret"), plus any key whose name matches `API_KEY`/`SECRET`/`PASSWORD`/`TOKEN`/`WEBHOOK` or `SERVICE_ACCOUNT_JSON` (those are always redacted — their 🔒 shows locked). The Configuration Management page still shows real values — it authenticates to the API with the internal token from `puzzleboss.yaml` (`API.INTERNAL_TOKEN`). If the admin page shows `********` instead of a value you know is set, the token is missing — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#config-admin-page-shows--for-secret-values--signup-gate-rejects-the-right-password). Upgrading an existing database: run `POST /migrate/add_config_secret_flag` once to add and backfill the flag column.
 
 Below are the keys you'll actually touch, grouped:
 

@@ -10,6 +10,10 @@ global $apiroot;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 $apiroot = $yaml['API']['APIURI'];
+// Internal token: this page needs unredacted config (ACCT_PASSWORD gate,
+// RECAPTCHA_SECRET_KEY) server-side. The secrets are only compared/used in
+// PHP — never emitted to the browser.
+$pbinternaltoken = getenv('INTERNAL_TOKEN') ?: ($yaml['API']['INTERNAL_TOKEN'] ?? '');
 $example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
 
 function readapi($apicall) {
@@ -17,7 +21,11 @@ function readapi($apicall) {
   $curl = curl_init($url);
   curl_setopt($curl, CURLOPT_URL, $url);
   curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-  curl_setopt($curl, CURLOPT_HTTPHEADER, ["Accept: application/json"]);
+  curl_setopt($curl, CURLOPT_HTTPHEADER, [
+    "Accept: application/json",
+    "X-PB-Internal-Token: " . $GLOBALS['pbinternaltoken'],
+    "X-Remote-User: account-signup-page",
+  ]);
   $resp = curl_exec($curl);
   curl_close($curl);
   return json_decode($resp);

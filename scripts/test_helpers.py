@@ -31,6 +31,43 @@ CREATION_TIMEOUT = 30000  # puzzle 5-step creation flow
 NAV_TIMEOUT = 15000  # navigation
 
 
+def get_internal_token():
+    """The shared internal token for unredacted /config reads, or "".
+
+    Same precedence as pblib.get_internal_token: INTERNAL_TOKEN env var wins,
+    then API.INTERNAL_TOKEN in puzzleboss.yaml. Tests run inside the app
+    container, where the yaml exists (Dockerfile.dev bakes in the SAMPLE).
+    """
+    token = os.environ.get("INTERNAL_TOKEN", "")
+    if token:
+        return token
+    for yaml_path in ("/app/puzzleboss.yaml", "puzzleboss.yaml"):
+        if os.path.exists(yaml_path):
+            import yaml as _yaml
+
+            with open(yaml_path) as f:
+                parsed = _yaml.safe_load(f) or {}
+            return (parsed.get("API") or {}).get("INTERNAL_TOKEN", "") or ""
+    return ""
+
+
+def get_full_config():
+    """Fetch /config unredacted via the internal token.
+
+    GET /config redacts secret values (passwords, API keys, webhooks) unless
+    the caller presents X-PB-Internal-Token. Tests that need real secret
+    values (e.g. ACCT_PASSWORD for the registration gate) use this instead of
+    a bare requests.get.
+    """
+    headers = {"X-Remote-User": "test-suite"}
+    token = get_internal_token()
+    if token:
+        headers["X-PB-Internal-Token"] = token
+    resp = requests.get(f"{API_URL}/config", headers=headers, timeout=10)
+    resp.raise_for_status()
+    return resp.json().get("config", {})
+
+
 # ============================================================================
 # Test infrastructure
 # ============================================================================

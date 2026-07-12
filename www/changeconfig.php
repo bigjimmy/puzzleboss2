@@ -11,6 +11,15 @@
 
 require('puzzlebosslib.php');
 
+  // Config writes are puzztech-only (same gate as config.php and the
+  // apicall.php proxy — this page POSTs to the API directly, so it must
+  // enforce the priv itself).
+  $uid = getauthenticateduser();
+  if (!checkpriv("puzztech", $uid)) {
+    http_response_code(403);
+    exit('Access denied: config changes require the puzztech role.');
+  }
+
   $configval = $_POST['configval'];
   $key = $_POST['key'];
 

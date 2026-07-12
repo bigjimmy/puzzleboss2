@@ -1,8 +1,26 @@
 summary: Get configuration
-description: Get all configuration key-value pairs from the database
+description: >
+  Get all configuration key-value pairs from the database. Secret values are
+  redacted to "********" unless the request carries a valid
+  X-PB-Internal-Token header (the shared internal token from puzzleboss.yaml
+  API.INTERNAL_TOKEN). A key is secret if its config.secret flag is set
+  (authoritative, operator-editable) OR its name matches
+  API_KEY/SECRET/PASSWORD/TOKEN/WEBHOOK or SERVICE_ACCOUNT_JSON (heuristic
+  fallback). The response's secret_keys field lists the combined
+  classification. All keys are always present; only secret values are masked.
 tags:
   - Config
-parameters: []
+parameters:
+  - name: X-PB-Internal-Token
+    in: header
+    type: string
+    required: false
+    description: Internal token for unredacted secret values (trusted server-side consumers only)
+  - name: X-Remote-User
+    in: header
+    type: string
+    required: false
+    description: Caller identity, logged on unredacted reads for auditing
 responses:
   200:
     description: Current configuration
@@ -20,6 +38,12 @@ responses:
             LOGLEVEL: "4"
             DOMAINNAME: "example.com"
             SKIP_GOOGLE_API: "false"
+        secret_keys:
+          type: array
+          items:
+            type: string
+          description: Keys classified as secret (flag OR name heuristic); their values are masked unless the internal token is presented
+          example: ["ACCT_PASSWORD", "GEMINI_API_KEY", "SERVICE_ACCOUNT_JSON"]
   500:
     description: Error fetching configuration
     schema:

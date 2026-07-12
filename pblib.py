@@ -2,6 +2,8 @@
 
 import yaml
 import sys
+import os
+import hmac
 import inspect
 import datetime
 import smtplib
@@ -147,7 +149,9 @@ def refresh_config():
 
         db_connection = MySQLdb.connect(**connect_params)
         cursor = db_connection.cursor()
-        cursor.execute("SELECT * FROM config")
+        # Explicit columns: dict(configdump) below needs exactly 2-tuples,
+        # and the config table also carries a `secret` flag column.
+        cursor.execute("SELECT `key`, `val` FROM config")
         configdump = cursor.fetchall()
         db_connection.close()
 
@@ -200,6 +204,104 @@ def refresh_config():
 
 # Initial configuration load
 refresh_config()
+
+
+# --- Config secret redaction and internal-token auth ---------------------
+#
+# GET /config and GET /huntinfo dump the config table, which holds secrets
+# (SERVICE_ACCOUNT_JSON is a Domain-Wide Delegation key). API responses are
+# redacted by default; server-side consumers that legitimately need secret
+# values (config.php admin page, account signup page, pbmail_inbox) present
+# the shared internal token, provisioned in puzzleboss.yaml (API.INTERNAL_TOKEN)
+# or the INTERNAL_TOKEN environment variable. The token authenticates the
+# *trusted server-side tier*, not a user — user-level authz (puzztech) stays
+# in the PHP layer, which checks privs before attaching the token.
+#
+# Secrecy classification is "flag as authority, heuristic as fallback":
+# the config table's `secret` column (operator-editable per key) is the
+# authoritative signal, and the name-pattern heuristic below is a safety net
+# so a forgotten flag on a conventionally-named key still fails closed.
+# A key is secret if EITHER says so.
+
+REDACTED_SENTINEL = "********"
+
+# Explicit secret keys that no substring pattern catches.
+_SECRET_CONFIG_EXACT = {"SERVICE_ACCOUNT_JSON"}
+
+# Case-insensitive substring patterns. Deliberately "API_KEY" and not "KEY":
+# RECAPTCHA_SITE_KEY is public by design and the frontend needs it.
+_SECRET_CONFIG_PATTERNS = ("API_KEY", "SECRET", "PASSWORD", "TOKEN", "WEBHOOK")
+
+
+def is_secret_config_key(key):
+    """Name-pattern heuristic: True if the key NAME looks like a secret.
+
+    This is the fallback classifier — the authoritative signal is the
+    config table's `secret` flag (see is_secret_config_entry).
+    """
+    upper = key.upper()
+    if upper in _SECRET_CONFIG_EXACT:
+        return True
+    return any(pattern in upper for pattern in _SECRET_CONFIG_PATTERNS)
+
+
+def is_secret_config_entry(key, flagged=None):
+    """True if a config entry is secret: flag as authority, heuristic as fallback.
+
+    flagged is the set of keys whose `secret` column is 1 (may be None when
+    the caller has no flag data, e.g. a pre-migration database).
+    """
+    if flagged and key in flagged:
+        return True
+    return is_secret_config_key(key)
+
+
+def secret_config_keys(config_dict, flagged=None):
+    """Sorted list of the keys in config_dict classified as secret
+    (flag OR heuristic). Exposed to clients as the response's secret_keys
+    field so display logic shares the server's classification."""
+    return sorted(
+        key for key in config_dict if is_secret_config_entry(key, flagged)
+    )
+
+
+def redact_config(config_dict, flagged=None):
+    """Return a copy of a config dict with secret values replaced by a sentinel.
+
+    Secrecy is flag-OR-heuristic (see is_secret_config_entry). Response shape
+    is preserved: every key stays present so consumers doing
+    config["SOME_KEY"] don't break. Empty values pass through unredacted —
+    an unset secret shows as unset, not as a phantom value.
+    """
+    return {
+        key: REDACTED_SENTINEL if val and is_secret_config_entry(key, flagged) else val
+        for key, val in config_dict.items()
+    }
+
+
+def get_internal_token():
+    """The shared internal token, or None if unconfigured.
+
+    Environment variable wins over YAML so deployments can inject the token
+    without touching the config file; both are deploy-time channels (in prod
+    the yaml itself arrives via Secrets Manager at container start).
+    """
+    token = os.environ.get("INTERNAL_TOKEN")
+    if token:
+        return token
+    try:
+        return (config or {}).get("API", {}).get("INTERNAL_TOKEN") or None
+    except AttributeError:
+        return None
+
+
+def internal_token_valid(provided):
+    """Constant-time check of a caller-supplied token. Fails closed:
+    no configured token, or no provided token, means not privileged."""
+    expected = get_internal_token()
+    if not expected or not provided:
+        return False
+    return hmac.compare_digest(str(provided), str(expected))
 
 
 def sanitize_puzzle_name(text):

@@ -24,6 +24,7 @@ from test_helpers import (
     API_URL,
     TestLogger,
     TestResult,
+    get_internal_token,
     find_by_name,
     assert_eq,
     assert_field,
@@ -63,6 +64,10 @@ class TestRunner:
         "Activity Tracking",
         "lastact Response Embedding",
         "lastact Write-through Freshness",
+        "lastact Cold-Start Consistency",
+        "lastact /all Matches Dedicated Endpoint",
+        "lastact Delete HDEL",
+        "lastact /all Latency",
         "Puzzle Activity Endpoint",
         "Solver Activity Endpoint",
         "Solver History",
@@ -82,6 +87,7 @@ class TestRunner:
         "Activity Statistics Endpoint",
         "Activity has_more and Comment Type",
         "Activity Source Metrics",
+        "Config Secret Redaction",
     ]
 
     def __init__(self, base_url=BASE_URL):
@@ -2985,6 +2991,199 @@ class TestRunner:
 
         result.set_success("Activity source metrics test completed successfully")
 
+    # ------------------------------------------------------------------
+    # Test 37: Config Secret Redaction
+    # ------------------------------------------------------------------
+    def test_config_secret_redaction(self, result: TestResult):
+        """Test API-side config secret redaction and internal-token bypass.
+
+        GET /config redacts secret values (keys matching API_KEY/SECRET/
+        PASSWORD/TOKEN/WEBHOOK + SERVICE_ACCOUNT_JSON) to "********" unless
+        the request carries a valid X-PB-Internal-Token. GET /huntinfo is
+        always redacted, token or not.
+        """
+        SENTINEL = "********"
+        token = get_internal_token()
+        if not token:
+            result.fail(
+                "No INTERNAL_TOKEN available (env or puzzleboss.yaml) — "
+                "cannot exercise the privileged read path"
+            )
+            return
+
+        # 1. Plant a secret-pattern key with a known value
+        secret_key = "TEST_REDACTION_WEBHOOK"
+        secret_val = f"https://hooks.example.com/secret-{random.randint(10000, 99999)}"
+        self.logger.log_operation(f"  Planting secret config key {secret_key}")
+        self.api_post("/config", {"cfgkey": secret_key, "cfgval": secret_val})
+
+        # Also plant a non-secret key to prove redaction is selective
+        plain_key = "TEST_REDACTION_PLAIN"
+        plain_val = "not-a-secret-value"
+        self.api_post("/config", {"cfgkey": plain_key, "cfgval": plain_val})
+
+        # 2. Unauthenticated GET /config: secret masked, non-secret raw,
+        #    all keys still present (shape compatibility)
+        self.logger.log_operation("  Testing: GET /config without token is redacted")
+        cfg = self.api_get("/config").get("config", {})
+        if secret_key not in cfg:
+            result.fail(f"{secret_key} missing from redacted /config — keys must survive redaction")
+            return
+        if cfg[secret_key] != SENTINEL:
+            result.fail(f"{secret_key} not redacted: got {cfg[secret_key]!r}")
+            return
+        if cfg.get(plain_key) != plain_val:
+            result.fail(f"Non-secret {plain_key} was altered: got {cfg.get(plain_key)!r}")
+            return
+        self.logger.log_operation("    ✓ Secret masked, non-secret intact, shape preserved")
+
+        # Seeded secrets must be masked too (ACCT_PASSWORD ships non-empty)
+        if cfg.get("ACCT_PASSWORD") and cfg["ACCT_PASSWORD"] != SENTINEL:
+            result.fail("Seeded ACCT_PASSWORD leaked through redaction")
+            return
+
+        # 3. Wrong token: still redacted
+        self.logger.log_operation("  Testing: GET /config with wrong token is redacted")
+        r = requests.get(
+            f"{self.base_url}/config",
+            headers={"X-PB-Internal-Token": "wrong-token-value"},
+        )
+        cfg_wrong = r.json().get("config", {})
+        if cfg_wrong.get(secret_key) != SENTINEL:
+            result.fail("Wrong token yielded unredacted config")
+            return
+        self.logger.log_operation("    ✓ Wrong token gets redacted values")
+
+        # 4. Valid token: real values, audit identity forwarded
+        self.logger.log_operation("  Testing: GET /config with valid token is unredacted")
+        r = requests.get(
+            f"{self.base_url}/config",
+            headers={
+                "X-PB-Internal-Token": token,
+                "X-Remote-User": "test_api_coverage",
+            },
+        )
+        cfg_priv = r.json().get("config", {})
+        if cfg_priv.get(secret_key) != secret_val:
+            result.fail(
+                f"Valid token did not return real value for {secret_key}: "
+                f"got {cfg_priv.get(secret_key)!r}"
+            )
+            return
+        self.logger.log_operation("    ✓ Valid token gets real secret values")
+
+        # 5. /huntinfo: always redacted, even with a valid token
+        self.logger.log_operation("  Testing: GET /huntinfo is redacted even with token")
+        r = requests.get(
+            f"{self.base_url}/huntinfo",
+            headers={"X-PB-Internal-Token": token},
+        )
+        hi_cfg = r.json().get("config", {})
+        if hi_cfg.get(secret_key) != SENTINEL:
+            result.fail(
+                f"/huntinfo leaked secret even though it must always redact: "
+                f"got {hi_cfg.get(secret_key)!r}"
+            )
+            return
+        if hi_cfg.get(plain_key) != plain_val:
+            result.fail(f"/huntinfo altered non-secret {plain_key}")
+            return
+        self.logger.log_operation("    ✓ /huntinfo always redacts (no privileged variant)")
+
+        # 6. Round-trip safety: writing a secret then reading it back through
+        #    the privileged path returns exactly what was written
+        self.logger.log_operation("  Testing: secret write → privileged read round-trip")
+        secret_val2 = f"{secret_val}-rotated"
+        self.api_post("/config", {"cfgkey": secret_key, "cfgval": secret_val2})
+        r = requests.get(
+            f"{self.base_url}/config",
+            headers={"X-PB-Internal-Token": token},
+        )
+        if r.json().get("config", {}).get(secret_key) != secret_val2:
+            result.fail("Privileged read after secret rotation returned stale/wrong value")
+            return
+        self.logger.log_operation("    ✓ Rotation round-trip works")
+
+        # --- Flag authority: config.secret column drives redaction for keys
+        # --- the name heuristic would never catch ---------------------------
+
+        # 7. Innocuously-named key POSTed with secret=true → redacted
+        self.logger.log_operation("  Testing: flag-only secret (innocuous key name)")
+        flag_key = "TEST_INNOCUOUS_NAME"
+        flag_val = f"flag-secret-{random.randint(10000, 99999)}"
+        self.api_post("/config", {"cfgkey": flag_key, "cfgval": flag_val, "secret": True})
+        cfg = self.api_get("/config")
+        if cfg["config"].get(flag_key) != SENTINEL:
+            result.fail(
+                f"Flagged key {flag_key} not redacted (name matches no pattern, "
+                f"so only the flag can protect it): got {cfg['config'].get(flag_key)!r}"
+            )
+            return
+        if flag_key not in cfg.get("secret_keys", []):
+            result.fail(f"{flag_key} missing from secret_keys response field")
+            return
+        self.logger.log_operation("    ✓ Flag alone redacts an innocuously-named key")
+
+        # 8. secret_keys reflects the combined classification
+        if secret_key not in cfg.get("secret_keys", []):
+            result.fail(f"Heuristic-matched {secret_key} missing from secret_keys")
+            return
+        if plain_key in cfg.get("secret_keys", []):
+            result.fail(f"Non-secret {plain_key} wrongly listed in secret_keys")
+            return
+        self.logger.log_operation("    ✓ secret_keys lists flag- and pattern-matched keys only")
+
+        # 9. Value-only update must PRESERVE the flag (legacy writers never unflag)
+        self.logger.log_operation("  Testing: value-only update preserves secret flag")
+        flag_val2 = f"{flag_val}-updated"
+        self.api_post("/config", {"cfgkey": flag_key, "cfgval": flag_val2})
+        cfg = self.api_get("/config")
+        if cfg["config"].get(flag_key) != SENTINEL:
+            result.fail("Value-only POST dropped the secret flag — legacy writers would unflag secrets")
+            return
+        r = requests.get(f"{self.base_url}/config", headers={"X-PB-Internal-Token": token})
+        if r.json()["config"].get(flag_key) != flag_val2:
+            result.fail("Privileged read after value-only update returned wrong value")
+            return
+        self.logger.log_operation("    ✓ Flag survives value-only updates")
+
+        # 10. Flag-only update (no cfgval) toggles secrecy without touching the value
+        self.logger.log_operation("  Testing: flag-only update (secret=false)")
+        self.api_post("/config", {"cfgkey": flag_key, "secret": False})
+        cfg = self.api_get("/config")
+        if cfg["config"].get(flag_key) != flag_val2:
+            result.fail(
+                f"Unflagged innocuous key should be visible again, got "
+                f"{cfg['config'].get(flag_key)!r}"
+            )
+            return
+        if flag_key in cfg.get("secret_keys", []):
+            result.fail(f"{flag_key} still in secret_keys after unflagging")
+            return
+        self.logger.log_operation("    ✓ Flag-only update works; value untouched")
+
+        # 11. Unflagging a PATTERN-matched key must NOT unredact (heuristic backstop)
+        self.logger.log_operation("  Testing: heuristic backstop survives unflagging")
+        self.api_post("/config", {"cfgkey": secret_key, "secret": False})
+        cfg = self.api_get("/config")
+        if cfg["config"].get(secret_key) != SENTINEL:
+            result.fail(
+                f"Unflagging pattern-matched {secret_key} unredacted it — "
+                f"the name heuristic must remain a backstop"
+            )
+            return
+        self.logger.log_operation("    ✓ Pattern-matched key stays redacted regardless of flag")
+
+        # 12. /huntinfo honors the flag too (flag-only key, re-flagged)
+        self.api_post("/config", {"cfgkey": flag_key, "secret": True})
+        hi = self.api_get("/huntinfo")
+        if hi["config"].get(flag_key) != SENTINEL:
+            result.fail("/huntinfo ignored the secret flag on an innocuously-named key")
+            return
+        self.logger.log_operation("    ✓ /huntinfo redacts flag-only secrets")
+
+        result.set_success("Config secret redaction test completed successfully")
+
     # ======================================================================
     # Test suite runner
     # ======================================================================
@@ -3031,7 +3230,16 @@ class TestRunner:
             self.test_activity_statistics_endpoint,
             self.test_activity_has_more_and_comment,
             self.test_activity_source_metrics,
+            self.test_config_secret_redaction,
         ]
+        # zip() silently truncates on length mismatch — a name/func drift
+        # here once caused the last four tests to never run. Fail loudly.
+        if len(self.TEST_NAMES) != len(test_funcs):
+            raise RuntimeError(
+                f"TEST_NAMES ({len(self.TEST_NAMES)}) and test_funcs "
+                f"({len(test_funcs)}) are out of sync — a test was added to "
+                f"one list but not the other"
+            )
         tests = list(zip(self.TEST_NAMES, test_funcs))
 
         if selected_tests:

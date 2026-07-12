@@ -211,7 +211,7 @@ Cache behavior is observable via botstats counters (in `METRICS_METADATA`, expos
 | `/puzzles/activate_all` | Re-deploy Apps Script add-on |
 | `/rounds`, `/solvers`, `/activity`, `/tags` | Standard CRUD |
 | `/solvers/byname/<username>` | Efficient lookup by name |
-| `/huntinfo` | Combined config + statuses + tags (frontend bootstrap) |
+| `/huntinfo` | Combined config + statuses + tags (frontend bootstrap; config secrets always redacted) |
 | `/migrate` (GET) | List available migrations |
 | `/migrate/<name>` (POST) | Run a migration |
 | `/v1/query` | LLM natural-language query |
@@ -245,6 +245,7 @@ If you believe a rewrite is necessary:
 
 - `MYSQL.*` — DB connection parameters
 - `API.APIURI` — REST API endpoint
+- `API.INTERNAL_TOKEN` — shared token for unredacted `/config` reads (see config secret redaction below). Env var `INTERNAL_TOKEN` overrides it.
 
 ### `config` table (dynamic, refreshed every 30s)
 
@@ -254,6 +255,7 @@ The full reference lives in [`www/config.php`](www/config.php) (search for `$key
 
 - Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf`. Service account credentials should live in the `SERVICE_ACCOUNT_JSON` config-table entry, not on disk.
 - Use environment variables or secrets management for production credentials.
+- **Config secret redaction:** `GET /config` and `GET /huntinfo` redact secret values to `"********"` — see `pblib.redact_config`. Secrecy classification is **flag as authority, heuristic as fallback**: the `config.secret` column (operator-editable via the 🔒 toggle in `config.php`, or `POST /config` with a boolean `secret` field) is the authoritative signal, OR'd with the name-pattern heuristic (`pblib.is_secret_config_key`: `API_KEY`/`SECRET`/`PASSWORD`/`TOKEN`/`WEBHOOK` substrings + `SERVICE_ACCOUNT_JSON`) so a forgotten flag on a conventionally-named key still fails closed. The `/config` response's `secret_keys` field exposes the combined classification so client display logic never drifts from the server. Value-only `POST /config` writes preserve the existing flag. Backfilled by [`migrations/add_config_secret_flag.py`](migrations/add_config_secret_flag.py); pre-migration databases get heuristic-only redaction (the API logs a warning rather than failing). Trusted server-side consumers (`config.php` admin page, `account/index.php` signup, `pbmail_inbox.py`) get unredacted `/config` by sending `X-PB-Internal-Token` matching `API.INTERNAL_TOKEN` (fail-closed if unconfigured; `hmac.compare_digest`; unredacted reads are logged with `X-Remote-User`). The token authenticates the server-side *tier* — user-level authz (puzztech) stays in the PHP layer, which checks privs before attaching it. Secrets Manager / SSM provisions the token at deploy time only; nothing fetches from AWS at runtime.
 - Apache should restrict access to the parent directory (only `www/` should be web-accessible).
 - The DB user should only have access to the `puzzleboss` database.
 - `REMOTE_USER` authentication is required for production. Disable `ALLOW_USERNAME_OVERRIDE` in production.

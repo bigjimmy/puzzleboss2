@@ -15,7 +15,9 @@ if (!isset($_GET['apicall']) || empty($_GET['apicall'])) {
 $apicall = $_GET['apicall'];
 
 // Operations that require puzztech privilege
-$puzztech_required = ['deleteuser', 'googleusers', 'privs', 'newusers', 'activitysearch'];
+// 'config' is gated for reads too: values are redacted API-side, but config
+// enumeration is an admin concern — no solver-facing code reads it via proxy.
+$puzztech_required = ['deleteuser', 'googleusers', 'privs', 'newusers', 'activitysearch', 'config'];
 $puzztech_required_post = ['rbac', 'config'];
 
 $needs_puzztech = in_array($apicall, $puzztech_required)

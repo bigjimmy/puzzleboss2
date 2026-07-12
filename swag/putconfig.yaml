@@ -1,5 +1,12 @@
 summary: Update configuration
-description: Set a configuration key-value pair in the database
+description: >
+  Set a configuration key's value and/or its secret flag. cfgval and secret
+  are each optional but at least one is required. Omitting secret preserves
+  the key's existing flag; a secret-only request updates the flag of an
+  existing key without touching its value (and fails if the key doesn't
+  exist). Flagged keys' values are redacted in GET /config and GET /huntinfo
+  responses (see getconfig). Keys whose names match the secret-name heuristic
+  are redacted regardless of the flag.
 tags:
   - Config
 consumes:
@@ -12,14 +19,16 @@ parameters:
       type: object
       required:
         - cfgkey
-        - cfgval
       properties:
         cfgkey:
           type: string
           description: Configuration key to set
         cfgval:
           type: string
-          description: Value to set for the configuration key
+          description: Value to set for the configuration key (optional if secret is provided)
+        secret:
+          type: boolean
+          description: Mark (true) or unmark (false) the key as secret; omit to preserve the current flag
 responses:
   200:
     description: Configuration updated successfully

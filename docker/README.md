@@ -93,7 +93,7 @@ That's the whole golden path. From here, see [docs/OPERATIONS.md](../docs/OPERAT
 
 ## Configuration
 
-**Default behavior:** the Docker image ships with a baked-in `puzzleboss.yaml` tuned for the compose network (MySQL host `mysql`, test credentials, SSL on, Google + Discord disabled). No config required to start.
+**Default behavior:** the Docker image ships with a baked-in `puzzleboss.yaml` tuned for the compose network (MySQL host `mysql`, test credentials, SSL on, Google + Discord disabled, a dev `API.INTERNAL_TOKEN` so the admin config page and signup page can read config secrets, which the API otherwise redacts). No config required to start.
 
 **To override:** create `puzzleboss.yaml` in the project root from `puzzleboss-SAMPLE.yaml`, then uncomment the volume mount in `docker-compose.yml`:
 

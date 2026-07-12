@@ -71,6 +71,12 @@ pytest --cov=bigjimmybot --cov-report=html
   - `TestRateLimiterConfig`: QPM configuration
   - `TestRateLimiterThreadSafety`: Concurrent access
 
+- **tests/test_config_redaction.py**: Config secret redaction and internal-token tests for pblib.py
+  - `TestIsSecretConfigKey`: which key names the heuristic counts as secret (patterns + explicit list; `RECAPTCHA_SITE_KEY` deliberately not)
+  - `TestFlagAuthority`: the config.secret flag is the authority, name heuristic the fallback — flag-only, heuristic-only, and neither; unflagging a pattern-matched key never unredacts; `secret_keys` classification
+  - `TestRedactConfig`: sentinel masking, response-shape preservation, empty-value passthrough
+  - `TestInternalToken`: fail-closed when unconfigured, env-over-yaml precedence, constant-time compare
+
 - **tests/test_pbcachelib.py**: Redis cache library tests (MagicMock client, no Redis needed)
   - Fail-safe contract (cache disabled / Redis raising → safe no-op/None)
   - lastact hash semantics, single-HGETALL guard, corrupt-entry resilience

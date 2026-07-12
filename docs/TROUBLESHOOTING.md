@@ -190,6 +190,10 @@ The activity feed shows entries from the `activity` table. Check:
 - For admin pages: the user needs a row in `privs` (`puzzleboss` or `puzztech`). See [OPERATIONS.md](OPERATIONS.md#add-an-admin).
 - `REMOTE_USER` not being set by Apache — check the OIDC config.
 
+### Config admin page shows `********` for secret values / signup gate rejects the right password
+
+The API redacts config secrets unless the caller presents the internal token, and it fails closed when the token is missing. Set `API.INTERNAL_TOKEN` in `puzzleboss.yaml` (generate with `openssl rand -hex 32`) — or the `INTERNAL_TOKEN` env var — and restart the API and Apache. The same token must be visible to both the Flask API and the PHP pages (they read the same yaml file, so one entry normally covers both).
+
 ### Random workers throwing tracebacks about integer IDs
 
 If you see `TypeError` involving an ID, or comparison silently failing between `"101"` and `101`, run the `normalize_solver_ids` migration: `POST /migrate/normalize_solver_ids`. **\[Dev\]** `curl -X POST http://localhost:5000/migrate/normalize_solver_ids`. **\[Prod\]** call the same endpoint at your internal API URL.

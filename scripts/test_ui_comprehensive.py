@@ -27,6 +27,8 @@ import argparse
 from test_helpers import (
     BASE_URL,
     API_URL,
+    get_full_config,
+    get_internal_token,
     REFRESH_TIMEOUT,
     DIALOG_TIMEOUT,
     PAGE_LOAD_TIMEOUT,
@@ -1362,6 +1364,108 @@ def test_config_page():
 
 
 # ──────────────────────────────────────────────────────────
+# Test 30: Config Secret Display and Redaction Chain
+# ──────────────────────────────────────────────────────────
+
+def test_config_secret_display():
+    """Verify the config-secret trust chain end-to-end:
+
+    - admin config.php shows REAL secret values (via the internal token)
+    - the huntinfo payload shipped to every browser is redacted
+    - apicall.php?apicall=config is puzztech-gated and, even for admins,
+      returns redacted values (the proxy never attaches the token on GET)
+    """
+    SENTINEL = "********"
+    token = get_internal_token()
+    assert token, "INTERNAL_TOKEN missing (env or puzzleboss.yaml) — cannot run secret display test"
+
+    # Plant a secret-pattern key (heuristic-classified) and an innocuously
+    # named key protected only by the secret flag
+    secret_key = "TEST_UI_SECRET_TOKEN"
+    secret_val = f"ui-secret-{int(time.time()) % 100000}"
+    flag_key = "TEST_UI_FLAGGED_PLAIN"
+    flag_val = f"ui-flagged-{int(time.time()) % 100000}"
+    print(f"  Planting {secret_key} (heuristic) and {flag_key} (flag-only) via API...")
+    requests.post(f"{API_URL}/config", json={"cfgkey": secret_key, "cfgval": secret_val}).raise_for_status()
+    requests.post(f"{API_URL}/config", json={"cfgkey": flag_key, "cfgval": flag_val, "secret": True}).raise_for_status()
+
+    # 1. Admin page must display the REAL values (readapi_internal chain),
+    #    with masking and the secret toggle driven by the server's secret_keys
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        print("  Loading config.php as puzztech admin...")
+        page.goto(f"{BASE_URL}/config.php?assumedid=testuser", wait_until="networkidle")
+        page.click("#warn-modal button:has-text('I understand')")
+        page.wait_for_selector("#config-content", state="visible", timeout=3000)
+
+        for key, val, kind in ((secret_key, secret_val, "heuristic"), (flag_key, flag_val, "flag-only")):
+            field = page.locator(f'.config-input[data-key="{key}"]')
+            assert field.count() > 0, f"{key} not rendered on config page"
+            displayed = field.input_value()
+            assert displayed == val, (
+                f"Admin page shows {displayed!r} for {key} ({kind}), expected the real "
+                f"value {val!r} — readapi_internal token chain is broken"
+            )
+            # Both are secret (one by name, one by flag) → masked password input
+            input_type = field.get_attribute("type")
+            assert input_type == "password", (
+                f"{key} ({kind}) should render click-to-reveal (type=password), got {input_type!r}"
+            )
+        print("    ✓ Admin page displays real values, masked per server classification")
+
+        # Secret toggle state: heuristic key locked (disabled), flagged key editable
+        heuristic_toggle = page.locator(f'.secret-flag-input[data-key="{secret_key}"]')
+        assert heuristic_toggle.is_checked(), f"{secret_key} toggle should be checked"
+        assert heuristic_toggle.is_disabled(), (
+            f"{secret_key} toggle should be locked — name pattern enforces redaction"
+        )
+        flag_toggle = page.locator(f'.secret-flag-input[data-key="{flag_key}"]')
+        assert flag_toggle.is_checked(), f"{flag_key} toggle should be checked"
+        assert flag_toggle.is_enabled(), f"{flag_key} toggle should be operator-editable"
+        print("    ✓ Secret toggles: pattern-enforced locked, flag-only editable")
+        browser.close()
+
+    # 1b. Flag-only key must be redacted for unauthenticated API readers
+    plain = requests.get(f"{API_URL}/config").json()["config"]
+    assert plain.get(flag_key) == SENTINEL, (
+        f"Flag-only key {flag_key} leaked through unauthenticated /config: {plain.get(flag_key)!r}"
+    )
+    print("    ✓ Flag-only key redacted on the public API surface")
+
+    # 2. huntinfo (what every solver's browser receives) must be redacted
+    print("  Checking huntinfo payload is redacted...")
+    hi = requests.get(f"{BASE_URL}/apicall.php?apicall=huntinfo&assumedid=testsolver1").json()
+    hi_val = hi.get("config", {}).get(secret_key)
+    assert hi_val == SENTINEL, f"huntinfo leaked secret to browser: {hi_val!r}"
+    print("    ✓ huntinfo config is redacted for solvers")
+
+    # 3. apicall config proxy: 403 for non-puzztech
+    print("  Checking apicall config gate for non-admin...")
+    r = requests.get(f"{BASE_URL}/apicall.php?apicall=config&assumedid=testsolver1")
+    assert r.status_code == 403, (
+        f"Non-puzztech GET apicall=config should 403, got {r.status_code}"
+    )
+    print("    ✓ Non-admin proxy config read denied (403)")
+
+    # 4. apicall config proxy for admins: allowed but STILL redacted
+    #    (the proxy never attaches the internal token — only server-rendered
+    #    pages that need secrets do)
+    print("  Checking apicall config is redacted even for admins...")
+    r = requests.get(f"{BASE_URL}/apicall.php?apicall=config&assumedid=testuser")
+    assert r.status_code == 200, f"Admin GET apicall=config failed: {r.status_code}"
+    proxy_val = r.json().get("config", {}).get(secret_key)
+    assert proxy_val == SENTINEL, (
+        f"apicall proxy returned unredacted secret {proxy_val!r} — "
+        f"the browser must never receive real secret values"
+    )
+    print("    ✓ Admin proxy read is redacted (secrets never reach the browser via JSON)")
+
+    print("✓ Config secret display and redaction chain test completed successfully")
+
+
+# ──────────────────────────────────────────────────────────
 # Test 23: Privilege Assignment and Gear Visibility
 # ──────────────────────────────────────────────────────────
 
@@ -1485,8 +1589,9 @@ def test_privilege_and_gear_visibility():
 def test_account_registration_gate():
     """Test the account registration page auth gate using DB-managed credentials."""
 
-    # Read current credentials from the API — use whatever is in the database
-    config = requests.get(f"{API_URL}/config").json().get("config", {})
+    # Read current credentials from the API — use whatever is in the database.
+    # Needs the internal token: ACCT_PASSWORD is redacted on plain GET /config.
+    config = get_full_config()
     acct_username = config.get("ACCT_USERNAME", "")
     acct_password = config.get("ACCT_PASSWORD", "")
 
@@ -1566,8 +1671,9 @@ def test_account_registration_gate():
 def test_account_create_delete():
     """Test creating an account via registration UI and deleting it via accounts.php."""
 
-    # Read gate credentials from config
-    config = requests.get(f"{API_URL}/config").json().get("config", {})
+    # Read gate credentials from config (internal token — ACCT_PASSWORD is
+    # redacted on plain GET /config)
+    config = get_full_config()
     acct_username = config.get("ACCT_USERNAME", "")
     acct_password = config.get("ACCT_PASSWORD", "")
 
@@ -2584,6 +2690,7 @@ def main():
         ('27', 'dashhint', test_dashboard_hint_dialog, 'Dashboard Hint Dialog'),
         ('28', 'activitypage', test_activity_page, 'Activity Log Page'),
         ('29', 'discordsource', test_discord_source_activity, 'Discord Source Activity Filter'),
+        ('30', 'secretdisplay', test_config_secret_display, 'Config Secret Display And Redaction Chain'),
     ]
 
     handle_list_and_destructive(args, all_tests=all_tests)

@@ -69,7 +69,7 @@ For a single-server install (EC2, VM, bare metal):
 2. Install prerequisites: Apache with PHP, Python ≥ 3.8, MySQL 8.x.
 3. `pip install -r requirements.txt`
 4. `mysql -u puzzleboss -p puzzleboss < scripts/puzzleboss.sql`
-5. `cp puzzleboss-SAMPLE.yaml puzzleboss.yaml`, edit MySQL credentials.
+5. `cp puzzleboss-SAMPLE.yaml puzzleboss.yaml`, edit MySQL credentials, and set `API.INTERNAL_TOKEN` to a fresh value (`openssl rand -hex 32`). The token lets trusted server-side pages (config admin, account signup) read config secrets, which the API otherwise redacts.
 6. Run the API: `gunicorn -c gunicorn_config.py wsgi:app`
 7. Configure Apache to serve the PHP frontend and set up `REMOTE_USER` auth (see step 7). Bind Gunicorn to localhost (`127.0.0.1:5000`); PHP talks to it server-side via `APIURI` in `puzzleboss.yaml`. Reverse-proxy `/apidocs`, `/flasgger_static`, and `/apispec_1.json` to Gunicorn if you want Swagger accessible — see [`docker/prod/apache-prod.conf`](../docker/prod/apache-prod.conf) for the reference config.
 

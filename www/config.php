@@ -356,6 +356,18 @@
       align-self: flex-end;
       flex-direction: row;
     }
+    .secret-flag {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+      user-select: none;
+      opacity: 0.85;
+      white-space: nowrap;
+    }
+    .secret-flag input[type="checkbox"] { cursor: pointer; }
+    .secret-flag input[type="checkbox"]:disabled { cursor: not-allowed; }
+    .secret-flag:has(input:disabled) { opacity: 0.5; }
   </style>
   <script type="module" src="./pb-utils.js"></script>
 </head>
@@ -380,10 +392,30 @@ if (!$allowed) {
   exit(2);
 }
 
-// Config is already loaded via puzzlebosslib.php ($config object from /huntinfo)
-// Convert to associative array for iteration
-$configArr = (array) $huntinfo->config;
+// /huntinfo config (loaded by puzzlebosslib.php) is redacted — this admin
+// page needs real secret values for editing, so fetch unredacted config via
+// the internal token. Safe: the puzztech gate above already exited otherwise.
+$fullconfig = readapi_internal('/config');
+$configArr = (array) ($fullconfig->config ?? new stdClass());
 ksort($configArr);
+
+// Server-side secrecy classification: keys the API would redact (the
+// config.secret flag OR the name heuristic). Drives display masking and the
+// per-key secret toggle, so the UI always agrees with the API.
+$serverSecretKeys = (array) ($fullconfig->secret_keys ?? []);
+
+// Mirror of the API's name-pattern heuristic (pblib.is_secret_config_key).
+// Cosmetic only: decides whether the secret toggle is locked (a name-matched
+// key stays redacted regardless of its flag, so unchecking would be a lie).
+// Authoritative classification always comes from $serverSecretKeys above.
+function pb_secret_name_heuristic($key) {
+  $upper = strtoupper($key);
+  if ($upper === 'SERVICE_ACCOUNT_JSON') return true;
+  foreach (['API_KEY', 'SECRET', 'PASSWORD', 'TOKEN', 'WEBHOOK'] as $pat) {
+    if (strpos($upper, $pat) !== false) return true;
+  }
+  return false;
+}
 
 // Category definitions: key => [label, description]
 $categories = [
@@ -567,6 +599,18 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
 
 <div id="status-area"></div>
 
+<!-- Secret redaction explainer -->
+<div class="info-box">
+  <p style="margin: 0;">
+    <strong>🔒 Secrets are redacted in the API.</strong> Values marked secret come back as
+    <code>********</code> from <code>GET /config</code> and <code>/huntinfo</code> — only this page
+    (via a server-side internal token) sees the real values. The 🔒 checkbox on each row controls a
+    key's secret flag; keys whose names contain <code>API_KEY</code>/<code>SECRET</code>/<code>PASSWORD</code>/<code>TOKEN</code>/<code>WEBHOOK</code>
+    (or <code>SERVICE_ACCOUNT_JSON</code>) are always redacted, so their checkbox is locked.
+    Flag any sensitive key whose name doesn't match those patterns.
+  </p>
+</div>
+
 <div class="toolbar">
   <input type="text" class="filter-input" id="filter" placeholder="Filter by key name..." oninput="filterConfig()">
   <button class="refresh-btn" onclick="location.reload()">Refresh</button>
@@ -588,7 +632,13 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       $isBool = in_array($key, $booleanKeys);
       $isNum = in_array($key, $numericKeys);
       $isTextarea = !$isSpecial && (in_array($key, $textareaKeys) || strlen($value) > 120);
-      $isSecret = (stripos($key, 'API_KEY') !== false || stripos($key, 'WEBHOOK') !== false || stripos($key, 'TOKEN') !== false);
+      // Display masking follows the server's classification (secret flag OR
+      // name heuristic, from the /config response's secret_keys). Long values
+      // still render as textareas because $isTextarea wins in the branch
+      // order below.
+      $isSecret = in_array($key, $serverSecretKeys);
+      // Locked toggle = key name alone forces redaction (see mirror fn above)
+      $isNameEnforced = pb_secret_name_heuristic($key);
     ?>
 
     <?php if ($key === 'BIGJIMMY_ABANDONED_STATUS'): ?>
@@ -736,6 +786,13 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
       <div class="config-actions">
         <button class="save-btn" onclick="saveConfig(this, '<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Save</button>
         <button class="revert-btn btn-secondary" onclick="revertConfig('<?= htmlspecialchars($key, ENT_QUOTES) ?>')">Revert</button>
+        <label class="secret-flag" title="<?= $isNameEnforced
+            ? 'Always redacted: the key name matches a secret pattern (API_KEY/SECRET/PASSWORD/TOKEN/WEBHOOK)'
+            : 'Secret: redact this value in API responses' ?>">
+          <input type="checkbox" class="secret-flag-input" data-key="<?= htmlspecialchars($key) ?>"
+                 <?= $isSecret ? 'checked' : '' ?> <?= $isNameEnforced ? 'disabled' : '' ?>
+                 onchange="saveSecretFlag(this, '<?= htmlspecialchars($key, ENT_QUOTES) ?>')">🔒
+        </label>
       </div>
     </div>
     <?php endif; ?>
@@ -755,6 +812,9 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
     <div class="add-config">
       <input type="text" id="new-key" placeholder="CONFIG_KEY" style="width: 260px;">
       <textarea id="new-value" placeholder="value" style="flex: 1; min-width: 200px;"></textarea>
+      <label class="secret-flag" title="Secret: redact this value in API responses (keys matching API_KEY/SECRET/PASSWORD/TOKEN/WEBHOOK are always redacted)">
+        <input type="checkbox" id="new-secret">🔒 secret
+      </label>
       <button class="save-btn" onclick="addNewConfig()">Add</button>
     </div>
   </div>
@@ -872,6 +932,7 @@ function revertConfig(key) {
 async function addNewConfig() {
   const keyInput = document.getElementById('new-key');
   const valInput = document.getElementById('new-value');
+  const secretInput = document.getElementById('new-secret');
   const key = keyInput.value.trim();
   const value = valInput.value;
   const statusArea = document.getElementById('status-area');
@@ -891,7 +952,7 @@ async function addNewConfig() {
     const resp = await fetch(apiProxy + '?apicall=config', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({cfgkey: key, cfgval: value})
+      body: JSON.stringify({cfgkey: key, cfgval: value, secret: secretInput.checked})
     });
     const data = await resp.json();
 
@@ -902,6 +963,7 @@ async function addNewConfig() {
     showStatus(statusArea, 'success', 'Added <strong>' + escapeHtml(key) + '</strong>. Refreshing page…');
     keyInput.value = '';
     valInput.value = '';
+    secretInput.checked = false;
 
     // Reload to show the new key in the correct category
     setTimeout(() => location.reload(), 1000);
@@ -909,6 +971,46 @@ async function addNewConfig() {
     if (window.onFetchFailure?.()) return;
     showStatus(statusArea, 'error', 'Failed to add <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message));
   }
+}
+
+async function saveSecretFlag(checkbox, key) {
+  // Flag-only update: POSTs {cfgkey, secret} with no cfgval, so the stored
+  // value is untouched. The API redacts by flag OR name pattern; name-matched
+  // keys render this checkbox disabled, so this only fires for flag-editable keys.
+  const statusArea = document.getElementById('status-area');
+  const wanted = checkbox.checked;
+  checkbox.disabled = true;
+  try {
+    const resp = await fetch(apiProxy + '?apicall=config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({cfgkey: key, secret: wanted})
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    if (data.status !== 'ok') throw new Error('Unexpected response');
+    window.onFetchSuccess?.();
+
+    // Reflect the new classification in the value field's masking
+    const input = document.querySelector('.config-input[data-key="' + CSS.escape(key) + '"]');
+    if (input && input.tagName === 'INPUT' && (input.type === 'text' || input.type === 'password')) {
+      input.type = (wanted && input.value !== '') ? 'password' : 'text';
+      if (wanted) {
+        input.onfocus = function() { this.type = 'text'; };
+        input.onblur = function() { if (this.value === this.dataset.orig) this.type = 'password'; };
+      } else {
+        input.onfocus = null;
+        input.onblur = null;
+      }
+    }
+    showStatus(statusArea, 'success',
+      '<strong>' + escapeHtml(key) + '</strong> is ' + (wanted ? 'now' : 'no longer') + ' marked secret.', 4000);
+  } catch (err) {
+    checkbox.checked = !wanted;  // revert on failure
+    if (window.onFetchFailure?.()) { checkbox.disabled = false; return; }
+    showStatus(statusArea, 'error', 'Failed to update secret flag for <strong>' + escapeHtml(key) + '</strong>: ' + escapeHtml(err.message));
+  }
+  checkbox.disabled = false;
 }
 
 function filterConfig() {
@@ -1032,8 +1134,9 @@ function revertMetricsEditor() {
 
 // Expose to inline onclick handlers (module scope is not global)
 Object.assign(window, { dismissWarning, toggleCategory, setBool, saveConfig,
-  revertConfig, addNewConfig, filterConfig, addStatusRow, serializeStatusEditor,
-  revertStatusEditor, addMetricRow, serializeMetricsEditor, revertMetricsEditor });
+  revertConfig, addNewConfig, saveSecretFlag, filterConfig, addStatusRow,
+  serializeStatusEditor, revertStatusEditor, addMetricRow,
+  serializeMetricsEditor, revertMetricsEditor });
 
 </script>
 

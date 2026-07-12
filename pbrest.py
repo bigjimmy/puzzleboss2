@@ -20,6 +20,7 @@ from pblib import (
     clear_puzzle_solvers, check_round_completion,
     update_puzzle_field, update_botstat, increment_botstat, sanitize_puzzle_name,
     email_user_verification, solver_exists,
+    redact_config, internal_token_valid, secret_config_keys,
 )
 import pbgooglelib
 from pbgooglelib import (
@@ -420,11 +421,14 @@ def get_hunt_info():
 
     conn, cursor = _read_cursor()
 
-    # Config
+    # Config — always redacted: /huntinfo is fetched by every page load and
+    # shipped to every solver's browser; nothing in the UI consumes secret
+    # values. Privileged consumers use GET /config with the internal token.
+    # Redaction honors the config.secret flag (authority) plus the name
+    # heuristic (fallback).
     try:
-        cursor.execute("SELECT * FROM config")
-        config_rows = cursor.fetchall()
-        result["config"] = {row["key"]: row["val"] for row in config_rows}
+        config_map, flagged = _fetch_config_with_flags(cursor)
+        result["config"] = redact_config(config_map, flagged)
     except Exception as e:
         debug_log(2, f"Could not fetch config: {e}")
         result["config"] = {}
@@ -1014,19 +1018,59 @@ def update_solver_part(id, part):
     return {"status": "ok", "solver": {"id": int(id), part: updated_value}}
 
 
+def _fetch_config_with_flags(cursor):
+    """Fetch the config table as (config_map, flagged_key_set).
+
+    flagged_key_set holds keys whose `secret` column is 1 — the authoritative
+    secrecy signal (the name heuristic in pblib backstops it). Falls back to
+    an empty flag set on pre-migration databases missing the column, so the
+    API stays up to serve POST /migrate/add_config_secret_flag.
+    """
+    try:
+        cursor.execute("SELECT `key`, `val`, `secret` FROM config")
+        rows = cursor.fetchall()
+        return (
+            {row["key"]: row["val"] for row in rows},
+            {row["key"] for row in rows if row.get("secret")},
+        )
+    except MySQLdb.OperationalError as e:
+        if e.args and e.args[0] == 1054:  # Unknown column 'secret'
+            debug_log(
+                2,
+                "config.secret column missing — run migration "
+                "add_config_secret_flag (heuristic-only redaction until then)",
+            )
+            cursor.execute("SELECT `key`, `val` FROM config")
+            rows = cursor.fetchall()
+            return {row["key"]: row["val"] for row in rows}, set()
+        raise
+
+
 @app.route("/config", endpoint="getconfig", methods=["GET"])
 # @swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
 def get_config():
     debug_log(5, "start")
     try:
         conn, cursor = _read_cursor()
-        cursor.execute("SELECT * FROM config")
-        config = {row["key"]: row["val"] for row in cursor.fetchall()}
+        config, flagged = _fetch_config_with_flags(cursor)
     except TypeError:
         raise Exception("Exception fetching config info from database")
 
+    # Shared classification (flag OR heuristic), exposed so clients (the
+    # config.php admin page) mask exactly what the server would redact.
+    secret_keys = secret_config_keys(config, flagged)
+
+    # Secrets are redacted unless the caller presents the internal token
+    # (trusted server-side tier: config.php admin page, account signup,
+    # pbmail_inbox). See pblib redact_config / internal_token_valid.
+    if internal_token_valid(request.headers.get("X-PB-Internal-Token")):
+        remote_user = request.headers.get("X-Remote-User", "unknown")
+        debug_log(3, f"unredacted config read via internal token (user: {remote_user})")
+    else:
+        config = redact_config(config, flagged)
+
     debug_log(5, "fetched all configuration values from database")
-    return {"status": "ok", "config": config}
+    return {"status": "ok", "config": config, "secret_keys": secret_keys}
 
 
 # POST/WRITE Operations
@@ -1035,26 +1079,61 @@ def get_config():
 @app.route("/config", endpoint="putconfig", methods=["POST"])
 # @swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
 def put_config():
+    """Upsert a config value and/or its secret flag.
+
+    Body: {"cfgkey": ..., "cfgval": ..., "secret": bool}. cfgval and secret
+    are each optional but at least one is required. Omitting secret preserves
+    the existing flag (so legacy value-only writers never unflag a secret);
+    secret-only requests update the flag of an existing key without touching
+    its value.
+    """
     debug_log(4, "start")
     try:
         data = request.get_json()
         mykey = data["cfgkey"]
-        myval = data["cfgval"]
-        debug_log(
-            3,
-            f"Config change attempt.  struct: {data} key {mykey} val {myval}",
-        )
+        myval = data.get("cfgval")
+        mysecret = data.get("secret")
+        if myval is None and mysecret is None:
+            raise Exception("must supply cfgval and/or secret")
+        if mysecret is not None and not isinstance(mysecret, bool):
+            raise Exception("secret field must be a JSON boolean")
+        # Redact secret values from this log line — flagged writes are
+        # exactly the ones whose values shouldn't land in logs.
+        logval = "<redacted>" if mysecret else myval
+        debug_log(3, f"Config change attempt. key {mykey} val {logval} secret {mysecret}")
     except Exception as e:
         raise Exception(f"Exception Interpreting input data for config change: {e}")
     conn, cursor = _cursor()
-    cursor.execute(
-        "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `key`=%s, `val`=%s",
-        (mykey, myval, mykey, myval),
-    )
+    if myval is None:
+        # Flag-only update: never creates a key (there'd be no value)
+        cursor.execute(
+            "UPDATE config SET `secret`=%s WHERE `key`=%s",
+            (1 if mysecret else 0, mykey),
+        )
+        if cursor.rowcount == 0 and not _config_key_exists(cursor, mykey):
+            raise Exception(f"Config key {mykey} not found for secret-flag update")
+    elif mysecret is None:
+        # Value-only update: existing secret flag is preserved
+        cursor.execute(
+            "INSERT INTO config (`key`, `val`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `val`=%s",
+            (mykey, myval, myval),
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO config (`key`, `val`, `secret`) VALUES (%s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE `val`=%s, `secret`=%s",
+            (mykey, myval, 1 if mysecret else 0, myval, 1 if mysecret else 0),
+        )
     conn.commit()
 
     debug_log(2, f"Config value {mykey} changed successfully")
     return {"status": "ok"}
+
+
+def _config_key_exists(cursor, key):
+    """True if a config key exists (UPDATE rowcount is 0 for no-op updates too)."""
+    cursor.execute("SELECT 1 FROM config WHERE `key`=%s", (key,))
+    return cursor.fetchone() is not None
 
 
 @app.route("/botstats", endpoint="getbotstats", methods=["GET"])

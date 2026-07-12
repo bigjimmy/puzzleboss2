@@ -1,5 +1,8 @@
 Get static hunt information including config, statuses, and tags.
 This endpoint consolidates multiple lookups into a single call for efficiency.
+Config secret values are always redacted to "********" (this response is
+shipped to every solver's browser); privileged consumers needing real
+secret values use GET /config with the internal token.
 ---
 tags:
   - Hunt Info
