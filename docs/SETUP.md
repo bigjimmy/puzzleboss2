@@ -55,7 +55,7 @@ Anything in *External* can be left off. Without Google you lose automatic puzzle
 
 | Option | When to choose | Pointer |
 |---|---|---|
-| AWS ECS (Fargate) | Reasonable scale, infra-as-code, multi-component, what this team runs | [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra) |
+| AWS ECS (Fargate) | Reasonable scale, infra-as-code, multi-component, what this team runs | [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra) |
 | Single VM / EC2 | Small team, low overhead, OK with manual ops | [Standalone deployment](#standalone-deployment) below |
 | Docker on a laptop | Local development, or running a tiny private hunt | [docker/README.md](../docker/README.md) |
 

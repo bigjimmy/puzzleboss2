@@ -2,7 +2,7 @@
 
 This is the standard local-development environment for Puzzleboss. It runs the full stack (Apache + PHP frontend, Gunicorn + Flask API, MySQL with SSL) in two containers, with code mounted from the host for live reload.
 
-For production deployment, see [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
+For production deployment, see [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra).
 
 ## Prerequisites
 

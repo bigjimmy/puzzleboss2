@@ -27,7 +27,7 @@ Pick the doc that matches what you're trying to do:
 | Working with Docker locally | [docker/README.md](docker/README.md) |
 | Working on the Apps Script add-on | [docs/apps-script-deployment.md](docs/apps-script-deployment.md) |
 
-Companion repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra) — Terraform, Grafana dashboards, production operations runbook.
+Companion repo: [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra) — Terraform, Grafana dashboards, production operations runbook.
 
 ## License & contributions
 

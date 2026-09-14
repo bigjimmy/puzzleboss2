@@ -7,7 +7,7 @@ If you're standing it up for the first time, see [SETUP.md](SETUP.md) first. If 
 ## What you need to know first
 
 - **Configuration lives in two places.** `puzzleboss.yaml` on disk holds bootstrap info (MySQL connection, API URL, the internal API token). The `config` table in MySQL holds everything else — team name, integration toggles, credentials, feature settings. The dynamic config refreshes every 30 seconds, so changes via the admin UI take effect within a minute without a restart. Config secrets are redacted in API responses; trusted server-side pages present the internal token to read them (see [the config table tour](#the-config-table-tour)).
-- **The infra is in a separate repo.** Terraform, Grafana dashboards, ECS task definitions, deploy scripts, and the production-operations runbook live in [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra). This repo only contains application code.
+- **The infra is in a separate repo.** Terraform, Grafana dashboards, ECS task definitions, deploy scripts, and the production-operations runbook live in [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra). This repo only contains application code.
 - **Most issues during a hunt are integration issues, not application bugs.** Google quota, Discord rate limits, sheets-add-on failures. Watch [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Request flow
@@ -89,7 +89,7 @@ Below are the keys you'll actually touch, grouped:
 
 `scripts/reset-hunt.py` uses `mysqldump` against the production DB and reads credentials from `puzzleboss.yaml`. It must run somewhere with both: a route to the database, and that yaml file present. Developer laptops don't have network access to a production RDS; ephemeral app containers don't have a sensible home for backups.
 
-**\[Prod, this team\]** The infra side provisions the utility server with both: it clones this repo to `/canadia/puzzleboss2/` and fetches `puzzleboss.yaml` from Secrets Manager on every boot. See [puzzleboss2-infra OPERATIONS.md → Reset Hunt for New Event](https://github.com/bigjimmy/puzzleboss2-infra/blob/main/OPERATIONS.md) for the exact invocation, IAM policy, and backup location — that's the canonical runbook.
+**\[Prod, this team\]** The infra side provisions the utility server with both: it clones this repo to `/canadia/puzzleboss2/` and fetches `puzzleboss.yaml` from Secrets Manager on every boot. See [puzzleboss2-infra OPERATIONS.md → Reset Hunt for New Event](https://github.com/benoc617/puzzleboss2-infra/blob/main/OPERATIONS.md) for the exact invocation, IAM policy, and backup location — that's the canonical runbook.
 
 **\[Other teams\]** Run on whatever long-lived jump/admin host you maintain alongside production, with a `puzzleboss.yaml` containing the production DB credentials placed next to a checkout of this repo.
 

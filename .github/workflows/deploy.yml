@@ -5,7 +5,7 @@ name: Deploy
 # Trigger: GitHub UI → Actions → Deploy → Run workflow
 # or: gh workflow run deploy.yml
 #
-# NOTE: This workflow is specific to the bigjimmy/puzzleboss2-infra AWS/ECS
+# NOTE: This workflow is specific to the benoc617/puzzleboss2-infra AWS/ECS
 # deployment. If you're deploying puzzleboss2 on different infrastructure,
 # replace this file with whatever your deploy process looks like.
 
@@ -39,7 +39,7 @@ jobs:
       - name: Checkout infra repo
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
-          repository: bigjimmy/puzzleboss2-infra
+          repository: benoc617/puzzleboss2-infra
           path: puzzleboss2-infra
           token: ${{ steps.get-pat.outputs.infra_pat }}
 

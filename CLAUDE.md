@@ -8,7 +8,7 @@ Developer / agent guide for working on Puzzleboss 2000. Architecture, convention
 - [docker/README.md](docker/README.md) — local Docker stack
 - [docs/apps-script-deployment.md](docs/apps-script-deployment.md) — Apps Script add-on
 
-Infrastructure (Terraform, ECS, Grafana dashboards, production runbook) is in a separate repo: [puzzleboss2-infra](https://github.com/bigjimmy/puzzleboss2-infra).
+Infrastructure (Terraform, ECS, Grafana dashboards, production runbook) is in a separate repo: [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra).
 
 ## Overview
 
