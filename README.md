@@ -31,4 +31,4 @@ Companion repo: [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infr
 
 ## License & contributions
 
-Contributions welcome via PR. No formal license declared — ask the owner if you intend to use this outside a puzzle-hunt context.
+Contributions welcome via PR. Licensed under the [MIT License](LICENSE).

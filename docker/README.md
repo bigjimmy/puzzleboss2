@@ -136,7 +136,7 @@ All of these are configured through the **Configuration Management** page at <ht
 
 ### Discord (puzzcord)
 
-In the **Configuration Management** page: set `SKIP_PUZZCORD=false` and fill in `PUZZCORD_HOST` / `PUZZCORD_PORT`. Requires a separately-running puzzcord daemon — see the puzzcord repo.
+In the **Configuration Management** page: set `SKIP_PUZZCORD=false` and fill in `PUZZCORD_HOST` / `PUZZCORD_PORT`. Requires a separately-running puzzcord daemon — see [github.com/dannybd/puzzcord](https://github.com/dannybd/puzzcord).
 
 ### LLM queries (Gemini)
 

@@ -154,7 +154,7 @@ By default, Puzzleboss creates puzzle sheets in a single folder named `HUNT_FOLD
 
 Skip this section if `SKIP_PUZZCORD=true`.
 
-Discord integration runs through a separate daemon called **puzzcord** (not in this repo). Puzzleboss connects to it via a TCP socket.
+Discord integration runs through a separate daemon called **puzzcord** ([github.com/dannybd/puzzcord](https://github.com/dannybd/puzzcord) — not in this repo). Puzzleboss connects to it via a TCP socket.
 
 1. Stand up puzzcord according to its own docs.
 2. In the **Configuration Management** page, set `SKIP_PUZZCORD=false`, `PUZZCORD_HOST` to the daemon's hostname, and `PUZZCORD_PORT` (default `3141`).
