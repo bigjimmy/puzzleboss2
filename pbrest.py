@@ -35,8 +35,9 @@ from pbdiscordlib import (
     chat_announce_move,
 )
 from secrets import token_hex
+from functools import wraps
 from flasgger.utils import swag_from
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, BadRequest
 
 # Prometheus multiprocess setup - must be done BEFORE importing prometheus
 # This allows metrics to be aggregated across Gunicorn workers
@@ -127,6 +128,66 @@ def invalidate_cache_with_stats():
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────
+
+# SQL identifier allowlists: these route parameters are interpolated into
+# queries as column names, so each must track its schema (scripts/puzzleboss.sql).
+
+# Columns of the puzzle_view view (GET /puzzles/<id>/<part>).
+PUZZLE_VIEW_COLUMNS = frozenset(
+    {
+        "id", "name", "status", "answer", "roundname", "round_id", "comments",
+        "drive_uri", "chat_channel_name", "chat_channel_id",
+        "chat_channel_link", "drive_id", "puzzle_uri", "ismeta", "solvers",
+        "cursolvers", "xyzloc", "sheetcount", "sheetenabled", "tags",
+    }
+)
+
+# Columns of the round table (GET /rounds/<id>/<part>).
+ROUND_COLUMNS = frozenset(
+    {"id", "name", "round_uri", "drive_uri", "drive_id", "status", "comments"}
+)
+
+# Round columns updatable via POST /rounds/<id>[/<part>] (id excluded).
+ROUND_UPDATABLE_COLUMNS = ROUND_COLUMNS - {"id"}
+
+# Solver columns updatable via POST /solvers/<id>[/<part>] (id excluded;
+# "puzz" is handled separately before the allowlist check).
+SOLVER_UPDATABLE_COLUMNS = frozenset({"name", "fullname", "chat_uid", "chat_name"})
+
+# Privilege columns of the privs table (POST /rbac/<priv>/<uid>).
+PRIV_COLUMNS = frozenset({"puzztech", "puzzleboss"})
+
+
+def _valid_puzzle_uri(uri):
+    """Non-empty puzzle URIs must be http(s) — blocks javascript: and
+    friends at write time."""
+    return not uri or str(uri).lower().startswith(("http://", "https://"))
+
+
+def admin_token_gated(f):
+    """Internal-token gate for admin endpoints (same X-PB-Internal-Token
+    mechanism GET /config uses; fail-closed constant-time check in pblib).
+
+    Enforcement is controlled by the ADMIN_TOKEN_ENFORCE config key. Until
+    it's "true" the gate only warns (SEV2, with endpoint/user/address) and
+    lets the request through — so callers missing the token are discovered
+    in logs before enforcement locks them out.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not internal_token_valid(request.headers.get("X-PB-Internal-Token")):
+            remote_user = request.headers.get("X-Remote-User") or "none"
+            detail = (
+                f"{request.method} {request.path} without valid internal token "
+                f"(X-Remote-User: {remote_user}, remote_addr: {request.remote_addr})"
+            )
+            if str(configstruct.get("ADMIN_TOKEN_ENFORCE", "false")).lower() == "true":
+                debug_log(2, f"admin endpoint REJECTED: {detail}")
+                return {"error": "internal token required"}, 403
+            debug_log(2, f"admin endpoint allowed without token (ADMIN_TOKEN_ENFORCE off): {detail}")
+        return f(*args, **kwargs)
+    return wrapper
+
 
 def _cursor():
     """Get a DB connection and cursor."""
@@ -658,6 +719,8 @@ def get_puzzle_part(id, part):
             rv = pblib.serialize_activity(get_last_activity_for_puzzle(id))
     elif part == "lastsheetact":
         rv = get_last_sheet_activity_for_puzzle(id)
+    elif part not in PUZZLE_VIEW_COLUMNS:
+        return {"error": f"Invalid puzzle part: {part}"}, 400
     else:
         try:
             conn, cursor = _read_cursor()
@@ -774,6 +837,8 @@ def get_one_round(id):
 @swag_from("swag/getroundpart.yaml", endpoint="round_part", methods=["GET"])
 def get_round_part(id, part):
     debug_log(4, f"start. id: {id}, part: {part}")
+    if part not in ROUND_COLUMNS:
+        return {"error": f"Invalid round part: {part}"}, 400
     try:
         conn, cursor = _read_cursor()
         # Use round table directly instead of round_view to get status
@@ -945,7 +1010,9 @@ def _update_single_solver_part(id, part, value, source="puzzleboss"):
         debug_log(3, f"solver {id} puzz updated to {value}")
         return value
 
-    # For all other parts, just try to update - MySQL will reject invalid columns
+    # part is interpolated as a SQL identifier — allowlist it.
+    if part not in SOLVER_UPDATABLE_COLUMNS:
+        raise BadRequest(f"Invalid solver part: {part}")
     try:
         conn, cursor = _cursor()
         cursor.execute(f"UPDATE solver SET {part} = %s WHERE id = %s", (value, id))
@@ -1029,10 +1096,8 @@ def _fetch_config_with_flags(cursor):
     try:
         cursor.execute("SELECT `key`, `val`, `secret` FROM config")
         rows = cursor.fetchall()
-        return (
-            {row["key"]: row["val"] for row in rows},
-            {row["key"] for row in rows if row.get("secret")},
-        )
+        config_map = {row["key"]: row["val"] for row in rows}
+        flagged = {row["key"] for row in rows if row.get("secret")}
     except MySQLdb.OperationalError as e:
         if e.args and e.args[0] == 1054:  # Unknown column 'secret'
             debug_log(
@@ -1042,8 +1107,16 @@ def _fetch_config_with_flags(cursor):
             )
             cursor.execute("SELECT `key`, `val` FROM config")
             rows = cursor.fetchall()
-            return {row["key"]: row["val"] for row in rows}, set()
-        raise
+            config_map = {row["key"]: row["val"] for row in rows}
+            flagged = set()
+        else:
+            raise
+
+    # ALLOW_USERNAME_OVERRIDE is deploy-time only: the frontend reads it from
+    # /config and /huntinfo, so serve the puzzleboss.yaml value here — a DB
+    # config-table row for it never takes effect (refresh_config ignores it too).
+    config_map["ALLOW_USERNAME_OVERRIDE"] = pblib.yaml_allow_username_override()
+    return config_map, flagged
 
 
 @app.route("/config", endpoint="getconfig", methods=["GET"])
@@ -1078,6 +1151,7 @@ def get_config():
 
 @app.route("/config", endpoint="putconfig", methods=["POST"])
 # @swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
+@admin_token_gated
 def put_config():
     """Upsert a config value and/or its secret flag.
 
@@ -1575,6 +1649,9 @@ def create_puzzle():
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
 
+    if not _valid_puzzle_uri(puzzle_uri):
+        return {"status": "error", "error": "puzzle_uri must start with http:// or https://"}, 400
+
     # Check for duplicate
     conn, cursor = _cursor()
     cursor.execute("SELECT id FROM puzzle WHERE name = %s LIMIT 1", (name,))
@@ -1648,6 +1725,9 @@ def create_puzzle_stepwise():
 
     if not name or not round_id or not puzzle_uri:
         return {"status": "error", "error": "Missing required fields: name, round_id, puzzle_uri"}, 400
+
+    if not _valid_puzzle_uri(puzzle_uri):
+        return {"status": "error", "error": "puzzle_uri must start with http:// or https://"}, 400
 
     # Check for duplicate
     try:
@@ -1862,8 +1942,12 @@ def create_round():
 
 @app.route("/rbac/<priv>/<uid>", endpoint="post_rbac_priv_uid", methods=["POST"])
 @swag_from("swag/putrbacprivuid.yaml", endpoint="post_rbac_priv_uid", methods=["POST"])
+@admin_token_gated
 def set_priv(priv, uid):
     debug_log(4, f"start. priv: {priv}, uid {uid}")
+    # priv is interpolated as a SQL identifier — allowlist it.
+    if priv not in PRIV_COLUMNS:
+        return {"error": f"Invalid priv: {priv}"}, 400
     try:
         data = request.get_json()
         debug_log(4, f"post data: {data}")
@@ -1901,7 +1985,9 @@ def _update_single_round_part(id, part, value):
     if value == "NULL":
         value = None
 
-    # Just try to update - MySQL will reject invalid columns
+    # part is interpolated as a SQL identifier — allowlist it.
+    if part not in ROUND_UPDATABLE_COLUMNS:
+        raise BadRequest(f"Invalid round part: {part}")
     try:
         conn, cursor = _cursor()
         cursor.execute(f"UPDATE round SET {part} = %s WHERE id = %s", (value, id))
@@ -2025,15 +2111,24 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
                 clear_puzzle_solvers(id, mysql.connection)
                 update_puzzle_part_in_db(id, "xyzloc", "", source)  # Clear location on solve
                 update_puzzle_part_in_db(id, part, value, source)
-                chat_announce_solved(mypuzzle["puzzle"]["name"])
 
                 # Check if this is a meta puzzle and if all metas in the round are solved
                 if mypuzzle["puzzle"]["ismeta"]:
                     check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
+
+                # Announce last: best-effort Discord I/O must not undo or
+                # block the already-committed solve.
+                try:
+                    chat_announce_solved(mypuzzle["puzzle"]["name"])
+                except Exception as e:
+                    debug_log(2, f"Discord solve announcement failed for {mypuzzle['puzzle']['name']}, continuing: {e}")
         elif value in ("Needs eyes", "Critical", "WTF"):
-            # These statuses trigger an attention announcement
+            # These statuses trigger an attention announcement (best-effort)
             update_puzzle_part_in_db(id, part, value, source)
-            chat_announce_attention(mypuzzle["puzzle"]["name"])
+            try:
+                chat_announce_attention(mypuzzle["puzzle"]["name"])
+            except Exception as e:
+                debug_log(2, f"Discord attention announcement failed for {mypuzzle['puzzle']['name']}, continuing: {e}")
         else:
             # All other valid statuses (Being worked, Unnecessary, Under control, Waiting for HQ, Grind, etc.)
             # Activity logging handled by update_puzzle_field() for all non-Solved status changes
@@ -2073,13 +2168,19 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
             )
             clear_puzzle_solvers(id, mysql.connection)
             update_puzzle_part_in_db(id, "xyzloc", "", source)  # Clear location on solve
-            chat_announce_solved(mypuzzle["puzzle"]["name"])
 
             pblib.log_activity(id, "solve", 100, source, mysql.connection)
 
             # Check if this is a meta puzzle and if all metas in the round are solved
             if mypuzzle["puzzle"]["ismeta"]:
                 check_round_completion(mypuzzle["puzzle"]["round_id"], mysql.connection)
+
+            # Announce last: best-effort Discord I/O must not undo or block
+            # the already-committed solve.
+            try:
+                chat_announce_solved(mypuzzle["puzzle"]["name"])
+            except Exception as e:
+                debug_log(2, f"Discord solve announcement failed for {mypuzzle['puzzle']['name']}, continuing: {e}")
 
     elif part == "comments":
         update_puzzle_part_in_db(id, part, value, source)
@@ -2130,6 +2231,8 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
 
     elif part == "puzzle_uri":
         # Update puzzle URI
+        if not _valid_puzzle_uri(value):
+            raise BadRequest("puzzle_uri must start with http:// or https://")
         update_puzzle_part_in_db(id, part, value, source)
 
     elif part == "sheetcount":
@@ -2268,8 +2371,10 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
         pblib.log_activity(id, "change", 100, source, mysql.connection)
 
     else:
-        # For any other part, just try to update it directly
-        # MySQL will reject invalid column names
+        # For any other part, update it directly — but only real puzzle
+        # columns (pblib's allowlist backstops this with a ValueError).
+        if part not in pblib.PUZZLE_UPDATABLE_COLUMNS:
+            raise BadRequest(f"Invalid puzzle part: {part}")
         update_puzzle_part_in_db(id, part, value, source)
 
     debug_log(
@@ -2588,6 +2693,7 @@ def finish_account(code):
 
 @app.route("/deleteuser/<username>", endpoint="get_delete_account", methods=["GET"])
 @swag_from("swag/getdeleteaccount.yaml", endpoint="get_delete_account", methods=["GET"])
+@admin_token_gated
 def delete_account(username):
     debug_log(4, f"start. username {username}")
 
@@ -2605,6 +2711,7 @@ def delete_account(username):
 
 @app.route("/newusers", endpoint="get_new_users", methods=["GET"])
 @swag_from("swag/getnewusers.yaml", endpoint="get_new_users", methods=["GET"])
+@admin_token_gated
 def get_new_users():
     """Return all pending account registrations from the newuser table."""
     debug_log(4, "start")
@@ -2647,6 +2754,7 @@ def get_all_privs():
 
 @app.route("/google/users", endpoint="get_google_users", methods=["GET"])
 @swag_from("swag/getgoogleusers.yaml", endpoint="get_google_users", methods=["GET"])
+@admin_token_gated
 def get_google_users():
     """Return all Google Workspace user information. Gracefully empty if Google API is disabled."""
     debug_log(4, "start")
@@ -2702,6 +2810,7 @@ def get_google_users():
 
 @app.route("/deletepuzzle/<puzzlename>", endpoint="delete_puzzle", methods=["DELETE"])
 @swag_from("swag/deletepuzzle.yaml", endpoint="delete_puzzle", methods=["DELETE"])
+@admin_token_gated
 def delete_puzzle(puzzlename):
     debug_log(4, f"start. delete puzzle named {puzzlename}")
     puzzid = get_puzzle_id_by_name(puzzlename)
@@ -2925,6 +3034,7 @@ def list_migrations():
 
 
 @app.route("/migrate/<name>", endpoint="migrate_run", methods=["POST"])
+@admin_token_gated
 def run_migration(name):
     """Run a named data migration."""
     from migrations import run_migration as _run

@@ -120,11 +120,34 @@ def debug_log(sev, message):
     return None
 
 
+def yaml_allow_username_override():
+    """ALLOW_USERNAME_OVERRIDE as configured in puzzleboss.yaml, normalized to
+    the "true"/"false" strings the PHP frontend compares against.
+
+    This key is deploy-time only: it is honored ONLY from the YAML file,
+    never from the DB config table (a runtime config write must not be able
+    to enable the auth-bypass ?assumedid= mechanism). Absent means "false".
+    """
+    val = (config or {}).get("ALLOW_USERNAME_OVERRIDE")
+    return "true" if str(val).lower() == "true" else "false"
+
+
+# Last DB value warned about for ALLOW_USERNAME_OVERRIDE, so the conflict
+# warning fires once per value instead of on every 30s refresh.
+_warned_username_override_value = None
+
+
 def refresh_config():
     """Reload configuration from both YAML file and database.
     Only updates and logs if there are actual changes.
+
+    Raises on YAML or DB failure — callers decide whether that's fatal.
+    Startup (the module-level load below) exits; periodic refreshes
+    (maybe_refresh_config, bigjimmybot's loop) catch and keep serving
+    with stale config.
     """
     global configstruct, config, _last_config_refresh
+    global _warned_username_override_value
     import time
 
     # Reload YAML config (rarely changes at runtime, so no comparison)
@@ -132,8 +155,8 @@ def refresh_config():
         with open("puzzleboss.yaml") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
     except Exception as e:
-        debug_log(0, f"FATAL EXCEPTION reading YAML configuration: {e}")
-        sys.exit(255)
+        debug_log(1, f"Error reading YAML configuration: {e}")
+        raise
 
     # Reload database config with change detection
     try:
@@ -157,6 +180,24 @@ def refresh_config():
 
         new_config = dict(configdump)
         _last_config_refresh = time.time()  # Update timestamp
+
+        # ALLOW_USERNAME_OVERRIDE honors only the YAML value — override any
+        # DB row before the change-detection comparison so a conflicting row
+        # neither takes effect nor spams the change log every refresh.
+        forced_override = yaml_allow_username_override()
+        db_override = new_config.get("ALLOW_USERNAME_OVERRIDE")
+        if (
+            db_override is not None
+            and str(db_override).lower() != forced_override
+            and db_override != _warned_username_override_value
+        ):
+            debug_log(
+                2,
+                f"Ignoring config-table ALLOW_USERNAME_OVERRIDE={db_override!r}: "
+                f"this key is honored only from puzzleboss.yaml (={forced_override})",
+            )
+            _warned_username_override_value = db_override
+        new_config["ALLOW_USERNAME_OVERRIDE"] = forced_override
 
         # Check if this is initial load (only default LOGLEVEL present)
         is_initial_load = len(configstruct) <= 1 and "LOGLEVEL" in configstruct
@@ -198,12 +239,18 @@ def refresh_config():
                 debug_log(5, "Configuration checked, no changes detected")
 
     except Exception as e:
-        debug_log(0, f"FATAL EXCEPTION reading database configuration: {e}")
-        sys.exit(255)
+        debug_log(1, f"Error reading database configuration: {e}")
+        raise
 
 
-# Initial configuration load
-refresh_config()
+# Initial configuration load. Only the startup load is fatal: a process
+# that never got a config can't serve, but a running process with a stale
+# config can (periodic refresh failures are caught by the callers).
+try:
+    refresh_config()
+except Exception as e:
+    debug_log(0, f"FATAL EXCEPTION during initial configuration load: {e}")
+    sys.exit(255)
 
 
 # --- Config secret redaction and internal-token auth ---------------------
@@ -708,6 +755,19 @@ def solver_exists(identifier, conn):
 # the cache. See REDIS_MIGRATION.md "Invalidation allowlist".
 STRUCTURAL_PUZZLE_FIELDS = {"status", "name", "round_id", "answer", "ismeta"}
 
+# Columns of the puzzle table that update_puzzle_field may interpolate as a
+# SQL identifier. Must track the puzzle table schema (scripts/puzzleboss.sql);
+# `id` is deliberately excluded.
+PUZZLE_UPDATABLE_COLUMNS = frozenset(
+    {
+        "name", "puzzle_uri", "drive_uri", "chat_channel_id",
+        "chat_channel_link", "comments", "status", "answer", "round_id",
+        "drive_id", "xyzloc", "chat_channel_name", "ismeta",
+        "current_solvers", "solver_history", "sheetcount", "sheetenabled",
+        "tags",
+    }
+)
+
 
 def _invalidate_cache(conn):
     """Invalidate the puzzle/round cache after a structural database mutation.
@@ -753,7 +813,10 @@ def update_puzzle_field(puzzle_id, field, value, conn, source="system"):
         else:  # Clear all solvers
             clear_puzzle_solvers(puzzle_id, conn)
     else:
-        # Handle other puzzle updates
+        # Handle other puzzle updates. field is interpolated as a SQL
+        # identifier, so it must be on the schema allowlist.
+        if field not in PUZZLE_UPDATABLE_COLUMNS:
+            raise ValueError(f"Invalid puzzle field: {field}")
         cursor = conn.cursor()
         cursor.execute(f"UPDATE puzzle SET {field} = %s WHERE id = %s", (value, puzzle_id))
         conn.commit()

@@ -36,6 +36,13 @@ API:
     # Can also be supplied via the INTERNAL_TOKEN env var (env wins over file).
     INTERNAL_TOKEN: dev-internal-token-change-me
 
+# Allow the ?assumedid= URL parameter to impersonate any user (dev/testing
+# only). SECURITY: this key is honored ONLY from this file — a config-table
+# row named ALLOW_USERNAME_OVERRIDE is ignored, so a runtime config write
+# can't enable the auth bypass. Absent means "false". Set to "false" (or
+# remove) for production.
+ALLOW_USERNAME_OVERRIDE: "true"
+
 # Google Service Account (optional - for Drive/Sheets/Admin integration)
 # 1. Create a service account in Google Cloud Console
 # 2. Enable Domain-Wide Delegation
