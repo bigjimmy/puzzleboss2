@@ -37,7 +37,8 @@ import pblib
 
 # Module-level constants and state
 EXIT_FLAG = 0
-QUEUE_LOCK = threading.Lock()
+# Queue is thread-safe on its own; no lock may ever be held around a
+# blocking put()/get() (a full queue + a lock the workers need = deadlock).
 WORK_QUEUE = queue.Queue(300)
 THREAD_COUNTER = 0
 THREADS = []
@@ -683,24 +684,24 @@ def _check_puzzle_from_queue(threadname: str, q: queue.Queue) -> int:
     global EXIT_FLAG
 
     while not EXIT_FLAG:
-        QUEUE_LOCK.acquire()
-        if not WORK_QUEUE.empty():
-            puzzle = q.get()
-            QUEUE_LOCK.release()
+        # Blocking get with timeout: no busy-wait on an empty queue, and the
+        # timeout lets the thread notice EXIT_FLAG.
+        try:
+            puzzle = q.get(timeout=1)
+        except queue.Empty:
+            continue
 
-            # Rate limiting is now handled by _rate_limiter.acquire() in pbgooglelib
+        # Rate limiting is now handled by _rate_limiter.acquire() in pbgooglelib
 
-            try:
-                _process_puzzle(puzzle, threadname)
-            except Exception as e:
-                debug_log(
-                    1,
-                    f"[Thread: {threadname}] Error processing puzzle {puzzle.get('name', 'unknown')}: {e}",
-                )
-            finally:
-                WORK_QUEUE.task_done()
-        else:
-            QUEUE_LOCK.release()
+        try:
+            _process_puzzle(puzzle, threadname)
+        except Exception as e:
+            debug_log(
+                1,
+                f"[Thread: {threadname}] Error processing puzzle {puzzle.get('name', 'unknown')}: {e}",
+            )
+        finally:
+            q.task_done()
 
     debug_log(4, f"Exiting puzzthread {threadname}")
     return 0
@@ -848,11 +849,10 @@ def main():
             THREADS.append(thread)
             THREAD_COUNTER += 1
 
-        # Put all puzzles in the queue
-        QUEUE_LOCK.acquire()
+        # Put all puzzles in the queue. No lock: workers are already draining,
+        # so a bounded put() that blocks (>maxsize puzzles) resolves itself.
         for puzzle in puzzles:
             WORK_QUEUE.put(puzzle)
-        QUEUE_LOCK.release()
 
         # Setup complete, start timing processing phase
         setup_elapsed = time.time() - setup_start_time
