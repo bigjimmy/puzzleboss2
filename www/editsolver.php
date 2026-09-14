@@ -4,25 +4,26 @@
 
 require('puzzlebosslib.php');
 
-if (isset($_GET['submit'])) {
-  if (!isset($_GET['id'])) {
+if (isset($_POST['submit'])) {
+  pb_verify_csrf();
+  if (!isset($_POST['id'])) {
     echo 'ERROR: No Authenticated User ID Found in Request';
     echo '</body></html>';
     exit (2);
   }
-  if ($_GET['id'] == "") {
+  if ($_POST['id'] == "") {
     echo 'ERROR: No Authenticated User ID Found in Request';
     echo '</body></html>';
     exit (2);
   }
 
-  $id = $_GET['id'];
-  $puzz = $_GET['puzz'];
+  $id = $_POST['id'];
+  $puzz = $_POST['puzz'];
   if ($puzz == '_none_') $puzz = '';
 
   echo 'Attempting to set puzz for solver.<br>';
-  echo 'solver_id: ' . $id . '<br>';
-  echo 'puzz: ' . $puzz . '<br>';
+  echo 'solver_id: ' . htmlspecialchars($id) . '<br>';
+  echo 'puzz: ' . htmlspecialchars($puzz) . '<br>';
 
   try {
     $responseobj = postapi(
@@ -38,7 +39,9 @@ if (isset($_GET['submit'])) {
   echo 'OK.  Solver reassigned.';
 } else {
   $solvers = readapi('/solvers')->solvers;
-  $id = getauthenticateduser();
+  $solver = getauthenticatedsolver();
+  $id = $solver->id;
+  $username = $solver->name;
 
   if ($id==0) {
     echo '<br>No solver found. Check Solvers Database<br>';
@@ -47,14 +50,15 @@ if (isset($_GET['submit'])) {
 
   }
 
-  echo "changing solver settings for username: " . $username . " user-id: " . $id . "<br>";
+  echo "changing solver settings for username: " . htmlspecialchars($username) . " user-id: " . htmlspecialchars($id) . "<br>";
   echo "What puzzle is this user working on?<br>";
 
   $rounds = readapi('/rounds')->rounds;
-  echo '<form action="editsolver.php" method="get">';
+  echo '<form action="editsolver.php" method="post">';
+  echo pb_csrf_field();
   echo '<table border=4 style="vertical-align:top" ><tr>';
   foreach ($rounds as $round) {
-    echo '<th>' . $round->name . "</th>";
+    echo '<th>' . htmlspecialchars($round->name) . "</th>";
   }
   echo '</tr><tr style="vertical-align:top" >';
   foreach ($rounds as $round) {
@@ -68,7 +72,7 @@ if (isset($_GET['submit'])) {
       if ($puzzleid !="") {
         $puzzlename = $puzzle->name;
         echo '<tr><td><input type="radio" id="' . $puzzleid . '" name="puzz" value="' . $puzzleid . '"></td>';
-        echo '<td>' . $puzzlename . '</td></tr>';
+        echo '<td>' . htmlspecialchars($puzzlename) . '</td></tr>';
       }
     }
     echo '</table>';
@@ -78,7 +82,7 @@ if (isset($_GET['submit'])) {
   echo '</tr></table>';
   echo '<br><input type="radio" id="_none_" name="puzz" value="_none_">';
   echo '<label for="_none_">Not working on any puzzle</label><br>';
-  echo '<input type = "hidden" name="id" value="' . $id . '">';
+  echo '<input type = "hidden" name="id" value="' . htmlspecialchars($id) . '">';
   echo '<input type = "submit" name="submit" />';
   echo '</form>';
 

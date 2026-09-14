@@ -396,6 +396,7 @@ if (!$allowed) {
 // page needs real secret values for editing, so fetch unredacted config via
 // the internal token. Safe: the puzztech gate above already exited otherwise.
 $fullconfig = readapi_internal('/config');
+$huntinfo = gethuntinfo();
 $configArr = (array) ($fullconfig->config ?? new stdClass());
 ksort($configArr);
 
@@ -496,6 +497,7 @@ $keyDescriptions = [
   'DOMAINNAME' => 'Primary domain for the team',
   'LOGLEVEL' => 'Log verbosity: 0=emergency … 5=trace',
   'ALLOW_USERNAME_OVERRIDE' => 'Allow ?assumedid= URL parameter to override authenticated user (dev/testing only)',
+  'ADMIN_TOKEN_ENFORCE' => 'When true, admin API endpoints (config writes, rbac, deleteuser, deletepuzzle, migrate, newusers, google/users) require the internal token; when false/absent they only log a warning for tokenless calls (warn-only rollout mode)',
   'BIGJIMMY_ABANDONED_STATUS' => 'Status to set when a puzzle is abandoned',
   'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES' => 'Minutes of inactivity before marking abandoned',
   'BIGJIMMY_AUTOASSIGN' => 'Auto-assign solvers to puzzles from sheets',
@@ -823,7 +825,7 @@ $grouped = array_filter($grouped, function($items) { return count($items) > 0; }
 </div><!-- end #config-content -->
 
 <script type="module">
-const { API_PROXY: apiProxy, escapeHtml, escapeAttr, showStatus } = window.pbUtils;
+const { API_PROXY: apiProxy, escapeHtml, escapeAttr, showStatus, getCsrfToken } = window.pbUtils;
 
 function dismissWarning() {
   document.getElementById('warn-modal').classList.remove('active');
@@ -868,7 +870,7 @@ async function saveConfig(btn, key) {
   try {
     const resp = await fetch(apiProxy + '?apicall=config', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken()},
       body: JSON.stringify({cfgkey: key, cfgval: value})
     });
     const data = await resp.json();
@@ -951,7 +953,7 @@ async function addNewConfig() {
   try {
     const resp = await fetch(apiProxy + '?apicall=config', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken()},
       body: JSON.stringify({cfgkey: key, cfgval: value, secret: secretInput.checked})
     });
     const data = await resp.json();
@@ -983,7 +985,7 @@ async function saveSecretFlag(checkbox, key) {
   try {
     const resp = await fetch(apiProxy + '?apicall=config', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken()},
       body: JSON.stringify({cfgkey: key, secret: wanted})
     });
     const data = await resp.json();

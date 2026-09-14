@@ -1,5 +1,7 @@
-<?php 
+<?php
 require('puzzlebosslib.php');
+
+$config = getpbconfig();
 
 function get_scrape_data() {
   global $config;
@@ -153,12 +155,12 @@ function print_rounds_table($rounds, $mypuzzle) {
         }
       }
     }
-    $round_name = $round->name;
+    $round_name = htmlspecialchars($round->name);
     // Add document link if drive_uri exists
     if (!empty($round->drive_uri)) {
       $round_name .= sprintf(
         ' <a href="%s" title="Round Documents" target="_blank">%s</a>',
-        $round->drive_uri,
+        htmlspecialchars($round->drive_uri),
         $use_text ? 'D' : '🗒️'
       );
     }
@@ -193,12 +195,12 @@ function print_rounds_table($rounds, $mypuzzle) {
         continue;
       }
       $puzzleid = $puzzle->id;
-      $puzzlename = $puzzle->name;
+      $puzzlename = htmlspecialchars($puzzle->name);
       $classes = array();
       if ($puzzle->ismeta && $puzzle->status != "Critical") {
         $classes[] = 'meta-row';
       }
-      if ($puzzlename == $mypuzzle) {
+      if ($puzzle->name == $mypuzzle) {
         $classes[] = 'currpuzz-row';
       }
       if ($puzzle->status == "New" && !$puzzle->ismeta) {
@@ -209,10 +211,10 @@ function print_rounds_table($rounds, $mypuzzle) {
       }
       $classattr = count($classes) > 0 ? ' class="' . implode(' ', $classes) . '"' : '';
       echo '<tr' . $classattr . '>';
-      echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank">';
+      echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . urlencode($username) . '" target="_blank">';
       echo get_status_display($puzzle->status, $use_text);
       echo '</a></td>';
-      echo '<td><a href="' . $puzzle->puzzle_uri . '" target="_blank">'. $puzzlename . '</a>';
+      echo '<td><a href="' . htmlspecialchars($puzzle->puzzle_uri ?? '') . '" target="_blank">'. $puzzlename . '</a>';
       if ($puzzle->ismeta) {
         echo ' <span title="Meta Puzzle">' . ($use_text ? '(M)' : '🎯') . '</span>';
       }
@@ -228,7 +230,7 @@ function print_rounds_table($rounds, $mypuzzle) {
         if ($channel_create_time <= $min_hint_time) {
           echo sprintf(
             '&nbsp;<a href="%s" target="_blank" title="Hints available!">%s</a>',
-            str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? ''),
+            htmlspecialchars(str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? '')),
             $use_text ? 'HINT?' : '🙉',
           );
         } else {
@@ -242,10 +244,10 @@ function print_rounds_table($rounds, $mypuzzle) {
         }
       }
       echo '</td>';
-      echo '<td><a href="' . $puzzle->drive_uri . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
-      echo '<td><a href="' . $puzzle->chat_channel_link  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
-      echo '<td><code><strong>' . $puzzle->answer .'</strong></code></td>';
-      echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . $username . '" target="_blank" title="Edit puzzle in PB">'. ($use_text ? '±' : '⚙️') . '</a></td>';
+      echo '<td><a href="' . htmlspecialchars($puzzle->drive_uri ?? '') . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
+      echo '<td><a href="' . htmlspecialchars($puzzle->chat_channel_link ?? '')  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
+      echo '<td><code><strong>' . htmlspecialchars($puzzle->answer ?? '') .'</strong></code></td>';
+      echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . urlencode($username) . '" target="_blank" title="Edit puzzle in PB">'. ($use_text ? '±' : '⚙️') . '</a></td>';
 
       echo '</tr>';
 
@@ -326,8 +328,8 @@ if (count($comparison) > 0) {
       $slug = strtolower($puzzle->name);
       $prefix = sprintf(
         'Puzzle <a href="%s">%s</a>:',
-        $puzzle->puzzle_uri,
-        $puzzle->name,
+        htmlspecialchars($puzzle->puzzle_uri ?? ''),
+        htmlspecialchars($puzzle->name),
       );
       if (!array_key_exists($slug, $comparison)) {
         $found_puzzle = false;
@@ -352,8 +354,8 @@ if (count($comparison) > 0) {
         $discrepancies[] = sprintf(
           '%s Round mismatch, <tt>%s</tt> (MH) vs. <tt>%s</tt> (PB)',
           $prefix,
-          $official_puzzle['round'] ?? '<null>',
-          $round->name ?? '<null>',
+          htmlspecialchars($official_puzzle['round'] ?? '<null>'),
+          htmlspecialchars($round->name ?? '<null>'),
         );
       }
       if ($official_puzzle['is_meta'] && $round->meta_id == null) {
@@ -380,7 +382,7 @@ if (count($comparison) > 0) {
             $prefix,
             $puzzle->id,
             urlencode($official_puzzle['answer']),
-            $official_puzzle['answer'],
+            htmlspecialchars($official_puzzle['answer']),
           );
         }
       }
@@ -391,15 +393,15 @@ if (count($comparison) > 0) {
   foreach ($comparison as $official_puzzle) {
     $discrepancies[] = sprintf(
       '[MISSING] Puzzle <a href="%s">%s</a> not found in PB! %s',
-      $official_puzzle['url'],
-      $official_puzzle['name'] ?? $official_puzzle['slug'],
+      htmlspecialchars($official_puzzle['url'] ?? ''),
+      htmlspecialchars($official_puzzle['name'] ?? $official_puzzle['slug']),
       $official_puzzle['name'] != null
         ? sprintf(
             '<a href="addpuzzle.php?puzzurl=%s&puzzid=%s&roundname=%s">Add it to round %s</a>.',
             urlencode($official_puzzle['url']),
             urlencode($official_puzzle['name']),
             urlencode($official_puzzle['round']),
-            $official_puzzle['round'],
+            htmlspecialchars($official_puzzle['round']),
           )
         : 'Go to its page and re-use the bookmarklet to add it.',
     );
@@ -416,7 +418,7 @@ if (count($comparison) > 0) {
 }
 ?>
 <?= $wifi_warning ?>
-You are: <?= $username ?><br>
+You are: <?= htmlspecialchars($username) ?><br>
 <a href="status.php">Hunt Status Overview / Puzzle Suggester</a> | <a href="search.php">Search Puzzles by Tag</a><br>
 <?php
 $unsolved_rounds = array();

@@ -96,7 +96,7 @@ $solver = getauthenticatedsolver();
                         </td>
                         <td>
                             <a v-if="getPuzzleUri(hint.puzzle_id)"
-                               :href="getPuzzleUri(hint.puzzle_id)" target="_blank">
+                               :href="safeUrl(getPuzzleUri(hint.puzzle_id))" target="_blank">
                                 {{ hint.puzzle_name || 'Puzzle #' + hint.puzzle_id }}
                             </a>
                             <span v-else>{{ hint.puzzle_name || 'Puzzle #' + hint.puzzle_id }}</span>
@@ -204,7 +204,7 @@ $solver = getauthenticatedsolver();
                         <a :href="'editpuzzle.php?pid=' + puzzle.id" target="_blank" class="gear-icon" data-tooltip="Edit puzzle">⚙️</a>
                     </td>
                     <td :class="{ 'hidden-column': !visibleColumns.round }">{{ getRoundName(puzzle.id) }}</td>
-                    <td><a :href="puzzle.puzzle_uri" target="_blank">{{ puzzle.name }}</a></td>
+                    <td><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
                     <td :data-tooltip="'Status: ' + statusEdits[puzzle.id]" :class="{ 'hidden-column': !visibleColumns.status }">
                         <select v-model="statusEdits[puzzle.id]" @change="updateStatus(puzzle.id)">
                             <option v-for="status in selectableStatuses" :key="status.name || status" :value="status.name || status" :title="status.name || status">
@@ -212,9 +212,9 @@ $solver = getauthenticatedsolver();
                             </option>
                         </select>
                     </td>
-                    <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="puzzle.drive_uri" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
+                    <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="safeUrl(puzzle.drive_uri)" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
                     <td :class="{ 'hidden-column': !visibleColumns.sheetcount }">{{ puzzle.sheetcount || 0 }}</td>
-                    <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="puzzle.chat_channel_link" target="_blank" data-tooltip="Discord">🗣️</a></td>
+                    <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="safeUrl(puzzle.chat_channel_link)" target="_blank" data-tooltip="Discord">🗣️</a></td>
                     <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">
                         <div v-for="solver in formatSolvers(puzzle.cursolvers)" :key="solver">{{ solver }}</div>
                     </td>
@@ -281,7 +281,7 @@ $solver = getauthenticatedsolver();
                         <a :href="'editpuzzle.php?pid=' + puzzle.id" target="_blank" class="gear-icon" data-tooltip="Edit puzzle">⚙️</a>
                     </td>
                     <td :class="{ 'hidden-column': !visibleColumns.round }">{{ getRoundName(puzzle.id) }}</td>
-                    <td><a :href="puzzle.puzzle_uri" target="_blank">{{ puzzle.name }}</a></td>
+                    <td><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
                     <td :data-tooltip="'Status: ' + statusEdits[puzzle.id]" :class="{ 'hidden-column': !visibleColumns.status }">
                         <select v-model="statusEdits[puzzle.id]" @change="updateStatus(puzzle.id)">
                             <option v-for="status in selectableStatuses" :key="status.name || status" :value="status.name || status" :title="status.name || status">
@@ -289,9 +289,9 @@ $solver = getauthenticatedsolver();
                             </option>
                         </select>
                     </td>
-                    <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="puzzle.drive_uri" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
+                    <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="safeUrl(puzzle.drive_uri)" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
                     <td :class="{ 'hidden-column': !visibleColumns.sheetcount }">{{ puzzle.sheetcount || 0 }}</td>
-                    <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="puzzle.chat_channel_link" target="_blank" data-tooltip="Discord">🗣️</a></td>
+                    <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="safeUrl(puzzle.chat_channel_link)" target="_blank" data-tooltip="Discord">🗣️</a></td>
                     <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">
                         <div v-for="solver in formatSolvers(puzzle.cursolvers)" :key="solver">{{ solver }}</div>
                     </td>
@@ -358,7 +358,7 @@ $solver = getauthenticatedsolver();
                         <a :href="'editpuzzle.php?pid=' + puzzle.id" target="_blank" class="gear-icon" data-tooltip="Edit puzzle">⚙️</a>
                     </td>
                     <td :class="{ 'hidden-column': !visibleColumns.round }">{{ getRoundName(puzzle.id) }}</td>
-                    <td><a :href="puzzle.puzzle_uri" target="_blank">{{ puzzle.name }}</a></td>
+                    <td><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
                     <td :data-tooltip="'Status: ' + statusEdits[puzzle.id]" :class="{ 'hidden-column': !visibleColumns.status }">
                         <select v-model="statusEdits[puzzle.id]" @change="updateStatus(puzzle.id)">
                             <option v-for="status in selectableStatuses" :key="status.name || status" :value="status.name || status" :title="status.name || status">
@@ -366,9 +366,9 @@ $solver = getauthenticatedsolver();
                             </option>
                         </select>
                     </td>
-                    <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="puzzle.drive_uri" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
+                    <td :class="{ 'hidden-column': !visibleColumns.doc }"><a :href="safeUrl(puzzle.drive_uri)" target="_blank" data-tooltip="Spreadsheet">📊</a></td>
                     <td :class="{ 'hidden-column': !visibleColumns.sheetcount }">{{ puzzle.sheetcount || 0 }}</td>
-                    <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="puzzle.chat_channel_link" target="_blank" data-tooltip="Discord">🗣️</a></td>
+                    <td :class="{ 'hidden-column': !visibleColumns.chat }"><a :href="safeUrl(puzzle.chat_channel_link)" target="_blank" data-tooltip="Discord">🗣️</a></td>
                     <td class="solver-col" :class="{ 'hidden-column': !visibleColumns.cursolvers }">
                         <div v-for="solver in formatSolvers(puzzle.cursolvers)" :key="solver">{{ solver }}</div>
                     </td>
@@ -413,7 +413,7 @@ $solver = getauthenticatedsolver();
     <script type="module">
         import { createApp, ref, computed, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
         import Consts from './consts.js'
-        import { onFetchSuccess, onFetchFailure } from './pb-utils.js'
+        import { onFetchSuccess, onFetchFailure, getCsrfToken } from './pb-utils.js'
         import HintSubmit from './hint-submit.js'
 
         <?php
@@ -709,6 +709,14 @@ $solver = getauthenticatedsolver();
                     })
                 }
 
+                //
+                // javascript: URI defense: only treat API-supplied URLs as
+                // links when they are http(s); otherwise render inert text.
+                //
+                function safeUrl(url) {
+                    return (typeof url === 'string' && /^https?:\/\//i.test(url)) ? url : null
+                }
+
                 function showHintDetail(hint) {
                     selectedHint.value = hint
                     hintDialog.value?.showModal()
@@ -727,7 +735,8 @@ $solver = getauthenticatedsolver();
                 async function submitHintToHQ(hintId) {
                     try {
                         await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=submit`, {
-                            method: 'POST'
+                            method: 'POST',
+                            headers: { 'X-PB-CSRF': getCsrfToken() }
                         })
                         await fetchData()
                     } catch (e) {
@@ -740,7 +749,8 @@ $solver = getauthenticatedsolver();
                     if (!confirm('Mark this hint as answered? It will be removed from the queue.')) return
                     try {
                         await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=answer`, {
-                            method: 'POST'
+                            method: 'POST',
+                            headers: { 'X-PB-CSRF': getCsrfToken() }
                         })
                         await fetchData()
                     } catch (e) {
@@ -752,7 +762,8 @@ $solver = getauthenticatedsolver();
                 async function demoteHint(hintId) {
                     try {
                         await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}&apiparam2=demote`, {
-                            method: 'POST'
+                            method: 'POST',
+                            headers: { 'X-PB-CSRF': getCsrfToken() }
                         })
                         await fetchData()
                     } catch (e) {
@@ -765,7 +776,8 @@ $solver = getauthenticatedsolver();
                     if (!confirm('Remove this hint from the queue?')) return
                     try {
                         await fetch(`./apicall.php?apicall=hint&apiparam1=${hintId}`, {
-                            method: 'DELETE'
+                            method: 'DELETE',
+                            headers: { 'X-PB-CSRF': getCsrfToken() }
                         })
                         await fetchData()
                     } catch (e) {
@@ -862,7 +874,7 @@ $solver = getauthenticatedsolver();
                     try {
                         await fetch(`./apicall.php?apicall=puzzle&apiparam1=${puzzleId}&apiparam2=comments`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify({ comments: comment })
                         })
 
@@ -893,7 +905,7 @@ $solver = getauthenticatedsolver();
                     try {
                         await fetch(`./apicall.php?apicall=puzzle&apiparam1=${puzzleId}&apiparam2=xyzloc`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify({ xyzloc: location })
                         })
 
@@ -923,7 +935,7 @@ $solver = getauthenticatedsolver();
                     try {
                         await fetch(`./apicall.php?apicall=puzzle&apiparam1=${puzzleId}&apiparam2=status`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify({ status: status })
                         })
 
@@ -1001,6 +1013,7 @@ $solver = getauthenticatedsolver();
                     currentUsername,
                     getPuzzleUri,
                     formatHintTime,
+                    safeUrl,
                     showHintDetail,
                     openHintSubmit,
                     closeHintSubmit,

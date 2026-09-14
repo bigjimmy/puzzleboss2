@@ -14,23 +14,6 @@ if (!isset($_GET['apicall']) || empty($_GET['apicall'])) {
 
 $apicall = $_GET['apicall'];
 
-// Operations that require puzztech privilege
-// 'config' is gated for reads too: values are redacted API-side, but config
-// enumeration is an admin concern — no solver-facing code reads it via proxy.
-$puzztech_required = ['deleteuser', 'googleusers', 'privs', 'newusers', 'activitysearch', 'config'];
-$puzztech_required_post = ['rbac', 'config'];
-
-$needs_puzztech = in_array($apicall, $puzztech_required)
-    || ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($apicall, $puzztech_required_post));
-
-if ($needs_puzztech) {
-    $uid = getauthenticateduser();
-    if (!checkpriv("puzztech", $uid)) {
-        http_response_code(403);
-        die(json_encode(['error' => 'Insufficient privileges']));
-    }
-}
-
 if (!isset($_GET['apiparam1']) || empty($_GET['apiparam1'])) {
   $apiparam1 = '';
 }
@@ -47,37 +30,100 @@ else {
   $apiparam2 = $_GET['apiparam2'];
 }
 
+// Defense-in-depth: apiparam2 only ever becomes a column/field path segment
+// (e.g. /puzzles/<id>/<part>). The API enforces its own allowlist; this is
+// belt-and-suspenders against path tricks through the proxy.
+if ($apiparam2 !== '' && !preg_match('/^[A-Za-z0-9_]{1,64}$/', $apiparam2)) {
+    http_response_code(400);
+    die(json_encode(['error' => 'Invalid apiparam2']));
+}
+
+// Operations that require puzztech privilege
+// 'config' is gated for reads too: values are redacted API-side, but config
+// enumeration is an admin concern — no solver-facing code reads it via proxy.
+$puzztech_required = ['deletepuzzle', 'deleteuser', 'googleusers', 'privs', 'newusers', 'activitysearch', 'config'];
+$puzztech_required_post = ['rbac', 'config'];
+// Hint queue administration (answer/demote/delete) is puzztech-only.
+// Solver-facing hint submission (POST hints, POST hint/<id>/submit) stays open.
+$hint_admin_parts = ['answer', 'demote'];
+
+$needs_puzztech = in_array($apicall, $puzztech_required)
+    || ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($apicall, $puzztech_required_post))
+    || ($_SERVER['REQUEST_METHOD'] === 'POST' && $apicall === 'hint' && in_array($apiparam2, $hint_admin_parts))
+    || ($_SERVER['REQUEST_METHOD'] === 'DELETE' && $apicall === 'hint');
+
+if ($needs_puzztech) {
+    $uid = getauthenticateduser();
+    if (!checkpriv("puzztech", $uid)) {
+        http_response_code(403);
+        die(json_encode(['error' => 'Insufficient privileges']));
+    }
+}
+
+// CSRF double-submit check for every mutating proxy call. Pure reads are
+// exempt; everything else must echo the pb_csrf cookie in the X-PB-CSRF
+// header (set by puzzlebosslib.php, sent by the JS fetch wrappers).
+// 'createpuzzle' is GET for legacy reasons but creates a puzzle, and
+// 'deleteuser' (POST-only, below) deletes an account.
+$is_mutating = in_array($_SERVER['REQUEST_METHOD'], ['POST', 'DELETE'])
+    || $apicall === 'createpuzzle'
+    || $apicall === 'deleteuser';
+if ($is_mutating) {
+    $csrf_cookie = $_COOKIE['pb_csrf'] ?? '';
+    $csrf_header = $_SERVER['HTTP_X_PB_CSRF'] ?? '';
+    if ($csrf_cookie === '' || $csrf_header === '' || !hash_equals($csrf_cookie, $csrf_header)) {
+        http_response_code(403);
+        die(json_encode(['error' => 'CSRF check failed: reload the page and try again']));
+    }
+}
+
+// Echo an API response, or a 502 if the backend is unreachable (readapi and
+// friends return null on curl failure — never emit a bare "null" with a 200).
+function respond($resp) {
+  if ($resp === null || $resp === false) {
+    http_response_code(502);
+    echo json_encode(['error' => 'backend unavailable']);
+    return;
+  }
+  echo json_encode($resp);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   $post = json_decode(file_get_contents('php://input'));
 
   switch ($apicall) {
     case "solver":
-      echo json_encode(postapi(('/solvers/' . $apiparam1 . '/' . $apiparam2), $post));
+      respond(postapi(('/solvers/' . $apiparam1 . '/' . $apiparam2), $post));
       break;
     case "puzzle":
-      echo json_encode(postapi(('/puzzles/' . $apiparam1 . '/' . $apiparam2), $post));
+      respond(postapi(('/puzzles/' . $apiparam1 . '/' . $apiparam2), $post));
       break;
     case "round":
-      echo json_encode(postapi(('/rounds/' . $apiparam1 . '/' . $apiparam2), $post));
+      respond(postapi(('/rounds/' . $apiparam1 . '/' . $apiparam2), $post));
       break;
     case "query":
-      echo json_encode(postapi('/v1/query', $post));
+      respond(postapi('/v1/query', $post));
       break;
     case "rbac":
-      echo json_encode(postapi('/rbac/' . $apiparam1 . '/' . $apiparam2, $post));
+      respond(postapi('/rbac/' . $apiparam1 . '/' . $apiparam2, $post));
       break;
     case "tag":
-      echo json_encode(postapi('/tags', $post));
+      respond(postapi('/tags', $post));
       break;
     case "config":
-      echo json_encode(postapi('/config', $post));
+      respond(postapi('/config', $post));
       break;
     case "hint":
-      echo json_encode(postapi(('/hints/' . $apiparam1 . '/' . $apiparam2), $post));
+      respond(postapi(('/hints/' . $apiparam1 . '/' . $apiparam2), $post));
       break;
     case "hints":
-      echo json_encode(postapi('/hints', $post));
+      respond(postapi('/hints', $post));
+      break;
+    case "deleteuser":
+      // Destructive: proxied as POST from the browser (never GET), though
+      // the server-side call to the API keeps its existing endpoint.
+      respond(readapi('/deleteuser/' . $apiparam1));
       break;
     default:
       http_response_code(500);
@@ -87,16 +133,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
   switch ($apicall) {
     case "tag":
-      echo json_encode(deleteapi('/tags/' . $apiparam1));
+      respond(deleteapi('/tags/' . $apiparam1));
       break;
     case "deletepuzzle":
-      echo json_encode(deleteapi('/deletepuzzle/' . $apiparam1));
+      respond(deleteapi('/deletepuzzle/' . $apiparam1));
       break;
     case "newusers":
-      echo json_encode(deleteapi('/newusers/' . $apiparam1));
+      respond(deleteapi('/newusers/' . $apiparam1));
       break;
     case "hint":
-      echo json_encode(deleteapi('/hints/' . $apiparam1));
+      respond(deleteapi('/hints/' . $apiparam1));
       break;
     default:
       http_response_code(500);
@@ -106,25 +152,25 @@ else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
 else {
   switch ($apicall) {
     case "all":
-      echo json_encode(readapi('/all'));
+      respond(readapi('/all'));
       break;
     case "huntinfo":
-      echo json_encode(readapi('/huntinfo'));
+      respond(readapi('/huntinfo'));
       break;
     case "solver":
-      echo json_encode(readapi('/solvers/' . $apiparam1));
+      respond(readapi('/solvers/' . $apiparam1));
       break;
     case "solvers":
-      echo json_encode(readapi('/solvers'));
+      respond(readapi('/solvers'));
       break;
     case "puzzle":
-      echo json_encode(readapi('/puzzles/' . $apiparam1));
+      respond(readapi('/puzzles/' . $apiparam1));
       break;
     case "round":
-      echo json_encode(readapi('/rounds/' . $apiparam1));
+      respond(readapi('/rounds/' . $apiparam1));
       break;
     case "rounds":
-      echo json_encode(readapi('/rounds'));
+      respond(readapi('/rounds'));
       break;
     case "search":
       // Build query string from tag or tag_id params
@@ -136,13 +182,13 @@ else {
         $searchParams[] = 'tag_id=' . urlencode($_GET['tag_id']);
       }
       $queryString = count($searchParams) > 0 ? '?' . implode('&', $searchParams) : '';
-      echo json_encode(readapi('/search' . $queryString));
+      respond(readapi('/search' . $queryString));
       break;
     case "tags":
-      echo json_encode(readapi('/tags'));
+      respond(readapi('/tags'));
       break;
     case "tag":
-      echo json_encode(readapi('/tags/' . $apiparam1));
+      respond(readapi('/tags/' . $apiparam1));
       break;
     case "createpuzzle":
       // Handle stepwise puzzle creation: /createpuzzle/<code>?step=N
@@ -151,32 +197,33 @@ else {
         $queryParams[] = 'step=' . urlencode($_GET['step']);
       }
       $queryString = count($queryParams) > 0 ? '?' . implode('&', $queryParams) : '';
-      echo json_encode(readapi('/createpuzzle/' . $apiparam1 . $queryString));
+      respond(readapi('/createpuzzle/' . $apiparam1 . $queryString));
       break;
     case "rbac":
       // Check privilege: /rbac/<priv>/<uid>
-      echo json_encode(readapi('/rbac/' . $apiparam1 . '/' . $apiparam2));
+      respond(readapi('/rbac/' . $apiparam1 . '/' . $apiparam2));
       break;
     case "deleteuser":
-      echo json_encode(readapi('/deleteuser/' . $apiparam1));
-      break;
+      // Destructive actions are not accepted over GET.
+      http_response_code(405);
+      die(json_encode(['error' => 'deleteuser requires POST']));
     case "privs":
-      echo json_encode(readapi('/privs'));
+      respond(readapi('/privs'));
       break;
     case "googleusers":
-      echo json_encode(readapi('/google/users'));
+      respond(readapi('/google/users'));
       break;
     case "config":
-      echo json_encode(readapi('/config'));
+      respond(readapi('/config'));
       break;
     case "newusers":
-      echo json_encode(readapi('/newusers'));
+      respond(readapi('/newusers'));
       break;
     case "hints":
-      echo json_encode(readapi('/hints'));
+      respond(readapi('/hints'));
       break;
     case "hintcount":
-      echo json_encode(readapi('/hints/count'));
+      respond(readapi('/hints/count'));
       break;
     case "activitysearch":
       $searchParams = [];
@@ -186,7 +233,7 @@ else {
         }
       }
       $queryString = count($searchParams) > 0 ? '?' . implode('&', $searchParams) : '';
-      echo json_encode(readapi('/activitysearch' . $queryString));
+      respond(readapi('/activitysearch' . $queryString));
       break;
     default:
       http_response_code(500);

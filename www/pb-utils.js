@@ -57,6 +57,17 @@ function escapeAttr(str) {
         .replace(/>/g, '&gt;');
 }
 
+// ─── CSRF (double-submit cookie) ─────────────────────────────────────
+
+/**
+ * Read the pb_csrf double-submit cookie (set by puzzlebosslib.php).
+ * Mutating calls to apicall.php must echo it in the X-PB-CSRF header.
+ */
+function getCsrfToken() {
+    const m = document.cookie.match(/(?:^|;\s*)pb_csrf=([^;]*)/);
+    return m ? m[1] : '';
+}
+
 // ─── API fetch wrapper ───────────────────────────────────────────────
 
 /**
@@ -74,6 +85,8 @@ async function apiCall(path, opts = {}) {
         opts.body = JSON.stringify(opts.body);
         opts.headers = { 'Content-Type': 'application/json', ...opts.headers };
     }
+    // Always attach the CSRF token; apicall.php requires it on mutations.
+    opts.headers = { 'X-PB-CSRF': getCsrfToken(), ...opts.headers };
     const resp = await fetch(API_PROXY + path, opts);
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
@@ -110,6 +123,7 @@ window.pbUtils = {
     API_PROXY,
     escapeHtml,
     escapeAttr,
+    getCsrfToken,
     apiCall,
     showStatus,
 };
@@ -121,6 +135,7 @@ export {
     onFetchFailure,
     escapeHtml,
     escapeAttr,
+    getCsrfToken,
     apiCall,
     showStatus,
 };

@@ -18,6 +18,7 @@ if (!$round) {
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    pb_verify_csrf();
     $updates = [];
     
     // Update name if changed
@@ -99,6 +100,7 @@ foreach ($round->puzzles as $puzzle) {
         </div>
         <div class="info-box-content">
             <form method="POST">
+                <?= pb_csrf_field() ?>
                 <table class="edit-table">
                     <tr>
                         <td><label for="name">Round Name:</label></td>

@@ -1,6 +1,10 @@
 <?php
 require('puzzlebosslib.php');
 
+$config = getpbconfig();
+$bookmarkuri = $config->bookmarklet_js ?? '';
+$pbroot = $config->BIN_URI ?? '';
+
 // Replace placeholder with actual BIN_URI (supports both <<>> and <<<PBROOTURI>>> formats)
 $bookmarkuri = trim(str_replace(['<<<PBROOTURI>>>', '<<>>'], [$pbroot, $pbroot], $bookmarkuri));
 
@@ -82,6 +86,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
     <td>To add a new round (enter round name):</td>
     <td>
       <form action="addround.php" method="post" class="inline-form">
+        <?= pb_csrf_field() ?>
         <input type="text" name="name">
         <input type="submit" name="submit" value="Add Round">
       </form>
@@ -120,6 +125,7 @@ A major timesaver for Puzzlebosses, this bookmarklet works in two ways:
 <?php
 // Handle tag creation
 if (isset($_POST['create_tag']) && !empty($_POST['new_tag_name'])) {
+  pb_verify_csrf();
   $new_tag_name = trim($_POST['new_tag_name']);
   try {
     $responseobj = postapi('/tags', array('name' => $new_tag_name));
@@ -136,6 +142,7 @@ if (isset($_POST['create_tag']) && !empty($_POST['new_tag_name'])) {
 
 // Handle tag deletion
 if (isset($_POST['delete_tag']) && !empty($_POST['tag_to_delete'])) {
+  pb_verify_csrf();
   $tag_to_delete = $_POST['tag_to_delete'];
   try {
     $ch = curl_init();
@@ -175,6 +182,7 @@ try {
     <td>Create a new tag:</td>
     <td>
       <form action="pbtools.php" method="post" class="inline-form">
+        <?= pb_csrf_field() ?>
         <input type="text" name="new_tag_name" placeholder="tag-name" pattern="[a-zA-Z0-9_-]+" title="Alphanumeric, hyphens, and underscores only" required>
         <input type="submit" name="create_tag" value="Create Tag">
       </form>
@@ -198,6 +206,7 @@ try {
     <td><?= $tag->id ?></td>
     <td>
       <form action="pbtools.php" method="post" class="inline-form" onsubmit="return confirm('Are you sure you want to delete tag \'<?= htmlentities($tag->name) ?>\'? This will remove it from all puzzles.');">
+        <?= pb_csrf_field() ?>
         <input type="hidden" name="tag_to_delete" value="<?= htmlentities($tag->name) ?>">
         <input type="submit" name="delete_tag" value="Delete" style="color: red;">
       </form>

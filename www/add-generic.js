@@ -2,7 +2,7 @@ import { ref, useTemplateRef, watch } from 'https://unpkg.com/vue@3/dist/vue.esm
 import TagSelect from './tag-select.js';
 import HintSubmit from './hint-submit.js';
 import Consts from './consts.js';
-import { onFetchSuccess, onFetchFailure } from './pb-utils.js';
+import { onFetchSuccess, onFetchFailure, getCsrfToken } from './pb-utils.js';
 
 //
 // This component represents one of three update icons on each puzzle. Much of
@@ -418,6 +418,7 @@ export default {
                             payload[what] = {add: tag};
                             await fetch(url, {
                                 method: 'POST',
+                                headers: { 'X-PB-CSRF': getCsrfToken() },
                                 body: JSON.stringify(payload),
                             });
                         }));
@@ -425,6 +426,7 @@ export default {
                             payload[what] = {remove: tag};
                             await fetch(url, {
                                 method: 'POST',
+                                headers: { 'X-PB-CSRF': getCsrfToken() },
                                 body: JSON.stringify(payload),
                             });
                         }));
@@ -449,6 +451,7 @@ export default {
                         try {
                             await fetch(commentUrl, {
                                 method: 'POST',
+                                headers: { 'X-PB-CSRF': getCsrfToken() },
                                 body: JSON.stringify({ comments: stateStrA.value }),
                             });
                             noteChanged = true;
@@ -472,12 +475,14 @@ export default {
                             await Promise.all(addTags.map(async (tag) => {
                                 await fetch(tagsUrl, {
                                     method: 'POST',
+                                    headers: { 'X-PB-CSRF': getCsrfToken() },
                                     body: JSON.stringify({ tags: {add: tag} }),
                                 });
                             }));
                             await Promise.all(removeTags.map(async (tag) => {
                                 await fetch(tagsUrl, {
                                     method: 'POST',
+                                    headers: { 'X-PB-CSRF': getCsrfToken() },
                                     body: JSON.stringify({ tags: {remove: tag} }),
                                 });
                             }));
@@ -508,6 +513,7 @@ export default {
                         try {
                             await fetch(nameUrl, {
                                 method: 'POST',
+                                headers: { 'X-PB-CSRF': getCsrfToken() },
                                 body: JSON.stringify({ name: stateStrA.value }),
                             });
                             settingsChanged = true;
@@ -526,6 +532,7 @@ export default {
                         try {
                             await fetch(roundUrl, {
                                 method: 'POST',
+                                headers: { 'X-PB-CSRF': getCsrfToken() },
                                 body: JSON.stringify({ round_id: parseInt(puzzleRoundId.value, 10) }),
                             });
                             settingsChanged = true;
@@ -555,6 +562,7 @@ export default {
                     try {
                         await fetch(url, {
                             method: 'POST',
+                            headers: { 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify(payload),
                         });
                         context.emit('please-fetch');
@@ -575,6 +583,7 @@ export default {
                     try {
                         await fetch(url, {
                             method: 'POST',
+                            headers: { 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify({ "ismeta": isMetaLoc.value }),
                         });
                         if (!emitFetch) context.emit('please-fetch');
@@ -609,6 +618,7 @@ export default {
             try {
                 await fetch(url, {
                     method: 'POST',
+                    headers: { 'X-PB-CSRF': getCsrfToken() },
                     body: JSON.stringify({ "puzz": props.puzzle.id }),
                 });
 
@@ -637,7 +647,7 @@ export default {
         async function deletePuzzle() {
             const url = `${Consts.api}/apicall.php?apicall=deletepuzzle&apiparam1=${encodeURIComponent(props.puzzle.name)}`;
             try {
-                const resp = await fetch(url, { method: 'DELETE' });
+                const resp = await fetch(url, { method: 'DELETE', headers: { 'X-PB-CSRF': getCsrfToken() } });
                 const data = await resp.json();
                 if (data.error) {
                     warning.value = "Delete failed: " + data.error;

@@ -86,6 +86,7 @@ function removetagfrompuzzle($puzzid, $tagname) {
 }
 
 if (isset($_POST['submit'])) {
+  pb_verify_csrf();
   if (!isset($_POST['uid'])) {
     exit_with_error_message('No Authenticated User ID Found in Request');
   }
@@ -170,7 +171,8 @@ $userid = $userobj->id;
 $username = $userobj->name;
 
 // Get puzzle data (includes lastact)
-// Note: $huntinfo (with config, statuses, tags) is loaded by puzzlebosslib.php
+// huntinfo (config, statuses, tags) is fetched lazily via gethuntinfo()
+$huntinfo = gethuntinfo();
 $puzzleobj = readapi('/puzzles/' . $puzzid);
 $puzname = $puzzleobj->puzzle->name;
 
@@ -286,6 +288,7 @@ if (isset($puzzleobj->lastact->time)) {
         <input type="hidden" name="startwork" value="yes">
         <input type="hidden" name="pid" value="<?= $puzzid ?>">
         <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
         <input type="submit" name="submit" value="Start Working On This Puzzle">
       </form>
     <?php else: ?>
@@ -294,6 +297,7 @@ if (isset($puzzleobj->lastact->time)) {
         <input type="hidden" name="stopwork" value="yes">
         <input type="hidden" name="pid" value="<?= $puzzid ?>">
         <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
         <input type="submit" name="submit" value="Stop Working On This Puzzle">
       </form>
     <?php endif; ?>
@@ -315,6 +319,7 @@ if (isset($puzzleobj->lastact->time)) {
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
             <input type="hidden" name="part" value="name">
             <input type="text" required minlength="1" name="value" value="<?= htmlentities($puzname) ?>">
             <input type="submit" name="submit" value="Update">
@@ -338,6 +343,7 @@ if (isset($puzzleobj->lastact->time)) {
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
             <input type="hidden" name="part" value="round_id">
             <select id="round_id" name="value" required>
               <option disabled selected value>-- select new round --</option>
@@ -365,6 +371,7 @@ if (isset($puzzleobj->lastact->time)) {
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
             <input type="hidden" name="part" value="answer">
             <input type="text" required minlength="1" name="value" value="<?= htmlentities($answer ?? '') ?>">
             <input type="submit" name="submit" value="Update">
@@ -380,6 +387,7 @@ if (isset($puzzleobj->lastact->time)) {
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
             <input type="hidden" name="part" value="xyzloc">
             <input type="text" name="value" value="<?= htmlentities($puzzleobj->puzzle->xyzloc ?? '') ?>">
             <input type="submit" name="submit" value="Update">
@@ -395,6 +403,7 @@ if (isset($puzzleobj->lastact->time)) {
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
             <input type="hidden" name="part" value="comments">
             <input type="text" name="value" value="<?= htmlentities($puzzleobj->puzzle->comments ?? '') ?>">
             <input type="submit" name="submit" value="Update">
@@ -405,7 +414,6 @@ if (isset($puzzleobj->lastact->time)) {
       <!-- Change Status -->
       <?php
       $excluded_statuses = ['Solved'];
-      global $huntinfo;
       $allstatuses = isset($huntinfo->statuses) ? $huntinfo->statuses : array();
       ?>
       <tr>
@@ -415,6 +423,7 @@ if (isset($puzzleobj->lastact->time)) {
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
             <input type="hidden" name="part" value="status">
             <select id="value" name="value" required>
               <option disabled selected value>-- select --</option>
@@ -438,6 +447,7 @@ if (isset($puzzleobj->lastact->time)) {
             <input type="hidden" name="partupdate" value="yes">
             <input type="hidden" name="pid" value="<?= $puzzid ?>">
             <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
             <input type="hidden" name="part" value="ismeta">
             <select id="ismeta" name="value">
               <option value="0"<?= $ismeta ? '' : ' selected' ?>>No</option>
@@ -489,6 +499,7 @@ if (isset($puzzleobj->lastact->time)) {
                   <input type="hidden" name="removetag" value="yes">
                   <input type="hidden" name="pid" value="<?= $puzzid ?>">
                   <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
                   <input type="hidden" name="tagname" value="<?= htmlentities($tagname) ?>">
                   <input type="submit" name="submit" value="Remove">
                 </form>
@@ -497,6 +508,7 @@ if (isset($puzzleobj->lastact->time)) {
                   <input type="hidden" name="addtag" value="yes">
                   <input type="hidden" name="pid" value="<?= $puzzid ?>">
                   <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
                   <input type="hidden" name="tagname" value="<?= htmlentities($tagname) ?>">
                   <input type="submit" name="submit" value="Add">
                 </form>
@@ -516,6 +528,7 @@ if (isset($puzzleobj->lastact->time)) {
       <input type="hidden" name="newtag" value="yes">
       <input type="hidden" name="pid" value="<?= $puzzid ?>">
       <input type="hidden" name="uid" value="<?= $userid ?>">
+            <?= pb_csrf_field() ?>
       <input type="text" name="newtagname" placeholder="new-tag-name" pattern="[a-zA-Z0-9_-]+" title="Alphanumeric, hyphens, and underscores only">
       <input type="submit" name="submit" value="Create &amp; Add Tag">
     </form>
@@ -590,7 +603,10 @@ createApp({
       try {
         await fetch('./apicall.php?apicall=hints', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-PB-CSRF': (document.cookie.match(/(?:^|;\s*)pb_csrf=([^;]*)/) || [])[1] || ''
+          },
           body: JSON.stringify({
             puzzle_id: <?= $puzzid ?>,
             solver: '<?= addslashes($username) ?>',

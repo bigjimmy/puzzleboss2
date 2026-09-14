@@ -20,14 +20,18 @@ require('puzzlebosslib.php');
     exit('Access denied: config changes require the puzztech role.');
   }
 
+  pb_verify_csrf();
+
   $configval = $_POST['configval'];
   $key = $_POST['key'];
+  $key_html = htmlspecialchars($key);
+  $configval_html = htmlspecialchars($configval);
 
   print <<<HTML
 
-Setting config key $key to:<br>
+Setting config key $key_html to:<br>
 <table class="registration">
-<tr><td>$key</td><td>$configval</td></tr>
+<tr><td>$key_html</td><td>$configval_html</td></tr>
 </table>
 HTML;
 
@@ -42,7 +46,7 @@ HTML;
   assert_api_success($responseobj);
 
   echo '<br><div class="success">';
-  echo 'OK. config ' . $key . ' is now set to: ' . $configval;
+  echo 'OK. config ' . $key_html . ' is now set to: ' . $configval_html;
   echo '</div>';
   echo '<div class="info-callout">';
   echo '<h3>ℹ️ Automatic Config Refresh</h3>';

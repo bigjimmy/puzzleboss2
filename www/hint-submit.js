@@ -1,5 +1,6 @@
 import { ref } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.prod.js'
 import Consts from './consts.js'
+import { getCsrfToken } from './pb-utils.js'
 
 //
 // Shared hint submission form used by both status.php (inside a <dialog>)
@@ -25,7 +26,7 @@ export default {
             try {
                 await fetch(`${Consts.api}/apicall.php?apicall=hints`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken() },
                     body: JSON.stringify({
                         puzzle_id: props.puzzleId,
                         solver: props.username,

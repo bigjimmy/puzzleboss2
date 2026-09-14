@@ -449,7 +449,7 @@ if ($hasGoogle) {
 </div>
 
 <script type="module">
-const { API_PROXY: apiProxy, escapeHtml, showStatus } = window.pbUtils;
+const { API_PROXY: apiProxy, escapeHtml, showStatus, getCsrfToken } = window.pbUtils;
 let deleteTarget = '';
 let sortCol = 'id';
 let sortAsc = true;
@@ -505,7 +505,7 @@ async function savePrivs(btn) {
       updates.push(
         fetch(apiProxy + '?apicall=rbac&apiparam1=puzztech&apiparam2=' + id, {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: {'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken()},
           body: JSON.stringify({allowed: newPt})
         }).then(r => r.json())
       );
@@ -514,7 +514,7 @@ async function savePrivs(btn) {
       updates.push(
         fetch(apiProxy + '?apicall=rbac&apiparam1=puzzleboss&apiparam2=' + id, {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: {'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken()},
           body: JSON.stringify({allowed: newPb})
         }).then(r => r.json())
       );
@@ -578,7 +578,10 @@ async function executeDelete() {
   showStatus(statusArea, '', 'Deleting account <strong>' + escapeHtml(username) + '</strong>...');
 
   try {
-    const resp = await fetch(apiProxy + '?apicall=deleteuser&apiparam1=' + encodeURIComponent(username));
+    const resp = await fetch(apiProxy + '?apicall=deleteuser&apiparam1=' + encodeURIComponent(username), {
+      method: 'POST',
+      headers: {'X-PB-CSRF': getCsrfToken()}
+    });
     const data = await resp.json();
 
     if (data.error) {
@@ -684,7 +687,8 @@ async function deletePending(code, username) {
   const statusArea = document.getElementById('status-area');
   try {
     const resp = await fetch(apiProxy + '?apicall=newusers&apiparam1=' + encodeURIComponent(code), {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: {'X-PB-CSRF': getCsrfToken()}
     });
     const data = await resp.json();
     if (data.error) throw new Error(data.error);

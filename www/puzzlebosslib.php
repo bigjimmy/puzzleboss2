@@ -1,9 +1,5 @@
 <?php
 global $apiroot;
-global $pbroot;
-global $bookmarkuri;
-global $config;
-global $huntinfo;
 
 $yaml = yaml_parse_file('../puzzleboss.yaml');
 $apiroot = $yaml['API']['APIURI'];
@@ -46,11 +42,53 @@ function readapi_internal($apicall) {
   return json_decode($resp);
 }
 
-// Load huntinfo (config + statuses + tags) once for all pages
-$huntinfo = readapi('/huntinfo');
-$config = (object) $huntinfo->config;
-$bookmarkuri = $config->bookmarklet_js ?? '';
-$pbroot = $config->BIN_URI ?? '';
+// CSRF double-submit cookie. Readable by JS on purpose (httponly=false):
+// fetch wrappers echo it back in the X-PB-CSRF header, and forms embed it
+// via pb_csrf_field(). apicall.php and the form-POST pages verify it.
+if (!isset($_COOKIE['pb_csrf']) && !headers_sent()) {
+  $pb_csrf_new = bin2hex(random_bytes(32));
+  setcookie('pb_csrf', $pb_csrf_new, [
+    'path' => '/',
+    'samesite' => 'Lax',
+    'httponly' => false,
+  ]);
+  // Make it visible to this request too (forms rendered on first page load)
+  $_COOKIE['pb_csrf'] = $pb_csrf_new;
+}
+
+// Hidden <input> echoing the CSRF cookie, for classic form-POST pages.
+function pb_csrf_field() {
+  $token = $_COOKIE['pb_csrf'] ?? '';
+  return '<input type="hidden" name="csrf" value="' . htmlspecialchars($token) . '">';
+}
+
+// Verify the double-submit token on a form POST. Dies with a 403 on mismatch.
+function pb_verify_csrf() {
+  $cookie = $_COOKIE['pb_csrf'] ?? '';
+  $posted = $_POST['csrf'] ?? '';
+  if ($cookie === '' || $posted === '' || !hash_equals($cookie, $posted)) {
+    http_response_code(403);
+    exit_with_error_message(
+      'Invalid or missing CSRF token. Reload the page and try again.'
+    );
+  }
+}
+
+// Lazily-loaded huntinfo (config + statuses + tags). Fetched at most once
+// per request, and only by code that actually needs it — so apicall.php
+// proxy hits that never touch config no longer trigger a /huntinfo call.
+function gethuntinfo() {
+  static $huntinfo = null;
+  if ($huntinfo === null) {
+    $huntinfo = readapi('/huntinfo');
+  }
+  return $huntinfo;
+}
+
+// Config-table values from huntinfo, as an object (lazy, cached).
+function getpbconfig() {
+  return (object) (gethuntinfo()->config ?? new stdClass());
+}
 
 function postapi($apicall, $data) {
   $url = $GLOBALS['apiroot'] . $apicall;
@@ -149,7 +187,7 @@ function getauthenticatedsolver() {
   }
   
   $username = "";
-  global $config;
+  $config = getpbconfig();
   $allow_override = ($config->ALLOW_USERNAME_OVERRIDE ?? 'false') === 'true';
   if (!isset($_SERVER['REMOTE_USER'])) {
     if ($allow_override) {
@@ -242,9 +280,8 @@ function checkpriv($priv, $uid) {
 
 // Returns emoji or text representation for a puzzle status
 function get_status_display($status, $use_text = false) {
-  global $huntinfo;
+  $huntinfo = gethuntinfo();
 
-  // Try to find status in huntinfo (loaded at top of file)
   if (isset($huntinfo->statuses) && is_array($huntinfo->statuses)) {
     foreach ($huntinfo->statuses as $s) {
       if (isset($s->name) && $s->name === $status) {

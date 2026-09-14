@@ -10,6 +10,12 @@ require('puzzlebosslib.php');
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script type="module" src="./pb-utils.js"></script>
   <script>
+  // CSRF double-submit token (cookie set by puzzlebosslib.php)
+  function pbCsrfToken() {
+    const m = document.cookie.match(/(?:^|;\s*)pb_csrf=([^;]*)/);
+    return m ? m[1] : '';
+  }
+
   let formSubmitted = false;
   function handleSubmit(event) {
     if (formSubmitted) {
@@ -123,7 +129,8 @@ require('puzzlebosslib.php');
 
     try {
       const url = 'apicall.php?apicall=createpuzzle&apiparam1=' + encodeURIComponent(code) + '&step=' + stepNum;
-      const response = await fetch(url);
+      // createpuzzle is GET for legacy reasons but mutating: send CSRF token
+      const response = await fetch(url, { headers: { 'X-PB-CSRF': pbCsrfToken() } });
       const data = await response.json();
 
       if (data.error) {
@@ -184,6 +191,7 @@ require('puzzlebosslib.php');
 
 $round_id = null;
 if (isset($_POST['submit'])) {
+  pb_verify_csrf();
   // Show header and navbar when processing form submission
   echo '<div class="status-header">';
   echo '  <h1>Adding Puzzle...</h1>';
@@ -579,6 +587,8 @@ try {
 <div id="app">
 
 <form action="addpuzzle.php" method="post" onsubmit="return handleSubmit(event)">
+
+  <?= pb_csrf_field() ?>
 
   <!-- Hidden field to track puzzle mode (new vs promote) -->
   <input type="hidden" id="puzzle_mode_value" name="puzzle_mode" value="new" />

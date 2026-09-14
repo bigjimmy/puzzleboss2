@@ -12,12 +12,14 @@
 require('puzzlebosslib.php');
 
 if (isset($_POST['submit'])) {
+  pb_verify_csrf();
   $name = $_POST['name'];
+  $name_html = htmlspecialchars($name);
 
   print <<<HTML
 Attempting to add round.<br>
 <table class="registration">
-<tr><td>name:</td><td>$name</td></tr>
+<tr><td>name:</td><td>$name_html</td></tr>
 </table>
 HTML;
 
@@ -29,8 +31,8 @@ HTML;
   }
   assert_api_success($resp);
   $round_name = $resp->round->name;
-  echo '<div class="success">Round <tt>'.$round_name.'</tt> created!';
-  echo '<pre>'.var_export($resp, true).'</pre></div>';
+  echo '<div class="success">Round <tt>'.htmlspecialchars($round_name).'</tt> created!';
+  echo '<pre>'.htmlspecialchars(var_export($resp, true)).'</pre></div>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
   echo '<br><hr>';
 }
@@ -49,6 +51,7 @@ HTML;
     <td>To add a new round (enter round name):</td>
     <td valign="middle">
       <form action="addround.php" method="post">
+        <?= pb_csrf_field() ?>
         <input type="text" name="name">
         <input type="submit" name="submit" value="Add Round">
       </form>

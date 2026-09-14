@@ -201,7 +201,8 @@ require_once('puzzlebosslib.php');
                 //
                 <?php
                 $auth_solver = getauthenticatedsolver();
-                echo "const username = ref(\"" . $auth_solver->name . "\");";
+                // json_encode: solver name must not break out of the JS string
+                echo "const username = ref(" . json_encode($auth_solver->name) . ");";
                 $is_pt = checkpriv("puzztech", $auth_solver->id) ? 'true' : 'false';
                 $is_pb = checkpriv("puzzleboss", $auth_solver->id) ? 'true' : 'false';
                 ?>
@@ -237,7 +238,14 @@ require_once('puzzlebosslib.php');
                     let success = false;
                     let temp = {'rounds': []};
                     try {
-                        temp = await (await fetch(url, {cache: "no-store"})).json();
+                        const resp = await fetch(url, {cache: "no-store"});
+                        temp = await resp.json();
+                        // Guard against backend-down responses (502 {"error"})
+                        // so the stale-data indicator shows instead of a
+                        // TypeError on data.value.rounds below.
+                        if (!resp.ok || temp.error || !Array.isArray(temp.rounds)) {
+                            throw new Error(temp.error || 'API returned an invalid response');
+                        }
                         data.value = temp;
 
                         if (firstUpdate) {

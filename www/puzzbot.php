@@ -5,6 +5,7 @@ require('puzzlebosslib.php');
 $username = isset($_SERVER['REMOTE_USER']) ? $_SERVER['REMOTE_USER'] : 'anonymous';
 
 // Get LLM model and system instruction from config
+$config = getpbconfig();
 $gemini_model = $config->GEMINI_MODEL ?? 'unknown';
 $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
 ?>
@@ -266,7 +267,9 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
             font-size: 0.75rem;
         }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Vendored locally (no CDN): markdown renderer + HTML sanitizer -->
+    <script src="./marked.min.js"></script>
+    <script src="./purify.min.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script type="module" src="./pb-utils.js"></script>
 </head>
@@ -352,6 +355,13 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
 
     <script>
         const username = <?php echo json_encode($username); ?>;
+
+        // CSRF double-submit token (cookie set by puzzlebosslib.php)
+        function pbCsrfToken() {
+            const m = document.cookie.match(/(?:^|;\s*)pb_csrf=([^;]*)/);
+            return m ? m[1] : '';
+        }
+
         const chatContainer = document.getElementById('chat-container');
         const queryInput = document.getElementById('query-input');
         const sendBtn = document.getElementById('send-btn');
@@ -378,7 +388,8 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
 
             // Format bot messages with markdown, plain text for user messages
             if (type === 'bot') {
-                msg.innerHTML = marked.parse(text);
+                // Sanitize the rendered markdown: LLM output is untrusted
+                msg.innerHTML = DOMPurify.sanitize(marked.parse(text));
             } else {
                 msg.textContent = text;
             }
@@ -404,7 +415,8 @@ $gemini_instruction = $config->GEMINI_SYSTEM_INSTRUCTION ?? '';
                 const response = await fetch('apicall.php?apicall=query', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-PB-CSRF': pbCsrfToken()
                     },
                     body: JSON.stringify({
                         user_id: username,

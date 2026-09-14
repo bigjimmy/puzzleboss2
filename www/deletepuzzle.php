@@ -11,13 +11,23 @@
 
 require('puzzlebosslib.php');
 
+// Puzzle deletion is puzztech-only (same gate as the apicall.php proxy —
+// this page calls the API directly, so it must enforce the priv itself).
+$authuid = getauthenticateduser();
+if (!checkpriv("puzztech", $authuid)) {
+  http_response_code(403);
+  exit('Access denied: puzzle deletion requires the puzztech role.');
+}
+
 if (isset($_POST['submit'])) {
+  pb_verify_csrf();
   $name = $_POST['name'];
+  $name_html = htmlspecialchars($name);
 
   print <<<HTML
 Attempting to delete puzzle.<br>
 <table class="registration">
-<tr><td>name:</td><td>$name</td></tr>
+<tr><td>name:</td><td>$name_html</td></tr>
 </table>
 HTML;
 
@@ -28,8 +38,8 @@ HTML;
     throw $e;
   }
   assert_api_success($resp);
-  echo '<div class="success">Puzzle <tt>'.$name.'</tt> deletion success!';
-  echo '<pre>'.var_export($resp, true).'</pre></div>';
+  echo '<div class="success">Puzzle <tt>'.$name_html.'</tt> deletion success!';
+  echo '<pre>'.htmlspecialchars(var_export($resp, true)).'</pre></div>';
   echo '<a href="javascript:window.history.back();">Go back</a>';
   echo '<br><hr>';
 }

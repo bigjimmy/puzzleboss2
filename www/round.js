@@ -167,10 +167,19 @@ export default {
             }).length;
         });
 
+        //
+        // javascript: URI defense: only treat API-supplied URLs as links
+        // when they are http(s); otherwise render inert text (no href).
+        //
+        function safeUrl(url) {
+            return (typeof url === 'string' && /^https?:\/\//i.test(url)) ? url : null;
+        }
+
         return {
             spoilRound, toggleSpoil,
             open, solved,
-            scroll, stopscroll, highlight, highlightedPuzzle
+            scroll, stopscroll, highlight, highlightedPuzzle,
+            safeUrl
         }
     },
 
@@ -188,7 +197,7 @@ export default {
             <div class="round-header-stats">
                 <p>({{solved}} solved / {{open}})</p>
                 <div class="round-header-icons">
-                    <p class="puzzle-icon"><a title='drive folder' :href='round.drive_uri' target="_blank" @click.stop>📂</a></p>
+                    <p class="puzzle-icon"><a title='drive folder' :href='safeUrl(round.drive_uri)' target="_blank" @click.stop>📂</a></p>
                     <AddGeneric type="comments" :puzzle='round' @please-fetch="$emit('please-fetch')"></AddGeneric>
                 </div>
             </div>
@@ -201,9 +210,9 @@ export default {
                 :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] ? ' ' + highlightedPuzzle[puzzle.id] : '')">
                 <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers" :hints="hints" :username="username"></AddGeneric>
                 <AddGeneric type="workstate" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
-                <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a :href='puzzle.puzzle_uri' target="_blank">{{puzzle.name}}</a></p>
-                <p class="puzzle-icon"><a title='spreadsheet' :href='puzzle.drive_uri' target="_blank">📊</a></p>
-                <p class="puzzle-icon"><a title='discord' :href='puzzle.chat_channel_link' target="_blank">🗣️</a></p>
+                <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a v-if='safeUrl(puzzle.puzzle_uri)' :href='safeUrl(puzzle.puzzle_uri)' target="_blank">{{puzzle.name}}</a><span v-else>{{puzzle.name}}</span></p>
+                <p class="puzzle-icon"><a title='spreadsheet' :href='safeUrl(puzzle.drive_uri)' target="_blank">📊</a></p>
+                <p class="puzzle-icon"><a title='discord' :href='safeUrl(puzzle.chat_channel_link)' target="_blank">🗣️</a></p>
                 <AddGeneric type="note-tags" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 <p
                     v-if = "puzzle.answer === null"
