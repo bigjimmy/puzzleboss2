@@ -38,7 +38,7 @@ HTML;
   $apiurl = "/config";
   $data = array('cfgkey' => $key, 'cfgval' => $configval);
   try {
-    $responseobj = postapi($apiurl, $data);
+    $responseobj = postapi_internal($apiurl, $data);
   } catch (Exception $e) {
     exit_with_api_error($e);
     throw $e;

@@ -40,7 +40,7 @@ HTML;
   $apiurl = "/rbac/" . urlencode($priv) . "/" . $uid;
   $data = array('allowed' => $allowed);
   try {
-    $responseobj = postapi($apiurl, $data);
+    $responseobj = postapi_internal($apiurl, $data);
   } catch (Exception $e) {
     exit_with_api_error($e);
     throw $e;

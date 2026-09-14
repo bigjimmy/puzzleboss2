@@ -106,13 +106,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       respond(postapi('/v1/query', $post));
       break;
     case "rbac":
-      respond(postapi('/rbac/' . $apiparam1 . '/' . $apiparam2, $post));
+      respond(postapi_internal('/rbac/' . $apiparam1 . '/' . $apiparam2, $post));
       break;
     case "tag":
       respond(postapi('/tags', $post));
       break;
     case "config":
-      respond(postapi('/config', $post));
+      respond(postapi_internal('/config', $post));
       break;
     case "hint":
       respond(postapi(('/hints/' . $apiparam1 . '/' . $apiparam2), $post));
@@ -123,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     case "deleteuser":
       // Destructive: proxied as POST from the browser (never GET), though
       // the server-side call to the API keeps its existing endpoint.
-      respond(readapi('/deleteuser/' . $apiparam1));
+      respond(readapi_internal('/deleteuser/' . $apiparam1));
       break;
     default:
       http_response_code(500);
@@ -136,10 +136,10 @@ else if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
       respond(deleteapi('/tags/' . $apiparam1));
       break;
     case "deletepuzzle":
-      respond(deleteapi('/deletepuzzle/' . $apiparam1));
+      respond(deleteapi_internal('/deletepuzzle/' . $apiparam1));
       break;
     case "newusers":
-      respond(deleteapi('/newusers/' . $apiparam1));
+      respond(deleteapi_internal('/newusers/' . $apiparam1));
       break;
     case "hint":
       respond(deleteapi('/hints/' . $apiparam1));
@@ -211,13 +211,13 @@ else {
       respond(readapi('/privs'));
       break;
     case "googleusers":
-      respond(readapi('/google/users'));
+      respond(readapi_internal('/google/users'));
       break;
     case "config":
       respond(readapi('/config'));
       break;
     case "newusers":
-      respond(readapi('/newusers'));
+      respond(readapi_internal('/newusers'));
       break;
     case "hints":
       respond(readapi('/hints'));

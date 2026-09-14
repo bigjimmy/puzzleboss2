@@ -194,12 +194,12 @@ $solvers = $solversResp->solvers ?? [];
 $privsResp = readapi('/privs');
 $privsRows = $privsResp->privs ?? [];
 
-$googleResp = readapi('/google/users');
+$googleResp = readapi_internal('/google/users');
 $googleUsers = $googleResp->users ?? [];
 $googleDisabled = isset($googleResp->google_disabled) && $googleResp->google_disabled;
 $googleError = isset($googleResp->error) ? $googleResp->error : '';
 
-$newusersResp = readapi('/newusers');
+$newusersResp = readapi_internal('/newusers');
 $pendingUsers = $newusersResp->newusers ?? [];
 
 // Index privs by uid for fast lookup

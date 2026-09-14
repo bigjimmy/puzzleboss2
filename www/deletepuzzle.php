@@ -32,7 +32,7 @@ Attempting to delete puzzle.<br>
 HTML;
 
   try {
-    $resp = deleteapi('/deletepuzzle/' . $name);
+    $resp = deleteapi_internal('/deletepuzzle/' . $name);
   } catch (Exception $e) {
     exit_with_api_error($resp);
     throw $e;

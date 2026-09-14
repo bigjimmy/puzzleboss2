@@ -42,6 +42,47 @@ function readapi_internal($apicall) {
   return json_decode($resp);
 }
 
+// Privileged write/delete siblings of readapi_internal, for the
+// admin_token_gated API endpoints (rbac, config writes, deleteuser,
+// deletepuzzle, migrate, newusers). Same contract: callers MUST have
+// already verified puzztech — the token authenticates this server-side
+// tier, not the end user.
+function postapi_internal($apicall, $data) {
+  $url = $GLOBALS['apiroot'] . $apicall;
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_URL, $url);
+  curl_setopt($curl, CURLOPT_POST, true);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $headers = array(
+    "Accept: application/json",
+    "Content-Type: application/json",
+    "X-PB-Internal-Token: " . $GLOBALS['pbinternaltoken'],
+    "X-Remote-User: " . ($_SERVER['REMOTE_USER'] ?? ''),
+  );
+  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+  curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
+  $resp = curl_exec($curl);
+  curl_close($curl);
+  return json_decode($resp);
+}
+
+function deleteapi_internal($apicall) {
+  $url = $GLOBALS['apiroot'] . $apicall;
+  $curl = curl_init($url);
+  curl_setopt($curl, CURLOPT_URL, $url);
+  curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+  $headers = array(
+    "Accept: application/json",
+    "X-PB-Internal-Token: " . $GLOBALS['pbinternaltoken'],
+    "X-Remote-User: " . ($_SERVER['REMOTE_USER'] ?? ''),
+  );
+  curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+  $resp = curl_exec($curl);
+  curl_close($curl);
+  return json_decode($resp);
+}
+
 // CSRF double-submit cookie. Readable by JS on purpose (httponly=false):
 // fetch wrappers echo it back in the X-PB-CSRF header, and forms embed it
 // via pb_csrf_field(). apicall.php and the form-POST pages verify it.
