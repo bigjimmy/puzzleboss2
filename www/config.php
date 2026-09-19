@@ -427,6 +427,7 @@ $categories = [
   'bigjimmy' => ['BigJimmy Bot', 'Sheet activity polling bot configuration'],
   'google' => ['Google Sheets & Drive', 'Google API and sheet template settings'],
   'discord' => ['Discord (Puzzcord)', 'Discord bot integration'],
+  'puzzcord' => ['Puzzcord Bot Settings', 'Read only by the puzzcord bot (overlays its hunt_config) — not used by Puzzleboss itself'],
   'redis' => ['Redis', 'Response caching layer'],
   'llm' => ['LLM & AI', 'Gemini AI, natural language queries, and wiki RAG'],
   'metadata' => ['Status & Metrics Metadata', 'JSON definitions for puzzle statuses and bot metrics'],
@@ -464,6 +465,27 @@ $keyCategoryMap = [
   'PUZZCORD_PORT' => 'discord',
   'DISCORD_EMAIL_WEBHOOK' => 'discord',
 
+  // Consumed by puzzcord only, via SQL.get_hunt_config(), which overlays this
+  // table on top of the bot's config.json hunt_config block. Stored here (not
+  // in config.json) so they survive a utility-server rebuild and are editable
+  // without SSHing to the box. Puzzleboss itself never reads these.
+  // Note: team name, team domain, and the signup credentials are deliberately
+  // absent — puzzcord aliases those to TEAMNAME / DOMAINNAME / ACCT_USERNAME /
+  // ACCT_PASSWORD so the value lives in exactly one key.
+  'feedback_doc' => 'puzzcord',
+  'hq_room' => 'puzzcord',
+  'hunt_begins' => 'puzzcord',
+  'hunt_ends' => 'puzzcord',
+  'printer_setup_link' => 'puzzcord',
+  'scrape_url' => 'puzzcord',
+  'scrape_cookie' => 'puzzcord',
+  'timezone' => 'puzzcord',
+  'wifi_network' => 'puzzcord',
+  'wifi_password' => 'puzzcord',
+  'wifi_qr' => 'puzzcord',
+  'wrapped_icon' => 'puzzcord',
+  'zoom_link' => 'puzzcord',
+
   'REDIS_ENABLED' => 'redis',
   'REDIS_HOST' => 'redis',
   'REDIS_PORT' => 'redis',
@@ -495,6 +517,21 @@ $keyCategoryMap = [
 $keyDescriptions = [
   'bookmarklet_js' => 'JavaScript bookmarklet for adding puzzles from the hunt site',
   'hunt_domain' => 'Domain of the current hunt website (e.g. puzzlehunt.example.com)',
+  // Per-hunt settings read by puzzcord (SQL.get_hunt_config overlays this table
+  // over its config.json). Set these each hunt year.
+  'feedback_doc' => 'Puzzcord: link to the team feedback doc (shown by !feedback)',
+  'hq_room' => 'Puzzcord: physical/virtual location of hunt HQ, shown in bot messages',
+  'hunt_begins' => 'Puzzcord: hunt start time, ISO 8601 local time (e.g. 2027-01-15T13:00:00)',
+  'hunt_ends' => 'Puzzcord: hunt end time, ISO 8601 local time',
+  'printer_setup_link' => 'Puzzcord: link to printer setup instructions for on-site solvers',
+  'scrape_url' => 'Puzzcord !sync: hunt site "all puzzles" page URL to scrape for new rounds/puzzles',
+  'scrape_cookie' => 'Puzzcord !sync: authenticated session cookie for the hunt website (SECRET — grants access as your team)',
+  'timezone' => 'Puzzcord: timezone for hunt times (e.g. US/Eastern)',
+  'wifi_network' => 'Puzzcord: WiFi SSID shown to on-site solvers',
+  'wifi_password' => 'Puzzcord: WiFi password shown to on-site solvers',
+  'wifi_qr' => 'Puzzcord: URL of a WiFi QR-code image',
+  'wrapped_icon' => 'Puzzcord: icon URL used in end-of-hunt "wrapped" summary embeds',
+  'zoom_link' => 'Puzzcord: team Zoom/video call link',
   'TEAMNAME' => 'Display name for your team',
   'HUNT_FOLDER_NAME' => 'Google Drive folder name for the hunt',
   'DOMAINNAME' => 'Primary domain for the team',
