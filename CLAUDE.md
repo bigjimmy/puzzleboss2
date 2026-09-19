@@ -49,7 +49,7 @@ Schema in [`scripts/puzzleboss.sql`](scripts/puzzleboss.sql). Key tables:
 - `newuser` — pending signup records
 - `privs` — admin role grants
 
-**Key index:** `activity` has a composite index `idx_puzzle_time (puzzle_id, time)`. It turns the per-puzzle "latest activity" query (and the `/all` cold-start `GROUP BY puzzle_id` that rebuilds the lastact hash) into a loose index scan — cost scales with puzzle count, not total activity rows. Added by [`migrations/add_activity_puzzle_time_index.py`](migrations/add_activity_puzzle_time_index.py) and present in the schema. Critical for lastact performance as activity grows during a hunt.
+**Key indexes:** `activity` has two composite indexes. `idx_puzzle_time (puzzle_id, time)` turns the per-puzzle "latest activity" query (and the `/all` cold-start `GROUP BY puzzle_id` that rebuilds the lastact hash) into a loose index scan — cost scales with puzzle count, not total activity rows. `idx_solver_time (solver_id, time)` does the same for `get_last_activity_for_solver`, which bigjimmybot calls per new activity record. Added by the corresponding `migrations/add_activity_*_index.py` migrations and present in the schema. Critical for performance as activity grows during a hunt.
 
 ### Integration points
 
@@ -162,13 +162,16 @@ Guarded by `tests/test_pblib_id_types.py` and `tests/test_pblib_solver_assignmen
 - Success: `{"status": "ok", ...}`
 - Failure: `{"error": "message"}` with appropriate HTTP status code
 - Each endpoint references a `@swag_from('swag/<name>.yaml')` spec; Flasgger validates automatically.
-- All endpoints require `REMOTE_USER` (or `?assumedid=` in dev mode with `ALLOW_USERNAME_OVERRIDE=true`).
+- All endpoints require `REMOTE_USER` (or `?assumedid=` in dev mode with `ALLOW_USERNAME_OVERRIDE=true` — honored **only from puzzleboss.yaml**, never from the config table, so a runtime config write can't enable impersonation).
+- **Admin endpoints are token-gated** via the `admin_token_gated` decorator: `POST /config`, `POST /rbac/*`, `GET /deleteuser`, `DELETE /deletepuzzle`, `POST /migrate/*`, `GET /newusers`, `GET /google/users` require `X-PB-Internal-Token`. Enforcement is controlled by the `ADMIN_TOKEN_ENFORCE` config key (false = warn-only rollout mode: log and allow; true = 403). The PHP tier attaches the token via `postapi_internal`/`deleteapi_internal`/`readapi_internal` — always AFTER a puzztech check (the token authenticates the server tier, not the user).
+- `puzzle_uri` must start with `http://` or `https://` at write time (creation and part-update paths).
 
 ### Database access
 
-- Use `mysql.connection` from Flask-MySQLdb (connection pooling built-in)
+- Use `mysql.connection` from Flask-MySQLdb (one connection per request — there is NO pooling; expect ~40ms connection setup with SSL)
 - Always commit after writes: `conn.commit()`
 - Use parameterized queries: `cursor.execute("SELECT * FROM puzzle WHERE id=%s", (puzzle_id,))`
+- **SQL identifiers are never interpolated from request data.** Endpoints that take a column/field name from the URL or JSON (`/puzzles/<id>/<part>`, solver/round part updates, `/rbac/<priv>`, `pblib.update_puzzle_field`) validate it against a schema-tracking frozenset allowlist (`PUZZLE_VIEW_COLUMNS`, `ROUND_UPDATABLE_COLUMNS`, `SOLVER_UPDATABLE_COLUMNS`, `PRIV_COLUMNS` in pbrest.py; `PUZZLE_UPDATABLE_COLUMNS` in pblib.py) and 400 on miss. When the schema changes, update the allowlists.
 - UTF-8: `MYSQL_CHARSET = "utf8mb4"`
 
 ### Logging
@@ -180,7 +183,8 @@ Use `debug_log(severity, message)` from `pblib.py`. Severity: 0=emergency, 1=err
 - Gunicorn uses multiple workers (configured in `gunicorn_config.py`).
 - Prometheus metrics use multiprocess mode via `prometheus_multiproc_dir`.
 - Wiki indexing uses file locking to prevent duplicate work across workers.
-- Config refresh is per-process but synchronized via the database.
+- Config refresh is per-process but synchronized via the database. Refresh failures raise and are swallowed by `maybe_refresh_config()` — the worker keeps serving with stale config; only the initial startup load is fatal (`sys.exit(255)`). A transient DB blip must never kill workers.
+- Discord announces (`chat_announce_*`) are best-effort: wrapped in try/except at call sites, and DB mutations (answer, activity, round completion) always happen BEFORE Discord I/O in the solve paths.
 
 ### File naming
 
@@ -209,7 +213,14 @@ Cache behavior is observable via botstats counters (in `METRICS_METADATA`, expos
 | `/puzzles/<id>/<field>` | Update one field |
 | `/puzzles/stepwise` + `/createpuzzle/{code}?step=N` | Step-by-step creation (UI uses this) |
 | `/puzzles/activate_all` | Re-deploy Apps Script add-on |
-| `/rounds`, `/solvers`, `/activity`, `/tags` | Standard CRUD |
+| `/rounds`, `/solvers`, `/tags` | Standard CRUD |
+| `/activity`, `/activitysearch` | Activity log (read-only; activitysearch takes filters + LIMIT) |
+| `/search` | Puzzle search by tag / tag_id |
+| `/hints`, `/hints/<id>/*` | Hint queue: solver submission, answer/demote/delete (admin ops puzztech-gated in the PHP proxy) |
+| `/rbac/<priv>/<uid>` | Privilege check (GET) / grant-revoke (POST, token-gated) |
+| `/config` | Config table read (secrets redacted) / write (token-gated) |
+| `/account`, `/finishaccount/<code>`, `/newusers` | Signup lifecycle (newusers is token-gated) |
+| `/cache/invalidate` | Force /all cache invalidation |
 | `/solvers/byname/<username>` | Efficient lookup by name |
 | `/huntinfo` | Combined config + statuses + tags (frontend bootstrap; config secrets always redacted) |
 | `/migrate` (GET) | List available migrations |
@@ -245,7 +256,8 @@ If you believe a rewrite is necessary:
 
 - `MYSQL.*` — DB connection parameters
 - `API.APIURI` — REST API endpoint
-- `API.INTERNAL_TOKEN` — shared token for unredacted `/config` reads (see config secret redaction below). Env var `INTERNAL_TOKEN` overrides it.
+- `API.INTERNAL_TOKEN` — shared token for unredacted `/config` reads and the token-gated admin endpoints (see Security notes). Env var `INTERNAL_TOKEN` overrides it.
+- `ALLOW_USERNAME_OVERRIDE` — deploy-time only; enables `?assumedid=` impersonation for dev. Honored ONLY from this file — the config-table row is ignored.
 
 ### `config` table (dynamic, refreshed every 30s)
 
@@ -256,6 +268,9 @@ The full reference lives in [`www/config.php`](www/config.php) (search for `$key
 - Never commit `puzzleboss.yaml`, `service-account.json`, `oidc-secrets.conf`. Service account credentials should live in the `SERVICE_ACCOUNT_JSON` config-table entry, not on disk.
 - Use environment variables or secrets management for production credentials.
 - **Config secret redaction:** `GET /config` and `GET /huntinfo` redact secret values to `"********"` — see `pblib.redact_config`. Secrecy classification is **flag as authority, heuristic as fallback**: the `config.secret` column (operator-editable via the 🔒 toggle in `config.php`, or `POST /config` with a boolean `secret` field) is the authoritative signal, OR'd with the name-pattern heuristic (`pblib.is_secret_config_key`: `API_KEY`/`SECRET`/`PASSWORD`/`TOKEN`/`WEBHOOK` substrings + `SERVICE_ACCOUNT_JSON`) so a forgotten flag on a conventionally-named key still fails closed. The `/config` response's `secret_keys` field exposes the combined classification so client display logic never drifts from the server. Value-only `POST /config` writes preserve the existing flag. Backfilled by [`migrations/add_config_secret_flag.py`](migrations/add_config_secret_flag.py); pre-migration databases get heuristic-only redaction (the API logs a warning rather than failing). Trusted server-side consumers (`config.php` admin page, `account/index.php` signup, `pbmail_inbox.py`) get unredacted `/config` by sending `X-PB-Internal-Token` matching `API.INTERNAL_TOKEN` (fail-closed if unconfigured; `hmac.compare_digest`; unredacted reads are logged with `X-Remote-User`). The token authenticates the server-side *tier* — user-level authz (puzztech) stays in the PHP layer, which checks privs before attaching it. Secrets Manager / SSM provisions the token at deploy time only; nothing fetches from AWS at runtime.
+- **Admin endpoint gating:** the same internal token gates the destructive/admin API endpoints (`POST /config`, `POST /rbac/*`, `/deleteuser`, `/deletepuzzle`, `POST /migrate/*`, `/newusers`, `/google/users`) via the `admin_token_gated` decorator. `ADMIN_TOKEN_ENFORCE=true` in the config table enforces 403; false/absent logs a SEV2 warning and allows (rollout mode). Production runs enforced. PHP attaches the token only from puzztech-gated code paths (`*api_internal` helpers in `puzzlebosslib.php`).
+- **CSRF:** double-submit cookie (`pb_csrf`, set by `puzzlebosslib.php`). JS fetch wrappers send `X-PB-CSRF`; form-POST pages embed `pb_csrf_field()` and verify with `pb_verify_csrf()`. Every mutating `apicall.php` call requires the header. New mutating pages/fetches must participate.
+- **XSS:** escape all request/API data echoed into HTML with `htmlspecialchars()` (see `search.php` for the pattern); solver names into inline JS via `json_encode()`; Vue `:href` bindings of user-supplied URIs must be scheme-checked (`^https?://`) — the API also rejects non-http(s) `puzzle_uri` at write time.
 - Apache should restrict access to the parent directory (only `www/` should be web-accessible).
 - The DB user should only have access to the `puzzleboss` database.
-- `REMOTE_USER` authentication is required for production. Disable `ALLOW_USERNAME_OVERRIDE` in production.
+- `REMOTE_USER` authentication is required for production. `ALLOW_USERNAME_OVERRIDE` is read from `puzzleboss.yaml` only (a DB config row is ignored with a warning) — omit it or set `"false"` in production; docker dev sets `"true"` for `?assumedid=`.

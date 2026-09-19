@@ -177,8 +177,8 @@ Track add-on deployment via:
 
 **Fix**:
 ```bash
-# Check logs for activation errors (production: query Loki; local Docker: check gunicorn error log)
-docker exec puzzleboss-app grep "activate_puzzle_sheet_via_api" /var/log/gunicorn/error.log
+# Check logs for activation errors (production: query Loki; local Docker: Gunicorn logs go to container stdout)
+docker logs puzzleboss-app 2>&1 | grep "activate_puzzle_sheet_via_api"
 
 # Manually re-deploy to all sheets missing the add-on
 curl -X POST "http://localhost:5000/puzzles/activate_all"

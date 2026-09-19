@@ -65,11 +65,18 @@ pytest --cov=bigjimmybot --cov-report=html
   - `TestUnassignSolverTypeNormalization`: unassign handles int/string input
   - `TestAssignUnassignsFromOldPuzzle`: cross-puzzle reassignment
   - `TestAssignSolverHistoryType`: solver_history JSON integrity
+  - `TestAssignStatusTransition`: puzzle status changes on assignment
 
 - **tests/test_rate_limiter.py**: Google API rate limiter tests
   - `TestRateLimiterBasics`: Acquire timing and slot spacing
   - `TestRateLimiterConfig`: QPM configuration
   - `TestRateLimiterThreadSafety`: Concurrent access
+  - `TestDefaultQpmConstant`: The default QPM constant stays under Google's quota
+
+- **tests/test_security_fixes.py**: Security-hardening regression tests
+  - `TestUpdatePuzzleFieldAllowlist`: `update_puzzle_field` rejects non-allowlisted fields
+  - `TestAllowUsernameOverrideYamlOnly`: `?assumedid=` override honors the config gate
+  - `TestRefreshConfigNonFatal`: config-refresh failures raise instead of exiting the process
 
 - **tests/test_config_redaction.py**: Config secret redaction and internal-token tests for pblib.py
   - `TestIsSecretConfigKey`: which key names the heuristic counts as secret (patterns + explicit list; `RECAPTCHA_SITE_KEY` deliberately not)
@@ -96,8 +103,7 @@ pytest --cov=bigjimmybot --cov-report=html
 ## Testing Philosophy
 
 These are **unit tests** that mock external dependencies:
-- ✅ Mock HTTP API calls (using `@patch` on `_api_request_with_retry`)
-- ✅ Mock database connections
+- ✅ Mock database access (`@patch` on `bigjimmybot._get_db_connection` and the pblib/bigjimmybot DB helper functions like `get_solver_by_name_from_db`, `update_puzzle_field`, `log_activity`)
 - ✅ Mock Google API calls
 - ✅ Use JSON fixtures for test data
 
@@ -115,6 +121,6 @@ This allows testing business logic without requiring:
 
 ## Future Work
 
-See README.md "Future TODOs" section for plans to expand testing to:
-- pbgooglelib.py Google API integration
+Areas not yet covered by unit tests:
+- pbgooglelib.py Google API integration (beyond the rate limiter)
 - pbllmlib.py LLM query functions

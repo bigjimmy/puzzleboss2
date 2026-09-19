@@ -1,0 +1,61 @@
+summary: Run a named data migration
+description: >
+  Runs the named data migration from the migrations/ package (see GET /migrate
+  for the list). This endpoint is admin-token-gated; when the
+  ADMIN_TOKEN_ENFORCE config key is "true", requests without a valid
+  X-PB-Internal-Token are rejected with 403.
+tags:
+  - Migrations
+parameters:
+  - name: name
+    in: path
+    type: string
+    required: true
+    description: Migration name, as listed by GET /migrate
+  - name: X-PB-Internal-Token
+    in: header
+    type: string
+    required: false
+    description: >
+      Internal token (puzzleboss.yaml API.INTERNAL_TOKEN). Required when
+      ADMIN_TOKEN_ENFORCE is "true".
+responses:
+  200:
+    description: Migration ran successfully
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        message:
+          type: string
+          description: Human-readable summary of what the migration did
+  403:
+    description: Missing or invalid X-PB-Internal-Token while ADMIN_TOKEN_ENFORCE is true
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: ["internal token required"]
+  404:
+    description: Unknown migration name, or the migration reported failure
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: string
+  500:
+    description: Migration raised an exception
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: string

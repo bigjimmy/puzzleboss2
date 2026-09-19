@@ -77,7 +77,6 @@ Below are the keys you'll actually touch, grouped:
 
 | Key | What |
 |---|---|
-| `BIGJIMMY_PUZZLEPAUSETIME` | Seconds between sheet polls per puzzle (default 1) |
 | `BIGJIMMY_THREADCOUNT` | Parallel sheet-polling threads (default 2) |
 | `BIGJIMMY_GOOGLE_API_QPM` | Soft rate limit for Google API calls (default 55) |
 | `BIGJIMMY_QUOTAFAIL_DELAY` / `BIGJIMMY_QUOTAFAIL_MAX_RETRIES` | Backoff on 429s |
@@ -141,6 +140,8 @@ curl -X POST http://localhost:5000/migrate/<name>
 ```
 
 Migrations are idempotent. Production-style: backup first (`mysqldump`), then run.
+
+`POST /migrate/<name>` is an admin-token-gated endpoint: when `ADMIN_TOKEN_ENFORCE=true` in the config table, add `-H "X-PB-Internal-Token: <API.INTERNAL_TOKEN>"` to the curl or it returns 403. (When enforcement is off — the default — tokenless calls are allowed but logged.)
 
 ### Edit the Apps Script add-on
 

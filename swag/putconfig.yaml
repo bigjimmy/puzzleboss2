@@ -12,6 +12,14 @@ tags:
 consumes:
   - application/json
 parameters:
+  - name: X-PB-Internal-Token
+    in: header
+    type: string
+    required: false
+    description: >
+      Internal token (puzzleboss.yaml API.INTERNAL_TOKEN). This endpoint is
+      admin-token-gated; when the ADMIN_TOKEN_ENFORCE config key is "true",
+      requests without a valid token are rejected with 403.
   - name: body
     in: body
     required: true
@@ -38,6 +46,14 @@ responses:
         status:
           type: string
           enum: [ok]
+  403:
+    description: Missing or invalid X-PB-Internal-Token while ADMIN_TOKEN_ENFORCE is true
+    schema:
+      type: object
+      properties:
+        error:
+          type: string
+          enum: ["internal token required"]
   500:
     description: Error updating configuration
     schema:

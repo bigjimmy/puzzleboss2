@@ -1,13 +1,13 @@
 # Puzzleboss — Local Docker setup
 
-This is the standard local-development environment for Puzzleboss. It runs the full stack (Apache + PHP frontend, Gunicorn + Flask API, MySQL with SSL) in two containers, with code mounted from the host for live reload.
+This is the standard local-development environment for Puzzleboss. It runs the full stack (Apache + PHP frontend, Gunicorn + Flask API, MySQL with SSL, Redis) across four compose services — `app`, `mysql`, `redis`, and a short-lived `ssl-setup` helper — with code mounted from the host for live reload.
 
 For production deployment, see [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra).
 
 ## Prerequisites
 
 - Docker and Docker Compose
-- Free local ports `80`, `3306`, and `5000` (see [Port conflicts](#port-conflicts) below if not)
+- Free local ports `80`, `3306`, `5000`, and `6379` (see [Port conflicts](#port-conflicts) below if not)
 
 ## Quick start
 
@@ -30,7 +30,7 @@ Other endpoints:
 
 ### The test user
 
-The schema seed creates one user, `testuser`, with full admin privileges (`puzztech` + `puzzleboss`). The PHP frontend is in test mode, so `?assumedid=testuser` substitutes for SSO. Use this for all local testing — you don't need to set up auth.
+On first boot, `docker/docker-entrypoint.sh` creates one user, `testuser`, with full admin privileges (`puzztech` + `puzzleboss`). This is Docker-only — the schema seed itself creates no solvers. The PHP frontend is in test mode, so `?assumedid=testuser` substitutes for SSO. Use this for all local testing — you don't need to set up auth.
 
 ## What the stack looks like
 
@@ -63,7 +63,7 @@ docker-compose ps
 # Logs
 docker-compose logs -f app          # Apache + Gunicorn + (maybe) bigjimmy
 docker-compose logs -f mysql
-docker exec puzzleboss-app tail -f /var/log/gunicorn/error.log
+docker logs -f puzzleboss-app                 # Gunicorn logs go to container stdout/stderr
 
 # Open a MySQL prompt
 docker exec -it puzzleboss-mysql mysql -u puzzleboss -ppuzzleboss123 puzzleboss
@@ -85,7 +85,7 @@ PHP, Python, scripts, swag, migrations, and tests are all volume-mounted, so mos
 After the stack is up:
 
 1. Open <http://localhost?assumedid=testuser>. You'll see an empty main UI.
-2. Click **pbtools** in the nav. Add a round, then add a puzzle to it.
+2. Click **PB Tools** in the nav. Add a round, then add a puzzle to it.
 3. Return to the main page — the round and puzzle now appear.
 4. Visit <http://localhost:5000/apidocs>, expand `GET /solvers`, click **Try it out** → **Execute**. You should see `testuser` in the response.
 
@@ -129,7 +129,7 @@ All of these are configured through the **Configuration Management** page at <ht
 ### Google Drive / Sheets (BigJimmy + sheet creation)
 
 1. Create a Google Cloud service account with **Domain-Wide Delegation** enabled.
-2. Authorize it in Google Workspace Admin (Security → API controls → Domain-wide delegation) for the scopes listed in [docs/SETUP.md](../docs/SETUP.md#google).
+2. Authorize it in Google Workspace Admin (Security → API controls → Domain-wide delegation) for the scopes listed in [docs/SETUP.md](../docs/SETUP.md#4-google-integration).
 3. In the **Configuration Management** page: paste the JSON key into `SERVICE_ACCOUNT_JSON`, set `SERVICE_ACCOUNT_SUBJECT` to your Workspace admin email, and flip `SKIP_GOOGLE_API` to `false`.
 4. Edit `docker/supervisord.conf` and set `autostart=true` for `[program:bigjimmybot]`.
 5. Rebuild: `docker-compose up --build`.
@@ -164,6 +164,7 @@ Or run an ad-hoc script — see the example in [CLAUDE.md](../CLAUDE.md#testing)
 | Port 80 in use | `sudo lsof -i :80` to find culprit, or edit `docker-compose.yml` to remap (`"8080:80"`) |
 | Port 3306 in use | You probably have a local MySQL. Stop it, or remap to `"3307:3306"` |
 | Port 5000 in use | Common on macOS (AirPlay Receiver). Remap to `"5001:5000"` or disable AirPlay Receiver in System Settings |
+| Port 6379 in use | You probably have a local Redis. Stop it, or remap to `"6380:6379"` |
 
 ## When something breaks
 

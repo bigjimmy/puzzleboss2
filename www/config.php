@@ -446,7 +446,7 @@ $keyCategoryMap = [
   'BIGJIMMY_ABANDONED_STATUS' => 'bigjimmy',
   'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES' => 'bigjimmy',
   'BIGJIMMY_AUTOASSIGN' => 'bigjimmy',
-  'BIGJIMMY_PUZZLEPAUSETIME' => 'bigjimmy',
+  'BIGJIMMY_GOOGLE_API_QPM' => 'bigjimmy',
   'BIGJIMMY_QUOTAFAIL_DELAY' => 'bigjimmy',
   'BIGJIMMY_QUOTAFAIL_MAX_RETRIES' => 'bigjimmy',
   'BIGJIMMY_THREADCOUNT' => 'bigjimmy',
@@ -456,6 +456,8 @@ $keyCategoryMap = [
   'SERVICE_ACCOUNT_FILE' => 'google',
   'SERVICE_ACCOUNT_SUBJECT' => 'google',
   'SHEETS_TEMPLATE_ID' => 'google',
+  'GOOGLE_APPS_SCRIPT_CODE' => 'google',
+  'GOOGLE_APPS_SCRIPT_MANIFEST' => 'google',
   'SKIP_PUZZCORD' => 'discord',
   'PUZZCORD_HOST' => 'discord',
   'PUZZCORD_PORT' => 'discord',
@@ -501,7 +503,7 @@ $keyDescriptions = [
   'BIGJIMMY_ABANDONED_STATUS' => 'Status to set when a puzzle is abandoned',
   'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES' => 'Minutes of inactivity before marking abandoned',
   'BIGJIMMY_AUTOASSIGN' => 'Auto-assign solvers to puzzles from sheets',
-  'BIGJIMMY_PUZZLEPAUSETIME' => 'Seconds between sheet polls per puzzle',
+  'BIGJIMMY_GOOGLE_API_QPM' => 'Google API rate limit for BigJimmy, in queries per minute — a global limiter shared across all polling threads (default 55)',
   'BIGJIMMY_QUOTAFAIL_DELAY' => 'Seconds to wait after a Google quota failure',
   'BIGJIMMY_QUOTAFAIL_MAX_RETRIES' => 'Max retries after quota failures',
   'BIGJIMMY_THREADCOUNT' => 'Number of parallel threads for sheet polling',
@@ -510,10 +512,14 @@ $keyDescriptions = [
   'SERVICE_ACCOUNT_FILE' => 'Path to Google service account JSON key file on disk (fallback if SERVICE_ACCOUNT_JSON is not set)',
   'SERVICE_ACCOUNT_SUBJECT' => 'Domain admin email for service account impersonation (e.g. admin@yourdomain.org)',
   'SHEETS_TEMPLATE_ID' => 'Google Sheet ID used as template for new puzzles',
+  'GOOGLE_APPS_SCRIPT_CODE' => 'Apps Script source deployed to each new puzzle sheet (e.g. the contents of scripts/puzzle_tools_addon_latest.gs). Empty = a built-in minimal onEdit activity tracker.',
+  'GOOGLE_APPS_SCRIPT_MANIFEST' => 'appsscript.json manifest for the deployed add-on (must be valid JSON; falls back to the built-in default if empty or invalid)',
   'SKIP_PUZZCORD' => 'Disable Discord integration',
   'PUZZCORD_HOST' => 'Hostname of the puzzcord daemon',
   'PUZZCORD_PORT' => 'Port of the puzzcord daemon',
   'DISCORD_EMAIL_WEBHOOK' => 'Webhook URL for email-to-Discord forwarding',
+  'SLACK_EMAIL_WEBHOOK' => 'Slack incoming-webhook URL for pbmail_inbox.py hunt-email notifications (works alongside or instead of DISCORD_EMAIL_WEBHOOK)',
+  'debugging_usernames' => 'Comma-separated usernames for whom the PHP frontend enables full error reporting and display',
   'REDIS_ENABLED' => 'Enable Redis caching (/all blob + write-through lastact)',
   'REDIS_HOST' => 'Redis server hostname',
   'REDIS_PORT' => 'Redis server port',
@@ -541,18 +547,19 @@ $keyDescriptions = [
 $booleanKeys = ['ALLOW_USERNAME_OVERRIDE', 'BIGJIMMY_AUTOASSIGN', 'SKIP_GOOGLE_API', 'SKIP_PUZZCORD', 'REDIS_ENABLED'];
 
 // Known numeric keys
-$numericKeys = ['LOGLEVEL', 'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', 'BIGJIMMY_PUZZLEPAUSETIME',
+$numericKeys = ['LOGLEVEL', 'BIGJIMMY_ABANDONED_TIMEOUT_MINUTES', 'BIGJIMMY_GOOGLE_API_QPM',
                 'BIGJIMMY_QUOTAFAIL_DELAY', 'BIGJIMMY_QUOTAFAIL_MAX_RETRIES', 'BIGJIMMY_THREADCOUNT',
                 'PUZZCORD_PORT', 'REDIS_PORT'];
 
 // Keys with long/JSON values that need textareas
-$textareaKeys = ['GEMINI_SYSTEM_INSTRUCTION', 'bookmarklet_js', 'debugging_usernames'];
+$textareaKeys = ['GEMINI_SYSTEM_INSTRUCTION', 'bookmarklet_js', 'debugging_usernames',
+                 'GOOGLE_APPS_SCRIPT_CODE', 'GOOGLE_APPS_SCRIPT_MANIFEST'];
 
 // Keys with custom structured editors (handled separately in the rendering loop)
 $specialKeys = ['STATUS_METADATA', 'METRICS_METADATA', 'BIGJIMMY_ABANDONED_STATUS'];
 
 // Deprecated keys to hide (removed from system, may linger in DB)
-$hiddenKeys = ['SLACK_EMAIL_WEBHOOK', 'LDAP_ADMINDN', 'LDAP_ADMINPW', 'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0',
+$hiddenKeys = ['LDAP_ADMINDN', 'LDAP_ADMINPW', 'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0',
                'SHEETS_ADDON_REFRESH_HEADERS', 'SHEETS_ADDON_COOKIES', 'SHEETS_ADDON_INVOKE_PARAMS'];
 
 // Group config by category

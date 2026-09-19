@@ -17,7 +17,6 @@ MYSQL:
     PASSWORD: puzzleboss123
     HOST: mysql              # For Docker (docker-compose service name)
                              # For native: Change to "127.0.0.1" or your MySQL host
-    PORT: 3306
     DATABASE: puzzleboss
     # SSL Configuration (optional - comment out to disable SSL)
     # For Docker: Uses auto-generated MySQL certs from /var/lib/mysql-certs

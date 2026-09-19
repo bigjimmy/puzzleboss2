@@ -104,6 +104,38 @@ responses:
                         time:
                           type: string
                           description: ISO 8601 string (e.g. "2026-03-29T21:13:27")
+        hints:
+          type: array
+          description: Active hint requests (queued/ready/submitted), ordered by queue position
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: Hint ID
+              puzzle_id:
+                type: integer
+              puzzle_name:
+                type: string
+              solver:
+                type: string
+                description: Name of the solver who requested the hint
+              queue_position:
+                type: integer
+              request_text:
+                type: string
+              status:
+                type: string
+                description: Hint status (e.g. queued, ready, submitted)
+              created_at:
+                type: string
+                description: ISO 8601 UTC timestamp, or null
+              answered_at:
+                type: string
+                description: ISO 8601 UTC timestamp, or null
+              submitted_at:
+                type: string
+                description: ISO 8601 UTC timestamp, or null
   500:
     description: Error retrieving data
     schema:

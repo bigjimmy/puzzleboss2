@@ -1120,7 +1120,7 @@ def _fetch_config_with_flags(cursor):
 
 
 @app.route("/config", endpoint="getconfig", methods=["GET"])
-# @swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
+@swag_from("swag/getconfig.yaml", endpoint="getconfig", methods=["GET"])
 def get_config():
     debug_log(5, "start")
     try:
@@ -1150,7 +1150,7 @@ def get_config():
 
 
 @app.route("/config", endpoint="putconfig", methods=["POST"])
-# @swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
+@swag_from("swag/putconfig.yaml", endpoint="putconfig", methods=["POST"])
 @admin_token_gated
 def put_config():
     """Upsert a config value and/or its secret flag.
@@ -1816,6 +1816,7 @@ def finish_puzzle_creation(code):
 
 
 @app.route("/puzzles/activate_all", endpoint="post_activate_all", methods=["POST"])
+@swag_from("swag/postactivateall.yaml", endpoint="post_activate_all", methods=["POST"])
 def activate_all_sheets():
     """
     Batch-activate the PB tracking add-on on all unsolved puzzles where
@@ -3027,6 +3028,7 @@ def force_cache_invalidate():
 
 
 @app.route("/migrate", endpoint="migrate_list", methods=["GET"])
+@swag_from("swag/getmigrations.yaml", endpoint="migrate_list", methods=["GET"])
 def list_migrations():
     """List all available data migrations."""
     from migrations import get_all_migrations
@@ -3034,6 +3036,7 @@ def list_migrations():
 
 
 @app.route("/migrate/<name>", endpoint="migrate_run", methods=["POST"])
+@swag_from("swag/postmigration.yaml", endpoint="migrate_run", methods=["POST"])
 @admin_token_gated
 def run_migration(name):
     """Run a named data migration."""

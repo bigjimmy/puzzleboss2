@@ -1,4 +1,12 @@
 <?php
+// =============================================================================
+// LEGACY — 2024 Mystery Hunt only. UNMAINTAINED.
+//
+// This page scrapes the 2024 hunt site (two-pi-noir.agency) with hardcoded
+// URLs, cookies, and DOM/JSON structure. It will not work against any other
+// hunt. Kept for historical reference; do not use or extend — the current UI
+// is index.php.
+// =============================================================================
 require('puzzlebosslib.php');
 
 $config = getpbconfig();

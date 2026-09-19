@@ -1319,7 +1319,7 @@ def test_config_page():
         """))
 
         # Known hidden keys (deprecated, intentionally not shown)
-        hidden_keys = {'SLACK_EMAIL_WEBHOOK', 'LDAP_ADMINDN', 'LDAP_ADMINPW',
+        hidden_keys = {'LDAP_ADMINDN', 'LDAP_ADMINPW',
                        'LDAP_DOMAIN', 'LDAP_HOST', 'LDAP_LDAP0',
                        'SHEETS_ADDON_REFRESH_HEADERS', 'SHEETS_ADDON_COOKIES',
                        'SHEETS_ADDON_INVOKE_PARAMS'}

@@ -7,6 +7,9 @@ responses:
                id: solvers
                type: object
                properties:
+                       status:
+                           type: string
+                           enum: ['ok']
                        solvers:
                            type: array
                            items:
@@ -14,6 +17,13 @@ responses:
                                    properties:
                                     id:
                                         type: integer
-                                    name:      
+                                    name:
                                         type: string
-                                
+                                    fullname:
+                                        type: string
+                                    chat_uid:
+                                        type: string
+                                        description: Discord user ID
+                                    chat_name:
+                                        type: string
+                                        description: Discord username

@@ -14,7 +14,6 @@ $apiroot = $yaml['API']['APIURI'];
 // RECAPTCHA_SECRET_KEY) server-side. The secrets are only compared/used in
 // PHP — never emitted to the browser.
 $pbinternaltoken = getenv('INTERNAL_TOKEN') ?: ($yaml['API']['INTERNAL_TOKEN'] ?? '');
-$example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.$yaml['GOOGLE']['SHEETS_TEMPLATE_ID'].'/preview';
 
 function readapi($apicall) {
   $url  = $GLOBALS['apiroot'] . $apicall;
@@ -39,6 +38,9 @@ $google_domain = $config->DOMAINNAME;
 $teamname = htmlspecialchars($config->TEAMNAME ?? 'Our Team');
 $recaptcha_site_key   = $config->RECAPTCHA_SITE_KEY   ?? '';
 $recaptcha_secret_key = $config->RECAPTCHA_SECRET_KEY ?? '';
+// Test-sheet link shown after successful account creation; SHEETS_TEMPLATE_ID
+// lives in the config table (not puzzleboss.yaml).
+$example_google_sheet_url = 'https://docs.google.com/spreadsheets/d/'.($config->SHEETS_TEMPLATE_ID ?? '').'/preview';
 ?>
 <!doctype html>
 <html lang="en">

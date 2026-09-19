@@ -9,7 +9,7 @@ For broader background on how the system is wired, see [OPERATIONS.md](OPERATION
 Puzzleboss is **infrastructure-agnostic**: the same app code runs anywhere that provides Apache+PHP, Python/Gunicorn, and MySQL. Before following any diagnosis below, decide which of these two contexts you're in — the commands differ:
 
 - **Production**: a hosted deployment with a real container orchestrator or VM, real OIDC, real MySQL, centralized logs. This team runs it on **AWS ECS Fargate with RDS** and ships logs to **Loki/Grafana**, but that's one example. Other valid setups include Kubernetes, ECS on EC2, Nomad, a single VM with systemd, bare-metal Docker, etc. Where this doc says "check ECS task health" or "query Loki," translate to the equivalent in your stack — "is the container running on its host" and "wherever your logs go." Production runbook for *this team's* ECS setup lives in [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra).
-- **Local dev**: the Docker stack from [docker/README.md](../docker/README.md) — two containers (`puzzleboss-app`, `puzzleboss-mysql`) on a developer machine. OIDC is bypassed via `?assumedid=`; MySQL runs in a sibling container; logs go to stdout via `docker-compose logs`.
+- **Local dev**: the Docker stack from [docker/README.md](../docker/README.md) — four compose services (`app`, `mysql`, `redis`, and a short-lived `ssl-setup` helper) on a developer machine. OIDC is bypassed via `?assumedid=`; MySQL runs in a sibling container; logs go to stdout via `docker-compose logs`.
 
 Throughout this doc, commands are tagged:
 
@@ -40,7 +40,7 @@ The first question is always: **can I reach the API?** Hit `/apidocs` (or `GET /
 |---|---|
 | Login / SSO broken | OIDC cache (Redis), Apache error log, IdP status |
 | Web UI 502 / 504 | Gunicorn process alive? container restart loop? |
-| API errors | `/var/log/gunicorn/error.log` inside the container, or your aggregated log stream (this team: `service=puzzleboss` in Loki) |
+| API errors | Container stdout/stderr (`docker logs puzzleboss-app` / `docker-compose logs app` — supervisord routes Gunicorn there), or your aggregated log stream (this team: `service=puzzleboss` in Loki) |
 | Bot not assigning | bot logs (this team: `service=bigjimmy` in Loki), `bigjimmy_quota_failures` metric |
 | Sheets not created | `SKIP_GOOGLE_API`, service account creds, Drive quota |
 | Add-on not appearing | Apps Script API enabled? DWD scopes? See [apps-script-deployment.md](apps-script-deployment.md) |
@@ -66,7 +66,7 @@ docker exec puzzleboss-app supervisorctl status
 
 Common causes (apply to both):
 
-- Gunicorn workers crashed. Look in `/var/log/gunicorn/error.log` inside the container for stack traces. **\[Dev\]** restart with `docker-compose restart app`; **\[Prod\]** trigger a redeploy or restart the task/pod.
+- Gunicorn workers crashed. Look in the container's stdout/stderr (`docker logs puzzleboss-app` or `docker-compose logs app`) for stack traces — supervisord routes Gunicorn output there. **\[Dev\]** restart with `docker-compose restart app`; **\[Prod\]** trigger a redeploy or restart the task/pod.
 - A worker is stuck. `gunicorn_config.py` defines a worker timeout — but if it's holding the DB lock, you'll see slow responses before timeouts.
 - MySQL is unreachable. Check next symptom.
 
@@ -221,6 +221,6 @@ When multiple symptoms hit simultaneously, work outside-in:
 ## Where to dig deeper
 
 - **Application logs \[Prod\]:** wherever you ship container stdout. This team ships to Loki with labels `service=puzzleboss` (web/API + Apache) and `service=bigjimmy` (bot); your team may ship to CloudWatch, Datadog, ELK, or a plain disk log. Same labels/streams either way.
-- **Application logs \[Dev\]:** `docker-compose logs app`, or `/var/log/gunicorn/error.log` and `/var/log/apache2/error.log` inside the container.
+- **Application logs \[Dev\]:** `docker-compose logs app` (Gunicorn goes to container stdout/stderr), or `/var/log/apache2/error.log` inside the container for Apache.
 - **Metrics:** `/metrics` endpoint on the app, scraped to Prometheus, charted in Grafana — applies to both environments if Prometheus is wired up.
 - **Infra-level issues** (orchestrator, load balancer, managed DB, security groups, DNS) are out of scope for this doc — that's your hosting layer. For *this team's* ECS-on-AWS setup specifically, the operations runbook is in [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra).

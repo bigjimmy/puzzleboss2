@@ -48,6 +48,8 @@ Anything in *External* can be left off. Without Google you lose automatic puzzle
 5. [Wire up Discord (optional)](#5-discord-integration)
 6. [Wire up email (optional, for account signup)](#6-email)
 7. [Set up authentication for solvers](#7-authentication)
+   - [Redis cache (optional but recommended)](#redis-cache-optional-but-recommended)
+   - [reCAPTCHA on signup (optional)](#recaptcha-on-signup-optional)
 8. [Onboard solvers](#8-onboard-solvers)
 9. [Pre-hunt readiness check](#9-pre-hunt-readiness-check)
 
@@ -78,7 +80,7 @@ For a single-server install (EC2, VM, bare metal):
 Once you've picked an environment and brought up the containers/services, sanity-check it:
 
 - `GET /apidocs` returns the Swagger UI
-- `GET /solvers` returns a non-empty list (the seed schema creates `testuser`)
+- `GET /solvers` returns a valid response. In the Docker dev stack this list contains `testuser` (created by `docker/docker-entrypoint.sh`, not the schema seed); on a standalone install the solver table starts empty, so expect `{"status": "ok", "solvers": []}` until you onboard someone (step 8)
 - The web UI loads at the root URL
 
 If any of that fails, go to [TROUBLESHOOTING.md](TROUBLESHOOTING.md) before continuing — there's no point configuring further if the basics aren't working.
@@ -224,10 +226,10 @@ After this, all further priv management can go through the Accounts Management U
 Run through this list a few days before the hunt:
 
 - [ ] `GET /huntinfo` returns expected `TEAMNAME` and tag/status metadata
-- [ ] `POST /rounds` creates a test round; `DELETE /rounds/<id>` deletes it
+- [ ] `POST /rounds` creates a test round (there is no round-delete endpoint — clean up test rounds directly in SQL, or fold them into the hunt-reset below)
 - [ ] `POST /puzzles` creates a test puzzle, the Drive sheet gets created, the Apps Script add-on is deployed (open the sheet, look for the "Puzzle Tools" menu)
-- [ ] BigJimmy bot is running and processing puzzles (check logs — should see "loop_iterations_total" incrementing in `/metrics`)
-- [ ] An edit to a test sheet shows up in the activity log within ~1 minute (visible at `/all.php` or `GET /activity`)
+- [ ] BigJimmy bot is running and processing puzzles (check logs — `bigjimmy_loop_iterations_total` should be incrementing in `/metrics`)
+- [ ] An edit to a test sheet shows up in the activity log within ~1 minute (visible at `/activity.php` or `GET /activity`)
 - [ ] Discord channel auto-creation works (if enabled) — solving the test puzzle posts to the solve channel
 - [ ] At least one non-admin solver has successfully signed up and logged in
 - [ ] `/metrics` exposes Prometheus metrics

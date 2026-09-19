@@ -1,0 +1,30 @@
+summary: List available data migrations
+description: >
+  Lists all data migrations discoverable in the migrations/ package. Run one
+  with POST /migrate/<name>.
+tags:
+  - Migrations
+parameters: []
+responses:
+  200:
+    description: Map of migration name to its metadata
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        migrations:
+          type: object
+          description: Keyed by migration name
+          additionalProperties:
+            type: object
+            properties:
+              module:
+                type: string
+                description: Python module name inside the migrations package
+              name:
+                type: string
+                description: Migration name (pass to POST /migrate/<name>)
+              description:
+                type: string

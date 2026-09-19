@@ -1,0 +1,53 @@
+summary: Batch-activate the sheet add-on on all puzzles missing it
+description: >
+  Deploys the Puzzle Tools Apps Script add-on to every unsolved puzzle whose
+  sheet does not yet have it (sheetenabled=0 and a non-empty drive_id).
+  Successfully activated puzzles get sheetenabled=1. Equivalent to the former
+  puzzcord !activate_all command. Requires Google integration
+  (SKIP_GOOGLE_API=false and valid service-account credentials).
+tags:
+  - Puzzles
+parameters: []
+responses:
+  200:
+    description: Activation attempted on all eligible puzzles (per-puzzle failures are reported in results, not as an HTTP error)
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        message:
+          type: string
+          example: "Activated 3/4 sheets"
+        activated:
+          type: integer
+          description: Number of sheets successfully activated
+        failed:
+          type: integer
+          description: Number of sheets that failed to activate
+        results:
+          type: array
+          description: Per-puzzle outcome (absent when no puzzles needed activation)
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Puzzle name
+              status:
+                type: string
+                enum: [activated, failed, error]
+              error:
+                type: string
+                description: Exception message (only when status is error)
+  500:
+    description: Database error while listing puzzles
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: string
