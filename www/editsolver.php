@@ -1,8 +1,9 @@
+<?php require_once('puzzlebosslib.php'); // set pb_csrf cookie before any output ?>
 <html>
 <head><title>Change Solver</title></head><body>
 <?php
 
-require('puzzlebosslib.php');
+require_once('puzzlebosslib.php');
 
 if (isset($_POST['submit'])) {
   pb_verify_csrf();

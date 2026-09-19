@@ -1,3 +1,4 @@
+<?php require_once('puzzlebosslib.php'); // set pb_csrf cookie before any output ?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -13,7 +14,7 @@
 </head>
 <body class="status-page">
 <?php
-require('puzzlebosslib.php');
+require_once('puzzlebosslib.php');
 
 function startuseronpuzzle($id, $puzz) {
   try {

@@ -1,3 +1,4 @@
+<?php require_once('puzzlebosslib.php'); // set pb_csrf cookie before any output ?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -9,7 +10,7 @@
 <body class="status-page">
 
 <?php
-require('puzzlebosslib.php');
+require_once('puzzlebosslib.php');
 
 $uid = getauthenticateduser();
 $allowed = checkpriv("puzztech", $uid);

@@ -1178,9 +1178,10 @@ def test_solved_puzzles_excluded():
         solve_result = page.evaluate(f"""
             async () => {{
                 try {{
+                    const csrf = (document.cookie.match(/(?:^|;\\s*)pb_csrf=([^;]*)/) || [])[1] || '';
                     const response = await fetch('./apicall.php?apicall=puzzle&apiparam1={puzzle_id}&apiparam2=answer', {{
                         method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
+                        headers: {{ 'Content-Type': 'application/json', 'X-PB-CSRF': csrf }},
                         body: JSON.stringify({{ answer: 'TESTANSWER' }})
                     }});
                     const data = await response.json();
