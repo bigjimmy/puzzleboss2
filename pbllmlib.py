@@ -32,8 +32,19 @@ chromadb = None
 Settings = None
 
 # Check if optional dependencies are available WITHOUT importing them
-GEMINI_AVAILABLE = importlib.util.find_spec("google.genai") is not None
-CHROMADB_AVAILABLE = importlib.util.find_spec("chromadb") is not None
+
+
+def _spec_available(name):
+    """find_spec, but False (not ModuleNotFoundError) when the parent package is
+    missing entirely — e.g. "google.genai" on a box with no google-* packages."""
+    try:
+        return importlib.util.find_spec(name) is not None
+    except ModuleNotFoundError:
+        return False
+
+
+GEMINI_AVAILABLE = _spec_available("google.genai")
+CHROMADB_AVAILABLE = _spec_available("chromadb")
 
 # Wiki indexer needs to be imported at startup (runs in background thread)
 WIKI_INDEXER_AVAILABLE = False
