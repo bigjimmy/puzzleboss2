@@ -710,6 +710,7 @@ def process_query(
     get_tag_id_by_name_fn=None,
     get_puzzles_by_tag_id_fn=None,
     wiki_chromadb_path=None,
+    embedding_model=None,
 ):
     """
     Process a natural language query using Google Gemini.
@@ -811,6 +812,7 @@ def process_query(
                     get_puzzles_by_tag_id_fn,
                     wiki_chromadb_path,
                     api_key,
+                    embedding_model=embedding_model,
                 )
 
                 function_responses.append(
