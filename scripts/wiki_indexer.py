@@ -34,10 +34,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pblib import debug_log
-# embedding_model_id / DEFAULT_EMBEDDING_MODEL are imported lazily inside the
-# functions that use them: pbllmlib imports this module at load time, so a
-# module-level import here would be circular.
+from pblib import debug_log, DEFAULT_EMBEDDING_MODEL, embedding_model_id
 
 # Configuration
 CONFIG_FILE = os.path.join(
@@ -254,8 +251,6 @@ def chunk_content(title, content, chunk_size=1000, overlap=200):
 
 def create_embeddings(chunks, api_key, embedding_model=None):
     """Create embeddings for chunks using Google Gemini."""
-    from pbllmlib import embedding_model_id
-
     if not chunks:
         return []
 
@@ -296,8 +291,6 @@ def index_wiki(config, full_reindex=False):
     wiki_url = config.get("WIKI_URL", "")
     chromadb_path = config.get("WIKI_CHROMADB_PATH", "/var/lib/puzzleboss/chromadb")
     api_key = config.get("GEMINI_API_KEY", "")
-    from pbllmlib import DEFAULT_EMBEDDING_MODEL, embedding_model_id
-
     embedding_model = config.get("GEMINI_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL
 
     if not wiki_url:

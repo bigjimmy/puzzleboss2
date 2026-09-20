@@ -10,19 +10,12 @@ import threading
 import fcntl
 import os
 import importlib.util
-from pblib import debug_log
-
-# Embedding model for wiki RAG, configurable via GEMINI_EMBEDDING_MODEL. The
-# index and every query MUST use the same model (vectors from different models
-# are not comparable), so the indexer stamps the model into the collection
-# metadata and search_wiki refuses to query a mismatched index.
-DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
-
-
-def embedding_model_id(name):
-    """Normalize a config value to the 'models/<name>' form the SDK expects."""
-    name = (name or DEFAULT_EMBEDDING_MODEL).strip()
-    return name if name.startswith("models/") else "models/" + name
+# Embedding model for wiki RAG (GEMINI_EMBEDDING_MODEL). The index and every
+# query MUST use the same model (vectors from different models are not
+# comparable): the indexer stamps the model into the collection metadata and
+# search_wiki refuses to query a mismatched index. Helpers live in pblib so
+# the indexer can use them without importing this module.
+from pblib import debug_log, DEFAULT_EMBEDDING_MODEL, embedding_model_id  # noqa: F401
 
 
 # Lazy-loaded modules (imported on first use to speed up worker startup)

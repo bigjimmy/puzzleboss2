@@ -253,6 +253,19 @@ except Exception as e:
     sys.exit(255)
 
 
+# --- Wiki RAG embedding model ---------------------------------------------
+# Lives here (not in pbllmlib) so scripts/wiki_indexer.py can import it
+# without importing pbllmlib, whose import starts a background indexing
+# thread — a standalone indexer run must not trigger a second one.
+DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
+
+
+def embedding_model_id(name):
+    """Normalize GEMINI_EMBEDDING_MODEL to the 'models/<name>' form the SDK expects."""
+    name = (name or DEFAULT_EMBEDDING_MODEL).strip()
+    return name if name.startswith("models/") else "models/" + name
+
+
 # --- Config secret redaction and internal-token auth ---------------------
 #
 # GET /config and GET /huntinfo dump the config table, which holds secrets
