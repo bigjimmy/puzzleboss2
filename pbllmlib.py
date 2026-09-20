@@ -290,6 +290,51 @@ def _init_wiki_search(chromadb_path, api_key):
         return None
 
 
+# Scoring for wiki search hits. Relevance comes from the embedding distance;
+# priority and recency only reorder near-equal matches — they must never
+# decide whether a page can be returned at all. The previous version applied
+# a -0.8 penalty to pages older than 3 years and then dropped anything below
+# 0.1, which on a 15-year-old team wiki (92% of pages >3y old, median 12.7y)
+# excluded almost every page: with gemini-embedding-001 a strong match has
+# cosine distance ~0.6, i.e. base_score ~0.4, so 0.4 - 0.8 was always dropped.
+_WIKI_MIN_BASE_SCORE = 0.05  # distance > 0.95: essentially unrelated
+
+
+def _score_wiki_hit(distance, metadata, now=None):
+    """Return (final_score, keep) for one ChromaDB hit."""
+    from datetime import datetime, timezone
+
+    base_score = 1 - distance
+    if base_score < _WIKI_MIN_BASE_SCORE:
+        return base_score, False
+
+    priority_boost = 0.15 if metadata.get("is_priority", False) else 0.0
+
+    recency_boost = 0.0
+    last_modified = metadata.get("last_modified", "")
+    if last_modified:
+        try:
+            mod_date = datetime.fromisoformat(last_modified.replace("Z", "+00:00"))
+            if mod_date.tzinfo is None:
+                mod_date = mod_date.replace(tzinfo=timezone.utc)
+            now = now or datetime.now(timezone.utc)
+            days_old = (now - mod_date).days
+            if days_old < 30:
+                recency_boost = 0.10
+            elif days_old < 365:
+                recency_boost = 0.05
+            elif days_old < 730:
+                recency_boost = 0.0
+            elif days_old < 1095:
+                recency_boost = -0.05
+            else:
+                recency_boost = -0.10
+        except Exception:
+            pass
+
+    return base_score + priority_boost + recency_boost, True
+
+
 def search_wiki(query, chromadb_path, api_key, n_results=5, embedding_model=None):
     """Search the wiki for relevant content using semantic search.
 
@@ -349,44 +394,11 @@ def search_wiki(query, chromadb_path, api_key, n_results=5, embedding_model=None
                 metadata = results["metadatas"][0][i] if results["metadatas"] else {}
                 distance = results["distances"][0][i] if results["distances"] else 1.0
 
-                # Base relevance score (1 - distance, so higher is better)
-                base_score = 1 - distance
-
-                # Boost priority pages
-                is_priority = metadata.get("is_priority", False)
-                priority_boost = 0.15 if is_priority else 0
-
-                # Boost recent pages, penalize old pages
-                # Pages older than 3 years are heavily penalized (essentially ignored)
-                recency_boost = 0
-                last_modified = metadata.get("last_modified", "")
-                if last_modified:
-                    try:
-                        from datetime import datetime
-
-                        mod_date = datetime.fromisoformat(
-                            last_modified.replace("Z", "+00:00")
-                        )
-                        now = datetime.now(mod_date.tzinfo)
-                        days_old = (now - mod_date).days
-                        if days_old < 30:
-                            recency_boost = 0.1
-                        elif days_old < 365:
-                            recency_boost = 0.05
-                        elif days_old < 730:  # 1-2 years old
-                            recency_boost = -0.1
-                        elif days_old < 1095:  # 2-3 years old
-                            recency_boost = -0.3
-                        else:  # 3+ years old - heavily penalize
-                            recency_boost = -0.8
-                    except Exception:
-                        pass
-
-                final_score = base_score + priority_boost + recency_boost
-
-                # Skip pages with very low scores (heavily penalized old pages)
-                if final_score < 0.1:
+                final_score, keep = _score_wiki_hit(distance, metadata)
+                if not keep:
                     continue
+                is_priority = bool(metadata.get("is_priority", False))
+                last_modified = metadata.get("last_modified", "")
 
                 wiki_results.append(
                     {
