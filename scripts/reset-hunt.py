@@ -251,6 +251,77 @@ def load_sql_file(config, sql_file):
         return False
 
 
+
+def snapshot_tsdb_volume(label: str):
+    """Snapshot the utility server's Prometheus data volume (hunt telemetry).
+
+    Prometheus keeps 30 days; a hunt weekend's metrics are gone soon after.
+    An EBS snapshot of the data volume is a cheap, durable copy that can be
+    turned back into a volume and mounted later. Returns the snapshot id,
+    None if not running on EC2 (dev/docker), or raises on a real failure.
+
+    The volume is found by tag on the instance we're running on, so this
+    needs no hardcoded ids. The filesystem is frozen for the ~1s it takes to
+    initiate the snapshot (point-in-time consistency); Prometheus tolerates
+    crash-consistent snapshots anyway, so the freeze is best-effort.
+    """
+    import json
+    import urllib.request
+
+    def imds(path):
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/api/token", method="PUT",
+            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"})
+        token = urllib.request.urlopen(req, timeout=2).read().decode()
+        req = urllib.request.Request(
+            "http://169.254.169.254/latest/" + path,
+            headers={"X-aws-ec2-metadata-token": token})
+        return urllib.request.urlopen(req, timeout=2).read().decode()
+
+    try:
+        instance_id = imds("meta-data/instance-id")
+        region = json.loads(imds("dynamic/instance-identity/document"))["region"]
+    except Exception:
+        debug_log("Not running on EC2 (no instance metadata); skipping TSDB snapshot")
+        return None
+
+    aws = ["aws", "--region", region, "--output", "json"]
+    out = subprocess.run(
+        aws + ["ec2", "describe-volumes", "--filters",
+               f"Name=attachment.instance-id,Values={instance_id}",
+               "Name=tag:Name,Values=puzzleboss-prometheus-data"],
+        capture_output=True, text=True, check=True).stdout
+    vols = json.loads(out)["Volumes"]
+    if not vols:
+        raise RuntimeError("no volume tagged puzzleboss-prometheus-data is attached to this instance")
+    vol_id = vols[0]["VolumeId"]
+    mount = "/var/lib/prometheus"
+
+    frozen = False
+    if os.geteuid() == 0:
+        subprocess.run(["sync"], check=False)
+        frozen = subprocess.run(["fsfreeze", "-f", mount], capture_output=True).returncode == 0
+        if not frozen:
+            debug_log(f"fsfreeze of {mount} failed; taking a crash-consistent snapshot instead")
+    else:
+        debug_log("not root; taking a crash-consistent snapshot (no fsfreeze)")
+    try:
+        out = subprocess.run(
+            aws + ["ec2", "create-snapshot", "--volume-id", vol_id,
+                   "--description", f"puzzleboss Prometheus TSDB archive ({label})",
+                   "--tag-specifications",
+                   "ResourceType=snapshot,Tags=["
+                   f"{{Key=Name,Value=puzzleboss-prometheus-{label}}},"
+                   "{Key=Project,Value=puzzleboss},"
+                   "{Key=Purpose,Value=hunt-telemetry-archive}]"],
+            capture_output=True, text=True, check=True).stdout
+    finally:
+        if frozen:
+            subprocess.run(["fsfreeze", "-u", mount], check=False)
+    snap_id = json.loads(out)["SnapshotId"]
+    debug_log(f"TSDB snapshot started: {snap_id} of {vol_id} (completes in the background)")
+    return snap_id
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(description='Reset hunt database (DESTRUCTIVE)')
@@ -259,7 +330,23 @@ def main():
         action='store_true',
         help='Bypass interactive confirmation (DANGEROUS - for automated testing only)'
     )
+    parser.add_argument(
+        '--tsdb-snapshot-only',
+        action='store_true',
+        help='Only snapshot the Prometheus data volume (non-destructive). Run this right after a hunt.'
+    )
+    parser.add_argument(
+        '--skip-tsdb-snapshot',
+        action='store_true',
+        help='Reset without snapshotting the Prometheus data volume'
+    )
     args = parser.parse_args()
+
+    if args.tsdb_snapshot_only:
+        label = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        snap = snapshot_tsdb_volume(label)
+        print(f"TSDB snapshot: {snap}" if snap else "No snapshot taken (not on EC2)")
+        sys.exit(0 if snap else 1)
 
     print("==WARNING!!!===WARNING!!!===WARNING!!!===WARNING==")
     print("")
@@ -313,6 +400,19 @@ def main():
     for table in preserve_tables:
         if not dump_table(config, table, backup_dir / f"{table}.sql"):
             print(f"Failed to backup {table} table. Aborting.")
+            sys.exit(1)
+
+    # Archive the Prometheus data volume before touching anything. Abort on a
+    # real failure, same as a failed DB backup; skip quietly when not on EC2.
+    tsdb_snapshot = None
+    if args.skip_tsdb_snapshot:
+        debug_log("Skipping TSDB snapshot (--skip-tsdb-snapshot)")
+    else:
+        try:
+            tsdb_snapshot = snapshot_tsdb_volume(timestamp)
+        except Exception as e:
+            print(f"Failed to snapshot the Prometheus data volume: {e}")
+            print("Aborting. Re-run with --skip-tsdb-snapshot to reset without it.")
             sys.exit(1)
 
     # Drop and recreate the entire database to avoid DEFINER privilege issues
@@ -370,6 +470,8 @@ def main():
 
     print("\nHunt reset completed successfully!")
     print(f"Backups saved in: {backup_dir}")
+    if tsdb_snapshot:
+        print(f"Prometheus TSDB snapshot: {tsdb_snapshot} (EBS, tagged Purpose=hunt-telemetry-archive)")
     print(f"Full database backup: {full_backup_file}")
 
 
