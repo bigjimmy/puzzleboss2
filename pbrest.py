@@ -3313,6 +3313,7 @@ def llm_query():
         get_tag_id_by_name_fn=get_tag_id_by_name,
         get_puzzles_by_tag_id_fn=get_puzzles_by_tag_id,
         wiki_chromadb_path=configstruct.get("WIKI_CHROMADB_PATH", ""),
+        embedding_model=configstruct.get("GEMINI_EMBEDDING_MODEL"),
     )
 
     if result.get("status") == "error":

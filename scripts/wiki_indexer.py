@@ -35,6 +35,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pblib import debug_log
+# embedding_model_id / DEFAULT_EMBEDDING_MODEL are imported lazily inside the
+# functions that use them: pbllmlib imports this module at load time, so a
+# module-level import here would be circular.
 
 # Configuration
 CONFIG_FILE = os.path.join(
@@ -249,8 +252,10 @@ def chunk_content(title, content, chunk_size=1000, overlap=200):
     return chunks
 
 
-def create_embeddings(chunks, api_key):
+def create_embeddings(chunks, api_key, embedding_model=None):
     """Create embeddings for chunks using Google Gemini."""
+    from pbllmlib import embedding_model_id
+
     if not chunks:
         return []
 
@@ -263,7 +268,7 @@ def create_embeddings(chunks, api_key):
             text = f"{chunk['title']}: {chunk['content']}"
 
             result = client.models.embed_content(
-                model="models/gemini-embedding-001", contents=text
+                model=embedding_model_id(embedding_model), contents=text
             )
 
             embeddings.append(result.embeddings[0].values)
@@ -291,6 +296,9 @@ def index_wiki(config, full_reindex=False):
     wiki_url = config.get("WIKI_URL", "")
     chromadb_path = config.get("WIKI_CHROMADB_PATH", "/var/lib/puzzleboss/chromadb")
     api_key = config.get("GEMINI_API_KEY", "")
+    from pbllmlib import DEFAULT_EMBEDDING_MODEL, embedding_model_id
+
+    embedding_model = config.get("GEMINI_EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL
 
     if not wiki_url:
         debug_log(1, "WIKI_URL not configured - cannot index wiki")
@@ -338,9 +346,26 @@ def index_wiki(config, full_reindex=False):
         except Exception:
             pass
 
-    collection = client.get_or_create_collection(
-        name=collection_name, metadata={"description": "MediaWiki page chunks for RAG"}
-    )
+    # The embedding model is stamped into the collection so search_wiki can
+    # refuse to query an index built with a different model.
+    collection_metadata = {
+        "description": "MediaWiki page chunks for RAG",
+        "embedding_model": embedding_model_id(embedding_model),
+    }
+    collection = client.get_or_create_collection(name=collection_name, metadata=collection_metadata)
+    indexed_with = (collection.metadata or {}).get("embedding_model")
+    if indexed_with and indexed_with != collection_metadata["embedding_model"]:
+        debug_log(
+            1,
+            f"Existing index was built with {indexed_with} but GEMINI_EMBEDDING_MODEL is "
+            f"{collection_metadata['embedding_model']}. Refusing an incremental index: "
+            "run with --full to rebuild.",
+        )
+        return False
+    if not indexed_with:
+        # Pre-existing index from before the model was recorded: stamp it with
+        # the model that built it (the old hardcoded default).
+        collection.modify(metadata={**(collection.metadata or {}), "embedding_model": embedding_model_id(DEFAULT_EMBEDDING_MODEL)})
 
     # Fetch all wiki pages
     try:
@@ -403,7 +428,7 @@ def index_wiki(config, full_reindex=False):
     debug_log(3, f"Creating embeddings for {len(all_chunks)} chunks")
 
     # Create embeddings
-    embeddings = create_embeddings(all_chunks, api_key)
+    embeddings = create_embeddings(all_chunks, api_key, embedding_model)
 
     # Filter out failed embeddings
     valid_data = [

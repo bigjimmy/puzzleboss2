@@ -63,7 +63,7 @@ Schema in [`scripts/puzzleboss.sql`](scripts/puzzleboss.sql). Key tables:
 - Redis cache (`REDIS_ENABLED`, `REDIS_HOST`, `REDIS_PORT`)
 - Prometheus metrics (exposed at `/metrics` if `prometheus_flask_exporter` installed — it is in the dev/prod images)
 - LLM queries (`/v1/query`, requires `google-genai`)
-- Wiki RAG (`WIKI_URL`, `WIKI_CHROMADB_PATH`, requires `chromadb`)
+- Wiki RAG (`WIKI_URL`, `WIKI_CHROMADB_PATH`, `GEMINI_EMBEDDING_MODEL`, requires `chromadb`). The embedding model is stamped into the ChromaDB collection metadata; changing it requires `scripts/wiki_indexer.py --full`, and `search_wiki` refuses a mismatched index.
 
 ## Development workflow
 

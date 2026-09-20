@@ -12,6 +12,19 @@ import os
 import importlib.util
 from pblib import debug_log
 
+# Embedding model for wiki RAG, configurable via GEMINI_EMBEDDING_MODEL. The
+# index and every query MUST use the same model (vectors from different models
+# are not comparable), so the indexer stamps the model into the collection
+# metadata and search_wiki refuses to query a mismatched index.
+DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
+
+
+def embedding_model_id(name):
+    """Normalize a config value to the 'models/<name>' form the SDK expects."""
+    name = (name or DEFAULT_EMBEDDING_MODEL).strip()
+    return name if name.startswith("models/") else "models/" + name
+
+
 # Lazy-loaded modules (imported on first use to speed up worker startup)
 genai = None
 types = None
@@ -273,7 +286,7 @@ def _init_wiki_search(chromadb_path, api_key):
         return None
 
 
-def search_wiki(query, chromadb_path, api_key, n_results=5):
+def search_wiki(query, chromadb_path, api_key, n_results=5, embedding_model=None):
     """Search the wiki for relevant content using semantic search.
 
     Results are boosted by:
@@ -294,10 +307,28 @@ def search_wiki(query, chromadb_path, api_key, n_results=5):
             "results": [],
         }
 
+    model_id = embedding_model_id(embedding_model)
+    indexed_with = (collection.metadata or {}).get("embedding_model")
+    if indexed_with and embedding_model_id(indexed_with) != model_id:
+        debug_log(
+            2,
+            f"Wiki index was built with {indexed_with} but GEMINI_EMBEDDING_MODEL is "
+            f"{model_id}; re-run scripts/wiki_indexer.py --full",
+        )
+        return {
+            "status": "error",
+            "error": (
+                f"Wiki index was built with embedding model {indexed_with}, but "
+                f"GEMINI_EMBEDDING_MODEL is now {model_id}. Re-index with "
+                "scripts/wiki_indexer.py --full."
+            ),
+            "results": [],
+        }
+
     try:
         # Create embedding for query using Gemini
         client = genai.Client(api_key=api_key)
-        result = client.models.embed_content(model="models/gemini-embedding-001", contents=query)
+        result = client.models.embed_content(model=model_id, contents=query)
         query_embedding = result.embeddings[0].values
 
         # Search ChromaDB - fetch more than needed for re-ranking
@@ -607,6 +638,7 @@ def execute_tool(
     get_puzzles_by_tag_id_fn=None,
     wiki_chromadb_path=None,
     api_key=None,
+    embedding_model=None,
 ):
     """Execute an LLM tool and return the result."""
     if tool_name == "get_hunt_summary":
@@ -639,7 +671,10 @@ def execute_tool(
     elif tool_name == "get_all_data":
         return get_all_data(get_all_data_fn)
     elif tool_name == "search_wiki":
-        return search_wiki(tool_args.get("query", ""), wiki_chromadb_path, api_key)
+        return search_wiki(
+            tool_args.get("query", ""), wiki_chromadb_path, api_key,
+            embedding_model=embedding_model,
+        )
     else:
         return {"status": "error", "error": f"Unknown tool: {tool_name}"}
 

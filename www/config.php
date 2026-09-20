@@ -492,6 +492,7 @@ $keyCategoryMap = [
 
   'GEMINI_API_KEY' => 'llm',
   'GEMINI_MODEL' => 'llm',
+  'GEMINI_EMBEDDING_MODEL' => 'llm',
   'GEMINI_SYSTEM_INSTRUCTION' => 'llm',
   'WIKI_URL' => 'llm',
   'WIKI_CHROMADB_PATH' => 'llm',
@@ -562,7 +563,8 @@ $keyDescriptions = [
   'REDIS_HOST' => 'Redis server hostname',
   'REDIS_PORT' => 'Redis server port',
   'GEMINI_API_KEY' => 'Google Gemini API key for LLM queries',
-  'GEMINI_MODEL' => 'Gemini model name (e.g. gemini-3-flash-preview)',
+  'GEMINI_MODEL' => 'Gemini model for /v1/query and PuzzBot chat (e.g. gemini-3.5-flash-lite). Needs function-calling support.',
+  'GEMINI_EMBEDDING_MODEL' => 'Gemini embedding model for wiki RAG search (default gemini-embedding-001). CHANGING THIS REQUIRES A FULL RE-INDEX (scripts/wiki_indexer.py --full) — vectors from different models are not comparable, and search refuses a mismatched index.',
   'GEMINI_SYSTEM_INSTRUCTION' => 'System prompt for the Gemini LLM assistant',
   'WIKI_URL' => 'Base URL of the team wiki for RAG indexing',
   'WIKI_CHROMADB_PATH' => 'File path to ChromaDB vector store',
