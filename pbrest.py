@@ -2714,26 +2714,36 @@ def delete_account(username):
 @swag_from("swag/getnewusers.yaml", endpoint="get_new_users", methods=["GET"])
 @admin_token_gated
 def get_new_users():
-    """Return all pending account registrations from the newuser table."""
+    """Return all pending account registrations from the newuser table.
+
+    The verification `code` is deliberately never returned here: it is the
+    sole credential GET /finishaccount/<code> needs to complete (or hijack)
+    a signup, and this endpoint's callers (the admin accounts page) have no
+    legitimate need to see it. `id` is what admin actions reference instead.
+    """
     debug_log(4, "start")
     conn, cursor = _read_cursor()
-    cursor.execute("SELECT username, fullname, email, code, created_at FROM newuser ORDER BY created_at DESC")
+    cursor.execute(
+        "SELECT id, username, fullname, email, created_at FROM newuser ORDER BY created_at DESC"
+    )
     rows = cursor.fetchall()
     return {"status": "ok", "newusers": rows}
 
 
-@app.route("/newusers/<code>", endpoint="delete_new_user", methods=["DELETE"])
+@app.route("/newusers/<int:new_user_id>", endpoint="delete_new_user", methods=["DELETE"])
 @swag_from("swag/deletenewuser.yaml", endpoint="delete_new_user", methods=["DELETE"])
-def delete_new_user(code):
-    """Delete a pending account registration by verification code."""
-    debug_log(4, f"start. code {code}")
+@admin_token_gated
+def delete_new_user(new_user_id):
+    """Delete a pending account registration by its id (not the verification code —
+    see get_new_users for why the code never leaves the server)."""
+    debug_log(4, f"start. id {new_user_id}")
     conn, cursor = _cursor()
-    cursor.execute("DELETE FROM newuser WHERE code = %s", (code,))
+    cursor.execute("DELETE FROM newuser WHERE id = %s", (int(new_user_id),))
     conn.commit()
     deleted = cursor.rowcount
     if deleted == 0:
-        raise Exception(f"No pending account found with code {code}")
-    debug_log(3, f"pending account with code {code} deleted")
+        raise Exception(f"No pending account found with id {new_user_id}")
+    debug_log(3, f"pending account with id {new_user_id} deleted")
     return {"status": "ok"}
 
 

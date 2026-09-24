@@ -1,6 +1,14 @@
 tags:
   - Accounts
 summary: List pending account registrations
+description: |
+  The verification `code` is never included in the response: it is the sole
+  credential GET /finishaccount/<code> needs to complete a signup, so exposing
+  it here would let anyone who can read this endpoint hijack a pending
+  registration. Use `id` to reference a row (e.g. for DELETE /newusers/<id>).
+  Requires X-PB-Internal-Token when ADMIN_TOKEN_ENFORCE is true.
 responses:
     200:
-        description: List of pending accounts from newuser table
+        description: List of pending accounts from newuser table (code omitted)
+    403:
+        description: Missing or invalid X-PB-Internal-Token (only when ADMIN_TOKEN_ENFORCE=true)

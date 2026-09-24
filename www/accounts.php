@@ -264,21 +264,19 @@ if ($hasGoogle) {
           <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Username</th>
           <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Full Name</th>
           <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Email</th>
-          <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Code</th>
           <th style="text-align: left; padding: 6px; border-bottom: 2px solid var(--border-medium);">Created</th>
           <th style="padding: 6px; border-bottom: 2px solid var(--border-medium);"></th>
         </tr>
       </thead>
       <tbody>
         <?php foreach ($pendingUsers as $pu): ?>
-        <tr id="pending-<?= htmlspecialchars($pu->code) ?>">
+        <tr id="pending-<?= (int)$pu->id ?>">
           <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); font-family: var(--font-mono); font-weight: 600;"><?= htmlspecialchars($pu->username) ?></td>
           <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light);"><?= htmlspecialchars($pu->fullname) ?></td>
           <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light);"><?= htmlspecialchars($pu->email) ?></td>
-          <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); font-family: var(--font-mono); color: var(--text-secondary);"><?= htmlspecialchars($pu->code) ?></td>
           <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary);"><?= htmlspecialchars(substr($pu->created_at, 0, 16)) ?></td>
           <td style="padding: 4px 6px; border-bottom: 1px solid var(--border-light); white-space: nowrap;">
-            <button class="btn-danger" onclick="deletePending('<?= htmlspecialchars($pu->code, ENT_QUOTES) ?>', '<?= htmlspecialchars($pu->username, ENT_QUOTES) ?>')">Delete</button>
+            <button class="btn-danger" onclick="deletePending(<?= (int)$pu->id ?>, '<?= htmlspecialchars($pu->username, ENT_QUOTES) ?>')">Delete</button>
           </td>
         </tr>
         <?php endforeach; ?>
@@ -682,12 +680,12 @@ function togglePending() {
   icon.textContent = hidden ? '▼' : '▶';
 }
 
-async function deletePending(code, username) {
+async function deletePending(id, username) {
   if (!confirm('Delete pending registration for "' + username + '"?')) return;
 
   const statusArea = document.getElementById('status-area');
   try {
-    const resp = await fetch(apiProxy + '?apicall=newusers&apiparam1=' + encodeURIComponent(code), {
+    const resp = await fetch(apiProxy + '?apicall=newusers&apiparam1=' + encodeURIComponent(id), {
       method: 'DELETE',
       headers: {'X-PB-CSRF': getCsrfToken()}
     });
@@ -697,7 +695,7 @@ async function deletePending(code, username) {
     window.onFetchSuccess?.();
 
     // Remove the row (getElementById takes a plain string, not a CSS selector)
-    const row = document.getElementById('pending-' + code);
+    const row = document.getElementById('pending-' + id);
     if (row) row.remove();
 
     // Hide box if no more pending rows

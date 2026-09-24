@@ -1,12 +1,20 @@
 tags:
   - Accounts
 summary: Delete a pending account registration
+description: |
+  Deletes by the newuser row's id (see GET /newusers), not by the
+  verification code. Requires X-PB-Internal-Token when ADMIN_TOKEN_ENFORCE
+  is true.
 parameters:
-  - name: code
+  - name: new_user_id
     in: path
-    type: string
+    type: integer
     required: true
-    description: The verification code of the pending account
+    description: The id of the pending account (from GET /newusers)
 responses:
     200:
         description: Pending account deleted
+    403:
+        description: Missing or invalid X-PB-Internal-Token (only when ADMIN_TOKEN_ENFORCE=true)
+    500:
+        description: No pending account found with that id
