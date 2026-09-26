@@ -1413,41 +1413,85 @@ def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
     return 0
 
 
-def add_user_to_google(username, firstname, lastname, password, recovery_email=None):
-    """Create a Google Workspace user account via Admin SDK. Returns 'OK' or error message."""
-    debug_log(
-        4,
-        f"start with (username, firstname, lastname, password): {username} {firstname} {lastname} REDACTED",
-    )
-    msg = ""
-    initadmin()
+def provision_new_google_user(username, firstname, lastname, recovery_email=None):
+    """Create a Google Workspace account with a random one-time password that
+    Google forces the owner to change at their next sign-in, or -- if the
+    account already exists because a previous attempt got interrupted before
+    the owner completed that forced change -- reissue a fresh one-time
+    password onto the existing account. Never touches an account whose owner
+    has already set a real password.
 
+    The temp password this returns MUST be delivered out-of-band (email) and
+    never persisted to the database: it is intentionally single-use, and the
+    email is the only durable record of it.
+
+    Returns (status, temp_password_or_None, message):
+      "created"        -- new account made, temp_password is set on it
+      "reissued"       -- account existed with the forced-change flag still
+                           set (owner never completed first sign-in); a new
+                           temp_password was set
+      "already_active" -- account exists and the owner already completed
+                           their forced password change; nothing was touched,
+                           temp_password is None
+      "error"          -- provisioning failed; message explains why
+    """
+    initadmin()
     userservice = build("admin", "directory_v1", credentials=admincreds)
+    email = f"{username}@{configstruct['DOMAINNAME']}"
+    temp_password = pblib.generate_temp_password()
 
     userbody = {
         "name": {"familyName": lastname, "givenName": firstname},
-        "password": password,
-        "primaryEmail": f"{username}@{configstruct['DOMAINNAME']}",
+        "password": temp_password,
+        "primaryEmail": email,
+        "changePasswordAtNextLogin": True,
     }
     if recovery_email:
         userbody["recoveryEmail"] = recovery_email
 
     safe_body = {k: ("REDACTED" if k == "password" else v) for k, v in userbody.items()}
+    debug_log(4, f"start for username {username}")
     debug_log(5, f"Attempting to add user with post body: {json.dumps(safe_body)}")
+
     try:
         _rate_limiter.acquire()
-        addresponse = userservice.users().insert(body=userbody).execute()
+        userservice.users().insert(body=userbody).execute()
+        debug_log(4, f"Created new google user {username}")
+        return "created", temp_password, "OK"
+    except googleapiclient.errors.HttpError as e:
+        if e.resp.status != 409:
+            msg = json.loads(e.content)["error"]["message"]
+            errmsg = f"Error in adding user: {msg}"
+            debug_log(1, errmsg)
+            return "error", None, errmsg
+        debug_log(
+            3,
+            f"User {username}: account already exists (409); checking whether "
+            "the owner has completed their first-login password change",
+        )
+
+    # Account already exists. Only touch it if the owner never finished the
+    # forced change from a previous (interrupted) provisioning attempt.
+    try:
+        _rate_limiter.acquire()
+        existing = userservice.users().get(userKey=email).execute()
     except googleapiclient.errors.HttpError as e:
         msg = json.loads(e.content)["error"]["message"]
-        addresponse = None
-
-    if not addresponse:
-        errmsg = f"Error in adding user: {msg}"
+        errmsg = f"Error looking up existing user: {msg}"
         debug_log(1, errmsg)
-        return errmsg
+        return "error", None, errmsg
 
-    debug_log(4, f"Created new google user {username}")
-    return "OK"
+    if not existing.get("changePasswordAtNextLogin"):
+        debug_log(
+            3, f"User {username}: account already fully set up; leaving password alone"
+        )
+        return "already_active", None, "OK"
+
+    result = change_google_user_password(username, temp_password, change_password_at_next_login=True)
+    if result != "OK":
+        return "error", None, result
+    debug_log(4, f"Reissued temp password for existing (not-yet-activated) user {username}")
+    return "reissued", temp_password, "OK"
 
 
 def delete_google_user(username):
@@ -1478,8 +1522,14 @@ def delete_google_user(username):
     return "OK"
 
 
-def change_google_user_password(username, password):
-    """Change a Google Workspace user's password. Returns 'OK' or error message."""
+def change_google_user_password(username, password, change_password_at_next_login=False):
+    """Change a Google Workspace user's password. Returns 'OK' or error message.
+
+    change_password_at_next_login=True marks the new password as one-time:
+    used by provision_new_google_user to reissue a temp password on an
+    account whose owner never completed their original forced password
+    change.
+    """
     debug_log(4, f"start with (username, password): {username} REDACTED")
     msg = ""
     initadmin()
@@ -1487,6 +1537,8 @@ def change_google_user_password(username, password):
     userservice = build("admin", "directory_v1", credentials=admincreds)
     email = f"{username}@{configstruct['DOMAINNAME']}"
     userbody = {"password": password, "primaryEmail": email}
+    if change_password_at_next_login:
+        userbody["changePasswordAtNextLogin"] = True
 
     debug_log(
         5, f"Attempting to change user pass with post body: {json.dumps(userbody)}"

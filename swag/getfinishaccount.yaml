@@ -6,7 +6,9 @@ description: |
 
   Supports optional step parameter for progress tracking:
   - step=1: Validate verification code
-  - step=2: Create Google Workspace account
+  - step=2: Create Google Workspace account (random one-time password,
+    emailed to the owner; response includes temp_password as a same-session
+    convenience, but the email is the durable copy)
   - step=3: Add to solver database (skipped if solver already exists)
   - step=4: Cleanup (delete temporary newuser entry)
 
@@ -44,6 +46,13 @@ responses:
         skipped:
           type: boolean
           description: True if step was skipped (e.g., step 3 when solver already exists)
+        temp_password:
+          type: string
+          description: |
+            Only present in the step 2 response, and only when a new one-time
+            password was actually (re)issued. Already emailed to the account
+            owner by the time this response is returned; provided here only
+            as a same-session convenience.
   500:
     description: Error during account creation
     schema:

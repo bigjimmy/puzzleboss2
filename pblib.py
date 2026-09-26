@@ -4,6 +4,7 @@ import yaml
 import sys
 import os
 import hmac
+import secrets
 import inspect
 import datetime
 import smtplib
@@ -374,6 +375,70 @@ def sanitize_puzzle_name(text):
     sanitized = re.sub(r'[\x00-\x1F\x7F<>:"\\|?* ]', "", text)
     # Trim whitespace
     return sanitized.strip()
+
+
+def generate_temp_password(length=18):
+    """Random one-time password for a freshly (re)created Google Workspace
+    account. URL-safe, so it survives being pasted from an email client
+    without mangling. Callers must never persist this -- Google is told
+    changePasswordAtNextLogin=True, so it is single-use by design; the only
+    durable copy is the email sent to the account owner.
+    """
+    return secrets.token_urlsafe(length)
+
+
+def email_temp_password(email, fullname, username, temp_password):
+    """Email a newly (re)issued Google Workspace temp password to the account
+    owner. Only called after the recipient has already clicked the
+    verification link, so this address has already been confirmed reachable
+    by the person completing signup -- same trust boundary as the
+    verification email itself.
+    """
+    debug_log(4, f"start for email: {email}")
+
+    team_name = configstruct["TEAMNAME"]
+    domain = configstruct["DOMAINNAME"]
+    full_username = f"{username}@{domain}"
+
+    messagecontent = f"""Hi {fullname},
+
+Your {team_name} Google account is ready: {full_username}
+
+Temporary password: {temp_password}
+
+Sign in at https://accounts.google.com/ with the address and password above.
+Google will immediately ask you to choose your own password -- this
+temporary one only works once, so please sign in and change it as soon as
+you can. If you lose it before your first sign-in, ask @Puzztech to send you
+a new one.
+
+If you did not request this account, please contact @Puzztech immediately.
+
+Thanks,
+The {team_name} Puzzletech Team
+
+---
+This is an automated message from {team_name} registration system.
+"""
+
+    debug_log(5, "Temp password email body: REDACTED (contains a one-time password)")
+
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = f"{team_name} - your Google account is ready"
+        msg["From"] = configstruct["REGEMAIL"]
+        msg["To"] = email
+        msg.set_content(messagecontent)
+        s = smtplib.SMTP(configstruct["MAILRELAY"])
+        s.send_message(msg)
+        s.quit()
+
+    except Exception as e:
+        errmsg = str(e)
+        debug_log(2, f"Exception sending temp password email: {errmsg}")
+        return errmsg
+
+    return "OK"
 
 
 def email_user_verification(email, code, fullname, username):

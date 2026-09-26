@@ -1,6 +1,10 @@
 tags:
   - Accounts
-description: Start New Account Registration
+description: |
+  Start New Account Registration. No password is collected: the Google
+  Workspace account's real password is chosen by the account owner at their
+  first Google sign-in (see GET /finishaccount), so nothing here is a secret
+  at rest.
 consumes:
     - application/json
 parameters:
@@ -13,15 +17,12 @@ parameters:
             - username
             - fullname
             - email
-            - password
         properties:
             username:
                 type: string
             fullname:
                 type: string
             email:
-                type: string
-            password:
                 type: string
             
 responses:

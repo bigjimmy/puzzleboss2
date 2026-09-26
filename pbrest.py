@@ -19,14 +19,14 @@ from pblib import (
     assign_solver_to_puzzle, unassign_solver_from_puzzle,
     clear_puzzle_solvers, check_round_completion,
     update_puzzle_field, update_botstat, increment_botstat, sanitize_puzzle_name,
-    email_user_verification, solver_exists,
+    email_user_verification, email_temp_password, solver_exists,
     redact_config, internal_token_valid, secret_config_keys,
 )
 import pbgooglelib
 from pbgooglelib import (
     initdrive, create_puzzle_sheet, create_round_folder,
     delete_puzzle_sheet, activate_puzzle_sheet_via_api,
-    add_user_to_google, delete_google_user,
+    provision_new_google_user, delete_google_user,
 )
 from pbdiscordlib import (
     chat_create_channel_for_puzzle, chat_announce_round,
@@ -2473,20 +2473,22 @@ def update_puzzle_part(id, part):
 @app.route("/account", endpoint="post_new_account", methods=["POST"])
 @swag_from("swag/putnewaccount.yaml", endpoint="post_new_account", methods=["POST"])
 def new_account():
+    """Start a signup. No password is collected or stored here: the Google
+    Workspace account's real password is chosen by the account owner at
+    their first Google sign-in (see finish_account / provision_new_google_user),
+    which also means nothing here needs to be treated as a secret at rest.
+    """
     debug_log(4, "start.")
     try:
         data = request.get_json()
         username = data["username"]
         fullname = data["fullname"]
         email = data["email"]
-        password = data["password"]
-        debug_log(5, f"request data: username={username} fullname={fullname} email={email} password=REDACTED")
+        debug_log(5, f"request data: username={username} fullname={fullname} email={email}")
     except TypeError:
         raise Exception("failed due to invalid JSON POST structure or empty POST")
     except KeyError:
-        raise Exception(
-            "Expected field missing (username, fullname, email, or password)"
-        )
+        raise Exception("Expected field missing (username, fullname, or email)")
 
     if _solver_exists(username):
         debug_log(
@@ -2508,10 +2510,10 @@ def new_account():
         cursor.execute(
             """
             INSERT INTO newuser
-            (username, fullname, email, password, code)
-            VALUES (%s, %s, %s, %s, %s)
+            (username, fullname, email, code)
+            VALUES (%s, %s, %s, %s)
             """,
-            (username, fullname, email, password, code),
+            (username, fullname, email, code),
         )
         conn.commit()
     except TypeError:
@@ -2534,6 +2536,42 @@ def new_account():
     return {"status": "ok", "code": code, "email_error": email_result}
 
 
+def _provision_google_account_and_notify(username, firstname, lastname, email):
+    """Create/reissue the Google Workspace account (see provision_new_google_user)
+    and, if a one-time password was actually issued, email it to the account
+    owner. Raises on failure. Returns a human-readable status message.
+
+    The temp password is deliberately not returned to callers beyond this
+    function's own email step -- see finish_account step 2, which forwards it
+    to the browser response too (as a same-session convenience; the email is
+    the durable copy) but never logs or stores it.
+    """
+    status, temp_password, message = provision_new_google_user(username, firstname, lastname, email)
+    if status == "error":
+        raise Exception(f"Failed to create Google account: {message}")
+
+    if status == "already_active":
+        debug_log(4, f"User {username}: Google account already fully set up; nothing to do")
+        return "Google account already set up", None
+
+    email_result = email_temp_password(email, f"{firstname} {lastname}", username, temp_password)
+    if email_result != "OK":
+        # The account/password exists regardless -- don't fail the signup over
+        # a mail delivery hiccup, but make sure it's loud in the logs, since
+        # the temp password has no other durable record.
+        debug_log(
+            1,
+            f"User {username}: Google account {status} but temp-password email failed: {email_result}",
+        )
+    else:
+        debug_log(4, f"User {username}: Google account {status}; temp password emailed")
+
+    return (
+        "Google account created" if status == "created" else "Google account password reissued",
+        temp_password,
+    )
+
+
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
 @swag_from("swag/getfinishaccount.yaml", endpoint="get_finish_account", methods=["GET"])
 def finish_account(code):
@@ -2542,7 +2580,8 @@ def finish_account(code):
 
     Steps:
       1 - Validate verification code
-      2 - Create Google Workspace account
+      2 - Create Google Workspace account (random one-time password, emailed
+          to the owner -- never stored; see provision_new_google_user)
       3 - Add to solver database (skipped if solver already exists)
       4 - Cleanup (delete temporary newuser entry)
 
@@ -2556,7 +2595,7 @@ def finish_account(code):
         conn, cursor = _cursor()
         cursor.execute(
             """
-            SELECT username, fullname, email, password, created_at
+            SELECT username, fullname, email, created_at
             FROM newuser
             WHERE code = %s
             """,
@@ -2567,8 +2606,7 @@ def finish_account(code):
         username = newuser["username"]
         fullname = newuser["fullname"]
         email = newuser["email"]
-        password = newuser["password"]
-        debug_log(5, f"newuser lookup: username={username} fullname={fullname} email={email} password=REDACTED")
+        debug_log(5, f"newuser lookup: username={username} fullname={fullname} email={email}")
 
         # Check code expiration (48 hours)
         import datetime
@@ -2587,7 +2625,7 @@ def finish_account(code):
 
     debug_log(
         4,
-        f"valid code. username: {username} fullname: {fullname} email: {email} password: REDACTED",
+        f"valid code. username: {username} fullname: {fullname} email: {email}",
     )
 
     firstname, lastname = fullname.split(maxsplit=1)
@@ -2597,9 +2635,8 @@ def finish_account(code):
         debug_log(
             4, f"User {username}: Running all steps at once (no step parameter)"
         )
-        result = add_user_to_google(username, firstname, lastname, password, email)
-        if result != "OK":
-            raise Exception(f"Failed to create Google account: {result}")
+        if configstruct.get("SKIP_GOOGLE_API") != "true":
+            _provision_google_account_and_notify(username, firstname, lastname, email)
         if not _solver_exists(username):
             conn, cursor = _cursor()
             cursor.execute(
@@ -2632,14 +2669,14 @@ def finish_account(code):
         debug_log(
             4, f"User {username}: Step 2 - Creating new Google Workspace account"
         )
-        result = add_user_to_google(username, firstname, lastname, password, email)
-        if result != "OK":
-            raise Exception(f"Failed to create Google account: {result}")
-        debug_log(
-            4,
-            f"User {username}: Step 2 - Google Workspace account created successfully",
-        )
-        return {"status": "ok", "step": 2, "message": "Google account created"}
+        message, temp_password = _provision_google_account_and_notify(username, firstname, lastname, email)
+        debug_log(4, f"User {username}: Step 2 - {message}")
+        response = {"status": "ok", "step": 2, "message": message}
+        if temp_password:
+            # Same-session convenience only -- the email just sent is the
+            # durable copy. Never logged (debug_log calls above redact it).
+            response["temp_password"] = temp_password
+        return response
 
     # Step 3: Add to solver database
     if step == "3":
@@ -2674,7 +2711,7 @@ def finish_account(code):
         return {"status": "ok", "step": 3, "message": "Added to solver database"}
 
     # Step 4: Cleanup
-    # Delete the temporary newuser entry (contains verification code and password)
+    # Delete the temporary newuser entry (contains only the verification code now)
     if step == "4":
         debug_log(
             4,

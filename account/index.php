@@ -248,7 +248,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $username = $_POST['username'];
   $fullname = rtrim($_POST['fullname']);
   $email    = $_POST['email'];
-  $password = $_POST['password'];
 
   // Run validation
   if (!ctype_alnum($username)) {
@@ -266,9 +265,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // End validation
 
   if (!array_key_exists("userok", $_POST)) {
-    if ($password != $_POST['password2']) {
-      exit_with_error_message("Passwords don't match");
-    }
     // no code, but user data. present the page to submit user for verification
     print <<<HTML
       <h1>Confirm account creation details</h1>
@@ -281,13 +277,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <form action="." method="POST">
         <input type="hidden" name="username" value="$username">
         <input type="hidden" name="fullname" value="$fullname">
-        <input type="hidden" name="password" value="$password">
         <input type="hidden" name="email" value="$email">
         <input type="hidden" name="userok" value="yes">
         <p>
           If the above information looks correct, click here:&nbsp;
           <input type="submit" name="submit" value="Confirm"><br>
-          We'll send you a confirmation code to the email you provided.
+          We'll send you a confirmation code to the email you provided. Once
+          confirmed, we'll email you a one-time password for your new Google
+          account (you'll set your real password the first time you sign in).
         </p>
         <p>
           Need to change something?
@@ -306,7 +303,6 @@ HTML;
       '/account',
       array(
         'username' => $username,
-        'password' => $password,
         'fullname' => $fullname,
         'email' => $email
       )
@@ -367,6 +363,16 @@ if (isset($_GET['code'])) {
       <span class="label">Finishing up...</span>
     </div>
   </div>
+  <div id="temp-password-container" style="display: none;">
+    <h3>Your one-time Google password</h3>
+    <p>We've also emailed this to you -- worth saving it somewhere if you're not signing in right away.</p>
+    <p><code id="temp-password-value" style="font-size: 1.2em; user-select: all;"></code></p>
+    <p style="font-size: 0.9em;">
+      Sign in at <a href="https://accounts.google.com/" target="_blank">accounts.google.com</a>
+      as <tt>YOUR_USERNAME@$google_domain</tt> with this password. Google will
+      immediately ask you to set your own password -- this one only works once.
+    </p>
+  </div>
   <div id="error-container" class="error" style="display: none;">
     <strong>ERROR:</strong>
     <span id="error-message"></span>
@@ -381,20 +387,23 @@ if (isset($_GET['code'])) {
     </p>
     <p>Please confirm that's the case by:</p>
     <ol>
-      <li>Logging into our <a href="/" target="_blank">Team Wiki</a> with the username/password you just made</li>
       <li>
-        Loading
-        <a href="$example_google_sheet_url" target="_blank">this test Google Spreadsheet</a>.
+        Signing into Google as <tt>YOUR_USERNAME@$google_domain</tt> with the
+        one-time password above (or from the email we sent you). Google will
+        immediately ask you to set your own real password.
         <ul>
-          <li>
-            Use <tt>YOUR_USERNAME@$google_domain</tt> and your $google_domain password to log into Google.
-          </li>
           <li>
             (Consider creating
             <a href="https://support.google.com/chrome/answer/2364824" target="_blank">a new Chrome profile</a>
             for Mystery Hunt; it also helps quarantine your wild Hunt search history.)
           </li>
         </ul>
+      </li>
+      <li>Logging into our <a href="/" target="_blank">Team Wiki</a> with your new Google account</li>
+      <li>
+        Loading
+        <a href="$example_google_sheet_url" target="_blank">this test Google Spreadsheet</a>
+        to make sure it opens for you
       </li>
       <li>
         Returning to our Discord and ping @RoleVerifier with your username
@@ -488,7 +497,15 @@ if (isset($_GET['code'])) {
         } else {
           setStepStatus(step.id, 'complete', step.label);
         }
-        
+
+        // Step 2 may hand back a one-time Google password. It's already been
+        // emailed by the time this response arrives -- this is a same-session
+        // convenience, not the durable copy.
+        if (stepNum === 2 && data.temp_password) {
+          document.getElementById('temp-password-value').textContent = data.temp_password;
+          document.getElementById('temp-password-container').style.display = 'block';
+        }
+
         return true;
       } catch (err) {
         setStepStatus(step.id, 'error');
@@ -542,29 +559,9 @@ HTML;
     <td><input type="email" id="email" name="email" required /></td>
   </tr>
   <tr>
-    <td><label for="password">Password (8-24 chars):</label></td>
-    <td>
-      <input
-        type="password"
-        id="password"
-        name="password"
-        required
-        minlength="8"
-        maxlength="24"
-      />
-    </td>
-  </tr>
-  <tr>
-    <td><label for="password2">Password (repeat):</label></td>
-    <td>
-      <input
-        type="password"
-        id="password2"
-        name="password2"
-        required
-        minlength="8"
-        maxlength="24"
-      />
+    <td colspan="2" style="padding-top: 0.5em; font-size: 0.9em;">
+      You'll set your account password the first time you sign into Google --
+      no need to choose one here.
     </td>
   </tr>
   <tr>
