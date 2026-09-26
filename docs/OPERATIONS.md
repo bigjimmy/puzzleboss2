@@ -192,11 +192,15 @@ For local/Docker development, no deployment — just `docker-compose up`.
 
 ## Backups
 
-`scripts/reset-hunt.py` makes a timestamped backup before wiping. On the utility server it also snapshots the Prometheus data volume first (EBS snapshot tagged `Purpose=hunt-telemetry-archive`; `--skip-tsdb-snapshot` to opt out, `--tsdb-snapshot-only` to take just the snapshot right after a hunt, before the 30-day retention window rolls past it). Off EC2 that step is skipped. After restoring the preserved tables it calls `POST /cache/flush` on the API (`--api-url`, else `$PUZZLEBOSS_API_URL`, else `API.APIURI` from `puzzleboss.yaml`) to drop the `/all` blob and the `lastact` hash; if the API is unreachable it prints the curl to run by hand. Skipping that leaves the previous hunt's last-activity times on the new hunt's puzzle ids. For ad-hoc backups:
+`scripts/reset-hunt.py` makes a timestamped backup before wiping, into `scripts/backups/<timestamp>/`: one full-database dump plus individual dumps of the four preserved tables (solver, privs, config, tag). On the utility server it then gzips those and uploads them to `s3://puzzleboss-hunt-backups/db/<timestamp>/`, because the local copies sit on a root volume that a rebuild discards. The upload happens before anything destructive and aborts the reset if it fails; `--skip-s3-backup` opts out. It also snapshots the Prometheus data volume first (EBS snapshot tagged `Purpose=hunt-telemetry-archive`; `--skip-tsdb-snapshot` to opt out, `--tsdb-snapshot-only` to take just the snapshot right after a hunt). Off EC2 both steps are skipped. After restoring the preserved tables it calls `POST /cache/flush` (`--api-url`, else `$PUZZLEBOSS_API_URL`, else `API.APIURI` from `puzzleboss.yaml`) to drop the `/all` blob and the `lastact` hash; if the API is unreachable it prints the curl to run by hand. Skipping that leaves the previous hunt's last-activity times on the new hunt's puzzle ids. For ad-hoc backups:
 
 ```bash
 mysqldump -u puzzleboss -p puzzleboss > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
+
+**A dump is a credential, not just data.** The `config` table contains `SERVICE_ACCOUNT_JSON`, the Google Workspace service account key with Domain-Wide Delegation, so a copy of it is equivalent to full control of the Google domain. It also holds the Gemini API key, the reCAPTCHA secret, the Slack and Discord webhooks, `ACCT_PASSWORD` and the Sheets add-on cookies, and the `solver` table has real names and Discord ids. Keep dumps encrypted, do not put one in the repo or a shared drive, and shred local copies when you are done. The S3 bucket is configured so the utility server can write backups but never read one back, and restoring is an admin action.
+
+Restore procedure, the S3 bucket's protections, and what to do when RDS itself is lost are documented in the infra repo runbook under [Backup sensitivity and the restore path](https://github.com/benoc617/puzzleboss2-infra/blob/main/OPERATIONS.md#backup-sensitivity-and-the-restore-path).
 
 In production, RDS automated backups handle PITR. Snapshot before any large migration.
 
