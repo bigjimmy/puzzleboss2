@@ -107,7 +107,6 @@ def dump_table(config, table_name, output_file):
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
         "--no-tablespaces",
-        "--skip-ssl",  # Skip SSL verification for backup operations
     ]
 
     # Only add --set-gtid-purged for MySQL client (not MariaDB)
@@ -137,7 +136,6 @@ def dump_full_database(config, output_file):
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
         "--no-tablespaces",
-        "--skip-ssl",  # Skip SSL verification for backup operations
     ]
 
     # Only add --set-gtid-purged for MySQL client (not MariaDB)
@@ -145,6 +143,11 @@ def dump_full_database(config, output_file):
         cmd.append("--set-gtid-purged=OFF")
 
     cmd.extend([
+        # Stored functions are NOT dumped by default, and all three views call
+        # them -- without this the backup restores to a broken database.
+        "--routines",
+        # Consistent snapshot without locking (everything is InnoDB).
+        "--single-transaction",
         "--add-drop-database",
         "--databases",
         config["MYSQL"]["DATABASE"],
@@ -166,7 +169,6 @@ def drop_all_views(config):
         "-u",
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
-        "--skip-ssl",
         config["MYSQL"]["DATABASE"],
         "-N",  # No column names
         "-B",  # Batch mode
@@ -195,8 +197,7 @@ def drop_all_views(config):
                 "-u",
                 config["MYSQL"]["USERNAME"],
                 f"-p{config['MYSQL']['PASSWORD']}",
-                "--skip-ssl",
-                config["MYSQL"]["DATABASE"],
+                        config["MYSQL"]["DATABASE"],
                 "-e",
                 f"DROP VIEW IF EXISTS `{view}`;"
             ]
@@ -221,7 +222,6 @@ def load_sql_file(config, sql_file):
         "-u",
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
-        "--skip-ssl",  # Skip SSL verification for restore operations
         config["MYSQL"]["DATABASE"],
     ]
 
@@ -431,7 +431,6 @@ def main():
         "-u",
         config["MYSQL"]["USERNAME"],
         f"-p{config['MYSQL']['PASSWORD']}",
-        "--skip-ssl",
         "-e",
         f"DROP DATABASE IF EXISTS {config['MYSQL']['DATABASE']}; CREATE DATABASE {config['MYSQL']['DATABASE']};"
     ]
