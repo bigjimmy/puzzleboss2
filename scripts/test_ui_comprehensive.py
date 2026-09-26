@@ -1626,6 +1626,96 @@ def test_status_location_immediate():
             print(f"    Warning: cleanup failed: {e}")
 
 
+def test_dashboard_edits_immediate():
+    """Comments and solver assignment made on index.php show up immediately
+    and survive the next poll.
+
+    Neither write invalidates the /all cache (15s TTL). The card modals
+    used to trigger a refetch that read the OLD value back, so the edit
+    looked lost. The card now reports the edit to the dashboard, which keeps
+    it on top of fetched data until the cache catches up. Docker runs with
+    Redis on, so this genuinely exercises the stale path.
+    """
+    import time as _time
+    puzzle_name = f"DashEdit{int(_time.time()) % 100000}"
+    comment = "optimistic comment check"
+    solver_name = "testuser"
+    puzzle_id = None
+
+    print("  Creating a puzzle...")
+    rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    if not rounds:
+        requests.post(f"{API_URL}/rounds", json={"name": "DashEditRound"})
+        rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    requests.post(f"{API_URL}/puzzles", json={"puzzle": {
+        "name": puzzle_name,
+        "round_id": rounds[0]["id"],
+        "puzzle_uri": "https://example.com/dashedit",
+    }})
+    for pz in requests.get(f"{API_URL}/puzzles").json().get("puzzles", []):
+        if pz["name"] == puzzle_name:
+            puzzle_id = pz["id"]
+    assert puzzle_id, "test puzzle was not created"
+    print(f"    ✓ Puzzle {puzzle_id} created")
+
+    def icon_title(page, index):
+        return get_puzzle_icons(find_puzzle(page, puzzle_name))[index].get_attribute("title") or ""
+
+    def wait_title_contains(page, index, needle, seconds):
+        deadline = _time.time() + seconds
+        last = ""
+        while _time.time() < deadline:
+            last = icon_title(page, index)
+            if needle in last:
+                return last
+            page.wait_for_timeout(100)
+        raise AssertionError(f"expected {needle!r} in icon {index} title within {seconds}s, got {last!r}")
+
+    try:
+        # Warm the /all blob with the pre-edit state.
+        requests.get(f"{API_URL}/all")
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            goto_main(page)
+            page.wait_for_selector(f"text={puzzle_name}", timeout=PAGE_LOAD_TIMEOUT)
+
+            # --- Comment via the note-tags modal (icon 4) ---
+            print("  Adding a comment via the card modal...")
+            get_puzzle_icons(find_puzzle(page, puzzle_name))[4].click()
+            page.wait_for_selector("dialog textarea", timeout=DIALOG_TIMEOUT)
+            page.locator("dialog textarea").fill(comment)
+            save_and_close_dialog(page)
+
+            wait_title_contains(page, 4, comment, 1.5)
+            print("    ✓ Comment visible on the card immediately")
+            server = requests.get(f"{API_URL}/puzzles/{puzzle_id}").json()
+            assert (server.get("puzzle") or server).get("comments") == comment, "comment did not reach the database"
+            print("    ✓ Write reached the database")
+
+            # --- Assignment via the workstate modal (icon 1) ---
+            print("  Claiming the puzzle via the card modal...")
+            claim_puzzle(page, find_puzzle(page, puzzle_name))
+            wait_title_contains(page, 1, solver_name, 1.5)
+            print("    ✓ Solver shown on the card immediately")
+
+            # A poll happens every 5s and, inside the TTL, returns the stale
+            # blob. Neither edit may be clobbered by it.
+            page.wait_for_timeout(6000)
+            assert comment in icon_title(page, 4), "comment was clobbered by a poll that read the stale cache"
+            assert solver_name in icon_title(page, 1), "assignment was clobbered by a poll that read the stale cache"
+            print("    ✓ Both survive the next poll against the stale cache")
+
+            browser.close()
+    finally:
+        try:
+            requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+            print("    ✓ Test puzzle removed")
+        except Exception as e:
+            print(f"    Warning: cleanup failed: {e}")
+
+
 def test_privilege_and_gear_visibility():
     """Test assigning and revoking privileges, and verify that gear icon
     visibility and admin page access are correctly gated on those privileges."""
@@ -2861,6 +2951,7 @@ def main():
         ('30', 'secretdisplay', test_config_secret_display, 'Config Secret Display And Redaction Chain'),
         ('31', 'huntarchives', test_admin_hunt_archives_box, 'Admin Hunt Archives Box'),
         ('32', 'statusloc', test_status_location_immediate, 'Status Page Location Immediate'),
+        ('33', 'dashedits', test_dashboard_edits_immediate, 'Dashboard Edits Immediate'),
     ]
 
     handle_list_and_destructive(args, all_tests=all_tests)

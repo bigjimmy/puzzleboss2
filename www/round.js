@@ -17,7 +17,7 @@ export default {
       hints: Array,
       username: String,
     },
-    emits: ['toggle-body', 'please-fetch', 'route-shown'],
+    emits: ['toggle-body', 'please-fetch', 'route-shown', 'local-edit'],
     computed: {
 
         //
@@ -209,11 +209,11 @@ export default {
                 :key='puzzle.id'
                 :class="'puzzle' + (puzzle.ismeta ? ' meta ' : ' ') + (currpuzz === puzzle.name ? ' currpuzz ' : ' ') + puzzle.status.toLowerCase().replace(' ', '') + (highlightedPuzzle[puzzle.id] ? ' ' + highlightedPuzzle[puzzle.id] : '')">
                 <AddGeneric type="status" :puzzle='puzzle' :initialpuzz='initialpuzz' :ismeta='puzzle.ismeta' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)" :solvers="solvers" :hints="hints" :username="username"></AddGeneric>
-                <AddGeneric type="workstate" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
+                <AddGeneric type="workstate" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @local-edit="(e) => $emit('local-edit', e)" :uid="uid" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 <p :class="{'meta': puzzle.ismeta, 'puzzle-name': true}" @mouseover="scroll($event, 0)" @mouseout="stopscroll"><a v-if='safeUrl(puzzle.puzzle_uri)' :href='safeUrl(puzzle.puzzle_uri)' target="_blank">{{puzzle.name}}</a><span v-else>{{puzzle.name}}</span></p>
                 <p class="puzzle-icon"><a title='spreadsheet' :href='safeUrl(puzzle.drive_uri)' target="_blank">📊</a></p>
                 <p class="puzzle-icon"><a title='discord' :href='safeUrl(puzzle.chat_channel_link)' target="_blank">🗣️</a></p>
-                <AddGeneric type="note-tags" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
+                <AddGeneric type="note-tags" :puzzle='puzzle' :initialpuzz='initialpuzz' @route-shown="$emit('route-shown')" @please-fetch="$emit('please-fetch')" @local-edit="(e) => $emit('local-edit', e)" @highlight-me="(s) => highlight(puzzle.id, s)"></AddGeneric>
                 <p
                     v-if = "puzzle.answer === null"
                     :class = "{'answer': true, 'spoil': true}"

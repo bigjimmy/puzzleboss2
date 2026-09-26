@@ -70,6 +70,7 @@ require_once('puzzlebosslib.php');
                         :username="username"
                         @toggle-body="toggleBody"
                         @please-fetch="fetchData"
+                        @local-edit="applyLocalEdit"
                         @route-shown="clearInitPuzz"
                     ></round>
                 </div>
@@ -91,6 +92,7 @@ require_once('puzzlebosslib.php');
                         :username="username"
                         @toggle-body="toggleBody"
                         @please-fetch="fetchData"
+                        @local-edit="applyLocalEdit"
                         @route-shown="clearInitPuzz"
                     ></round>
                 </div>
@@ -209,6 +211,88 @@ require_once('puzzlebosslib.php');
                 const uid = ref(<?php echo $auth_solver->id; ?>);
                 const isAdmin = ref(<?php echo $is_pt; ?> || <?php echo $is_pb; ?>);
                 const solvers = ref(null);
+                // Edits the /all cache has not caught up with. xyzloc, comments
+                // and solver assignment deliberately do not invalidate the /all
+                // blob (15s TTL, see STRUCTURAL_PUZZLE_FIELDS), so the refetch a
+                // modal triggers reads the OLD value back. What we wrote stays
+                // on top of fetched data until the server agrees, or 30s passes.
+                const pendingEdits = ref({});   // puzzleId -> { field: {...} }
+                const PENDING_TTL_MS = 30000;
+
+                function findPuzzle(rounds, puzzleId) {
+                    for (const round of rounds) {
+                        for (const puzzle of round.puzzles) {
+                            if (puzzle.id === puzzleId) return puzzle;
+                        }
+                    }
+                    return null;
+                }
+                function findPuzzleByName(rounds, name) {
+                    for (const round of rounds) {
+                        for (const puzzle of round.puzzles) {
+                            if (puzzle.name === name) return puzzle;
+                        }
+                    }
+                    return null;
+                }
+                // cursolvers is GROUP_CONCAT of names: "alice,bob"
+                const nameList = (csv) => (csv ? csv.split(',').filter(n => n) : []);
+                const hasName = (csv, name) => nameList(csv).includes(name);
+                const withName = (csv, name) => hasName(csv, name) ? csv : nameList(csv).concat(name).join(',');
+                const withoutName = (csv, name) => nameList(csv).filter(n => n !== name).join(',');
+
+                // Assignment moves this user from their current puzzle to the
+                // target, so it touches two puzzles' solver lists. Merged by
+                // membership rather than overwritten, so other people joining or
+                // leaving in the meantime are not clobbered.
+                function applyAssign(rounds, edit) {
+                    const target = findPuzzle(rounds, edit.puzzleId);
+                    if (target) target.cursolvers = withName(target.cursolvers, edit.name);
+                    if (edit.fromName) {
+                        const from = findPuzzleByName(rounds, edit.fromName);
+                        if (from && from.id !== edit.puzzleId) from.cursolvers = withoutName(from.cursolvers, edit.name);
+                    }
+                }
+                function assignConfirmed(rounds, edit) {
+                    const target = findPuzzle(rounds, edit.puzzleId);
+                    if (!target || !hasName(target.cursolvers, edit.name)) return false;
+                    const from = edit.fromName ? findPuzzleByName(rounds, edit.fromName) : null;
+                    return !from || from.id === edit.puzzleId || !hasName(from.cursolvers, edit.name);
+                }
+
+                function applyLocalEdit({ puzzleId, field, value }) {
+                    const entry = pendingEdits.value[puzzleId] || (pendingEdits.value[puzzleId] = {});
+                    if (field === 'assign') {
+                        const fromName = (currPuzz.value && currPuzz.value !== "0") ? currPuzz.value : null;
+                        const edit = { puzzleId, name: username.value, fromName, at: Date.now() };
+                        entry.assign = edit;
+                        applyAssign(data.value.rounds, edit);
+                        return;
+                    }
+                    const puzzle = findPuzzle(data.value.rounds, puzzleId);
+                    if (puzzle) puzzle[field] = value;
+                    entry[field] = { value, at: Date.now() };
+                }
+
+                function overlayPendingEdits(newData) {
+                    const now = Date.now();
+                    for (const [pid, fields] of Object.entries(pendingEdits.value)) {
+                        // Object keys are strings; puzzle ids are integers.
+                        const puzzleId = Number(pid);
+                        for (const [field, edit] of Object.entries(fields)) {
+                            const expired = now - edit.at > PENDING_TTL_MS;
+                            if (field === 'assign') {
+                                if (expired || assignConfirmed(newData.rounds, edit)) delete fields[field];
+                                else applyAssign(newData.rounds, edit);
+                                continue;
+                            }
+                            const puzzle = findPuzzle(newData.rounds, puzzleId);
+                            if (expired || !puzzle || puzzle[field] === edit.value) delete fields[field];
+                            else puzzle[field] = edit.value;
+                        }
+                        if (Object.keys(fields).length === 0) delete pendingEdits.value[pid];
+                    }
+                }
 
                 const tags = ref([]);
                 const tagFilter = ref("");
@@ -246,6 +330,7 @@ require_once('puzzlebosslib.php');
                         if (!resp.ok || temp.error || !Array.isArray(temp.rounds)) {
                             throw new Error(temp.error || 'API returned an invalid response');
                         }
+                        overlayPendingEdits(temp);
                         data.value = temp;
 
                         if (firstUpdate) {
@@ -534,7 +619,7 @@ require_once('puzzlebosslib.php');
                     data,
                     showBody, highlight, toggleBody,
                     roundStats, puzzleStats,
-                    fetchData, time, updateState,
+                    fetchData, applyLocalEdit, time, updateState,
                     uid, username, isAdmin, tags, solvers,
                     currPuzz, initialPuzz, clearInitPuzz,
                     tags, tagFilter,

@@ -153,7 +153,10 @@ export default {
     // route-shown is propagated to index.html and indicates that the route
     // initially specified when the page loaded was shown.
     //
-    emits: ['please-fetch', 'highlight-me', 'route-shown'],
+    // local-edit carries {puzzleId, field, value} for a write that does NOT
+    // invalidate the /all cache (xyzloc, comments, solver assignment), so the
+    // dashboard can show it now instead of reading the stale blob back.
+    emits: ['please-fetch', 'highlight-me', 'route-shown', 'local-edit'],
     setup(props, context) {
 
         //
@@ -449,11 +452,14 @@ export default {
                     if (stateStrA.value !== props.puzzle.comments) {
                         const commentUrl = `${Consts.api}/apicall.php?apicall=puzzle&apiparam1=${props.puzzle.id}&apiparam2=comments`;
                         try {
-                            await fetch(commentUrl, {
+                            const resp = await fetch(commentUrl, {
                                 method: 'POST',
                                 headers: { 'X-PB-CSRF': getCsrfToken() },
                                 body: JSON.stringify({ comments: stateStrA.value }),
                             });
+                            if (resp.ok) {
+                                context.emit('local-edit', { puzzleId: props.puzzle.id, field: 'comments', value: stateStrA.value });
+                            }
                             noteChanged = true;
                         } catch (e) {
                             if (onFetchFailure()) return;
@@ -560,11 +566,14 @@ export default {
 
                 if (emitFetch) {
                     try {
-                        await fetch(url, {
+                        const resp = await fetch(url, {
                             method: 'POST',
                             headers: { 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify(payload),
                         });
+                        if (resp.ok && props.type === 'workstate' && what === 'xyzloc') {
+                            context.emit('local-edit', { puzzleId: props.puzzle.id, field: 'xyzloc', value: stateStrA.value });
+                        }
                         context.emit('please-fetch');
                     } catch (e) {
                         if (onFetchFailure()) return;
@@ -616,11 +625,14 @@ export default {
             const url = `${Consts.api}/apicall.php?apicall=solver&apiparam1=${props.uid}&apiparam2=puzz`
             
             try {
-                await fetch(url, {
+                const resp = await fetch(url, {
                     method: 'POST',
                     headers: { 'X-PB-CSRF': getCsrfToken() },
                     body: JSON.stringify({ "puzz": props.puzzle.id }),
                 });
+                if (resp.ok) {
+                    context.emit('local-edit', { puzzleId: props.puzzle.id, field: 'assign' });
+                }
 
                 context.emit('please-fetch');
                 showModal.value = false;
