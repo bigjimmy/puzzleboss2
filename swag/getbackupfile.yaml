@@ -1,0 +1,35 @@
+Download one hunt CSV archive
+---
+tags:
+  - Backups
+summary: Download one archived CSV, decompressed
+description: |
+  Streams one file out of s3://puzzleboss-hunt-backups/db/<timestamp>/,
+  gunzipped, as text/csv with a Content-Disposition attachment header.
+
+  filename must be exactly puzzle_view.csv or activity.csv; anything else is
+  404, including the SQL dumps that sit in the same prefix. Downloads are
+  logged at SEV3 with the requesting X-Remote-User.
+
+  Requires X-PB-Internal-Token. The PHP tier attaches it only after a
+  puzztech check.
+parameters:
+  - name: timestamp
+    in: path
+    type: string
+    required: true
+    description: The reset timestamp, as returned by GET /backups
+  - name: filename
+    in: path
+    type: string
+    required: true
+    enum: [puzzle_view.csv, activity.csv]
+responses:
+  200:
+    description: The CSV
+    schema:
+      type: file
+  400:
+    description: Malformed timestamp
+  404:
+    description: Not a downloadable archive file, or the object is missing

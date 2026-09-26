@@ -7,7 +7,8 @@ import pblib
 import traceback
 import json
 import os
-from flask import Flask, request
+import re
+from flask import Flask, request, Response
 from flask_restful import Api
 from flask_mysqldb import MySQL
 from pblib import (
@@ -3137,6 +3138,95 @@ def force_cache_invalidate():
     except Exception as e:
         debug_log(1, f"Error invalidating cache: {str(e)}")
         return {"status": "error", "error": str(e)}, 500
+
+
+# Hunt CSV archives (written to S3 by scripts/reset-hunt.py at each reset).
+# Only these two files are ever exposed: the .sql.gz dumps sitting beside them
+# in the same prefix carry SERVICE_ACCOUNT_JSON and the whole config table, and
+# must never be reachable from the web tier. The task role is scoped to
+# *.csv.gz as well, so this allowlist is the second of two gates.
+BACKUP_BUCKET = "puzzleboss-hunt-backups"
+BACKUP_PREFIX = "db/"
+DOWNLOADABLE_BACKUP_FILES = frozenset({"puzzle_view.csv", "activity.csv"})
+BACKUP_TIMESTAMP_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _s3_client():
+    import boto3
+
+    return boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+
+
+@app.route("/backups", endpoint="list_backups", methods=["GET"])
+@swag_from("swag/getbackups.yaml", endpoint="list_backups", methods=["GET"])
+@admin_token_gated
+def list_backups():
+    """List the hunt CSV archives available for download."""
+    debug_log(4, "start")
+    try:
+        paginator = _s3_client().get_paginator("list_objects_v2")
+        sets = {}
+        for page in paginator.paginate(Bucket=BACKUP_BUCKET, Prefix=BACKUP_PREFIX):
+            for obj in page.get("Contents", []):
+                parts = obj["Key"].split("/")
+                if len(parts) != 3:
+                    continue
+                _, timestamp, filename = parts
+                if not filename.endswith(".csv.gz"):
+                    continue
+                base = filename[: -len(".gz")]
+                if base not in DOWNLOADABLE_BACKUP_FILES:
+                    continue
+                sets.setdefault(timestamp, []).append({
+                    "name": base,
+                    "compressed_bytes": obj["Size"],
+                    "last_modified": obj["LastModified"].isoformat(),
+                })
+    except Exception as e:
+        debug_log(1, f"Failed to list hunt archives: {e}")
+        return {"status": "error", "error": f"Could not list backups: {e}"}, 500
+
+    backups = [
+        {"timestamp": ts, "files": sorted(files, key=lambda f: f["name"])}
+        for ts, files in sorted(sets.items(), reverse=True)
+    ]
+    debug_log(4, f"found {len(backups)} hunt archive sets")
+    return {"status": "ok", "backups": backups}
+
+
+@app.route("/backups/<timestamp>/<filename>", endpoint="get_backup", methods=["GET"])
+@swag_from("swag/getbackupfile.yaml", endpoint="get_backup", methods=["GET"])
+@admin_token_gated
+def get_backup(timestamp, filename):
+    """Stream one archived CSV, decompressed, as a download."""
+    debug_log(4, f"start for {timestamp}/{filename}")
+    if filename not in DOWNLOADABLE_BACKUP_FILES:
+        return {"status": "error", "error": "Not a downloadable archive file"}, 404
+    if not BACKUP_TIMESTAMP_RE.match(timestamp):
+        return {"status": "error", "error": "Invalid backup timestamp"}, 400
+
+    import gzip
+
+    key = f"{BACKUP_PREFIX}{timestamp}/{filename}.gz"
+    try:
+        obj = _s3_client().get_object(Bucket=BACKUP_BUCKET, Key=key)
+        body = gzip.decompress(obj["Body"].read())
+    except Exception as e:
+        debug_log(2, f"Failed to fetch hunt archive {key}: {e}")
+        return {"status": "error", "error": f"Could not read {filename}: {e}"}, 404
+
+    debug_log(
+        3,
+        f"hunt archive downloaded: {key} ({len(body)} bytes) by "
+        f"{request.headers.get('X-Remote-User') or 'unknown'}",
+    )
+    return Response(
+        body,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{timestamp}-{filename}"',
+        },
+    )
 
 
 @app.route("/cache/flush", endpoint="cache_flush", methods=["POST"])

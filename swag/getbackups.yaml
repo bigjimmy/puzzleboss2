@@ -1,0 +1,50 @@
+List hunt CSV archives
+---
+tags:
+  - Backups
+summary: List the hunt CSV archives available for download
+description: |
+  Enumerates the per-reset CSV archives that scripts/reset-hunt.py writes to
+  s3://puzzleboss-hunt-backups/db/<timestamp>/, newest first.
+
+  Only puzzle_view.csv and activity.csv are ever listed. The full SQL dumps
+  stored in the same prefix contain SERVICE_ACCOUNT_JSON and the rest of the
+  config table and are deliberately unreachable from the web tier: the ECS
+  task role is scoped to *.csv.gz, and this endpoint allowlists the two
+  filenames on top of that.
+
+  Requires X-PB-Internal-Token. The PHP tier attaches it only after a
+  puzztech check.
+responses:
+  200:
+    description: Available archives
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        backups:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                description: The reset timestamp, which is also the S3 prefix
+                example: "20260215_031500"
+              files:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: activity.csv
+                    compressed_bytes:
+                      type: integer
+                      description: Size in S3, gzipped; the download is larger
+                    last_modified:
+                      type: string
+  500:
+    description: Could not list the bucket

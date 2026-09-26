@@ -19,6 +19,9 @@ requests
 bleach
 urllib3>=2.6.3  # CVE-2026-21441 fix
 
+# AWS — reading the hunt CSV archives out of S3 for the admin download UI
+boto3
+
 # Optional dependencies
 pandas
 redis
