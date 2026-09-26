@@ -1,0 +1,36 @@
+Flush all derived cache state
+---
+tags:
+  - Cache
+summary: Flush the /all blob and the lastact hash
+description: |
+  Deletes the /all Redis blob (puzzleboss:all) and the write-through lastact
+  hash (puzzleboss:lastact). Both are pure derivations of the database and
+  rebuild on the next /all request (the lastact hash via one indexed GROUP BY
+  over activity), so this is safe at any time.
+
+  Required after a hunt reset: puzzle ids restart from 1 and the lastact hash
+  is otherwise never invalidated, so stale entries from the previous hunt
+  would be served for the new hunt's puzzles. scripts/reset-hunt.py calls this.
+responses:
+  200:
+    description: Cache flushed
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        message:
+          type: string
+          example: Cache blob and lastact hash flushed
+  500:
+    description: Error flushing cache
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string

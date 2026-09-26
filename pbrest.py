@@ -86,6 +86,7 @@ from pbcachelib import (
     ensure_cache_initialized,
     lastact_get,
     lastact_get_all,
+    lastact_flush,
     lastact_delete,
     lastact_set_many,
     try_acquire_rebuild_lock,
@@ -3135,6 +3136,21 @@ def force_cache_invalidate():
         return {"status": "ok", "message": "Cache invalidated successfully"}
     except Exception as e:
         debug_log(1, f"Error invalidating cache: {str(e)}")
+        return {"status": "error", "error": str(e)}, 500
+
+
+@app.route("/cache/flush", endpoint="cache_flush", methods=["POST"])
+@swag_from("swag/postcacheflush.yaml", endpoint="cache_flush", methods=["POST"])
+def force_cache_flush():
+    """Drop everything in Redis that derives from the database: the /all
+    blob and the lastact hash. Both rebuild on the next /all request."""
+    debug_log(3, "Full cache flush requested")
+    try:
+        invalidate_cache_with_stats()
+        lastact_flush()
+        return {"status": "ok", "message": "Cache blob and lastact hash flushed"}
+    except Exception as e:
+        debug_log(1, f"Error flushing cache: {str(e)}")
         return {"status": "error", "error": str(e)}, 500
 
 

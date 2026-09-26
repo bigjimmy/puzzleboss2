@@ -192,7 +192,7 @@ For local/Docker development, no deployment — just `docker-compose up`.
 
 ## Backups
 
-`scripts/reset-hunt.py` makes a timestamped backup before wiping. On the utility server it also snapshots the Prometheus data volume first (EBS snapshot tagged `Purpose=hunt-telemetry-archive`; `--skip-tsdb-snapshot` to opt out, `--tsdb-snapshot-only` to take just the snapshot right after a hunt, before the 30-day retention window rolls past it). Off EC2 that step is skipped. For ad-hoc backups:
+`scripts/reset-hunt.py` makes a timestamped backup before wiping. On the utility server it also snapshots the Prometheus data volume first (EBS snapshot tagged `Purpose=hunt-telemetry-archive`; `--skip-tsdb-snapshot` to opt out, `--tsdb-snapshot-only` to take just the snapshot right after a hunt, before the 30-day retention window rolls past it). Off EC2 that step is skipped. After restoring the preserved tables it calls `POST /cache/flush` on the API (`--api-url`, else `$PUZZLEBOSS_API_URL`, else `API.APIURI` from `puzzleboss.yaml`) to drop the `/all` blob and the `lastact` hash; if the API is unreachable it prints the curl to run by hand. Skipping that leaves the previous hunt's last-activity times on the new hunt's puzzle ids. For ad-hoc backups:
 
 ```bash
 mysqldump -u puzzleboss -p puzzleboss > backup_$(date +%Y%m%d_%H%M%S).sql

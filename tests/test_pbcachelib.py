@@ -139,6 +139,9 @@ class TestFailsafeDisabled:
     def test_lastact_set_many_noop(self, no_rc):
         pbcachelib.lastact_set_many({1: {"type": "create"}})
 
+    def test_lastact_flush_noop(self, no_rc):
+        pbcachelib.lastact_flush()
+
     def test_lock_acquire_failopen(self, no_rc):
         # With Redis down the lock fails open: everyone "rebuilds", same as
         # having no cache. Returning False here would deadlock /all forever.
@@ -166,6 +169,14 @@ class TestFailsafeOnException:
     def test_cache_delete_swallows(self, mock_rc):
         mock_rc.delete.side_effect = RuntimeError("boom")
         pbcachelib.cache_delete("k")
+
+    def test_lastact_flush_swallows(self, mock_rc):
+        mock_rc.delete.side_effect = RuntimeError("boom")
+        pbcachelib.lastact_flush()
+
+    def test_lastact_flush_deletes_whole_hash(self, mock_rc):
+        pbcachelib.lastact_flush()
+        mock_rc.delete.assert_called_once_with(pbcachelib.LASTACT_KEY)
 
     def test_lastact_set_swallows(self, mock_rc):
         mock_rc.hset.side_effect = RuntimeError("boom")

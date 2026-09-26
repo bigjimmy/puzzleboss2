@@ -200,7 +200,7 @@ Use `debug_log(severity, message)` from `pblib.py`. Severity: 0=emergency, 1=err
 
 The `/all` blob is invalidated **only** for *structural* changes — enforced by the `STRUCTURAL_PUZZLE_FIELDS` allowlist in `pblib.update_puzzle_field` (status, name, round_id, answer, ismeta) plus create/delete, round operations, and puzzle tag add/remove/delete (which write `puzzle.tags` directly and invalidate explicitly, since the UI filters on tags immediately). Everything else (xyzloc, comments, sheetcount, solver assignment) rides the 15-second TTL. This keeps hit rates high during active solving (>90% observed during January 2026 hunt).
 
-Per-puzzle `lastact` is NOT cached in the blob: it lives in a write-through Redis hash (`puzzleboss:lastact`), updated by `pblib.log_activity()` on every activity insert and attached fresh to every `/all` response — always current, never invalidated. Cold-start fallback is the indexed GROUP BY over `activity(puzzle_id, time)`. A `SET NX` rebuild lock prevents miss stampedes.
+Per-puzzle `lastact` is NOT cached in the blob: it lives in a write-through Redis hash (`puzzleboss:lastact`), updated by `pblib.log_activity()` on every activity insert and attached fresh to every `/all` response — always current, never invalidated by normal operation. Cold-start fallback is the indexed GROUP BY over `activity(puzzle_id, time)`, which also means the hash can be dropped at any time and rebuilds itself (`POST /cache/flush`). This is mandatory after a hunt reset: puzzle ids restart from 1 and the old entries would otherwise be served for the new puzzles. A `SET NX` rebuild lock prevents miss stampedes.
 
 Cache behavior is observable via botstats counters (in `METRICS_METADATA`, exposed through `metrics.php` → Prometheus → the `redis-cache` Grafana dashboard): `cache_hits_total`, `cache_misses_total`, `cache_invalidations_total`, `cache_rebuild_lock_contentions_total`, `cache_write_through_failures_total`, `cache_cold_start_backfills_total`.
 
@@ -221,6 +221,7 @@ Cache behavior is observable via botstats counters (in `METRICS_METADATA`, expos
 | `/config` | Config table read (secrets redacted) / write (token-gated) |
 | `/account`, `/finishaccount/<code>`, `/newusers` | Signup lifecycle (newusers is token-gated) |
 | `/cache/invalidate` | Force /all cache invalidation |
+| `/cache/flush` | Drop the /all blob AND the lastact hash (both rebuild on next /all). Called by `scripts/reset-hunt.py` after a reset. |
 | `/solvers/byname/<username>` | Efficient lookup by name |
 | `/huntinfo` | Combined config + statuses + tags (frontend bootstrap; config secrets always redacted) |
 | `/migrate` (GET) | List available migrations |

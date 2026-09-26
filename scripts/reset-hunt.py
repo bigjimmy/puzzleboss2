@@ -340,6 +340,12 @@ def main():
         action='store_true',
         help='Reset without snapshotting the Prometheus data volume'
     )
+    parser.add_argument(
+        '--api-url',
+        default=os.environ.get('PUZZLEBOSS_API_URL'),
+        help='Base URL of the Flask API for the post-reset cache flush '
+             '(default: $PUZZLEBOSS_API_URL, else API.APIURI from puzzleboss.yaml)'
+    )
     args = parser.parse_args()
 
     if args.tsdb_snapshot_only:
@@ -455,18 +461,27 @@ def main():
             print(f"Failed to restore {table} table. Aborting.")
             sys.exit(1)
 
-    # Invalidate cache
-    debug_log("Invalidating cache...")
+    # Flush Redis: the /all blob self-heals in 15s, but the lastact hash is
+    # never invalidated by the app and puzzle ids restart after a reset, so
+    # without this the new hunt's puzzles would show last hunt's activity.
+    api_base = args.api_url or config.get("API", {}).get("APIURI", "http://localhost:5000")
+    debug_log(f"Flushing cache via {api_base}/cache/flush ...")
+    cache_flushed = False
     try:
-        api_base = config.get("API", {}).get("APIURI", "http://localhost:5000")
-        resp = requests.post(f"{api_base}/cache/invalidate", timeout=10)
+        resp = requests.post(f"{api_base}/cache/flush", timeout=10)
         if resp.ok:
-            debug_log("Cache invalidated successfully")
+            debug_log("Cache flushed")
+            cache_flushed = True
         else:
-            debug_log(f"Warning: Cache invalidation returned status {resp.status_code}")
+            debug_log(f"Warning: cache flush returned status {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
-        debug_log(f"Warning: Could not invalidate cache: {e}")
-        debug_log("You may need to restart the API server or wait for cache to expire")
+        debug_log(f"Warning: could not reach the API to flush the cache: {e}")
+    if not cache_flushed:
+        print()
+        print("WARNING: the Redis cache was NOT flushed. Until it is, /all will show")
+        print("stale last-activity data for the new hunt's puzzles. Run manually:")
+        print(f"    curl -X POST {api_base}/cache/flush")
+        print("(or re-run with --api-url pointing at a reachable API)")
 
     print("\nHunt reset completed successfully!")
     print(f"Backups saved in: {backup_dir}")

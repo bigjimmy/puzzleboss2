@@ -231,6 +231,21 @@ def lastact_delete(puzzle_id):
         _note_redis_error("lastact_delete", e)
 
 
+def lastact_flush():
+    """Drop the whole lastact hash. The next /all rebuilds it from the
+    activity table, so this is safe at any time; it is required after a
+    hunt reset, where puzzle ids restart and the old entries would
+    otherwise be served for the new hunt's puzzles."""
+    if rc is None:
+        return
+    try:
+        rc.delete(LASTACT_KEY)
+        debug_log(3, "lastact_flush: dropped lastact hash")
+        _note_redis_ok()
+    except Exception as e:
+        _note_redis_error("lastact_flush", e)
+
+
 def lastact_set_many(rows_by_pid):
     """Bulk-populate the lastact hash (cold-start backfill from the DB).
 
