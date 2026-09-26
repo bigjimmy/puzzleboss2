@@ -580,7 +580,7 @@ $keyDescriptions = [
   'RECAPTCHA_SECRET_KEY' => 'Google reCAPTCHA v3 secret key (server-side verification). Leave empty to disable CAPTCHA.',
   'ACTIVITY_SOURCES' => 'Comma-separated list of valid activity sources. ⚠️ Must match the ENUM values in the activity.source column in the database — adding a value here without a corresponding ALTER TABLE will cause inserts to fail.',
   'STATUS_METADATA' => 'JSON array defining puzzle statuses (emoji, text, order)',
-  'METRICS_METADATA' => 'JSON object defining Prometheus metric definitions for botstats. Activity-table metrics (puzzleboss_activity_total) are automatically exported by type and source and are not configured here.',
+  'METRICS_METADATA' => 'JSON object defining Prometheus metric definitions for botstats. Activity-table metrics (puzzleboss_activity_total) are automatically exported by type and source and are not configured here. The values themselves are fed in by whatever produces them (bigjimmybot, puzzcord, the API) via POST /botstats/<key> for a single stat or POST /botstats for a batch; this config only supplies the Prometheus type and help text for each, and a stat posted without an entry here is still exported, guessing counter for names ending in _total and gauge otherwise.',
 ];
 
 // Known boolean keys (values are "true"/"false" strings)
