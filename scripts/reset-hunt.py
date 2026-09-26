@@ -5,6 +5,7 @@ import os
 import yaml
 import subprocess
 import re
+import csv
 import datetime
 import requests
 from pathlib import Path
@@ -128,6 +129,72 @@ def dump_table(config, table_name, output_file):
     ])
 
     return run_command(cmd, f"Failed to dump table {table_name}")
+
+
+def _unescape_mysql(field):
+    """Undo the escaping the mysql client applies in batch mode.
+
+    Batch output is tab-separated with \\0 \\n \\r \\t \\\\ escaped and NULL
+    written as \\N, so a value containing a tab or newline never breaks the
+    row. A literal backslash-N in the data arrives as \\\\N, so the NULL
+    marker is unambiguous.
+    """
+    if field == "\\N":
+        return ""
+    if "\\" not in field:
+        return field
+    out = []
+    i = 0
+    escapes = {"0": "\0", "n": "\n", "r": "\r", "t": "\t", "\\": "\\"}
+    while i < len(field):
+        if field[i] == "\\" and i + 1 < len(field):
+            out.append(escapes.get(field[i + 1], field[i + 1]))
+            i += 2
+        else:
+            out.append(field[i])
+            i += 1
+    return "".join(out)
+
+
+def dump_query_csv(config, query, output_file, label):
+    """Write one query's results to a CSV file.
+
+    Goes through the mysql client rather than a driver because the utility
+    server has no Python MySQL module, and through the client rather than
+    SELECT ... INTO OUTFILE because that writes on the database host, which
+    is RDS.
+    """
+    debug_log(f"Writing {label} CSV to {output_file}")
+    cmd = [
+        "mysql",
+        "-h", config["MYSQL"]["HOST"],
+        "-u", config["MYSQL"]["USERNAME"],
+        f"-p{config['MYSQL']['PASSWORD']}",
+        "--batch",  # tab-separated with escaping; do NOT add --raw
+        config["MYSQL"]["DATABASE"],
+        "-e", query,
+    ]
+    debug_log(f"Running command: {' '.join(_redact(cmd))}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: failed to export {label} to CSV")
+        print(f"Command output: {e.stderr}")
+        return False
+
+    lines = result.stdout.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    if not lines:
+        print(f"Error: {label} query returned no header row")
+        return False
+
+    with open(output_file, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        for line in lines:
+            writer.writerow([_unescape_mysql(f) for f in line.split("\t")])
+    debug_log(f"{label}: {len(lines) - 1} rows")
+    return True
 
 
 def dump_full_database(config, output_file):
@@ -276,7 +343,7 @@ S3_BACKUP_BUCKET = "puzzleboss-hunt-backups"
 
 
 def upload_backups_to_s3(backup_dir, label):
-    """Gzip every dump in backup_dir and upload it to the backups bucket.
+    """Gzip every dump and CSV export in backup_dir and upload to the bucket.
 
     The local copies live on the utility's root volume, which a rebuild
     discards, so S3 is the durable copy. This host can write to that bucket
@@ -298,8 +365,11 @@ def upload_backups_to_s3(backup_dir, label):
         return None
 
     prefix = f"s3://{S3_BACKUP_BUCKET}/db/{label}"
-    for sql_file in sorted(Path(backup_dir).glob("*.sql")):
-        gz_path = sql_file.with_suffix(".sql.gz")
+    sources = sorted(
+        list(Path(backup_dir).glob("*.sql")) + list(Path(backup_dir).glob("*.csv"))
+    )
+    for sql_file in sources:
+        gz_path = sql_file.with_suffix(sql_file.suffix + ".gz")
         with open(sql_file, "rb") as src, gzip.open(gz_path, "wb") as dst:
             shutil.copyfileobj(src, dst)
         debug_log(f"Uploading {gz_path.name} ({gz_path.stat().st_size} bytes) to {prefix}/")
@@ -466,6 +536,28 @@ def main():
             print(f"Failed to backup {table} table. Aborting.")
             sys.exit(1)
 
+    # Human-readable archive of the hunt that just happened. The SQL dumps can
+    # restore the database; these are for reading afterwards (scoring, stats,
+    # "what happened at 3am") without standing a database back up. Activity
+    # carries resolved puzzle and solver names because the ids stop meaning
+    # anything once the tables behind them are wiped.
+    csv_exports = [
+        ("puzzle_view.csv", "SELECT * FROM puzzle_view", "puzzle view"),
+        (
+            "activity.csv",
+            """SELECT a.*, p.name AS puzzle_name, s.name AS solver_name
+               FROM activity a
+               LEFT JOIN puzzle p ON p.id = a.puzzle_id
+               LEFT JOIN solver s ON s.id = a.solver_id
+               ORDER BY a.id""",
+            "activity log",
+        ),
+    ]
+    for filename, query, label in csv_exports:
+        if not dump_query_csv(config, query, backup_dir / filename, label):
+            print(f"Failed to export {label}. Aborting.")
+            sys.exit(1)
+
     # Copy the dumps off this server before anything destructive. The local
     # ones are on the root volume, which a rebuild discards.
     s3_prefix = None
@@ -558,6 +650,7 @@ def main():
     if tsdb_snapshot:
         print(f"Prometheus TSDB snapshot: {tsdb_snapshot} (EBS, tagged Purpose=hunt-telemetry-archive)")
     print(f"Full database backup: {full_backup_file}")
+    print(f"Readable archive: {backup_dir}/puzzle_view.csv, {backup_dir}/activity.csv")
     if s3_prefix:
         print(f"Off-server copy: {s3_prefix}/ (KMS-encrypted; restoring is an admin action)")
     else:
