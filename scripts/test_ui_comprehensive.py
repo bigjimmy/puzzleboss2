@@ -1644,6 +1644,13 @@ def test_account_registration_gate():
         # password, emailed after verification -- the form must not ask for one.
         assert page.locator("input[name='password']").count() == 0, \
             "Registration form should not have a password field"
+        # When reCAPTCHA is configured the form is submitted from JS via
+        # form.submit(). A form control named "submit" shadows that method and
+        # silently breaks the button. Docker has no site key so the JS path
+        # isn't rendered here -- assert the invariant it depends on instead.
+        assert page.evaluate(
+            "() => typeof document.getElementById('reg-form').submit === 'function'"
+        ), "A form control is shadowing reg-form.submit() -- the Submit button will not work with reCAPTCHA enabled"
         print("    ✓ Registration form displayed after correct credentials")
 
         # Step 4: Session persists — navigating back still shows registration form

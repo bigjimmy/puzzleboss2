@@ -148,11 +148,13 @@ if (empty($_SESSION['acct_authenticated'])) {
       document.getElementById('gate-form').addEventListener('submit', function(e) {
         e.preventDefault();
         var form = this;
+        // Off the prototype: a form control named "submit" shadows form.submit.
+        var send = function() { HTMLFormElement.prototype.submit.call(form); };
         grecaptcha.ready(function() {
           grecaptcha.execute('{$recaptcha_site_key}', {action: 'gate_login'}).then(function(token) {
             document.getElementById('g-recaptcha-response-gate').value = token;
-            form.submit();
-          });
+            send();
+          }).catch(send);
         });
       });
     </script>
@@ -587,7 +589,7 @@ HTML;
   </tr>
   <tr>
     <td />
-    <td><input type="submit" name="submit" value="Submit"></td>
+    <td><input type="submit" value="Submit"></td>
     <td />
   </tr>
 </table>
@@ -597,11 +599,13 @@ HTML;
   document.getElementById('reg-form').addEventListener('submit', function(e) {
     e.preventDefault();
     var form = this;
+    // Off the prototype: a form control named "submit" shadows form.submit.
+    var send = function() { HTMLFormElement.prototype.submit.call(form); };
     grecaptcha.ready(function() {
       grecaptcha.execute('<?= htmlspecialchars($recaptcha_site_key) ?>', {action: 'register'}).then(function(token) {
         document.getElementById('g-recaptcha-response-reg').value = token;
-        form.submit();
-      });
+        send();
+      }).catch(send);
     });
   });
 </script>
