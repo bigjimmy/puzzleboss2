@@ -397,6 +397,13 @@ def _send_registration_email(to_email, subject, body):
         msg["From"] = configstruct["REGEMAIL"]
         msg["To"] = to_email
         msg.set_content(body)
+        # The relay is SendGrid, which rewrites every URL in the body into an
+        # unreadable ct.sendgrid.net click-tracking link. On a signup mail that
+        # is actively harmful: the verification link and the accounts.google.com
+        # sign-in link both become opaque redirects that look like phishing.
+        msg["X-SMTPAPI"] = json.dumps(
+            {"filters": {"clicktrack": {"settings": {"enable": 0}}}}
+        )
         s = smtplib.SMTP(configstruct["MAILRELAY"])
         s.send_message(msg)
         s.quit()

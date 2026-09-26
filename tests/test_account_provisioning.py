@@ -345,6 +345,14 @@ class TestRegistrationEmails(unittest.TestCase):
         for line in self.logged:
             self.assertNotIn("c0de1234", line)
 
+    def test_click_tracking_disabled(self):
+        """SendGrid rewrites every URL into a ct.sendgrid.net redirect unless
+        told not to, which mangles the verification link and makes the mail
+        look like phishing."""
+        pblib.email_user_verification("a@b.c", "c0de1234", "New Solver", "newsolver")
+        header = self.sent[0]["X-SMTPAPI"]
+        assert json.loads(header)["filters"]["clicktrack"]["settings"]["enable"] == 0
+
     def test_smtp_failure_returns_error_string(self):
         pblib.smtplib.SMTP.side_effect = OSError("relay down")
         result = pblib.email_temp_password("a@b.c", "New Solver", "newsolver", "pw-abc")
