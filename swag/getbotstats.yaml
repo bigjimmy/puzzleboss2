@@ -2,18 +2,37 @@ tags:
   - Bot Stats
 summary: Get all bot statistics
 description: |
-  Returns all bot statistics from the botstats table.
+  Returns every row of the botstats table, a flat key/value store that
+  producers write to and Prometheus reads from.
 
-  Active cache counters (written by the /all path in pbrest and the
-  write-through path in pbcachelib): cache_hits_total, cache_misses_total,
-  cache_invalidations_total, cache_rebuild_lock_contentions_total,
-  cache_write_through_failures_total, cache_cold_start_backfills_total.
-  Other counters: tags_assigned_total, bigjimmy loop metrics, puzzcord
-  member/activity metrics.
+  **How the stats system fits together**
 
-  All of the above are also exposed to Prometheus via metrics.php and surfaced
-  on the redis-cache Grafana dashboard (alongside redis_exporter native
-  metrics).
+  1. A producer (bigjimmybot, puzzcord, the API itself) writes a value with
+     `POST /botstats/{key}` or, for several at once, `POST /botstats`.
+  2. The value lands in the botstats table, keyed by name. Values are stored
+     as strings, max 500 characters, and `updated` is set automatically.
+  3. `www/metrics.php` reads this endpoint on every Prometheus scrape and
+     renders each stat as `puzzleboss_<key>`.
+  4. The `METRICS_METADATA` config key optionally declares a stat's Prometheus
+     `type` and help text. Anything not declared there is still exported,
+     guessing counter for names ending in `_total` and gauge otherwise, with
+     the key itself as the description. So writing a value is sufficient to
+     get a metric; declaring it just makes the metric properly typed and
+     documented.
+
+  Nothing here is hunt-critical: metrics.php tolerates this endpoint failing
+  and simply omits the botstats section.
+
+  Note that `reset-hunt.py` does not preserve this table, so all counters
+  return to zero at each hunt reset. Historical values live in Prometheus.
+
+  **What is currently written here:** cache counters from the `/all` path and
+  the write-through path (`cache_hits_total`, `cache_misses_total`,
+  `cache_invalidations_total`, `cache_rebuild_lock_contentions_total`,
+  `cache_write_through_failures_total`, `cache_cold_start_backfills_total`),
+  `tags_assigned_total`, the bigjimmy loop timings, and the puzzcord member and
+  activity gauges. Several are graphed on the redis-cache Grafana dashboard
+  alongside native redis_exporter metrics.
 responses:
   200:
     description: Bot statistics retrieved successfully
@@ -25,17 +44,31 @@ responses:
           example: ok
         botstats:
           type: object
-          description: Dictionary of bot statistics keyed by stat name
+          description: >
+            Every stat, keyed by name. Empty object if nothing has been
+            written yet.
           additionalProperties:
             type: object
             properties:
               val:
                 type: string
-                description: The statistic value
+                description: >
+                  The value as stored. Always a string, even for numbers:
+                  metrics.php emits it verbatim, so a non-numeric value
+                  produces a malformed Prometheus line.
               updated:
                 type: string
                 format: date-time
-                description: When the stat was last updated
+                description: >
+                  When the row last changed, as YYYY-MM-DDTHH:MM:SSZ. Set by
+                  the database on insert and update; null only if the column
+                  was cleared by hand.
+          example:
+            cache_hits_total:
+              val: "184213"
+              updated: "2026-02-15T03:15:00Z"
+            puzzcord_members_online:
+              val: "37"
+              updated: "2026-02-15T03:14:52Z"
   500:
     description: Error fetching bot statistics
-

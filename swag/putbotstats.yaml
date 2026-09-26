@@ -2,25 +2,53 @@ tags:
   - Bot Stats
 summary: Update multiple bot statistics
 description: |
-  Updates or inserts multiple bot statistics in a single call.
-  Used primarily by bigjimmybot and puzzcord to report metrics.
+  Upserts several values into the botstats table in one transaction. This is
+  what bigjimmybot and puzzcord use at the end of each cycle, so a scrape
+  never catches half of a related set.
 
-  Note: the cache_* counters (cache_hits_total, cache_misses_total,
-  cache_invalidations_total, cache_rebuild_lock_contentions_total,
-  cache_write_through_failures_total, cache_cold_start_backfills_total) are
-  written internally by the API/cache layer — external callers should not write
-  them here.
+  **End to end**
 
-  Accepts either format:
-  - Array: [{"key": "k1", "val": "v1"}, {"key": "k2", "val": "v2"}]
-  - Object: {"k1": "v1", "k2": "v2"}
+  1. Post the values here. Each is inserted, or overwritten if the key exists,
+     and all of them commit together.
+  2. `www/metrics.php` reads the table on every Prometheus scrape and emits
+     `puzzleboss_<key>` for each.
+  3. Optionally declare keys in the `METRICS_METADATA` config entry to give
+     them a Prometheus `type` and help text. Undeclared keys are exported
+     anyway, guessing counter for names ending in `_total` and gauge
+     otherwise. Declare one when that guess would be wrong, since the type
+     decides whether `rate()` is meaningful.
 
-  Maintains backwards compatibility with the single-stat endpoint POST /botstats/{key}
+  **Two accepted body shapes**
+
+  - Object, which is usually what you want:
+    `{"puzzcord_members_online": "37", "puzzcord_tables_in_use": "8"}`
+  - Array of key/val pairs, equivalent and kept for older callers:
+    `[{"key": "puzzcord_members_online", "val": "37"}]`
+
+  Anything else, or an empty body, is rejected. Every item in the array form
+  must carry both `key` and `val`; one malformed entry rejects the whole
+  request before any write happens.
+
+  **Things to know**
+
+  - Values are stored verbatim as strings, max 500 characters, and emitted
+    verbatim to Prometheus. Send bare numbers.
+  - This sets absolute values. There is no increment over HTTP, so a counter's
+    caller owns its running total.
+  - `updated` is maintained by the database.
+  - The `cache_*` counters are written internally by the API and cache layer.
+    External callers should leave them alone; overwriting one corrupts the
+    hit-rate graphs until the next reset.
+  - Not token-gated: any caller the API accepts can write stats.
+  - For a single value, `POST /botstats/{key}` is equivalent.
 parameters:
   - name: body
     in: body
     required: true
-    description: Array of key-value pairs or object/dictionary
+    description: >
+      Either an object of key/value pairs, or an array of {key, val} objects.
+      The array schema is shown below; the object form is accepted equally and
+      is not expressible alongside it in Swagger 2.0.
     schema:
       type: array
       items:
@@ -31,21 +59,21 @@ parameters:
         properties:
           key:
             type: string
-            description: The statistic key to update
+            description: Stat name, max 100 characters
           val:
             type: string
-            description: The new value for the statistic
+            description: The new absolute value, stored as a string
     examples:
-      array_format:
-        value:
-          - key: "puzzle_count"
-            val: "42"
-          - key: "solver_count"
-            val: "15"
       object_format:
         value:
-          puzzle_count: "42"
-          solver_count: "15"
+          puzzcord_members_online: "37"
+          puzzcord_tables_in_use: "8"
+      array_format:
+        value:
+          - key: "puzzcord_members_online"
+            val: "37"
+          - key: "puzzcord_tables_in_use"
+            val: "8"
 responses:
   200:
     description: Statistics updated successfully
@@ -57,7 +85,13 @@ responses:
           example: ok
         updated:
           type: integer
-          description: Number of statistics updated
+          description: >
+            How many stats were submitted and written. Upserts are not
+            distinguished from inserts, so this is the size of the request,
+            not a count of values that actually changed.
           example: 2
   500:
-    description: Error updating statistics
+    description: >
+      Body was not an object or array, was empty, had an array entry missing
+      "key" or "val", or the write failed. No stats are written in any of
+      these cases.

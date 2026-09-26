@@ -1,13 +1,48 @@
 tags:
   - Bot Stats
-summary: Update a bot statistic
-description: Updates or inserts a single bot statistic value
+summary: Update a single bot statistic
+description: |
+  Upserts one value into the botstats table. This is the whole interface for
+  getting a number into Prometheus: write it here and it is exported.
+
+  **End to end**
+
+  1. Write the value here. The row is inserted, or overwritten if the key
+     already exists, and `updated` is set automatically.
+  2. `www/metrics.php` reads the table on every Prometheus scrape and emits
+     `puzzleboss_<key>`.
+  3. Optionally declare the key in the `METRICS_METADATA` config entry to give
+     it a Prometheus `type` and help text. Undeclared keys are exported
+     anyway, guessing counter for names ending in `_total` and gauge
+     otherwise. Declare it when that guess would be wrong, which matters
+     because the type decides whether `rate()` is meaningful.
+
+  **Things to know**
+
+  - The value is stored verbatim as a string, max 500 characters, and emitted
+    verbatim into the Prometheus exposition format. Write a bare number.
+    Anything else produces a malformed metric line rather than an error here.
+  - There is no increment over HTTP. This endpoint sets an absolute value, so
+    a counter's caller owns its running total. (Inside the API,
+    `pblib.increment_botstat` does an atomic database-side increment; that is
+    not exposed.)
+  - Keys are free-form, max 100 characters, and are used directly in the
+    metric name, so stick to `[a-z0-9_]` and suffix counters with `_total`.
+  - There is no delete endpoint. A key written once keeps being exported
+    until the row is removed by hand or the next hunt reset drops the table.
+  - Not token-gated: any caller the API accepts can write stats. These are
+    observability counters, not authorization-relevant state.
+  - Writing several stats at once? Use `POST /botstats`, which commits them
+    in one transaction.
 parameters:
   - name: key
     in: path
     type: string
     required: true
-    description: The statistic key to update
+    description: >
+      Stat name, max 100 characters. Becomes the Prometheus metric name as
+      puzzleboss_<key>.
+    x-example: bigjimmy_loop_iterations_total
   - name: body
     in: body
     required: true
@@ -18,7 +53,9 @@ parameters:
       properties:
         val:
           type: string
-          description: The new value for the statistic
+          description: >
+            The new absolute value. Stored as a string; send a bare number.
+          example: "4271"
 responses:
   200:
     description: Statistic updated successfully
@@ -29,5 +66,5 @@ responses:
           type: string
           example: ok
   500:
-    description: Error updating statistic
-
+    description: >
+      Body was missing or had no "val" property, or the write failed.
