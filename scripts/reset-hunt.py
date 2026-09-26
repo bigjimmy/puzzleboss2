@@ -134,13 +134,14 @@ def dump_table(config, table_name, output_file):
 def _unescape_mysql(field):
     """Undo the escaping the mysql client applies in batch mode.
 
-    Batch output is tab-separated with \\0 \\n \\r \\t \\\\ escaped and NULL
-    written as \\N, so a value containing a tab or newline never breaks the
-    row. A literal backslash-N in the data arrives as \\\\N, so the NULL
-    marker is unambiguous.
+    Batch output is tab-separated with \\0 \\n \\r \\t and backslash itself
+    escaped, so a value containing a tab or a newline never breaks the row.
+
+    NULL is not escaped: the client prints it as the text NULL, exactly as it
+    shows on screen, and a stored string "NULL" is indistinguishable from it.
+    That is left alone. These exports are for reading, and the columns that
+    are actually nullable here never hold that string.
     """
-    if field == "\\N":
-        return ""
     if "\\" not in field:
         return field
     out = []
