@@ -51,9 +51,11 @@ if (!$allowed) {
 </div>
 
 <div class="info-box">
-  <div class="info-box-header">
+  <div class="info-box-header" @click="showArchives = !showArchives">
+    <span class="collapse-icon" :class="{ collapsed: !showArchives }">▼</span>
     <h3>Hunt Archives</h3>
   </div>
+  <div class="info-box-content" v-show="showArchives" v-cloak>
   <p>
     Each hunt reset writes a snapshot of the hunt it is about to wipe. These are
     the readable parts of it: every puzzle with its round, status, answer and
@@ -95,6 +97,7 @@ if ($backups_error !== null) {
     echo '</tbody></table>';
 }
 ?>
+  </div>
 </div>
 
 
@@ -106,7 +109,9 @@ const { createApp } = Vue;
 
 createApp({
   data() {
-    return {}
+    return {
+      showArchives: false,
+    }
   }
 }).mount('#app');
 </script>

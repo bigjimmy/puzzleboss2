@@ -1470,6 +1470,59 @@ def test_config_secret_display():
 # Test 23: Privilege Assignment and Gear Visibility
 # ──────────────────────────────────────────────────────────
 
+def test_admin_hunt_archives_box():
+    """admin.php's Hunt Archives box collapses like the rest of the UI and
+    starts closed.
+
+    Docker has no AWS credentials, so the API cannot reach S3 and the box
+    renders its unavailable state. That is the point worth testing here: the
+    box must still appear, stay collapsed, and open on click rather than
+    breaking the page when the archive store is unreachable.
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        print("  Navigating to admin page...")
+        page.goto(f"{BASE_URL}/admin.php?assumedid=testuser", wait_until="networkidle")
+
+        header = page.locator(".info-box-header", has=page.locator("h3:text('Hunt Archives')"))
+        assert header.count() == 1, "Hunt Archives box not found on admin.php"
+        print("    ✓ Hunt Archives box present")
+
+        icon = header.locator(".collapse-icon")
+        assert icon.count() == 1, "Hunt Archives header has no collapse icon"
+        body = page.locator(".info-box-content").filter(has_text="Each hunt reset writes a snapshot")
+        assert body.count() == 1, "Hunt Archives content container not found"
+
+        # Collapsed by default.
+        assert not body.is_visible(), "Hunt Archives should start collapsed"
+        assert "collapsed" in (icon.get_attribute("class") or ""), \
+            "Collapse icon should carry the collapsed class while closed"
+        print("    ✓ Starts collapsed, icon rotated")
+
+        header.click()
+        page.wait_for_timeout(300)
+        assert body.is_visible(), "Hunt Archives should open when the header is clicked"
+        assert "collapsed" not in (icon.get_attribute("class") or ""), \
+            "Collapse icon should lose the collapsed class when open"
+        print("    ✓ Expands on click")
+
+        # Without AWS credentials the API cannot list; the box must say so
+        # rather than rendering an empty or broken table.
+        text = body.inner_text()
+        assert ("Archives unavailable" in text or "No archives yet" in text
+                or "Download" in text), f"Unexpected archive box content: {text[:200]}"
+        print("    ✓ Reports archive availability cleanly")
+
+        header.click()
+        page.wait_for_timeout(300)
+        assert not body.is_visible(), "Hunt Archives should close again on a second click"
+        print("    ✓ Collapses again")
+
+        browser.close()
+
+
 def test_privilege_and_gear_visibility():
     """Test assigning and revoking privileges, and verify that gear icon
     visibility and admin page access are correctly gated on those privileges."""
@@ -2703,6 +2756,7 @@ def main():
         ('28', 'activitypage', test_activity_page, 'Activity Log Page'),
         ('29', 'discordsource', test_discord_source_activity, 'Discord Source Activity Filter'),
         ('30', 'secretdisplay', test_config_secret_display, 'Config Secret Display And Redaction Chain'),
+        ('31', 'huntarchives', test_admin_hunt_archives_box, 'Admin Hunt Archives Box'),
     ]
 
     handle_list_and_destructive(args, all_tests=all_tests)
