@@ -4,6 +4,7 @@ import sys
 import os
 import yaml
 import subprocess
+import re
 import datetime
 import requests
 from pathlib import Path
@@ -83,9 +84,14 @@ def is_mysql_client():
         return True
 
 
+def _redact(cmd):
+    """Mask the -pPASSWORD argument mysql/mysqldump require on the command line."""
+    return [re.sub(r"^-p.+", "-p<redacted>", a) for a in cmd]
+
+
 def run_command(cmd, error_msg):
     """Run a shell command and handle errors"""
-    debug_log(f"Running command: {' '.join(cmd)}")
+    debug_log(f"Running command: {' '.join(_redact(cmd))}")
     try:
         subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
