@@ -258,6 +258,63 @@ def load_sql_file(config, sql_file):
 
 
 
+def imds(path):
+    """Read one EC2 instance-metadata path (IMDSv2). Raises off EC2."""
+    import urllib.request
+
+    req = urllib.request.Request(
+        "http://169.254.169.254/latest/api/token", method="PUT",
+        headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"})
+    token = urllib.request.urlopen(req, timeout=2).read().decode()
+    req = urllib.request.Request(
+        "http://169.254.169.254/latest/" + path,
+        headers={"X-aws-ec2-metadata-token": token})
+    return urllib.request.urlopen(req, timeout=2).read().decode()
+
+
+S3_BACKUP_BUCKET = "puzzleboss-hunt-backups"
+
+
+def upload_backups_to_s3(backup_dir, label):
+    """Gzip every dump in backup_dir and upload it to the backups bucket.
+
+    The local copies live on the utility's root volume, which a rebuild
+    discards, so S3 is the durable copy. Objects are encrypted with the
+    puzzleboss-hunt-backups KMS key; the instance role can write but not read
+    or delete, so a compromise here cannot exfiltrate or destroy old backups.
+
+    Returns the s3:// prefix, or None if not running on EC2. Raises on a real
+    failure so the caller can abort before wiping anything.
+    """
+    import gzip
+    import json
+    import shutil
+
+    try:
+        region = json.loads(imds("dynamic/instance-identity/document"))["region"]
+    except Exception:
+        debug_log("Not running on EC2 (no instance metadata); skipping S3 backup upload")
+        return None
+
+    prefix = f"s3://{S3_BACKUP_BUCKET}/db/{label}"
+    for sql_file in sorted(Path(backup_dir).glob("*.sql")):
+        gz_path = sql_file.with_suffix(".sql.gz")
+        with open(sql_file, "rb") as src, gzip.open(gz_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+        debug_log(f"Uploading {gz_path.name} ({gz_path.stat().st_size} bytes) to {prefix}/")
+        subprocess.run(
+            ["aws", "--region", region, "s3", "cp", str(gz_path),
+             f"{prefix}/{gz_path.name}",
+             "--sse", "aws:kms",
+             "--sse-kms-key-id", f"alias/{S3_BACKUP_BUCKET}",
+             "--only-show-errors"],
+            check=True,
+        )
+        gz_path.unlink()
+    debug_log(f"Backups uploaded to {prefix}/")
+    return prefix
+
+
 def snapshot_tsdb_volume(label: str):
     """Snapshot the utility server's Prometheus data volume (hunt telemetry).
 
@@ -272,17 +329,6 @@ def snapshot_tsdb_volume(label: str):
     crash-consistent snapshots anyway, so the freeze is best-effort.
     """
     import json
-    import urllib.request
-
-    def imds(path):
-        req = urllib.request.Request(
-            "http://169.254.169.254/latest/api/token", method="PUT",
-            headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"})
-        token = urllib.request.urlopen(req, timeout=2).read().decode()
-        req = urllib.request.Request(
-            "http://169.254.169.254/latest/" + path,
-            headers={"X-aws-ec2-metadata-token": token})
-        return urllib.request.urlopen(req, timeout=2).read().decode()
 
     try:
         instance_id = imds("meta-data/instance-id")
@@ -345,6 +391,12 @@ def main():
         '--skip-tsdb-snapshot',
         action='store_true',
         help='Reset without snapshotting the Prometheus data volume'
+    )
+    parser.add_argument(
+        '--skip-s3-backup',
+        action='store_true',
+        help='Reset without copying the database backups to S3 (they then exist '
+             'only on this server, and a rebuild discards them)'
     )
     parser.add_argument(
         '--api-url',
@@ -412,6 +464,19 @@ def main():
     for table in preserve_tables:
         if not dump_table(config, table, backup_dir / f"{table}.sql"):
             print(f"Failed to backup {table} table. Aborting.")
+            sys.exit(1)
+
+    # Copy the dumps off this server before anything destructive. The local
+    # ones are on the root volume, which a rebuild discards.
+    s3_prefix = None
+    if args.skip_s3_backup:
+        debug_log("Skipping S3 backup upload (--skip-s3-backup)")
+    else:
+        try:
+            s3_prefix = upload_backups_to_s3(backup_dir, timestamp)
+        except Exception as e:
+            print(f"Failed to upload backups to S3: {e}")
+            print("Aborting. Re-run with --skip-s3-backup to reset without an off-server copy.")
             sys.exit(1)
 
     # Archive the Prometheus data volume before touching anything. Abort on a
@@ -493,6 +558,10 @@ def main():
     if tsdb_snapshot:
         print(f"Prometheus TSDB snapshot: {tsdb_snapshot} (EBS, tagged Purpose=hunt-telemetry-archive)")
     print(f"Full database backup: {full_backup_file}")
+    if s3_prefix:
+        print(f"Off-server copy: {s3_prefix}/ (KMS-encrypted; restoring is an admin action)")
+    else:
+        print("NOTE: no off-server copy was made -- these backups live only on this server.")
 
 
 if __name__ == "__main__":
