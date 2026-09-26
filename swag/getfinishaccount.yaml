@@ -53,6 +53,25 @@ responses:
             password was actually (re)issued. Already emailed to the account
             owner by the time this response is returned; provided here only
             as a same-session convenience.
+        reissued:
+          type: boolean
+          description: |
+            Step 2 only. True when the account already existed from an
+            interrupted earlier attempt and a fresh one-time password
+            superseded the previous one (any earlier password email is now
+            invalid).
+        cooldown:
+          type: boolean
+          description: |
+            Step 2 only. True when this code already provisioned the Google
+            account within the last few minutes; nothing was reissued or
+            emailed. The earlier email is still the valid copy.
+        email_error:
+          type: string
+          description: |
+            Step 2 only. Present when a one-time password was issued but the
+            email carrying it could not be sent; temp_password in this
+            response is then the only copy.
   500:
     description: Error during account creation
     schema:

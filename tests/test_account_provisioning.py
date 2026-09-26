@@ -264,5 +264,94 @@ class TestProvisionNewGoogleUser(unittest.TestCase):
         userservice.users.return_value.update.assert_not_called()
 
 
+class TestPasswordNeverLogged(unittest.TestCase):
+    """Every log line emitted while a one-time password is in flight must
+    redact it. LOGLEVEL is operator-tunable at runtime and logs ship to Loki,
+    so a trace-level leak is one config flip away from being a real leak."""
+
+    def test_change_google_user_password_redacts_trace_log(self):
+        logged = []
+        patchers = [
+            patch.object(pbgooglelib, "configstruct", {"DOMAINNAME": "importanthuntpoll.org"}),
+            patch.object(pbgooglelib, "debug_log", lambda level, msg: logged.append(msg)),
+            patch.object(pbgooglelib, "_rate_limiter", MagicMock(acquire=lambda: None)),
+            patch.object(pbgooglelib, "initadmin", lambda: None),
+        ]
+        for p in patchers:
+            p.start()
+            self.addCleanup(p.stop)
+
+        with patch("pbgooglelib.build") as mock_build:
+            userservice = mock_build.return_value
+            userservice.users.return_value.update.return_value.execute.return_value = {
+                "primaryEmail": "x@importanthuntpoll.org"
+            }
+            result = pbgooglelib.change_google_user_password(
+                "x", "s3cret-one-time", change_password_at_next_login=True
+            )
+
+        self.assertEqual(result, "OK")
+        self.assertTrue(logged, "expected some log output")
+        for line in logged:
+            self.assertNotIn("s3cret-one-time", line)
+        # The request body itself must still carry the password.
+        body = userservice.users.return_value.update.call_args.kwargs["body"]
+        self.assertEqual(body["password"], "s3cret-one-time")
+        self.assertTrue(body["changePasswordAtNextLogin"])
+
+
+class TestRegistrationEmails(unittest.TestCase):
+    """SMTP is mocked; these pin down the copy and the no-logging rule."""
+
+    def setUp(self):
+        self.logged = []
+        self.sent = []
+        smtp = MagicMock()
+        smtp.return_value.send_message.side_effect = lambda m: self.sent.append(m)
+        patchers = [
+            patch.object(pblib, "configstruct", {
+                "TEAMNAME": "Mystik Spiral", "DOMAINNAME": "importanthuntpoll.org",
+                "REGEMAIL": "reg@importanthuntpoll.org", "MAILRELAY": "relay",
+                "ACCT_URI": "https://acct.example",
+            }),
+            patch.object(pblib, "debug_log", lambda level, msg: self.logged.append(msg)),
+            patch.object(pblib.smtplib, "SMTP", smtp),
+        ]
+        for p in patchers:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_temp_password_email_created_copy(self):
+        result = pblib.email_temp_password("a@b.c", "New Solver", "newsolver", "pw-abc")
+        self.assertEqual(result, "OK")
+        msg = self.sent[0]
+        self.assertIn("is ready", msg["Subject"])
+        self.assertIn("pw-abc", msg.get_content())
+        self.assertNotIn("no longer works", msg.get_content())
+        for line in self.logged:
+            self.assertNotIn("pw-abc", line)
+
+    def test_temp_password_email_reissued_copy(self):
+        pblib.email_temp_password("a@b.c", "New Solver", "newsolver", "pw-xyz", reissued=True)
+        msg = self.sent[0]
+        self.assertIn("reissued", msg["Subject"])
+        self.assertIn("no longer works", msg.get_content())
+        self.assertIn("pw-xyz", msg.get_content())
+
+    def test_verification_email_never_logs_code(self):
+        result = pblib.email_user_verification("a@b.c", "c0de1234", "New Solver", "newsolver")
+        self.assertEqual(result, "OK")
+        self.assertIn("c0de1234", self.sent[0].get_content())
+        for line in self.logged:
+            self.assertNotIn("c0de1234", line)
+
+    def test_smtp_failure_returns_error_string(self):
+        pblib.smtplib.SMTP.side_effect = OSError("relay down")
+        result = pblib.email_temp_password("a@b.c", "New Solver", "newsolver", "pw-abc")
+        self.assertEqual(result, "relay down")
+        for line in self.logged:
+            self.assertNotIn("pw-abc", line)
+
+
 if __name__ == "__main__":
     unittest.main()

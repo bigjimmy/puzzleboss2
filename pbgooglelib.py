@@ -1540,9 +1540,8 @@ def change_google_user_password(username, password, change_password_at_next_logi
     if change_password_at_next_login:
         userbody["changePasswordAtNextLogin"] = True
 
-    debug_log(
-        5, f"Attempting to change user pass with post body: {json.dumps(userbody)}"
-    )
+    safe_body = {**userbody, "password": "REDACTED"}
+    debug_log(5, f"Attempting to change user pass with post body: {json.dumps(safe_body)}")
     try:
         _rate_limiter.acquire()
         changeresponse = (

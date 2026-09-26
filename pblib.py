@@ -387,22 +387,54 @@ def generate_temp_password(length=18):
     return secrets.token_urlsafe(length)
 
 
-def email_temp_password(email, fullname, username, temp_password):
+def _send_registration_email(to_email, subject, body):
+    """Send one transactional signup email via MAILRELAY. Returns "OK" or the
+    error string. Never logs the body: signup mail carries credentials
+    (verification links, one-time passwords)."""
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = configstruct["REGEMAIL"]
+        msg["To"] = to_email
+        msg.set_content(body)
+        s = smtplib.SMTP(configstruct["MAILRELAY"])
+        s.send_message(msg)
+        s.quit()
+    except Exception as e:
+        errmsg = str(e)
+        debug_log(2, f"Exception sending email ({subject!r}) to {to_email}: {errmsg}")
+        return errmsg
+    return "OK"
+
+
+def email_temp_password(email, fullname, username, temp_password, reissued=False):
     """Email a newly (re)issued Google Workspace temp password to the account
     owner. Only called after the recipient has already clicked the
     verification link, so this address has already been confirmed reachable
     by the person completing signup -- same trust boundary as the
     verification email itself.
+
+    reissued=True means an earlier password email for this account is now
+    invalid; the copy says so, since the recipient may have both in their inbox.
     """
-    debug_log(4, f"start for email: {email}")
+    debug_log(4, f"start for email: {email} reissued={reissued}")
 
     team_name = configstruct["TEAMNAME"]
     domain = configstruct["DOMAINNAME"]
     full_username = f"{username}@{domain}"
 
+    if reissued:
+        subject = f"{team_name} - your Google account password has been reissued"
+        intro = f"""We've issued a new temporary password for your {team_name} Google account: {full_username}
+
+Any password we emailed you earlier no longer works -- use this one instead."""
+    else:
+        subject = f"{team_name} - your Google account is ready"
+        intro = f"Your {team_name} Google account is ready: {full_username}"
+
     messagecontent = f"""Hi {fullname},
 
-Your {team_name} Google account is ready: {full_username}
+{intro}
 
 Temporary password: {temp_password}
 
@@ -420,25 +452,7 @@ The {team_name} Puzzletech Team
 ---
 This is an automated message from {team_name} registration system.
 """
-
-    debug_log(5, "Temp password email body: REDACTED (contains a one-time password)")
-
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = f"{team_name} - your Google account is ready"
-        msg["From"] = configstruct["REGEMAIL"]
-        msg["To"] = email
-        msg.set_content(messagecontent)
-        s = smtplib.SMTP(configstruct["MAILRELAY"])
-        s.send_message(msg)
-        s.quit()
-
-    except Exception as e:
-        errmsg = str(e)
-        debug_log(2, f"Exception sending temp password email: {errmsg}")
-        return errmsg
-
-    return "OK"
+    return _send_registration_email(email, subject, messagecontent)
 
 
 def email_user_verification(email, code, fullname, username):
@@ -467,25 +481,11 @@ The {team_name} Puzzletech Team
 ---
 This is an automated message from {team_name} registration system.
 """
-
-    debug_log(4, f"Email to be sent: {messagecontent}")
-
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = f"{team_name} - Complete your account registration"
-        msg["From"] = configstruct["REGEMAIL"]
-        msg["To"] = email
-        msg.set_content(messagecontent)
-        s = smtplib.SMTP(configstruct["MAILRELAY"])
-        s.send_message(msg)
-        s.quit()
-
-    except Exception as e:
-        errmsg = str(e)
-        debug_log(2, f"Exception sending email: {errmsg}")
-        return errmsg
-
-    return "OK"
+    # Body deliberately not logged: the verification URL is the bearer
+    # credential for GET /finishaccount.
+    return _send_registration_email(
+        email, f"{team_name} - Complete your account registration", messagecontent
+    )
 
 
 # Business logic functions for solver assignment and round completion

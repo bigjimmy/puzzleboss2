@@ -238,16 +238,30 @@ function assert_api_success($responseobj) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  // CAPTCHA check on initial registration submission (not on the confirm step)
+  $username = $_POST['username'];
+  $fullname = rtrim($_POST['fullname']);
+  $email    = $_POST['email'];
+
+  // CAPTCHA is checked on the initial submission. The confirm step is bound
+  // to that check through the session: it must carry exactly the details
+  // that passed CAPTCHA, so a client can't skip straight to confirm.
   if (!array_key_exists('userok', $_POST)) {
     if (!verify_recaptcha($_POST['g-recaptcha-response'] ?? '', $recaptcha_secret_key)) {
       exit_with_error_message("CAPTCHA verification failed. Please go back and try again.");
     }
+    $_SESSION['captcha_verified'] = array(
+      'username' => $username, 'fullname' => $fullname, 'email' => $email,
+    );
+  } else {
+    $verified = $_SESSION['captcha_verified'] ?? null;
+    if (!is_array($verified)
+        || $verified['username'] !== $username
+        || $verified['fullname'] !== $fullname
+        || $verified['email'] !== $email) {
+      exit_with_error_message("Session expired or details changed. Please start registration again.");
+    }
+    unset($_SESSION['captcha_verified']);
   }
-
-  $username = $_POST['username'];
-  $fullname = rtrim($_POST['fullname']);
-  $email    = $_POST['email'];
 
   // Run validation
   if (!ctype_alnum($username)) {
@@ -363,10 +377,12 @@ if (isset($_GET['code'])) {
       <span class="label">Finishing up...</span>
     </div>
   </div>
-  <div id="temp-password-container" style="display: none;">
+  <div id="temp-password-container" style="display: none;" aria-live="polite">
     <h3>Your one-time Google password</h3>
-    <p>We've also emailed this to you -- worth saving it somewhere if you're not signing in right away.</p>
-    <p><code id="temp-password-value" style="font-size: 1.2em; user-select: all;"></code></p>
+    <p id="temp-password-reissued" style="display: none;"><strong>This replaces any password we emailed you earlier</strong> -- that one no longer works.</p>
+    <p id="temp-password-emailed">We've also emailed this to you -- worth saving it somewhere if you're not signing in right away.</p>
+    <p id="temp-password-email-failed" class="error" style="display: none;"><strong>We couldn't email this to you</strong> -- this page is your only copy. Save it now, or ask @Puzztech for a new one if you lose it.</p>
+    <p><code id="temp-password-value" aria-label="Your one-time Google password" style="font-size: 1.2em; user-select: all; overflow-wrap: anywhere;"></code></p>
     <p style="font-size: 0.9em;">
       Sign in at <a href="https://accounts.google.com/" target="_blank">accounts.google.com</a>
       as <tt>YOUR_USERNAME@$google_domain</tt> with this password. Google will
@@ -491,18 +507,23 @@ if (isset($_GET['code'])) {
           throw new Error(data.message || 'Unknown error');
         }
         
-        // Mark complete with appropriate label
-        if (data.skipped) {
-          setStepStatus(step.id, 'skipped', step.label);
-        } else {
-          setStepStatus(step.id, 'complete', step.label);
-        }
+        // Step 2 reports what actually happened (created / reissued /
+        // already set up / cooldown); prefer that over the static label.
+        const label = (stepNum === 2 && data.message) ? data.message : step.label;
+        setStepStatus(step.id, data.skipped ? 'skipped' : 'complete', label);
 
         // Step 2 may hand back a one-time Google password. It's already been
         // emailed by the time this response arrives -- this is a same-session
-        // convenience, not the durable copy.
+        // convenience, not the durable copy (unless email_error says otherwise).
         if (stepNum === 2 && data.temp_password) {
           document.getElementById('temp-password-value').textContent = data.temp_password;
+          if (data.reissued) {
+            document.getElementById('temp-password-reissued').style.display = 'block';
+          }
+          if (data.email_error) {
+            document.getElementById('temp-password-emailed').style.display = 'none';
+            document.getElementById('temp-password-email-failed').style.display = 'block';
+          }
           document.getElementById('temp-password-container').style.display = 'block';
         }
 

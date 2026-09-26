@@ -2536,40 +2536,90 @@ def new_account():
     return {"status": "ok", "code": code, "email_error": email_result}
 
 
-def _provision_google_account_and_notify(username, firstname, lastname, email):
+PROVISION_COOLDOWN_MINUTES = 10
+
+
+def _claim_provisioning_slot(code):
+    """Atomically mark this signup code as having provisioned Google within
+    the last PROVISION_COOLDOWN_MINUTES. Returns False if another request
+    already holds the slot. This serializes concurrent step-2 calls for one
+    code (a double-click or two tabs would otherwise each reissue a password,
+    invalidating the email the other just sent) and caps how often a leaked
+    code can be used to re-trigger a password email."""
+    conn, cursor = _cursor()
+    cursor.execute(
+        """
+        UPDATE newuser SET provisioned_at = NOW()
+        WHERE code = %s
+          AND (provisioned_at IS NULL
+               OR provisioned_at < NOW() - INTERVAL %s MINUTE)
+        """,
+        (code, PROVISION_COOLDOWN_MINUTES),
+    )
+    conn.commit()
+    return cursor.rowcount == 1
+
+
+def _release_provisioning_slot(code):
+    conn, cursor = _cursor()
+    cursor.execute("UPDATE newuser SET provisioned_at = NULL WHERE code = %s", (code,))
+    conn.commit()
+
+
+def _provision_google_account_and_notify(code, username, firstname, lastname, email):
     """Create/reissue the Google Workspace account (see provision_new_google_user)
     and, if a one-time password was actually issued, email it to the account
-    owner. Raises on failure. Returns a human-readable status message.
+    owner. Raises on failure.
 
-    The temp password is deliberately not returned to callers beyond this
-    function's own email step -- see finish_account step 2, which forwards it
-    to the browser response too (as a same-session convenience; the email is
-    the durable copy) but never logs or stores it.
+    Returns a dict with: message (human-readable status), reissued (bool),
+    temp_password (str or None; the caller may forward it to the browser as a
+    same-session convenience -- the email is the durable copy -- but must
+    never log or store it), email_error (str or None), cooldown (bool: True
+    if this code provisioned within the last PROVISION_COOLDOWN_MINUTES and
+    nothing was done).
     """
-    status, temp_password, message = provision_new_google_user(username, firstname, lastname, email)
+    result = {"message": "", "reissued": False, "temp_password": None, "email_error": None, "cooldown": False}
+
+    if not _claim_provisioning_slot(code):
+        debug_log(3, f"User {username}: Google provisioning requested again within cooldown; not reissuing")
+        result["message"] = "Google account set up moments ago; check your email for the one-time password"
+        result["cooldown"] = True
+        return result
+
+    try:
+        status, temp_password, message = provision_new_google_user(username, firstname, lastname, email)
+    except Exception:
+        _release_provisioning_slot(code)
+        raise
     if status == "error":
+        _release_provisioning_slot(code)
         raise Exception(f"Failed to create Google account: {message}")
 
     if status == "already_active":
         debug_log(4, f"User {username}: Google account already fully set up; nothing to do")
-        return "Google account already set up", None
+        result["message"] = "Google account already set up"
+        return result
 
-    email_result = email_temp_password(email, f"{firstname} {lastname}", username, temp_password)
+    reissued = status == "reissued"
+    email_result = email_temp_password(
+        email, f"{firstname} {lastname}", username, temp_password, reissued=reissued
+    )
     if email_result != "OK":
         # The account/password exists regardless -- don't fail the signup over
-        # a mail delivery hiccup, but make sure it's loud in the logs, since
-        # the temp password has no other durable record.
+        # a mail delivery hiccup, but make sure it's loud in the logs and in
+        # the response, since the browser is now the only copy.
         debug_log(
             1,
             f"User {username}: Google account {status} but temp-password email failed: {email_result}",
         )
+        result["email_error"] = email_result
     else:
         debug_log(4, f"User {username}: Google account {status}; temp password emailed")
 
-    return (
-        "Google account created" if status == "created" else "Google account password reissued",
-        temp_password,
-    )
+    result["message"] = "Google account password reissued" if reissued else "Google account created"
+    result["reissued"] = reissued
+    result["temp_password"] = temp_password
+    return result
 
 
 @app.route("/finishaccount/<code>", endpoint="get_finish_account", methods=["GET"])
@@ -2636,7 +2686,13 @@ def finish_account(code):
             4, f"User {username}: Running all steps at once (no step parameter)"
         )
         if configstruct.get("SKIP_GOOGLE_API") != "true":
-            _provision_google_account_and_notify(username, firstname, lastname, email)
+            # Legacy all-at-once path: the emailed copy is the only way the
+            # temp password reaches the user, so surface a mail failure.
+            provision = _provision_google_account_and_notify(code, username, firstname, lastname, email)
+            if provision["email_error"]:
+                raise Exception(
+                    f"Google account created but the one-time password email failed: {provision['email_error']}"
+                )
         if not _solver_exists(username):
             conn, cursor = _cursor()
             cursor.execute(
@@ -2669,13 +2725,21 @@ def finish_account(code):
         debug_log(
             4, f"User {username}: Step 2 - Creating new Google Workspace account"
         )
-        message, temp_password = _provision_google_account_and_notify(username, firstname, lastname, email)
-        debug_log(4, f"User {username}: Step 2 - {message}")
-        response = {"status": "ok", "step": 2, "message": message}
-        if temp_password:
+        provision = _provision_google_account_and_notify(code, username, firstname, lastname, email)
+        debug_log(4, f"User {username}: Step 2 - {provision['message']}")
+        response = {
+            "status": "ok",
+            "step": 2,
+            "message": provision["message"],
+            "reissued": provision["reissued"],
+            "cooldown": provision["cooldown"],
+        }
+        if provision["temp_password"]:
             # Same-session convenience only -- the email just sent is the
             # durable copy. Never logged (debug_log calls above redact it).
-            response["temp_password"] = temp_password
+            response["temp_password"] = provision["temp_password"]
+        if provision["email_error"]:
+            response["email_error"] = provision["email_error"]
         return response
 
     # Step 3: Add to solver database

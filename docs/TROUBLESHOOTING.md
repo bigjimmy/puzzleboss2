@@ -163,6 +163,16 @@ s.quit()
 - Network blocked: outbound port 25 is blocked from your network. Many cloud providers (AWS, GCP) block this by default — open a support ticket or use a relay that accepts a different port.
 - Mail going to spam: check `REGEMAIL` is a real, deliverable `From:` address, and that the relay isn't filtering you.
 
+### Solver says their one-time password doesn't work
+
+How the one-time password works: `GET /finishaccount/<code>` step 2 creates the Google account with a random password flagged `changePasswordAtNextLogin`, emails it, and shows it once in the browser. Puzzleboss never stores it.
+
+- **They have two password emails:** only the most recent one is valid. Clicking the verification link again reissues a new password (and the email says so). Any earlier one is dead.
+- **They reloaded the page and got "set up moments ago":** the same code won't reissue more than once every 10 minutes (`PROVISION_COOLDOWN_MINUTES` in `pbrest.py`). The password from the earlier email is still the valid one. Wait out the cooldown and click the link again if it's truly lost.
+- **They already signed in once and set a real password, then clicked the link again:** the step reports "Google account already set up" and nothing changes. Their real password stands. A forgotten real password is a Google admin-console reset, not a Puzzleboss operation.
+- **The verification code has expired (48 hours):** the `newuser` row is gone; they register again. If the Google account already exists from the first attempt, the new code's step 2 reissues a password on it rather than failing.
+- **The page said "we couldn't email this to you":** the browser was the only copy. Fix `MAILRELAY` (see above) and have them click the link again after the cooldown to get a reissue by email.
+
 ### `/all` is slow or returning stale data
 
 The cache layer is Redis. `/all` is the hot-path endpoint and caches transparently; `/allcached` is a deprecated alias that hits the same code.

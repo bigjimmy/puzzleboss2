@@ -164,7 +164,7 @@ Discord integration runs through a separate daemon called **puzzcord** ([github.
 
 ## 6. Email
 
-Puzzleboss sends one kind of mail: account-signup verification. Set:
+Puzzleboss sends two kinds of mail, both during signup: the verification link, and then the one-time Google Workspace password once the link is clicked. Set:
 
 | Key | Example |
 |---|---|
@@ -196,7 +196,10 @@ The intended flow is self-service:
 1. A new solver visits `ACCT_URI` (the signup page), gated by `ACCT_USERNAME`/`ACCT_PASSWORD` (the team's shared secret).
 2. They submit name, email, and desired username.
 3. The system emails them a verification link via `MAILRELAY`.
-4. Clicking it completes account creation; they now appear in the `solver` table and can log in via SSO.
+4. Clicking it creates their Google Workspace account with a random one-time password, emails that password to them (it's also shown once on the page), and adds them to the `solver` table.
+5. They sign in at accounts.google.com with the one-time password; Google forces them to choose their own password before anything else. After that they can log in to Puzzleboss via SSO.
+
+If a solver abandons the flow partway and clicks the link again later, the same code reissues a fresh one-time password (the earlier email becomes invalid). Once they've set their real password, nothing in Puzzleboss will touch the account again. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#solver-says-their-one-time-password-doesnt-work).
 
 Admins can also create solvers directly via the API (`POST /solvers`) or via the admin UI for bulk imports.
 
