@@ -1,16 +1,25 @@
 summary: Get all puzzles and rounds
 description: |
-  Get all puzzles organized by rounds with their complete information.
-  Uses Redis for performance if available, falls back to database.
-  
-  Note: /all and /allcached are now equivalent endpoints.
+  The whole hunt in one call: every round with its puzzles, plus the active
+  hint queue. This is the hot path during a hunt; the UI polls it every 5s.
+
+  Served from a Redis blob with a 15s TTL that is invalidated only by
+  structural changes (status, name, round, answer, ismeta, tags, create /
+  delete). Non-structural fields (xyzloc, comments, sheetcount, solver
+  assignment) ride the TTL and can be up to 15s stale. lastact is attached
+  fresh on every request from the write-through hash and is never stale.
+  /allcached is a deprecated alias of this endpoint.
+
+  Puzzle objects are rows of the puzzle_view SQL view; round objects are
+  rows of round_view with their puzzles attached. Field names below are the
+  real ones (chat_channel_link, drive_id, solvers/cursolvers as strings).
 tags:
   - Puzzles
   - Rounds
 parameters: []
 responses:
   200:
-    description: List of all rounds with their puzzles
+    description: Every round with its puzzles, and the active hint queue
     schema:
       type: object
       properties:
@@ -19,131 +28,78 @@ responses:
           items:
             type: object
             properties:
-              id:
-                type: integer
-                description: Round ID
-              name:
-                type: string
-                description: Round name
-              comments:
-                type: string
-                description: Round comments
+              id: { type: integer }
+              name: { type: string }
+              round_uri: { type: string, description: Link to the round on the hunt site }
+              drive_uri: { type: string, description: Google Drive folder URL for the round }
+              drive_id: { type: string, description: Google Drive folder id }
+              comments: { type: string }
               status:
                 type: string
-                enum: ['Solved']
-                description: Status of the round (Solved when all meta puzzles are solved)
+                description: Round status. Set to Solved automatically when every meta in the round is solved; otherwise the value an admin gave it (New by default).
               puzzles:
                 type: array
                 items:
                   type: object
                   properties:
-                    id:
-                      type: integer
-                      description: Puzzle ID
-                    name:
-                      type: string
-                      description: Puzzle name
-                    answer:
-                      type: string
-                      description: Puzzle answer if solved
-                    puzzle_uri:
-                      type: string
-                      description: URI to the puzzle
-                    chat_channel_id:
-                      type: string
-                      description: Discord channel ID
-                    chat_channel_url:
-                      type: string
-                      description: Discord channel URL
-                    sheet_id:
-                      type: string
-                      description: Google Sheet ID
-                    current_solvers:
-                      type: object
-                      properties:
-                        solvers:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              solver_id:
-                                type: integer
-                    solver_history:
-                      type: object
-                      properties:
-                        solvers:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              solver_id:
-                                type: integer
-                    sheetcount:
-                      type: integer
-                      description: Number of sheets/tabs in the puzzle's Google spreadsheet
+                    id: { type: integer }
+                    name: { type: string }
+                    status: { type: string, description: One of the configured puzzle statuses }
+                    answer: { type: string, description: Null until solved }
+                    roundname: { type: string }
+                    round_id: { type: integer }
+                    comments: { type: string }
+                    puzzle_uri: { type: string, description: Link to the puzzle on the hunt site }
+                    drive_uri: { type: string, description: Google Sheet URL }
+                    drive_id: { type: string, description: Google Sheet id }
+                    chat_channel_id: { type: string, description: Discord channel id }
+                    chat_channel_name: { type: string }
+                    chat_channel_link: { type: string, description: Discord channel URL }
+                    ismeta: { type: integer, description: 1 for a meta puzzle }
+                    xyzloc: { type: string, description: Where the puzzle is being worked (free text) }
+                    sheetcount: { type: integer, description: Tabs in the Google Sheet }
+                    sheetenabled: { type: integer, description: 1 once the Apps Script add-on is writing the hidden _pb_activity sheet }
+                    tags: { type: string, description: Comma-separated tag names }
+                    solvers: { type: string, description: Comma-separated names of everyone who has ever worked the puzzle }
+                    cursolvers: { type: string, description: Comma-separated names of who is working it now }
                     lastact:
                       type: object
                       nullable: true
                       description: |
-                        Most recent activity for this puzzle, always current — served from the
-                        write-through Redis lastact hash (DB fallback), attached fresh on every
-                        request regardless of the cached blob's age. Null only for puzzles that
-                        have never had any activity. time is an ISO 8601 string. Use this instead
-                        of calling /puzzles/<id>/lastact per puzzle to avoid N+1 queries.
+                        Most recent activity row for this puzzle, always current (write-through
+                        Redis hash, DB fallback). Null only for a puzzle with no activity yet.
+                        Use this rather than /puzzles/<id>/lastact per puzzle.
                       properties:
-                        id:
-                          type: integer
-                        puzzle_id:
-                          type: integer
-                        solver_id:
-                          type: integer
-                        source:
-                          type: string
-                        type:
-                          type: string
-                        time:
-                          type: string
-                          description: ISO 8601 string (e.g. "2026-03-29T21:13:27")
+                        id: { type: integer }
+                        puzzle_id: { type: integer }
+                        solver_id: { type: integer }
+                        source: { type: string }
+                        type: { type: string }
+                        uri: { type: string }
+                        source_version: { type: integer }
+                        time: { type: string, description: ISO 8601, e.g. 2026-03-29T21:13:27 }
         hints:
           type: array
-          description: Active hint requests (queued/ready/submitted), ordered by queue position
+          description: Active hint requests (queued / ready / submitted), ordered by queue position
           items:
             type: object
             properties:
-              id:
-                type: integer
-                description: Hint ID
-              puzzle_id:
-                type: integer
-              puzzle_name:
-                type: string
-              solver:
-                type: string
-                description: Name of the solver who requested the hint
-              queue_position:
-                type: integer
-              request_text:
-                type: string
-              status:
-                type: string
-                description: Hint status (e.g. queued, ready, submitted)
-              created_at:
-                type: string
-                description: ISO 8601 UTC timestamp, or null
-              answered_at:
-                type: string
-                description: ISO 8601 UTC timestamp, or null
-              submitted_at:
-                type: string
-                description: ISO 8601 UTC timestamp, or null
+              id: { type: integer }
+              puzzle_id: { type: integer }
+              puzzle_name: { type: string }
+              solver: { type: string, description: Name of the solver who requested the hint }
+              queue_position: { type: integer }
+              request_text: { type: string }
+              status: { type: string, description: queued, ready or submitted }
+              created_at: { type: string, description: ISO 8601 UTC, or null }
+              answered_at: { type: string, description: ISO 8601 UTC, or null }
+              submitted_at: { type: string, description: ISO 8601 UTC, or null }
   500:
     description: Error retrieving data
     schema:
       type: object
       properties:
-        error:
-          type: string
-        error_type:
-          type: string
-        traceback:
-          type: string
+        status: { type: string, example: error }
+        error: { type: string }
+        error_type: { type: string }
+        traceback: { type: string }

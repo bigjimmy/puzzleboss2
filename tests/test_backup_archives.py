@@ -13,66 +13,10 @@ Run with: pytest tests/test_backup_archives.py -v
 
 import datetime
 import gzip
-import importlib
 import sys
-import types
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-
-# Importing pbrest pulls in flask_mysqldb and, through pbgooglelib, the whole
-# Google client stack. CI installs neither. Stub anything absent BEFORE the
-# import rather than relying on another test file having done it: collection
-# order is alphabetical today, so test_account_provisioning happens to stub
-# the Google modules first, and this file would silently start failing if that
-# file were renamed or run separately.
-_GOOGLE_STACK = (
-    "googleapiclient",
-    "googleapiclient.discovery",
-    "googleapiclient.errors",
-    "google.auth",
-    "google.auth.transport",
-    "google.auth.transport.requests",
-    "google.oauth2",
-    "google.oauth2.service_account",
-    "google_auth_httplib2",
-    "httplib2",
-)
-
-
-@pytest.fixture(scope="module")
-def pbrest():
-    """Import pbrest with everything it needs but CI does not install."""
-    if "flask_mysqldb" not in sys.modules:
-        fake = types.ModuleType("flask_mysqldb")
-
-        class _MySQL:
-            def __init__(self, app=None):
-                self.connection = MagicMock()
-
-        fake.MySQL = _MySQL
-        sys.modules["flask_mysqldb"] = fake
-
-    for name in _GOOGLE_STACK:
-        if name not in sys.modules:
-            try:
-                importlib.import_module(name)
-            except ImportError:
-                sys.modules[name] = MagicMock()
-
-    import pbrest as _pbrest
-
-    return _pbrest
-
-
-@pytest.fixture
-def client(pbrest):
-    pbrest.app.config["TESTING"] = True
-    # before_request refreshes config off the DB; it is irrelevant here.
-    with patch.object(pbrest, "maybe_refresh_config", lambda: None):
-        with pbrest.app.test_client() as c:
-            yield c
 
 
 @pytest.fixture

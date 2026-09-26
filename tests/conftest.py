@@ -65,3 +65,61 @@ def load_fixture(filename):
     fixture_path = os.path.join(os.path.dirname(__file__), 'fixtures', filename)
     with open(fixture_path) as f:
         return json.load(f)
+
+
+# --- pbrest fixtures (shared by every test that drives real routes) ---------
+#
+# Importing pbrest pulls in flask_mysqldb and, through pbgooglelib, the Google
+# client stack. CI installs neither. Stub whatever is absent BEFORE the import,
+# here, so no test file depends on another having done it first.
+
+import importlib
+import types
+from unittest.mock import patch
+
+import pytest
+
+_PBREST_STUBS = (
+    "googleapiclient", "googleapiclient.discovery", "googleapiclient.errors",
+    "google.auth", "google.auth.transport", "google.auth.transport.requests",
+    "google.oauth2", "google.oauth2.service_account", "google_auth_httplib2",
+    "httplib2", "boto3",
+)
+
+
+@pytest.fixture(scope="session")
+def pbrest():
+    """The real pbrest module with its un-installable dependencies stubbed."""
+    added = []
+    if "flask_mysqldb" not in sys.modules:
+        fake = types.ModuleType("flask_mysqldb")
+
+        class _MySQL:
+            def __init__(self, app=None):
+                self.connection = MagicMock()
+
+        fake.MySQL = _MySQL
+        sys.modules["flask_mysqldb"] = fake
+        added.append("flask_mysqldb")
+    for name in _PBREST_STUBS:
+        if name in sys.modules:
+            continue
+        try:
+            importlib.import_module(name)
+        except ImportError:
+            sys.modules[name] = MagicMock()
+            added.append(name)
+    import pbrest as _pbrest
+
+    yield _pbrest
+    for name in added:
+        sys.modules.pop(name, None)
+
+
+@pytest.fixture
+def client(pbrest):
+    """Flask test client; the per-request config refresh (a DB read) is off."""
+    pbrest.app.config["TESTING"] = True
+    with patch.object(pbrest, "maybe_refresh_config", lambda: None):
+        with pbrest.app.test_client() as c:
+            yield c

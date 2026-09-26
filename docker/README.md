@@ -26,7 +26,7 @@ Other endpoints:
 | <http://localhost?assumedid=testuser> | Main web UI |
 | <http://localhost:5000/apidocs> | Swagger / OpenAPI explorer |
 | <http://localhost:5000/metrics> | Prometheus metrics |
-| <http://localhost/admin.php?assumedid=testuser> | Admin / config editor |
+| <http://localhost/config.php?assumedid=testuser> | Admin / config editor |
 
 ### The test user
 
@@ -103,7 +103,7 @@ That's the whole golden path. From here, see [docs/OPERATIONS.md](../docs/OPERAT
 
 Rebuild with `docker-compose up --build`.
 
-Most runtime tuning happens in the database `config` table rather than the YAML — edit it via the admin UI (<http://localhost/admin.php?assumedid=testuser>) or directly via SQL.
+Most runtime tuning happens in the database `config` table rather than the YAML — edit it via the admin UI (<http://localhost/config.php?assumedid=testuser>) or directly via SQL.
 
 ## MySQL SSL
 

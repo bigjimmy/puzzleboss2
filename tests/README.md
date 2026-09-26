@@ -124,3 +124,16 @@ This allows testing business logic without requiring:
 Areas not yet covered by unit tests:
 - pbgooglelib.py Google API integration (beyond the rate limiter)
 - pbllmlib.py LLM query functions
+
+## Added September 2026
+
+| File | Covers |
+|---|---|
+| `test_account_provisioning.py` | Passwordless signup: `generate_temp_password`, the create / reissue / leave-alone decision in `provision_new_google_user`, that passwords are never logged, and the registration email copy. |
+| `test_finishaccount.py` | The `/finishaccount` step-2 state machine end to end through Flask's test client: cooldown, slot release on failure, `email_error` / `reissued` / `temp_password` propagation, code expiry. |
+| `test_admin_gate.py` | Every `@admin_token_gated` route returns 403 with enforcement on and no token, and only warns with enforcement off. |
+| `test_pbrest_allowlists.py` | The SQL-identifier allowlists in pbrest reject unknown parts with 400 before any SQL runs, and track the schema. |
+| `test_backup_archives.py` | `/backups*` only ever serve the two CSV archives, never the SQL dumps beside them. |
+| `test_reset_hunt_helpers.py` | `reset-hunt.py`'s pure helpers: the mysql batch-output unescaper and password redaction. |
+| `test_migrations.py` | Migration discovery and the idempotence of the newuser migrations. |
+| `test_embedding_model.py`, `test_wiki_scoring.py` | Gemini embedding-model config and wiki search scoring. |

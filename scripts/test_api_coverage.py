@@ -2191,7 +2191,7 @@ class TestRunner:
 
         # Non-existent deletion
         r = self.api_delete_raw(f"/deletepuzzle/NonExistent{ts}")
-        self.logger.log_operation(f"  Delete non-existent: {r.status_code}")
+        assert_true(result, r.status_code >= 400, f"Delete of a non-existent puzzle must fail, got {r.status_code}")
 
         result.set_success("Puzzle deletion test completed successfully")
 
@@ -2299,10 +2299,7 @@ class TestRunner:
             return
         # Submit of non-ready hint should fail
         r = self.api_post_raw(f"/hints/{ctx['hint_ids'][1]}/submit", {})
-        if r.status_code < 400:
-            self.logger.log_warning(f"  Submit of non-ready hint returned {r.status_code} (expected 404)")
-        else:
-            self.logger.log_operation(f"  ✓ Non-ready submit correctly returned {r.status_code}")
+        assert_true(result, r.status_code >= 400, f"Submit of a non-ready hint must be rejected, got {r.status_code}")
         self.logger.log_operation("  ✓ Submit endpoint works correctly")
 
     def _hint_answer_submitted(self, result, ctx):
@@ -2394,19 +2391,13 @@ class TestRunner:
         # Error cases
         if extra_id:
             r = self.api_post_raw(f"/hints/{extra_id}/demote", {})
-            if r.status_code < 400:
-                self.logger.log_warning(f"  Demote of last hint returned {r.status_code} (expected 400)")
-            else:
-                self.logger.log_operation(f"  ✓ Demote of last hint correctly returned {r.status_code}")
+            assert_true(result, r.status_code >= 400, f"Demote of the last hint must be rejected, got {r.status_code}")
 
         r = self.api_delete_raw("/hints/999999")
         self.logger.log_operation(f"  Delete non-existent hint: {r.status_code}")
 
         r = self.api_post_raw("/hints", {"puzzle_id": puz1["id"]})
-        if r.ok:
-            self.logger.log_warning("  POST /hints with missing fields unexpectedly succeeded")
-        else:
-            self.logger.log_operation(f"  ✓ POST /hints with missing fields returned {r.status_code}")
+        assert_true(result, not r.ok, "POST /hints with missing fields must be rejected")
 
         # Clean up
         data = self.api_get("/hints")

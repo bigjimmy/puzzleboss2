@@ -291,7 +291,7 @@ _SECRET_CONFIG_EXACT = {"SERVICE_ACCOUNT_JSON"}
 
 # Case-insensitive substring patterns. Deliberately "API_KEY" and not "KEY":
 # RECAPTCHA_SITE_KEY is public by design and the frontend needs it.
-_SECRET_CONFIG_PATTERNS = ("API_KEY", "SECRET", "PASSWORD", "TOKEN", "WEBHOOK")
+_SECRET_CONFIG_PATTERNS = ("API_KEY", "SECRET", "PASSWORD", "TOKEN", "WEBHOOK", "COOKIE")
 
 
 def is_secret_config_key(key):

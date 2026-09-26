@@ -15,7 +15,19 @@ description: |
 
   Requires X-PB-Internal-Token. The PHP tier attaches it only after a
   puzztech check.
+parameters:
+  - name: X-PB-Internal-Token
+    in: header
+    type: string
+    required: true
+    description: The internal token from puzzleboss.yaml API.INTERNAL_TOKEN. The PHP tier attaches it only after a puzztech check.
 responses:
+  403:
+    description: Missing or wrong internal token while ADMIN_TOKEN_ENFORCE is true
+    schema:
+      type: object
+      properties:
+        error: { type: string, example: internal token required }
   200:
     description: Available archives
     schema:

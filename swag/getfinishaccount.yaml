@@ -43,6 +43,9 @@ responses:
         message:
           type: string
           description: Human-readable status message
+        operation:
+          type: string
+          description: Step 1 only. "new" for a fresh signup.
         skipped:
           type: boolean
           description: True if step was skipped (e.g., step 3 when solver already exists)

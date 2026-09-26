@@ -87,7 +87,7 @@ If any of that fails, go to [TROUBLESHOOTING.md](TROUBLESHOOTING.md) before cont
 
 ## 3. Set the per-team config values
 
-Most runtime configuration lives in the database `config` table, editable via the admin UI (`/admin.php`) or directly via SQL. Here are the ones every new team needs to set:
+Most runtime configuration lives in the database `config` table, editable via the admin UI (`/config.php`) or directly via SQL. Here are the ones every new team needs to set:
 
 | Key | What it does | Example |
 |---|---|---|
@@ -179,7 +179,7 @@ Puzzleboss authenticates users by reading the `REMOTE_USER` header set by the we
 
 For production, you need something in front of Apache that sets `REMOTE_USER`. This team uses [`mod_auth_openidc`](https://github.com/OpenIDC/mod_auth_openidc) backed by Google as an OIDC provider — see [`docker/prod/apache-prod.conf`](../docker/prod/apache-prod.conf) for the reference config. Anything that ends up setting `REMOTE_USER` works (LDAP, Kerberos, SAML, etc.).
 
-For development and testing, set `ALLOW_USERNAME_OVERRIDE=true` in the config table — this enables the `?assumedid=<username>` URL parameter, which substitutes for real auth. **Turn this off in production**, or anyone can become anyone.
+For development and testing, set `ALLOW_USERNAME_OVERRIDE: "true"` in `puzzleboss.yaml` (the config-table row of the same name is ignored) — this enables the `?assumedid=<username>` URL parameter, which substitutes for real auth. **Turn this off in production**, or anyone can become anyone.
 
 ### Redis cache (optional but recommended)
 

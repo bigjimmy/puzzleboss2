@@ -26,6 +26,13 @@ parameters:
                 type: string
             
 responses:
+  400:
+    description: A solver with that username already exists
+    schema:
+      type: object
+      properties:
+        status: { type: string, example: error }
+        error: { type: string }
     200:
         description: New account ready for verification
         schema:

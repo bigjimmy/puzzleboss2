@@ -1716,6 +1716,41 @@ def test_dashboard_edits_immediate():
             print(f"    Warning: cleanup failed: {e}")
 
 
+def test_activity_deleted_label():
+    """Activity rows whose puzzle was deleted say DELETED, not just a dash.
+
+    Activity deliberately outlives its puzzle (no cascade). The API returns
+    the orphan's puzzle_id with a null name, and the page must show that as
+    a deleted puzzle rather than as an event with no puzzle at all.
+    """
+    import time as _time
+    puzzle_name = f"Orphan{int(_time.time()) % 100000}"
+    rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    if not rounds:
+        requests.post(f"{API_URL}/rounds", json={"name": "OrphanRound"})
+        rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    requests.post(f"{API_URL}/puzzles", json={"puzzle": {
+        "name": puzzle_name, "round_id": rounds[0]["id"],
+        "puzzle_uri": "https://example.com/orphan",
+    }})
+    puzzle_id = next(p["id"] for p in requests.get(f"{API_URL}/puzzles").json()["puzzles"] if p["name"] == puzzle_name)
+    print(f"  Created puzzle {puzzle_id}; deleting it to orphan its activity...")
+    requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(f"{BASE_URL}/activity.php?assumedid=testuser", wait_until="networkidle")
+        page.wait_for_selector(".activity-table tbody tr", timeout=PAGE_LOAD_TIMEOUT)
+        labels = page.locator(".deleted-puzzle")
+        assert labels.count() > 0, "no DELETED label rendered for orphaned activity"
+        titles = [labels.nth(i).get_attribute("title") or "" for i in range(labels.count())]
+        assert any(str(puzzle_id) in t for t in titles), f"DELETED label should name puzzle {puzzle_id}; titles: {titles[:5]}"
+        assert all(labels.nth(i).inner_text().strip() == "DELETED" for i in range(labels.count()))
+        print(f"    ✓ Orphaned activity for puzzle {puzzle_id} shows DELETED with the id on hover")
+        browser.close()
+
+
 def test_privilege_and_gear_visibility():
     """Test assigning and revoking privileges, and verify that gear icon
     visibility and admin page access are correctly gated on those privileges."""
@@ -2952,6 +2987,7 @@ def main():
         ('31', 'huntarchives', test_admin_hunt_archives_box, 'Admin Hunt Archives Box'),
         ('32', 'statusloc', test_status_location_immediate, 'Status Page Location Immediate'),
         ('33', 'dashedits', test_dashboard_edits_immediate, 'Dashboard Edits Immediate'),
+        ('34', 'deletedlabel', test_activity_deleted_label, 'Activity DELETED Label'),
     ]
 
     handle_list_and_destructive(args, all_tests=all_tests)

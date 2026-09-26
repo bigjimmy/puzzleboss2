@@ -389,7 +389,7 @@ def upload_backups_to_s3(backup_dir, label):
 def snapshot_tsdb_volume(label: str):
     """Snapshot the utility server's Prometheus data volume (hunt telemetry).
 
-    Prometheus keeps 30 days; a hunt weekend's metrics are gone soon after.
+    Prometheus keeps 25 months (760d / 40 GB), so this is a durable archive of a hunt rather than a race against retention.
     An EBS snapshot of the data volume is a cheap, durable copy that can be
     turned back into a volume and mounted later. Returns the snapshot id,
     None if not running on EC2 (dev/docker), or raises on a real failure.
@@ -653,7 +653,7 @@ def main():
     print(f"Full database backup: {full_backup_file}")
     print(f"Readable archive: {backup_dir}/puzzle_view.csv, {backup_dir}/activity.csv")
     if s3_prefix:
-        print(f"Off-server copy: {s3_prefix}/ (KMS-encrypted; restoring is an admin action)")
+        print(f"Off-server copy: {s3_prefix}/ (SSE-S3 encrypted; restoring is an admin action)")
     else:
         print("NOTE: no off-server copy was made -- these backups live only on this server.")
 

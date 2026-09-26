@@ -159,7 +159,7 @@ info = get_puzzle_sheet_info_legacy(sheet_id)
 ### Metrics
 
 Track add-on deployment via:
-- Puzzle database: Check `drive_id` is not NULL
+- Puzzle database: `puzzle.addon_activated` is 1 once the add-on has been deployed to that sheet, and `puzzle.sheetenabled` is 1 once bigjimmybot has confirmed the hidden `_pb_activity` sheet is being written. `drive_id` is set for every sheet and says nothing about the add-on.
 - Developer metadata: Query for `PB_SPREADSHEET` keys
 - Logs: Search for "Apps Script API activation complete"
 
