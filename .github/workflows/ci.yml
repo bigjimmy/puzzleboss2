@@ -31,7 +31,7 @@ jobs:
           cache: "pip"
 
       - name: Install test dependencies
-        run: pip install pytest pyyaml
+        run: pip install pytest pyyaml flask flask_restful flasgger
 
       - name: Run unit tests
         run: pytest tests/ -v

@@ -10,6 +10,13 @@ MySQLdb and reads the config table. Mocking MySQLdb here lets any test module
 The mock is guarded: test modules that set up their own MySQLdb mock (e.g.
 test_bigjimmybot, test_rate_limiter, test_pblib_id_types) check
 `if 'MySQLdb' not in sys.modules` first, so this does not interfere with them.
+
+CI installs pytest, pyyaml and the Flask trio (flask, flask_restful, flasgger)
+— pure-Python wheels. The Flask packages are there so test_backup_archives can
+import pbrest and exercise real routes through Flask's test client; that file
+stubs flask_mysqldb itself. Everything awkward to build (mysqlclient) or
+credential-bound (the Google and AWS SDKs) is still absent and must be mocked
+by the test that needs it.
 """
 
 import json
