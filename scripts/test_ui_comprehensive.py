@@ -1757,15 +1757,26 @@ def test_activity_deleted_label():
         page.goto(f"{BASE_URL}/activity.php?assumedid=testuser", wait_until="networkidle")
         page.wait_for_selector(".activity-table tbody tr", timeout=PAGE_LOAD_TIMEOUT)
 
-        # The default type filter does not include every type, so make the
-        # search include everything, as a user hunting for an old row would.
+        # On load the page filters to the viewer's own activity. The orphan's
+        # comment row belongs to the system solver, so clear the solver filter
+        # (and widen types/sources) the way anyone hunting for an old row would.
+        solver_box = page.locator("input[list='solverlist']")
+        solver_box.fill("")
+        solver_box.dispatch_event("change")
         for i in range(page.locator(".filter-action:has-text('Select All')").count()):
             page.locator(".filter-action:has-text('Select All')").nth(i).click()
         page.locator("button:has-text('Search')").click()
 
         # Wait for THIS puzzle's label, not just for rows.
         mine = f".deleted-puzzle[title*='Puzzle ID {puzzle_id} ']"
-        page.wait_for_selector(mine, timeout=DIALOG_TIMEOUT)
+        try:
+            page.wait_for_selector(mine, timeout=DIALOG_TIMEOUT)
+        except PlaywrightTimeout:
+            rows = page.locator(".activity-table tbody tr")
+            shown = [rows.nth(i).inner_text().replace("\n", " | ")[:100] for i in range(min(rows.count(), 5))]
+            raise AssertionError(
+                f"no DELETED label for puzzle {puzzle_id}; {rows.count()} rows shown, first: {shown}"
+            )
         labels = page.locator(".deleted-puzzle")
         assert page.locator(mine).first.inner_text().strip() == "DELETED"
         assert all(labels.nth(i).inner_text().strip() == "DELETED" for i in range(labels.count()))
