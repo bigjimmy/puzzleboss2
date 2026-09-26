@@ -279,9 +279,10 @@ def upload_backups_to_s3(backup_dir, label):
     """Gzip every dump in backup_dir and upload it to the backups bucket.
 
     The local copies live on the utility's root volume, which a rebuild
-    discards, so S3 is the durable copy. Objects are encrypted with the
-    puzzleboss-hunt-backups KMS key; the instance role can write but not read
-    or delete, so a compromise here cannot exfiltrate or destroy old backups.
+    discards, so S3 is the durable copy. This host can write to that bucket
+    but not read or delete (IAM grants PutObject only, and the bucket policy
+    denies this role Get/Delete/List a second time), so a compromise here
+    cannot exfiltrate or destroy previous hunts' backups.
 
     Returns the s3:// prefix, or None if not running on EC2. Raises on a real
     failure so the caller can abort before wiping anything.
@@ -305,8 +306,7 @@ def upload_backups_to_s3(backup_dir, label):
         subprocess.run(
             ["aws", "--region", region, "s3", "cp", str(gz_path),
              f"{prefix}/{gz_path.name}",
-             "--sse", "aws:kms",
-             "--sse-kms-key-id", f"alias/{S3_BACKUP_BUCKET}",
+             "--sse", "AES256",
              "--only-show-errors"],
             check=True,
         )
