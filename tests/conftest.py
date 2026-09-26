@@ -2,8 +2,8 @@
 
 conftest.py is imported by pytest before any test module is collected, so the
 MySQLdb mock below is in place before test modules do `import pblib`. The unit
-test suite runs on a bare runner (CI installs only pytest + pyyaml — no
-mysqlclient), and pblib calls refresh_config() at import time, which imports
+test suite runs on a bare runner (no mysqlclient — see the CI note below),
+and pblib calls refresh_config() at import time, which imports
 MySQLdb and reads the config table. Mocking MySQLdb here lets any test module
 `import pblib` / `import pbcachelib` directly without its own boilerplate.
 
