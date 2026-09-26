@@ -1523,6 +1523,109 @@ def test_admin_hunt_archives_box():
         browser.close()
 
 
+def test_status_location_immediate():
+    """Setting a location on status.php shows up immediately and survives
+    the next poll.
+
+    xyzloc deliberately does not invalidate the /all cache (15s TTL). The
+    page used to refetch right after saving and read the OLD value back, so
+    the edit looked lost for up to 15 seconds. It now applies the edit
+    locally and keeps it on top of fetched data until the cache catches up.
+    Docker runs with Redis on, so this genuinely exercises the stale path.
+    """
+    import time as _time
+    puzzle_name = f"LocImmediate{int(_time.time()) % 100000}"
+    location = "Room 4-231"
+    puzzle_id = None
+
+    print("  Creating a puzzle with no location...")
+    rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    if not rounds:
+        requests.post(f"{API_URL}/rounds", json={"name": "LocTestRound"})
+        rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    requests.post(f"{API_URL}/puzzles", json={"puzzle": {
+        "name": puzzle_name,
+        "round_id": rounds[0]["id"],
+        "puzzle_uri": "https://example.com/locimmediate",
+    }})
+    for pz in requests.get(f"{API_URL}/puzzles").json().get("puzzles", []):
+        if pz["name"] == puzzle_name:
+            puzzle_id = pz["id"]
+    assert puzzle_id, "test puzzle was not created"
+    print(f"    ✓ Puzzle {puzzle_id} created")
+
+    try:
+        # Make sure the /all blob exists and contains the empty location, so a
+        # naive refetch after saving would return stale data.
+        requests.get(f"{API_URL}/all")
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"{BASE_URL}/status.php?assumedid=testuser", wait_until="networkidle")
+            page.wait_for_selector(".status-header", timeout=PAGE_LOAD_TIMEOUT)
+
+            noloc_row = page.locator(f"#puzzle-noloc-{puzzle_id}")
+            if noloc_row.count() == 0 or not noloc_row.is_visible():
+                header = page.locator(".puzzle-table .info-box-header", has_text="Missing Location")
+                header.click()
+            page.wait_for_selector(f"#puzzle-noloc-{puzzle_id}", state="visible", timeout=DIALOG_TIMEOUT)
+            print("    ✓ Puzzle listed under Missing Location")
+
+            print("  Setting the location...")
+            noloc_row.locator(".location-col input").fill(location)
+            noloc_row.locator(".location-col input").press("Enter")
+
+            # Immediately (well under the 15s cache TTL): gone from the
+            # missing-location table, shown with its location in the overview.
+            page.wait_for_selector(f"#puzzle-noloc-{puzzle_id}", state="detached", timeout=1500)
+            overview_row = page.locator(f"#puzzle-overview-{puzzle_id}")
+            page.wait_for_selector(f"#puzzle-overview-{puzzle_id} .location-col .cell-display", timeout=1500)
+            shown = overview_row.locator(".location-col .cell-display").inner_text().strip()
+            assert shown == location, f"Expected {location!r} shown right away, got {shown!r}"
+            print("    ✓ Location visible immediately, puzzle left the missing-location table")
+
+            # The server really has it (this endpoint reads the DB, not the cache).
+            server = requests.get(f"{API_URL}/puzzles/{puzzle_id}").json()
+            server_loc = (server.get("puzzle") or server).get("xyzloc")
+            assert server_loc == location, f"Server has {server_loc!r}"
+            print("    ✓ Write reached the database")
+
+            # The page polls /all every 5s. Within the TTL that poll returns the
+            # stale blob; the local edit must not be clobbered by it.
+            page.wait_for_timeout(6000)
+            still = overview_row.locator(".location-col .cell-display")
+            assert still.count() == 1 and still.inner_text().strip() == location, \
+                "Location was clobbered by a poll that read the stale cache"
+            assert page.locator(f"#puzzle-noloc-{puzzle_id}").count() == 0, \
+                "Puzzle reappeared in the missing-location table after a poll"
+            print("    ✓ Survives the next poll against the stale cache")
+
+            # Width: the page itself never scrolls sideways; each table box
+            # contains its own overflow like every other info box.
+            no_hscroll = page.evaluate(
+                "() => document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+            )
+            assert no_hscroll, "status.php has a horizontal page scrollbar"
+            boxes = page.locator(".puzzle-table")
+            assert boxes.count() >= 2, "expected the puzzle tables on the page"
+            for i in range(boxes.count()):
+                cs = boxes.nth(i).evaluate(
+                    "el => ({ox: getComputedStyle(el).overflowX, box: el.classList.contains('info-box')})"
+                )
+                assert cs["box"], "puzzle table is not styled as an info-box"
+                assert cs["ox"] == "auto", f"puzzle table overflow-x is {cs['ox']}, not auto"
+            print("    ✓ Tables are contained boxes; no page-level horizontal scroll")
+
+            browser.close()
+    finally:
+        try:
+            requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+            print("    ✓ Test puzzle removed")
+        except Exception as e:
+            print(f"    Warning: cleanup failed: {e}")
+
+
 def test_privilege_and_gear_visibility():
     """Test assigning and revoking privileges, and verify that gear icon
     visibility and admin page access are correctly gated on those privileges."""
@@ -2757,6 +2860,7 @@ def main():
         ('29', 'discordsource', test_discord_source_activity, 'Discord Source Activity Filter'),
         ('30', 'secretdisplay', test_config_secret_display, 'Config Secret Display And Redaction Chain'),
         ('31', 'huntarchives', test_admin_hunt_archives_box, 'Admin Hunt Archives Box'),
+        ('32', 'statusloc', test_status_location_immediate, 'Status Page Location Immediate'),
     ]
 
     handle_list_and_destructive(args, all_tests=all_tests)

@@ -987,12 +987,25 @@ td:first-child [data-tooltip]::after {
     display: none !important;
 }
 
+/* status.php puzzle tables sit in an .info-box like every other box on the
+   page. The box absorbs any overflow; the page never scrolls sideways. */
 .puzzle-table {
-    margin-bottom: 30px;
+    overflow-x: auto;
 }
 
-.puzzle-table table {
+/* Needs #app in the selector to outrank the status-page table default of
+   width: auto, which is right for the small stats tables but leaves these
+   ragged against their box. */
+body.status-page #app .puzzle-table table {
     font-size: 0.9em;
+    width: 100%;
+}
+
+.name-col {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .meta-row {

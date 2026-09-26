@@ -174,7 +174,7 @@ $solver = getauthenticatedsolver();
             </div>
         </div>
 
-        <div class="puzzle-table">
+        <div class="puzzle-table info-box">
             <div class="info-box-header section-header" @click="showNoLoc = !showNoLoc">
                 <span class="collapse-icon" :class="{ collapsed: !showNoLoc }">▼</span>
                 <h2>Unsolved Puzzles Missing Location</h2>
@@ -204,7 +204,7 @@ $solver = getauthenticatedsolver();
                         <a :href="'editpuzzle.php?pid=' + puzzle.id" target="_blank" class="gear-icon" data-tooltip="Edit puzzle">⚙️</a>
                     </td>
                     <td :class="{ 'hidden-column': !visibleColumns.round }">{{ getRoundName(puzzle.id) }}</td>
-                    <td><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
+                    <td class="name-col" :title="puzzle.name"><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
                     <td :data-tooltip="'Status: ' + statusEdits[puzzle.id]" :class="{ 'hidden-column': !visibleColumns.status }">
                         <select v-model="statusEdits[puzzle.id]" @change="updateStatus(puzzle.id)">
                             <option v-for="status in selectableStatuses" :key="status.name || status" :value="status.name || status" :title="status.name || status">
@@ -251,7 +251,7 @@ $solver = getauthenticatedsolver();
             </table>
         </div>
 
-        <div class="puzzle-table" v-if="sheetDisabledPuzzles.length > 0">
+        <div class="puzzle-table info-box" v-if="sheetDisabledPuzzles.length > 0">
             <div class="info-box-header section-header" @click="showSheetDisabled = !showSheetDisabled">
                 <span class="collapse-icon" :class="{ collapsed: !showSheetDisabled }">▼</span>
                 <h2>Puzzles Without Sheet Tracking Enabled</h2>
@@ -281,7 +281,7 @@ $solver = getauthenticatedsolver();
                         <a :href="'editpuzzle.php?pid=' + puzzle.id" target="_blank" class="gear-icon" data-tooltip="Edit puzzle">⚙️</a>
                     </td>
                     <td :class="{ 'hidden-column': !visibleColumns.round }">{{ getRoundName(puzzle.id) }}</td>
-                    <td><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
+                    <td class="name-col" :title="puzzle.name"><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
                     <td :data-tooltip="'Status: ' + statusEdits[puzzle.id]" :class="{ 'hidden-column': !visibleColumns.status }">
                         <select v-model="statusEdits[puzzle.id]" @change="updateStatus(puzzle.id)">
                             <option v-for="status in selectableStatuses" :key="status.name || status" :value="status.name || status" :title="status.name || status">
@@ -328,7 +328,7 @@ $solver = getauthenticatedsolver();
             </table>
         </div>
 
-        <div class="puzzle-table">
+        <div class="puzzle-table info-box">
             <div class="info-box-header section-header" @click="showOverview = !showOverview">
                 <span class="collapse-icon" :class="{ collapsed: !showOverview }">▼</span>
                 <h2>Total Hunt Overview</h2>
@@ -358,7 +358,7 @@ $solver = getauthenticatedsolver();
                         <a :href="'editpuzzle.php?pid=' + puzzle.id" target="_blank" class="gear-icon" data-tooltip="Edit puzzle">⚙️</a>
                     </td>
                     <td :class="{ 'hidden-column': !visibleColumns.round }">{{ getRoundName(puzzle.id) }}</td>
-                    <td><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
+                    <td class="name-col" :title="puzzle.name"><a :href="safeUrl(puzzle.puzzle_uri)" target="_blank">{{ puzzle.name }}</a></td>
                     <td :data-tooltip="'Status: ' + statusEdits[puzzle.id]" :class="{ 'hidden-column': !visibleColumns.status }">
                         <select v-model="statusEdits[puzzle.id]" @change="updateStatus(puzzle.id)">
                             <option v-for="status in selectableStatuses" :key="status.name || status" :value="status.name || status" :title="status.name || status">
@@ -452,6 +452,12 @@ $solver = getauthenticatedsolver();
                 const locationEdits = ref({})
                 const statusEdits = ref({})
                 const saving = ref({})
+                // Edits the /all cache has not caught up with. xyzloc and
+                // comments deliberately do not invalidate the /all blob (15s
+                // TTL, see STRUCTURAL_PUZZLE_FIELDS), so a fetch right after
+                // saving returns the OLD value. What we wrote stays on top of
+                // fetched data until the server agrees, or 30s passes.
+                const pendingEdits = ref({})   // puzzleId -> { field: { value, at } }
 
                 const sortColumn = ref({
                     noLoc: null,
@@ -795,6 +801,41 @@ $solver = getauthenticatedsolver();
                     return ''
                 }
                 
+                function findPuzzle(rounds, puzzleId) {
+                    for (const round of rounds) {
+                        for (const puzzle of round.puzzles) {
+                            if (puzzle.id === puzzleId) return puzzle
+                        }
+                    }
+                    return null
+                }
+
+                function applyLocalEdit(puzzleId, field, value) {
+                    const puzzle = findPuzzle(data.value.rounds, puzzleId)
+                    if (puzzle) puzzle[field] = value
+                    const entry = pendingEdits.value[puzzleId] || (pendingEdits.value[puzzleId] = {})
+                    entry[field] = { value, at: Date.now() }
+                }
+
+                function overlayPendingEdits(newData) {
+                    const PENDING_TTL_MS = 30000
+                    for (const [pid, fields] of Object.entries(pendingEdits.value)) {
+                        // Object keys are strings; puzzle ids are integers.
+                        const puzzle = findPuzzle(newData.rounds, Number(pid))
+                        for (const [field, edit] of Object.entries(fields)) {
+                            const settled = !puzzle
+                                || puzzle[field] === edit.value
+                                || Date.now() - edit.at > PENDING_TTL_MS
+                            if (settled) {
+                                delete fields[field]
+                            } else {
+                                puzzle[field] = edit.value
+                            }
+                        }
+                        if (Object.keys(fields).length === 0) delete pendingEdits.value[pid]
+                    }
+                }
+
                 function getPuzzleRowClass(puzzle) {
                     if (puzzle.status === 'Critical') return 'critical-row'
                     if (puzzle.ismeta && puzzle.status !== 'Critical') return 'meta-row'
@@ -818,6 +859,7 @@ $solver = getauthenticatedsolver();
                     try {
                         const response = await fetch('./apicall.php?apicall=all', { cache: 'no-store' })
                         const newData = await response.json()
+                        overlayPendingEdits(newData)
                         data.value = newData
                         hints.value = newData.hints || []
 
@@ -872,11 +914,12 @@ $solver = getauthenticatedsolver();
 
                     saving.value[puzzleId] = true
                     try {
-                        await fetch(`./apicall.php?apicall=puzzle&apiparam1=${puzzleId}&apiparam2=comments`, {
+                        const res = await fetch(`./apicall.php?apicall=puzzle&apiparam1=${puzzleId}&apiparam2=comments`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify({ comments: comment })
                         })
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
                         // Flash the row
                         const row = document.getElementById('puzzle-noloc-' + puzzleId) ||
@@ -887,9 +930,9 @@ $solver = getauthenticatedsolver();
                             setTimeout(() => row.classList.remove('flash'), 500)
                         }
 
-                        // Clear the input and refresh
+                        // Show it now; refetching would read the stale cache.
+                        applyLocalEdit(puzzleId, 'comments', comment)
                         commentEdits.value[puzzleId] = ''
-                        await fetchData()
                     } catch (e) {
                         console.error('Update error:', e)
                         alert('Failed to update comment')
@@ -903,11 +946,12 @@ $solver = getauthenticatedsolver();
 
                     saving.value[puzzleId] = true
                     try {
-                        await fetch(`./apicall.php?apicall=puzzle&apiparam1=${puzzleId}&apiparam2=xyzloc`, {
+                        const res = await fetch(`./apicall.php?apicall=puzzle&apiparam1=${puzzleId}&apiparam2=xyzloc`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-PB-CSRF': getCsrfToken() },
                             body: JSON.stringify({ xyzloc: location })
                         })
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
                         // Flash the row
                         const row = document.getElementById('puzzle-noloc-' + puzzleId) ||
@@ -918,9 +962,9 @@ $solver = getauthenticatedsolver();
                             setTimeout(() => row.classList.remove('flash'), 500)
                         }
 
-                        // Clear the input and refresh
+                        // Show it now; refetching would read the stale cache.
+                        applyLocalEdit(puzzleId, 'xyzloc', location)
                         locationEdits.value[puzzleId] = ''
-                        await fetchData()
                     } catch (e) {
                         console.error('Update error:', e)
                         alert('Failed to update location')
