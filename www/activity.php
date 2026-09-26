@@ -38,6 +38,7 @@ if (!$allowed) {
     .activity-table .col-time { white-space: nowrap; }
     .activity-table td.col-time { font-family: var(--font-mono); }
     .system-solver { color: var(--text-secondary); font-style: italic; }
+    .deleted-puzzle { color: var(--text-secondary); font-style: italic; }
     .help-table th { white-space: nowrap; }
     .help-table td { vertical-align: top; }
     .help-table code { font-family: var(--font-mono); font-size: 0.9em; }
@@ -180,7 +181,11 @@ if (!$allowed) {
       <td class="col-time" :class="{ 'hidden-column': !visibleColumns.time }">{{ formatTime(row.time) }}</td>
       <td :class="{ 'hidden-column': !visibleColumns.type }">{{ row.type }}</td>
       <td :class="{ 'hidden-column': !visibleColumns.source }">{{ row.source }}</td>
-      <td :class="{ 'hidden-column': !visibleColumns.puzzle }">{{ row.puzzle_name || '—' }}</td>
+      <td :class="{ 'hidden-column': !visibleColumns.puzzle }">
+        <span v-if="row.puzzle_name">{{ row.puzzle_name }}</span>
+        <span v-else-if="row.puzzle_id" class="deleted-puzzle" :title="'Puzzle ID ' + row.puzzle_id + ' no longer exists'">DELETED</span>
+        <span v-else>—</span>
+      </td>
       <td :class="{ 'hidden-column': !visibleColumns.solver }">
         <span v-if="row.solver_id === 100" class="system-solver">system</span>
         <span v-else>{{ row.solver_name || ('ID:' + row.solver_id) }}</span>
