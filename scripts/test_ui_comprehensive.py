@@ -1620,8 +1620,8 @@ def test_status_location_immediate():
             browser.close()
     finally:
         try:
-            requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
-            print("    ✓ Test puzzle removed")
+            r = requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+            print("    ✓ Test puzzle removed" if r.ok else f"    Warning: cleanup returned {r.status_code}")
         except Exception as e:
             print(f"    Warning: cleanup failed: {e}")
 
@@ -1710,8 +1710,8 @@ def test_dashboard_edits_immediate():
             browser.close()
     finally:
         try:
-            requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
-            print("    ✓ Test puzzle removed")
+            r = requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+            print("    ✓ Test puzzle removed" if r.ok else f"    Warning: cleanup returned {r.status_code}")
         except Exception as e:
             print(f"    Warning: cleanup failed: {e}")
 
@@ -1734,8 +1734,20 @@ def test_activity_deleted_label():
         "puzzle_uri": "https://example.com/orphan",
     }})
     puzzle_id = next(p["id"] for p in requests.get(f"{API_URL}/puzzles").json()["puzzles"] if p["name"] == puzzle_name)
-    print(f"  Created puzzle {puzzle_id}; deleting it to orphan its activity...")
-    requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+
+    # A puzzle created straight through the API has no activity of its own
+    # yet, so give it some; a comment logs a 'comment' row against this id.
+    r = requests.post(f"{API_URL}/puzzles/{puzzle_id}/comments", json={"comments": "about to be orphaned"})
+    assert r.ok, f"comment write failed: {r.status_code} {r.text[:120]}"
+    before = requests.get(f"{API_URL}/activitysearch", params={"puzzle_id": puzzle_id}).json().get("activity", [])
+    assert before, f"puzzle {puzzle_id} has no activity rows to orphan"
+
+    print(f"  Created puzzle {puzzle_id} with {len(before)} activity rows; deleting it...")
+    r = requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+    assert r.ok, f"deletepuzzle failed: {r.status_code} {r.text[:120]}"
+    after = requests.get(f"{API_URL}/activitysearch", params={"puzzle_id": puzzle_id}).json().get("activity", [])
+    assert after and all(row["puzzle_name"] is None for row in after), \
+        "activity must outlive the puzzle with a null name (that is what the label renders)"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
