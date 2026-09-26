@@ -200,7 +200,7 @@ mysqldump -u puzzleboss -p puzzleboss > backup_$(date +%Y%m%d_%H%M%S).sql
 
 **A dump is a credential, not just data.** The `config` table contains `SERVICE_ACCOUNT_JSON`, the Google Workspace service account key with Domain-Wide Delegation, so a copy of it is equivalent to full control of the Google domain. It also holds the Gemini API key, the reCAPTCHA secret, the Slack and Discord webhooks, `ACCT_PASSWORD` and the Sheets add-on cookies, and the `solver` table has real names and Discord ids. Keep dumps encrypted, do not put one in the repo or a shared drive, and shred local copies when you are done. The S3 bucket is configured so the utility server can write backups but never read one back, and restoring is an admin action.
 
-Restore procedure, the S3 bucket's protections, and what to do when RDS itself is lost are documented in the infra repo runbook under [Backup sensitivity and the restore path](https://github.com/benoc617/puzzleboss2-infra/blob/main/OPERATIONS.md#backup-sensitivity-and-the-restore-path).
+These reset backups exist to reach back past a reset, for example recovering last year's data or a config table the reset replaced. For an unexpected loss during normal operation the first answer is an RDS snapshot or point-in-time restore, which only reaches back about three days. Restore procedure and the S3 bucket's protections are documented in the infra repo runbook under [Backup sensitivity and the restore path](https://github.com/benoc617/puzzleboss2-infra/blob/main/OPERATIONS.md#backup-sensitivity-and-the-restore-path).
 
 In production, RDS automated backups handle PITR. Snapshot before any large migration.
 
