@@ -1737,7 +1737,8 @@ def test_activity_deleted_label():
 
     # A puzzle created straight through the API has no activity of its own
     # yet, so give it some; a comment logs a 'comment' row against this id.
-    r = requests.post(f"{API_URL}/puzzles/{puzzle_id}/comments", json={"comments": "about to be orphaned"})
+    # source must be one the page's source filter knows, or the row is hidden.
+    r = requests.post(f"{API_URL}/puzzles/{puzzle_id}/comments", json={"comments": "about to be orphaned", "source": "puzzleboss"})
     assert r.ok, f"comment write failed: {r.status_code} {r.text[:120]}"
     before = requests.get(f"{API_URL}/activitysearch", params={"puzzle_id": puzzle_id}).json().get("activity", [])
     assert before, f"puzzle {puzzle_id} has no activity rows to orphan"
@@ -1748,6 +1749,7 @@ def test_activity_deleted_label():
     after = requests.get(f"{API_URL}/activitysearch", params={"puzzle_id": puzzle_id}).json().get("activity", [])
     assert after and all(row["puzzle_name"] is None for row in after), \
         "activity must outlive the puzzle with a null name (that is what the label renders)"
+    print(f"    orphan rows: {[(row['type'], row['source']) for row in after]}")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
