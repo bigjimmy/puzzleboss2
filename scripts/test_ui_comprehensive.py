@@ -1638,7 +1638,12 @@ def test_account_registration_gate():
         assert "Account Registration" in body_text, \
             f"Expected registration form, got: {body_text[:200]}"
         assert page.locator("input[name='username']").count() > 0, "Missing registration username field"
-        assert page.locator("input[name='password']").count() > 0, "Missing registration password field"
+        assert page.locator("input[name='fullname']").count() > 0, "Missing registration fullname field"
+        assert page.locator("input[name='email']").count() > 0, "Missing registration email field"
+        # Passwordless signup: the Google account gets a random one-time
+        # password, emailed after verification -- the form must not ask for one.
+        assert page.locator("input[name='password']").count() == 0, \
+            "Registration form should not have a password field"
         print("    ✓ Registration form displayed after correct credentials")
 
         # Step 4: Session persists — navigating back still shows registration form
@@ -1687,7 +1692,6 @@ def test_account_create_delete():
     test_username = f"uitest{int(time.time()) % 100000}"
     test_fullname = "Ui Testuser"
     test_email = "uitest@example.com"
-    test_password = "testpass1"
 
     print(f"  Test account: {test_username}")
 
@@ -1712,8 +1716,6 @@ def test_account_create_delete():
         page.fill("input[name='username']", test_username)
         page.fill("input[name='fullname']", test_fullname)
         page.fill("input[name='email']", test_email)
-        page.fill("input[name='password']", test_password)
-        page.fill("input[name='password2']", test_password)
         page.click("input[type='submit']")
         page.wait_for_load_state("load")
 
@@ -1722,6 +1724,8 @@ def test_account_create_delete():
         assert "Confirm account creation" in body_text, \
             f"Expected confirmation page, got: {body_text[:200]}"
         assert test_username in body_text, "Username not shown on confirmation page"
+        assert "one-time password" in body_text, \
+            "Confirmation page should explain the emailed one-time password"
         print("    ✓ Confirmation page displayed")
 
         # ── Step 3: Confirm and capture verification code ──
