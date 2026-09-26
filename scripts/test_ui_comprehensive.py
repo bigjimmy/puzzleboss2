@@ -1754,10 +1754,18 @@ def test_activity_deleted_label():
         page = browser.new_page()
         page.goto(f"{BASE_URL}/activity.php?assumedid=testuser", wait_until="networkidle")
         page.wait_for_selector(".activity-table tbody tr", timeout=PAGE_LOAD_TIMEOUT)
+
+        # The default type filter does not include every type, so make the
+        # search include everything, as a user hunting for an old row would.
+        for i in range(page.locator(".filter-action:has-text('Select All')").count()):
+            page.locator(".filter-action:has-text('Select All')").nth(i).click()
+        page.locator("button:has-text('Search')").click()
+
+        # Wait for THIS puzzle's label, not just for rows.
+        mine = f".deleted-puzzle[title*='Puzzle ID {puzzle_id} ']"
+        page.wait_for_selector(mine, timeout=DIALOG_TIMEOUT)
         labels = page.locator(".deleted-puzzle")
-        assert labels.count() > 0, "no DELETED label rendered for orphaned activity"
-        titles = [labels.nth(i).get_attribute("title") or "" for i in range(labels.count())]
-        assert any(str(puzzle_id) in t for t in titles), f"DELETED label should name puzzle {puzzle_id}; titles: {titles[:5]}"
+        assert page.locator(mine).first.inner_text().strip() == "DELETED"
         assert all(labels.nth(i).inner_text().strip() == "DELETED" for i in range(labels.count()))
         print(f"    ✓ Orphaned activity for puzzle {puzzle_id} shows DELETED with the id on hover")
         browser.close()
