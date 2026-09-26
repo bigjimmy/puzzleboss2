@@ -2,18 +2,31 @@
 """
 PuzzleBoss Email to Discord/Slack Forwarder
 
-This script receives email via stdin (piped from /etc/aliases) and forwards
-it to Discord and/or Slack channels via webhooks.
+Receives one email on stdin (piped from /etc/aliases) and forwards it to
+Discord and/or Slack via webhooks.
 
 Usage in /etc/aliases:
-    puzzleboss: "|/path/to/python /path/to/pbmail_inbox.py"
+    puzzleboss: "|/usr/bin/python3 /path/to/puzzleboss2/scripts/pbmail_inbox.py --config /path/to/puzzleboss.yaml"
 
-Configuration:
-    Set DISCORD_EMAIL_WEBHOOK in the puzzleboss config table for Discord.
-    Set SLACK_EMAIL_WEBHOOK in the puzzleboss config table for Slack.
-    Either or both can be configured.
+Configuration follows the rest of the package:
+  * puzzleboss.yaml, read from the project root like pblib does, or from
+    --config. Only API.APIURI and API.INTERNAL_TOKEN are used here. The
+    INTERNAL_TOKEN environment variable wins over the file, exactly as in
+    pblib.get_internal_token. The mail pipe runs as an unprivileged user,
+    so point --config at a copy holding just those two keys rather than
+    the full application yaml with database credentials.
+  * Everything else comes from the config table via GET /config:
+    DISCORD_EMAIL_WEBHOOK and/or SLACK_EMAIL_WEBHOOK. Those are redacted
+    unless the token is presented, which is why the token is required.
+
+--check-config reads the config, reports whether each webhook is set and
+readable, sends nothing, and exits 0 only if at least one is usable.
+
+pblib itself is not imported: it connects to MySQL at import time, and
+the mail host has neither the driver nor credentials.
 """
 
+import argparse
 import sys
 import os
 from email import policy
@@ -22,7 +35,7 @@ import requests
 import yaml
 from datetime import datetime
 
-# Configuration file path (only needed for API_URI)
+# Same convention as pblib: puzzleboss.yaml at the project root.
 CONFIG_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "puzzleboss.yaml"
 )
@@ -36,23 +49,23 @@ def log(level, message):
     )
 
 
-def load_config():
-    """Load configuration from YAML file (for API_URI) and then fetch config via API."""
+def load_config(config_path=CONFIG_FILE):
+    """API.APIURI and API.INTERNAL_TOKEN from puzzleboss.yaml, then the config
+    table via GET /config. Same keys and precedence as pblib."""
     try:
-        with open(CONFIG_FILE, "r") as f:
-            yaml_config = yaml.safe_load(f)
+        with open(config_path, "r") as f:
+            yaml_config = yaml.safe_load(f) or {}
     except Exception as e:
-        log("ERROR", f"Failed to load YAML config: {e}")
+        log("ERROR", f"Failed to load {config_path}: {e}")
         return None
 
-    api_uri = yaml_config.get("API_URI", "http://localhost:5000")
+    api = yaml_config.get("API") or {}
+    api_uri = api.get("APIURI")
+    if not api_uri:
+        log("ERROR", f"{config_path} has no API.APIURI")
+        return None
 
-    # Internal token for unredacted /config — this script needs the webhook
-    # URLs, which the API redacts for unauthenticated callers. Env var wins
-    # over yaml (same precedence as pblib.get_internal_token).
-    internal_token = os.environ.get("INTERNAL_TOKEN") or (
-        (yaml_config.get("API") or {}).get("INTERNAL_TOKEN") or ""
-    )
+    internal_token = os.environ.get("INTERNAL_TOKEN") or api.get("INTERNAL_TOKEN") or ""
     headers = {"X-Remote-User": "pbmail_inbox"}
     if internal_token:
         headers["X-PB-Internal-Token"] = internal_token
@@ -308,6 +321,35 @@ def send_to_slack(webhook_url, email_data):
         return False
 
 
+def _parse_args(argv):
+    parser = argparse.ArgumentParser(description="Forward one email from stdin to Discord/Slack")
+    parser.add_argument("--config", default=CONFIG_FILE,
+                        help="puzzleboss.yaml to read API.APIURI / API.INTERNAL_TOKEN from")
+    parser.add_argument("--check-config", action="store_true",
+                        help="report webhook readability and exit; sends nothing")
+    return parser.parse_args(argv)
+
+
+def check_config(config_path):
+    """Exit 0 only if at least one webhook is configured and unredacted."""
+    config = load_config(config_path)
+    if config is None:
+        print("config: UNREADABLE (see log)")
+        return 1
+    usable = 0
+    for key in ("DISCORD_EMAIL_WEBHOOK", "SLACK_EMAIL_WEBHOOK"):
+        value = config.get(key) or ""
+        if not value:
+            state = "not set"
+        elif value.startswith("****"):
+            state = "REDACTED (no valid INTERNAL_TOKEN)"
+        else:
+            state = "ok"
+            usable += 1
+        print(f"{key}: {state}")
+    return 0 if usable else 1
+
+
 def main():
     """Main entry point."""
     log("INFO", "Receiving email...")
@@ -326,7 +368,7 @@ def main():
     log("INFO", f"Received {len(raw_email)} bytes")
 
     # Load configuration
-    config = load_config()
+    config = load_config(ARGS.config)
     if config is None:
         log("ERROR", "Failed to load configuration")
         sys.exit(1)
@@ -372,4 +414,7 @@ def main():
 
 
 if __name__ == "__main__":
+    ARGS = _parse_args(sys.argv[1:])
+    if ARGS.check_config:
+        sys.exit(check_config(ARGS.config))
     main()
