@@ -2985,6 +2985,91 @@ class TestRunner:
     # ------------------------------------------------------------------
     # Test 37: Config Secret Redaction
     # ------------------------------------------------------------------
+    def test_config_write(self, result: TestResult):
+        """POST /config: value-only writes must preserve the secret flag, and
+        a flag-only write must not disturb the value.
+
+        This endpoint writes the config table, including secrets, and had no
+        coverage at any tier. The contract that matters is the preservation
+        rule: a legacy value-only writer must never silently unflag a secret,
+        because unflagging is what puts a value back into every /config and
+        /huntinfo response.
+        """
+        token = get_internal_token()
+        if not token:
+            result.fail("No INTERNAL_TOKEN available — cannot exercise POST /config")
+            return
+        H = {"X-PB-Internal-Token": token, "X-Remote-User": "api-coverage"}
+        ts = int(time.time())
+        key = f"TESTWRITE_{ts}"          # no secret-looking substring on purpose
+        SENTINEL = "********"
+
+        def post(body):
+            return requests.post(f"{self.base_url}/config", json=body, headers=H)
+
+        def read(unredacted):
+            hdrs = H if unredacted else {"X-Remote-User": "api-coverage"}
+            data = requests.get(f"{self.base_url}/config", headers=hdrs).json()
+            cfg = data.get("config", {})
+            if not isinstance(cfg, dict):
+                cfg = {r["key"]: r["val"] for r in cfg}
+            return cfg, set(data.get("secret_keys") or [])
+
+        try:
+            # 1. Create, not secret.
+            r = post({"cfgkey": key, "cfgval": "first"})
+            if not assert_eq(result, r.status_code, 200, "create config key"):
+                return
+            cfg, secrets = read(unredacted=False)
+            if not assert_eq(result, cfg.get(key), "first", "value readable unredacted when not secret"):
+                return
+            assert_true(result, key not in secrets, "new key is not secret")
+
+            # 2. Flag it secret without touching the value.
+            post({"cfgkey": key, "secret": True})
+            cfg, secrets = read(unredacted=False)
+            assert_true(result, key in secrets, "key is now classified secret")
+            assert_eq(result, cfg.get(key), SENTINEL, "value redacted once flagged")
+            cfg_open, _ = read(unredacted=True)
+            assert_eq(result, cfg_open.get(key), "first", "flag-only write left the value alone")
+
+            # 3. THE RULE: a value-only write must keep the flag.
+            post({"cfgkey": key, "cfgval": "second"})
+            cfg, secrets = read(unredacted=False)
+            assert_true(result, key in secrets, "value-only write PRESERVED the secret flag")
+            assert_eq(result, cfg.get(key), SENTINEL, "still redacted after a value-only write")
+            cfg_open, _ = read(unredacted=True)
+            assert_eq(result, cfg_open.get(key), "second", "value actually updated")
+
+            # 4. Unflagging is explicit and does re-expose.
+            post({"cfgkey": key, "cfgval": "second", "secret": False})
+            cfg, secrets = read(unredacted=False)
+            assert_true(result, key not in secrets, "explicit secret=false clears the flag")
+            assert_eq(result, cfg.get(key), "second", "value visible again once unflagged")
+
+            # 5. Rejections.
+            assert_true(result, post({"cfgkey": key}).status_code >= 400,
+                        "neither cfgval nor secret must be rejected")
+            assert_true(result, post({"cfgkey": key, "secret": "yes"}).status_code >= 400,
+                        "non-boolean secret must be rejected")
+            assert_true(result, post({"cfgkey": f"NOSUCH_{ts}", "secret": True}).status_code >= 400,
+                        "flag-only write to a missing key must be rejected")
+
+            # 6. Without the token the write is refused when enforcement is on.
+            bare = requests.post(f"{self.base_url}/config",
+                                 json={"cfgkey": key, "cfgval": "nope"},
+                                 headers={"X-Remote-User": "api-coverage"})
+            if bare.status_code == 403:
+                self.logger.log_operation("  ✓ Untokened write rejected (ADMIN_TOKEN_ENFORCE on)")
+            else:
+                self.logger.log_operation(
+                    f"  ADMIN_TOKEN_ENFORCE is off here; untokened write returned {bare.status_code}")
+
+            self.logger.log_operation("  ✓ POST /config preserves the secret flag on value-only writes")
+        finally:
+            # Leave no test key behind; there is no DELETE, so blank it.
+            post({"cfgkey": key, "cfgval": "", "secret": False})
+
     def test_config_secret_redaction(self, result: TestResult):
         """Test API-side config secret redaction and internal-token bypass.
 
@@ -3221,6 +3306,7 @@ class TestRunner:
             self.test_activity_statistics_endpoint,
             self.test_activity_has_more_and_comment,
             self.test_activity_source_metrics,
+            self.test_config_write,
             self.test_config_secret_redaction,
         ]
         # zip() silently truncates on length mismatch — a name/func drift

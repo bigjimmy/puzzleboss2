@@ -1784,6 +1784,89 @@ def test_activity_deleted_label():
         browser.close()
 
 
+def test_csrf_rejection():
+    """Mutating requests without the CSRF token are refused.
+
+    Every mutating call through apicall.php, and every classic form POST,
+    depends on the pb_csrf double-submit cookie. Nothing showed that the
+    check actually rejects anything — a removed check would have passed CI
+    silently. These requests go through the browser context (so the session
+    and the cookie are real) but deliberately omit or corrupt the token.
+    """
+    puzzle_name = f"CsrfTest{int(time.time()) % 100000}"
+    rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    if not rounds:
+        requests.post(f"{API_URL}/rounds", json={"name": "CsrfTestRound"})
+        rounds = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+    requests.post(f"{API_URL}/puzzles", json={"puzzle": {
+        "name": puzzle_name, "round_id": rounds[0]["id"],
+        "puzzle_uri": "https://example.com/csrf",
+    }})
+    puzzle_id = next(p["id"] for p in requests.get(f"{API_URL}/puzzles").json()["puzzles"]
+                     if p["name"] == puzzle_name)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            # Load a page so the pb_csrf cookie is set for this context.
+            page.goto(f"{BASE_URL}/index.php?assumedid=testuser", wait_until="networkidle")
+            cookies = {c["name"]: c["value"] for c in page.context.cookies()}
+            token = cookies.get("pb_csrf", "")
+            assert token, "pb_csrf cookie was not set on page load"
+            print("    ✓ pb_csrf cookie present")
+
+            url = (f"{BASE_URL}/apicall.php?apicall=puzzle&apiparam1={puzzle_id}"
+                   f"&apiparam2=comments")
+            body = {"comments": "csrf probe"}
+
+            # 1. No header at all.
+            r = page.request.post(url, data=body)
+            assert r.status == 403, f"missing CSRF header should be 403, got {r.status}"
+            assert "CSRF" in r.text(), f"unexpected body: {r.text()[:120]}"
+            print("    ✓ Missing X-PB-CSRF header rejected (403)")
+
+            # 2. Header present but wrong.
+            r = page.request.post(url, data=body, headers={"X-PB-CSRF": "not-the-token"})
+            assert r.status == 403, f"wrong CSRF header should be 403, got {r.status}"
+            print("    ✓ Wrong X-PB-CSRF header rejected (403)")
+
+            # 3. The correct token is accepted, so the check is not simply
+            #    refusing everything.
+            r = page.request.post(url, data=body, headers={"X-PB-CSRF": token})
+            assert r.status == 200, f"correct CSRF header should succeed, got {r.status}"
+            print("    ✓ Correct token accepted")
+
+            # 4. DELETE is mutating too.
+            r = page.request.delete(
+                f"{BASE_URL}/apicall.php?apicall=deletepuzzle&apiparam1={puzzle_name}")
+            assert r.status == 403, f"DELETE without CSRF should be 403, got {r.status}"
+            print("    ✓ DELETE without the token rejected (403)")
+
+            # 5. A pure read stays exempt.
+            r = page.request.get(f"{BASE_URL}/apicall.php?apicall=all")
+            assert r.status == 200, f"GET should not require CSRF, got {r.status}"
+            print("    ✓ Reads remain exempt")
+
+            # 6. Classic form POST: pb_verify_csrf() guards the form pages.
+            r = page.request.post(f"{BASE_URL}/addround.php",
+                                  form={"roundname": f"CsrfRound{int(time.time()) % 10000}"})
+            assert r.status == 403, f"form POST without a csrf field should be 403, got {r.status}"
+            assert "CSRF" in r.text(), "form rejection should name CSRF"
+            print("    ✓ Form POST without the hidden csrf field rejected (403)")
+
+            # The comment write in step 3 really happened.
+            server = requests.get(f"{API_URL}/puzzles/{puzzle_id}").json()
+            assert (server.get("puzzle") or server).get("comments") == "csrf probe", \
+                "the accepted request should have taken effect"
+            print("    ✓ The accepted request did take effect")
+
+            browser.close()
+    finally:
+        r = requests.delete(f"{API_URL}/deletepuzzle/{puzzle_name}")
+        print("    ✓ Test puzzle removed" if r.ok else f"    Warning: cleanup returned {r.status_code}")
+
+
 def test_privilege_and_gear_visibility():
     """Test assigning and revoking privileges, and verify that gear icon
     visibility and admin page access are correctly gated on those privileges."""
@@ -3021,6 +3104,7 @@ def main():
         ('32', 'statusloc', test_status_location_immediate, 'Status Page Location Immediate'),
         ('33', 'dashedits', test_dashboard_edits_immediate, 'Dashboard Edits Immediate'),
         ('34', 'deletedlabel', test_activity_deleted_label, 'Activity DELETED Label'),
+        ('35', 'csrf', test_csrf_rejection, 'CSRF Rejection'),
     ]
 
     handle_list_and_destructive(args, all_tests=all_tests)
