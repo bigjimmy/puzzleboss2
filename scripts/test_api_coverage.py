@@ -87,6 +87,7 @@ class TestRunner:
         "Activity Statistics Endpoint",
         "Activity has_more and Comment Type",
         "Activity Source Metrics",
+        "Config Write And Secret Flag",
         "Config Secret Redaction",
     ]
 

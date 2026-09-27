@@ -1849,11 +1849,17 @@ def test_csrf_rejection():
             print("    ✓ Reads remain exempt")
 
             # 6. Classic form POST: pb_verify_csrf() guards the form pages.
+            #    The page only reaches that check when the submit field is
+            #    present, so send the real field names, minus the csrf one.
+            round_name = f"CsrfRound{int(time.time()) % 10000}"
             r = page.request.post(f"{BASE_URL}/addround.php",
-                                  form={"roundname": f"CsrfRound{int(time.time()) % 10000}"})
+                                  form={"submit": "Add Round", "name": round_name})
             assert r.status == 403, f"form POST without a csrf field should be 403, got {r.status}"
-            assert "CSRF" in r.text(), "form rejection should name CSRF"
-            print("    ✓ Form POST without the hidden csrf field rejected (403)")
+            assert "CSRF" in r.text(), f"form rejection should name CSRF; got {r.text()[:160]}"
+            rounds_after = requests.get(f"{API_URL}/rounds").json().get("rounds", [])
+            assert not any(rd["name"] == round_name for rd in rounds_after), \
+                "the rejected form POST must not have created a round"
+            print("    ✓ Form POST without the hidden csrf field rejected (403), no round created")
 
             # The comment write in step 3 really happened.
             server = requests.get(f"{API_URL}/puzzles/{puzzle_id}").json()
