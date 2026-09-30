@@ -26,22 +26,37 @@ parameters:
                 type: string
             
 responses:
+  200:
+    description: Pending signup created and the verification email sent (or attempted)
+    schema:
+      id: usercode
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        code:
+          type: string
+          description: >
+            Verification code, returned to the signup page so it can show the
+            link if email delivery failed. It is a bearer credential for
+            GET /finishaccount and is never listed by GET /newusers.
+        email_error:
+          type: string
+          description: >
+            Present only if the verification email could not be sent. The
+            signup row exists and the code is still valid, so puzztech can
+            hand the link over manually.
   400:
     description: A solver with that username already exists
     schema:
       type: object
       properties:
-        status: { type: string, example: error }
-        error: { type: string }
-    200:
-        description: New account ready for verification
-        schema:
-          id: usercode
-          type: object
-          properties:
-           code:
-             type: string
-             description: Verification code to complete registration
+        status:
+          type: string
+          example: error
+        error:
+          type: string
   500:
     description: Unhandled server error
     schema:
