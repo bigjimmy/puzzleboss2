@@ -12,6 +12,7 @@ Usage:
 """
 
 import json
+import os
 import random
 import string
 import sys
@@ -87,6 +88,11 @@ class TestRunner:
         "Activity Statistics Endpoint",
         "Activity has_more and Comment Type",
         "Activity Source Metrics",
+        "Cache Flush",
+        "Tag Deletion",
+        "Activate All Sheets",
+        "New Users Listing And Delete",
+        "Google Users Listing",
         "Config Write And Secret Flag",
         "Config Secret Redaction",
     ]
@@ -1197,7 +1203,7 @@ class TestRunner:
     # ------------------------------------------------------------------
     def test_lastact_cold_start_consistency(self, result: TestResult):
         if self.redis is None:
-            result.set_success("skipped — Redis not reachable from test context")
+            result.skip("Redis not reachable from test context")
             return
 
         # Create a fresh puzzle and log two activities in the same second so
@@ -1314,7 +1320,7 @@ class TestRunner:
     # ------------------------------------------------------------------
     def test_lastact_delete_hdel(self, result: TestResult):
         if self.redis is None:
-            result.set_success("skipped — Redis not reachable from test context")
+            result.skip("Redis not reachable from test context")
             return
 
         ts = str(int(time.time()))
@@ -1367,7 +1373,7 @@ class TestRunner:
     # ------------------------------------------------------------------
     def test_lastact_all_latency(self, result: TestResult):
         if self.redis is None:
-            result.set_success("skipped — Redis not reachable from test context")
+            result.skip("Redis not reachable from test context")
             return
 
         def timed_get(path, n=7, warm_first=True):
@@ -2986,6 +2992,203 @@ class TestRunner:
     # ------------------------------------------------------------------
     # Test 37: Config Secret Redaction
     # ------------------------------------------------------------------
+    def test_cache_flush(self, result: TestResult):
+        """POST /cache/flush drops the /all blob AND the lastact hash.
+
+        reset-hunt.py calls this after wiping the database. Puzzle ids
+        restart from 1, and the lastact hash is never invalidated by normal
+        operation, so without the flush the new hunt's puzzles inherit the
+        previous hunt's activity timestamps.
+        """
+        if self.redis is None:
+            result.skip("Redis not reachable from test context")
+            return
+
+        # Warm both structures.
+        self.api_get("/all")
+        blob_before = self.redis.exists("puzzleboss:all")
+        hash_before = self.redis.hlen("puzzleboss:lastact")
+        if not assert_true(result, blob_before == 1, "/all blob present before flush"):
+            return
+        if not assert_true(result, hash_before > 0, "lastact hash populated before flush"):
+            return
+
+        resp = self.api_post("/cache/flush", {})
+        if not assert_eq(result, resp.get("status"), "ok", "flush status"):
+            return
+        if not assert_true(result, self.redis.exists("puzzleboss:all") == 0,
+                           "/all blob deleted by flush"):
+            return
+        if not assert_true(result, self.redis.hlen("puzzleboss:lastact") == 0,
+                           "lastact hash deleted by flush"):
+            return
+        self.logger.log_operation("  ✓ both structures gone after flush")
+
+        # Both must rebuild from the database on the next read, with lastact
+        # still attached — a flush that left /all without lastact would be
+        # worse than not flushing.
+        data = self.api_get("/all")
+        puzzles = [p for r in data.get("rounds", []) for p in r.get("puzzles", [])]
+        if not assert_true(result, len(puzzles) > 0, "/all still returns puzzles after flush"):
+            return
+        with_lastact = [p for p in puzzles if p.get("lastact")]
+        if not assert_true(result, len(with_lastact) > 0,
+                           "lastact rebuilt from the DB on the next /all"):
+            return
+        assert_true(result, self.redis.hlen("puzzleboss:lastact") > 0,
+                    "lastact hash backfilled after the cold read")
+        self.logger.log_operation(f"  ✓ rebuilt: {len(with_lastact)}/{len(puzzles)} puzzles have lastact")
+
+    def test_tag_deletion(self, result: TestResult):
+        """DELETE /tags/<tag> removes the tag and strips it from every puzzle.
+
+        The tag id lives inside each puzzle's JSON tags array, so deleting a
+        tag has to rewrite those arrays; a dangling id would show as a ghost
+        tag the UI cannot filter away.
+        """
+        ts = int(time.time())
+        tag_name = f"deltag{ts}"
+        rd = self.create_round(f"TagDeleteRound{ts}")
+        if not rd:
+            result.fail("could not create a round for the tag-deletion test")
+            return
+        puzzle = self.create_puzzle(f"TagDelete{ts}", rd["id"])
+        if not puzzle:
+            result.fail("could not create a puzzle for the tag-deletion test")
+            return
+        pid = puzzle["id"]
+        try:
+            self.api_post("/tags", {"name": tag_name})
+            self.api_post(f"/puzzles/{pid}/tags", {"tags": {"add": tag_name}})
+            tagged = self.api_get(f"/puzzles/{pid}").get("puzzle", {})
+            if not assert_true(result, tag_name in (tagged.get("tags") or ""),
+                               "tag attached before deletion"):
+                return
+
+            r = self.api_delete_raw(f"/tags/{tag_name}")
+            if not assert_eq(result, r.status_code, 200, "delete tag"):
+                return
+
+            names = [t["name"] for t in self.api_get("/tags").get("tags", [])]
+            if not assert_true(result, tag_name not in names, "tag gone from /tags"):
+                return
+            after = self.api_get(f"/puzzles/{pid}").get("puzzle", {})
+            if not assert_true(result, tag_name not in (after.get("tags") or ""),
+                               "tag stripped from the puzzle"):
+                return
+            # /all is the UI's source for tag filtering; it must agree.
+            blob = self.api_get("/all")
+            stale = [p for r_ in blob.get("rounds", []) for p in r_.get("puzzles", [])
+                     if p["id"] == pid and tag_name in (p.get("tags") or "")]
+            if not assert_true(result, not stale, "/all invalidated after tag deletion"):
+                return
+            r = self.api_delete_raw(f"/tags/{tag_name}")
+            assert_true(result, r.status_code == 404, "deleting a missing tag is 404")
+            self.logger.log_operation("  ✓ tag removed from the table, the puzzle and /all")
+        finally:
+            self.api_delete_raw(f"/deletepuzzle/TagDelete{ts}")
+
+    def test_activate_all_sheets(self, result: TestResult):
+        """POST /puzzles/activate_all is safe to call and reports a count.
+
+        With SKIP_GOOGLE_API on (as in Docker/CI) there is nothing to
+        activate, so this checks the endpoint answers in its documented
+        shape rather than erroring — the batch path used to be a puzzcord
+        command with no coverage at all.
+        """
+        r = self.api_post_raw("/puzzles/activate_all", {})
+        if not assert_eq(result, r.status_code, 200, "activate_all status"):
+            return
+        body = r.json()
+        if not assert_eq(result, body.get("status"), "ok", "activate_all ok"):
+            return
+        for field in ("activated", "failed"):
+            if not assert_true(result, isinstance(body.get(field), int),
+                               f"{field} is an integer"):
+                return
+        assert_true(result, body["failed"] == 0, "nothing should fail with Google disabled")
+        self.logger.log_operation(
+            f"  ✓ activated={body['activated']} failed={body['failed']} — {body.get('message','')}")
+
+    def test_newusers_listing_and_delete(self, result: TestResult):
+        """GET /newusers never returns the verification code; DELETE removes
+        a pending signup by id.
+
+        The code is the sole credential GET /finishaccount needs, so leaking
+        it through the admin list would let anyone holding the list complete
+        someone else's signup.
+        """
+        token = get_internal_token()
+        if not token:
+            result.fail("No INTERNAL_TOKEN available — cannot exercise /newusers")
+            return
+        H = {"X-PB-Internal-Token": token, "X-Remote-User": "api-coverage"}
+        ts = int(time.time())
+        username = f"pendtest{ts}"
+
+        created = requests.post(f"{self.base_url}/account",
+                                json={"username": username, "fullname": "Pend Tester",
+                                      "email": f"{username}@example.org"})
+        if not assert_eq(result, created.status_code, 200, "create pending signup"):
+            return
+        code = created.json().get("code")
+        if not assert_true(result, bool(code), "POST /account returns the code to the caller"):
+            return
+
+        listing = requests.get(f"{self.base_url}/newusers", headers=H).json()
+        rows = listing.get("newusers", [])
+        mine = [r_ for r_ in rows if r_.get("username") == username]
+        if not assert_true(result, len(mine) == 1, "pending signup appears in /newusers"):
+            return
+        row = mine[0]
+        if not assert_true(result, "code" not in row,
+                           "the verification code must NOT be in the listing"):
+            return
+        if not assert_true(result, code not in json.dumps(listing),
+                           "the code must not leak anywhere in the response"):
+            return
+        for field in ("id", "username", "fullname", "email", "created_at"):
+            if not assert_true(result, field in row, f"listing includes {field}"):
+                return
+
+        r = requests.delete(f"{self.base_url}/newusers/{row['id']}", headers=H)
+        if not assert_eq(result, r.status_code, 200, "delete pending signup"):
+            return
+        remaining = requests.get(f"{self.base_url}/newusers", headers=H).json().get("newusers", [])
+        if not assert_true(result, not [x for x in remaining if x.get("username") == username],
+                           "pending signup gone after delete"):
+            return
+        r = requests.delete(f"{self.base_url}/newusers/{row['id']}", headers=H)
+        assert_true(result, r.status_code >= 400, "deleting the same id twice must fail")
+        self.logger.log_operation("  ✓ code never listed; delete by id works and is not idempotent")
+
+    def test_google_users_listing(self, result: TestResult):
+        """GET /google/users degrades gracefully when the Google API is off.
+
+        Docker and CI run with SKIP_GOOGLE_API=true, so the contract worth
+        pinning is that the endpoint returns an empty list and says why,
+        rather than raising — accounts.php renders this.
+        """
+        token = get_internal_token()
+        if not token:
+            result.fail("No INTERNAL_TOKEN available — cannot exercise /google/users")
+            return
+        H = {"X-PB-Internal-Token": token, "X-Remote-User": "api-coverage"}
+        r = requests.get(f"{self.base_url}/google/users", headers=H)
+        if not assert_eq(result, r.status_code, 200, "google users status"):
+            return
+        body = r.json()
+        if not assert_eq(result, body.get("status"), "ok", "google users ok"):
+            return
+        if not assert_true(result, isinstance(body.get("users"), list), "users is a list"):
+            return
+        if body.get("google_disabled"):
+            assert_true(result, body["users"] == [],
+                        "users must be empty when Google is disabled")
+            self.logger.log_operation("  ✓ Google disabled: empty list, google_disabled flag set")
+        else:
+            self.logger.log_operation(f"  ✓ Google enabled: {len(body['users'])} users returned")
+
     def test_config_write(self, result: TestResult):
         """POST /config: value-only writes must preserve the secret flag, and
         a flag-only write must not disturb the value.
@@ -3307,6 +3510,11 @@ class TestRunner:
             self.test_activity_statistics_endpoint,
             self.test_activity_has_more_and_comment,
             self.test_activity_source_metrics,
+            self.test_cache_flush,
+            self.test_tag_deletion,
+            self.test_activate_all_sheets,
+            self.test_newusers_listing_and_delete,
+            self.test_google_users_listing,
             self.test_config_write,
             self.test_config_secret_redaction,
         ]
@@ -3335,11 +3543,13 @@ class TestRunner:
         # Summary
         print(f"\n\nTest Results Summary:")
         print("=" * 50)
-        passed = failed = 0
+        passed = failed = skipped = 0
         for name, res, elapsed in results:
-            icon = "✅" if res.passed else "❌"
+            icon = "⏭️" if res.skipped else ("✅" if res.passed else "❌")
             print(f"{icon} {name}: {res.message} ({elapsed:.2f}s)")
-            if res.passed:
+            if res.skipped:
+                skipped += 1
+            elif res.passed:
                 passed += 1
             else:
                 failed += 1
@@ -3347,8 +3557,16 @@ class TestRunner:
         print(f"\nTotal tests: {len(results)}")
         print(f"Passed: {passed}")
         print(f"Failed: {failed}")
+        print(f"Skipped: {skipped}")
         print(f"Total duration: {total_elapsed:.2f}s")
 
+        # A skip is not a pass. Docker and CI both guarantee Redis, so a skip
+        # there means the dependency broke and the test silently stopped
+        # checking. Treat it as failure unless explicitly tolerated.
+        if skipped and not os.environ.get("ALLOW_SKIPPED_TESTS"):
+            print(f"\n{skipped} test(s) were SKIPPED — their dependency was unavailable.")
+            print("Set ALLOW_SKIPPED_TESTS=1 to tolerate this outside CI.")
+            return False
         return failed == 0
 
 

@@ -96,15 +96,25 @@ class TestLogger:
 
 
 class TestResult:
-    """Tracks pass/fail for a single test."""
+    """Tracks pass/fail/skip for a single test."""
 
     def __init__(self):
         self.passed = True
+        self.skipped = False
         self.message = ""
 
     def fail(self, msg):
         self.passed = False
+        self.skipped = False
         self.message = msg
+
+    def skip(self, msg):
+        """The test could not run. Distinct from a pass: a suite that skips
+        is a suite that did not check, and in CI (where the dependency is
+        guaranteed) that should be loud rather than counted as success."""
+        if self.passed:
+            self.skipped = True
+            self.message = f"SKIPPED — {msg}"
 
     def set_success(self, msg):
         if self.passed:

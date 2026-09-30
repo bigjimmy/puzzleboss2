@@ -111,9 +111,6 @@ docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --list
 docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive
 docker exec puzzleboss-app python /app/scripts/test_api_coverage.py --allow-destructive --tests 1 5 10
 
-# Solver assignment tests
-docker exec puzzleboss-app python /app/scripts/test_solver_assignments.py
-
 # UI tests (Playwright)
 docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --list
 docker exec puzzleboss-app python /app/scripts/test_ui_comprehensive.py --allow-destructive
