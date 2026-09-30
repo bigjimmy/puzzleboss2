@@ -13,7 +13,6 @@ from google.oauth2 import service_account
 import google_auth_httplib2
 import httplib2
 import pblib
-import datetime
 import json
 from pblib import debug_log, configstruct
 
@@ -1387,30 +1386,6 @@ def _hex_to_rgb_triple(hex_color):
     # hex_color is a hex code, with leading '#', e.g., '#abc123'
     hexes = hex_color[1:3], hex_color[3:5], hex_color[5:7]
     return tuple(int(x, base=16) / 255 for x in hexes)
-
-
-def force_sheet_edit(driveid, mytimestamp=datetime.datetime.utcnow()):
-    """Write a bigjimmybot probe timestamp to cell A7 to trigger edit detection."""
-    debug_log(4, f"start with driveid: {driveid}")
-    threadsafe_sheethttp = _get_thread_http()
-
-    datarange = "A7"
-    datainputoption = "USER_ENTERED"
-    data = {"values": [[f"last bigjimmybot probe: {mytimestamp}"]]}
-    _rate_limiter.acquire()
-    response = (
-        sheetsservice.spreadsheets()
-        .values()
-        .update(
-            spreadsheetId=driveid,
-            range=datarange,
-            valueInputOption=datainputoption,
-            body=data,
-        )
-        .execute(http=threadsafe_sheethttp)
-    )
-    debug_log(4, f"response to sheet edit attempt: {response}")
-    return 0
 
 
 def provision_new_google_user(username, firstname, lastname, recovery_email=None):
