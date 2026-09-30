@@ -30,10 +30,30 @@ responses:
                 type: string
               status:
                 type: string
-                enum: [queued, ready, submitted, answered]
+                enum: [queued, ready, submitted]
+                description: >
+                  Active hints only. _HINT_ACTIVE_STATES in pbrest restricts the
+                  query to these three, so an answered hint is never returned here.
               created_at:
                 type: string
               answered_at:
                 type: string
               submitted_at:
                 type: string
+  500:
+    description: Unhandled server error
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Human-readable message
+        error_type:
+          type: string
+          description: Python exception class name
+        traceback:
+          type: string
+          description: Server traceback; this API is not internet-facing

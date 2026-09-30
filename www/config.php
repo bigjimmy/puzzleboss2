@@ -512,6 +512,11 @@ $keyCategoryMap = [
 
   'STATUS_METADATA' => 'metadata',
   'METRICS_METADATA' => 'metadata',
+
+  // Read only by www/old.php, the unmaintained 2024-hunt scraper.
+  'hunt_cookie' => 'general',
+  'hunt_team_username' => 'general',
+  'HINT_WAIT_MINUTES' => 'general',
 ];
 
 // Key descriptions for helpful tooltips
@@ -581,6 +586,9 @@ $keyDescriptions = [
   'ACTIVITY_SOURCES' => 'Comma-separated list of valid activity sources. ⚠️ Must match the ENUM values in the activity.source column in the database — adding a value here without a corresponding ALTER TABLE will cause inserts to fail.',
   'STATUS_METADATA' => 'JSON array defining puzzle statuses (emoji, text, order)',
   'METRICS_METADATA' => 'JSON object defining Prometheus metric definitions for botstats. Activity-table metrics (puzzleboss_activity_total) are automatically exported by type and source and are not configured here. The values themselves are fed in by whatever produces them (bigjimmybot, puzzcord, the API) via POST /botstats/<key> for a single stat or POST /botstats for a batch; this config only supplies the Prometheus type and help text for each, and a stat posted without an entry here is still exported, guessing counter for names ending in _total and gauge otherwise.',
+  'hunt_cookie' => 'LEGACY (www/old.php only) — session cookie used by the unmaintained 2024-hunt scraper. Not read by the current UI or API; safe to leave empty.',
+  'hunt_team_username' => 'LEGACY (www/old.php only) — team name sent in the User-Agent by the unmaintained 2024-hunt scraper. Not read by the current UI or API.',
+  'HINT_WAIT_MINUTES' => 'LEGACY (www/old.php only) — minutes the 2024 scraper waited between hint requests, defaulting to 60. The current hint queue does not use it.',
 ];
 
 // Known boolean keys (values are "true"/"false" strings)

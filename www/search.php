@@ -43,7 +43,7 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
 </head>
 <body class="status-page">
 <h1>Search Puzzles by Tag</h1>
-<p>You are: <?= htmlentities($username) ?> | <a href="old.php">Back to Main Board</a></p>
+<p>You are: <?= htmlentities($username) ?> | <a href="index.php">Back to Main Board</a></p>
 
 <div class="search-form">
   <form method="get" action="search.php">

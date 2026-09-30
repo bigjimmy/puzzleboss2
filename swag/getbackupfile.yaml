@@ -44,3 +44,20 @@ responses:
     description: Malformed timestamp
   404:
     description: Not a downloadable archive file, or the object is missing
+  500:
+    description: Unhandled server error
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Human-readable message
+        error_type:
+          type: string
+          description: Python exception class name
+        traceback:
+          type: string
+          description: Server traceback; this API is not internet-facing

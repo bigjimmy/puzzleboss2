@@ -59,6 +59,9 @@ responses:
     schema:
       type: object
       properties:
+        status:
+          type: string
+          example: error
         error:
           type: string
         error_type:

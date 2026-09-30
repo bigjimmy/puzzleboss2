@@ -78,4 +78,20 @@ responses:
         error:
           type: string
           description: Error message (e.g., "Must provide 'tag' or 'tag_id' parameter" or "tag_id must be an integer")
-
+  500:
+    description: Unhandled server error
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Human-readable message
+        error_type:
+          type: string
+          description: Python exception class name
+        traceback:
+          type: string
+          description: Server traceback; this API is not internet-facing

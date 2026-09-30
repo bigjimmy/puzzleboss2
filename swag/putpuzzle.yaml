@@ -74,6 +74,9 @@ responses:
         schema:
             type: object
             properties:
+              status:
+                type: string
+                example: error
                 error:
                     type: string
                     example: "failed due to invalid JSON POST structure"

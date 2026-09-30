@@ -22,3 +22,20 @@ responses:
           example: "Hint 1 submitted to HQ"
   404:
     description: Hint not found or not in ready state
+  500:
+    description: Unhandled server error
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          description: Human-readable message
+        error_type:
+          type: string
+          description: Python exception class name
+        traceback:
+          type: string
+          description: Server traceback; this API is not internet-facing
