@@ -1873,6 +1873,77 @@ def test_csrf_rejection():
         print("    ✓ Test puzzle removed" if r.ok else f"    Warning: cleanup returned {r.status_code}")
 
 
+def test_backup_download_gates():
+    """www/backupdownload.php is the outermost gate on the hunt archives.
+
+    The same S3 prefix holds the SQL dumps, whose config table contains
+    SERVICE_ACCOUNT_JSON — the Workspace service account key with
+    Domain-Wide Delegation. Three layers keep those out of the web tier:
+    the ECS task role is scoped to *.csv.gz, pbrest allowlists two
+    filenames, and this page allowlists them again after a puzztech check.
+    Only this page's layer is reachable from a browser, and it had no test.
+
+    Docker has no AWS credentials, so a permitted request fails at the API
+    rather than returning a CSV. That is fine: what matters is that a
+    refused request is refused before the API is ever called, and that the
+    refusal is never a 200.
+    """
+    denied_msg = "restricted to the puzztech role"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+
+        # --- not puzztech: refused regardless of what is asked for ---
+        page = browser.new_page()
+        page.goto(f"{BASE_URL}/index.php?assumedid=testsolver1", wait_until="networkidle")
+        r = page.request.get(
+            f"{BASE_URL}/backupdownload.php?assumedid=testsolver1"
+            f"&ts=20260101_000000&file=activity.csv")
+        assert r.status == 403, f"non-puzztech should get 403, got {r.status}"
+        assert denied_msg in r.text(), f"unexpected body: {r.text()[:120]}"
+        print("    ✓ Non-puzztech refused (403)")
+
+        # A non-puzztech user must not even be able to name a SQL dump.
+        r = page.request.get(
+            f"{BASE_URL}/backupdownload.php?assumedid=testsolver1"
+            f"&ts=20260101_000000&file=full_database_backup.sql")
+        assert r.status == 403, f"privilege check must come first, got {r.status}"
+        print("    ✓ Privilege checked before the filename allowlist")
+        page.close()
+
+        # --- puzztech: allowlist still applies ---
+        page = browser.new_page()
+        page.goto(f"{BASE_URL}/admin.php?assumedid=testuser", wait_until="networkidle")
+        base = f"{BASE_URL}/backupdownload.php?assumedid=testuser"
+
+        for bad_file in ["full_database_backup.sql", "full_database_backup.sql.gz",
+                         "config.sql", "solver.sql", "activity.csv.gz",
+                         "../../etc/passwd", "activity.csv%00.sql"]:
+            r = page.request.get(f"{base}&ts=20260101_000000&file={bad_file}")
+            assert r.status == 400, f"{bad_file!r} should be 400, got {r.status}"
+            assert "Invalid archive request" in r.text(), f"unexpected body for {bad_file!r}"
+        print("    ✓ Every SQL dump and traversal attempt rejected (400)")
+
+        for bad_ts in ["../..", "2026 0101", "ts/with/slash", "a" * 65, ""]:
+            r = page.request.get(f"{base}&ts={bad_ts}&file=activity.csv")
+            assert r.status == 400, f"timestamp {bad_ts!r} should be 400, got {r.status}"
+        print("    ✓ Malformed timestamps rejected (400)")
+
+        # A permitted request passes the page's own gates and reaches the API.
+        # Without AWS credentials that fails upstream — but it must never be a
+        # 200, and must never be the page's own 400/403.
+        r = page.request.get(f"{base}&ts=20260101_000000&file=activity.csv")
+        assert r.status != 200, "no archive exists in Docker; a 200 would mean something leaked"
+        assert r.status not in (400, 403), \
+            f"a permitted request should pass this page's gates, got {r.status}"
+        body = r.text()
+        assert "SERVICE_ACCOUNT_JSON" not in body and "BEGIN PRIVATE KEY" not in body, \
+            "response must never carry dump contents"
+        print(f"    ✓ Permitted request passed the page's gates and failed upstream ({r.status})")
+
+        browser.close()
+
+
 def test_privilege_and_gear_visibility():
     """Test assigning and revoking privileges, and verify that gear icon
     visibility and admin page access are correctly gated on those privileges."""
@@ -3111,6 +3182,7 @@ def main():
         ('33', 'dashedits', test_dashboard_edits_immediate, 'Dashboard Edits Immediate'),
         ('34', 'deletedlabel', test_activity_deleted_label, 'Activity DELETED Label'),
         ('35', 'csrf', test_csrf_rejection, 'CSRF Rejection'),
+        ('36', 'backupdl', test_backup_download_gates, 'Backup Download Gates'),
     ]
 
     handle_list_and_destructive(args, all_tests=all_tests)
