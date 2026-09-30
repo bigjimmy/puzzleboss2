@@ -118,18 +118,23 @@ def _get_solver_id(identifier: str, match_type: str = "name") -> int:
 # ── Timestamp Parsing ───────────────────────────────────────────────────
 
 
-def _parse_revision_timestamp(revision_time: str) -> float:
+def _parse_revision_timestamp(revision_time: str) -> int:
     """
     Parse Google Revisions API timestamp to Unix timestamp.
+
+    Truncated to whole seconds because activity.time is a DATETIME with no
+    fractional part: an edit at 100.4 is stored as 100, and a float 100.4
+    would then compare newer than its own stored row on every poll and be
+    re-inserted forever. The hidden-sheet path already uses whole seconds.
 
     Args:
         revision_time: ISO format "YYYY-MM-DDTHH:MM:SS.fffZ"
 
     Returns:
-        Unix timestamp as float
+        Unix timestamp as int (whole seconds)
     """
     dt = datetime.datetime.strptime(revision_time, "%Y-%m-%dT%H:%M:%S.%fZ")
-    return dt.timestamp()
+    return int(dt.timestamp())
 
 
 # ── Activity Recording ──────────────────────────────────────────────────

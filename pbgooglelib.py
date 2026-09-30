@@ -27,6 +27,11 @@ admincreds = None
 # all Google API calls in that thread, instead of creating a new one per call.
 _thread_local = threading.local()
 
+# Socket timeout for the per-thread client. httplib2.Http() defaults to
+# none, so one hung Google call would stall its bigjimmy thread forever.
+# Matches googleapiclient's own default for clients that build() creates.
+GOOGLE_HTTP_TIMEOUT_SEC = 60
+
 
 def _get_thread_http():
     """Return a reusable AuthorizedHttp for the current thread.
@@ -37,7 +42,7 @@ def _get_thread_http():
     """
     http = getattr(_thread_local, "authorized_http", None)
     if http is None and creds is not None:
-        http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http())
+        http = google_auth_httplib2.AuthorizedHttp(creds, http=httplib2.Http(timeout=GOOGLE_HTTP_TIMEOUT_SEC))
         _thread_local.authorized_http = http
     return http
 

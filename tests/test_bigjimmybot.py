@@ -94,13 +94,16 @@ class TestTimestampParsing:
         """Test parsing valid Google Drive revision timestamp."""
         timestamp = "2026-02-12T01:40:46.123Z"
         result = _parse_revision_timestamp(timestamp)
-        # Verify it returns a numeric timestamp with milliseconds
-        assert isinstance(result, float)
-        assert result > 0
-        # Verify milliseconds are preserved
-        assert result != int(result)  # Has fractional part
+        # Whole seconds: activity.time has no fractional part
+        assert isinstance(result, int)
         # Verify it's reasonable (year 2026)
         assert 1700000000 < result < 1800000000
+
+    def test_parse_revision_timestamp_truncates_not_rounds(self):
+        """Every fraction of a second maps to the same stored second."""
+        base = _parse_revision_timestamp("2026-02-12T01:40:46.000Z")
+        assert _parse_revision_timestamp("2026-02-12T01:40:46.400Z") == base
+        assert _parse_revision_timestamp("2026-02-12T01:40:46.999Z") == base
 
 
 class TestSolverLookup:
@@ -437,6 +440,24 @@ class TestActivityProcessing:
         _process_activity_records(records, puzzle, last_sheet_act_ts, "test-thread", True)
 
         # Verify we never looked up solver (edit was too old)
+        mock_get_solver.assert_not_called()
+
+    @patch('bigjimmybot.configstruct', {'BIGJIMMY_AUTOASSIGN': 'true'})
+    @patch('bigjimmybot._get_solver_id')
+    def test_revision_already_recorded_is_not_reinserted(self, mock_get_solver):
+        """Legacy Revisions path: a sub-second revision whose row is already
+        stored (activity.time drops the fraction) must not count as new on
+        the next poll, or it is re-inserted forever."""
+        puzzle = load_fixture('puzzle_data.json')
+        records = [{
+            "lastModifyingUser": {"emailAddress": "benoc@example.com"},
+            "modifiedTime": "2026-02-12T01:40:46.400Z",
+        }]
+        # What the DB hands back after storing that edit: the whole second
+        stored = datetime(2026, 2, 12, 1, 40, 46).timestamp()
+
+        _process_activity_records(records, puzzle, stored, "test-thread", False)
+
         mock_get_solver.assert_not_called()
 
 

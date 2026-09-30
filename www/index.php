@@ -6,7 +6,7 @@ require_once('puzzlebosslib.php');
     <head>
         <title>Puzzboss 2000</title>
         <link rel="stylesheet" href="./pb-ui.css">
-        <script src="https://cdn.rawgit.com/localForage/localForage/4ce19202/dist/localforage.min.js"></script>
+        <script src="./localforage.min.js"></script>
     </head>
     <body>
         <div id = "main">

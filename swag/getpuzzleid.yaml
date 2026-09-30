@@ -118,6 +118,17 @@ responses:
               time:
                 type: string
                 description: ISO 8601 string (e.g. "2026-03-29T21:13:27")
+    404:
+      description: No puzzle with this id
+      schema:
+        type: object
+        properties:
+          status:
+            type: string
+            example: error
+          error:
+            type: string
+            example: Puzzle 42 not found
     500:
       description: Unhandled server error
       schema:

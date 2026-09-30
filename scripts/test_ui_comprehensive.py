@@ -953,6 +953,15 @@ def test_basic_page_load():
         print("  Checking for status indicator...")
         page.wait_for_selector(".circle", timeout=DIALOG_TIMEOUT)
 
+        # The solve sound stores its file with localForage, which used to load
+        # from the defunct cdn.rawgit.com. It is served from www/ now.
+        print("  Checking localForage loaded from the app...")
+        assert page.evaluate("typeof localforage") == "object", "localforage not loaded"
+        script_srcs = page.evaluate(
+            "Array.from(document.scripts).map(s => s.src).filter(Boolean)"
+        )
+        assert not any("rawgit" in s for s in script_srcs), f"rawgit still used: {script_srcs}"
+
         browser.close()
         print("✓ Basic page load test completed successfully")
 

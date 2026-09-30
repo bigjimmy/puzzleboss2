@@ -685,10 +685,11 @@ def get_one_puzzle(id):
         conn, cursor = _read_cursor()
         cursor.execute("SELECT * from puzzle_view where id = %s", (id,))
         puzzle = cursor.fetchone()
-    except IndexError:
-        raise Exception(f"Puzzle {id} not found in database")
     except Exception as e:
         raise Exception(f"Exception in fetching puzzle {id} from database") from e
+
+    if puzzle is None:
+        return {"status": "error", "error": f"Puzzle {id} not found"}, 404
 
     debug_log(5, f"fetched puzzle {id}: {puzzle}")
 
@@ -1173,13 +1174,17 @@ def put_config():
             raise Exception("must supply cfgval and/or secret")
         if mysecret is not None and not isinstance(mysecret, bool):
             raise Exception("secret field must be a JSON boolean")
-        # Redact secret values from this log line — flagged writes are
-        # exactly the ones whose values shouldn't land in logs.
-        logval = "<redacted>" if mysecret else myval
-        debug_log(3, f"Config change attempt. key {mykey} val {logval} secret {mysecret}")
     except Exception as e:
         raise Exception(f"Exception Interpreting input data for config change: {e}")
     conn, cursor = _cursor()
+    # Redact the value from this log line if the request flags it OR the key
+    # is already secret (stored flag or name heuristic). Value-only writes
+    # omit the flag, and they are how existing secrets get rotated.
+    if mysecret or _config_key_is_secret(cursor, mykey):
+        logval = "<redacted>"
+    else:
+        logval = myval
+    debug_log(3, f"Config change attempt. key {mykey} val {logval} secret {mysecret}")
     if myval is None:
         # Flag-only update: never creates a key (there'd be no value)
         cursor.execute(
@@ -1210,6 +1215,25 @@ def _config_key_exists(cursor, key):
     """True if a config key exists (UPDATE rowcount is 0 for no-op updates too)."""
     cursor.execute("SELECT 1 FROM config WHERE `key`=%s", (key,))
     return cursor.fetchone() is not None
+
+
+def _config_key_is_secret(cursor, key):
+    """True if a config key is secret by its stored flag or the name heuristic.
+
+    Only used to decide whether a value may be logged, so a failed flag
+    lookup fails closed. A pre-migration database without the `secret`
+    column falls back to the heuristic alone.
+    """
+    if pblib.is_secret_config_key(key):
+        return True
+    try:
+        cursor.execute("SELECT `secret` FROM config WHERE `key`=%s", (key,))
+        row = cursor.fetchone()
+    except MySQLdb.OperationalError as e:
+        if e.args and e.args[0] == 1054:  # Unknown column 'secret'
+            return False
+        return True
+    return bool(row and row.get("secret"))
 
 
 @app.route("/botstats", endpoint="getbotstats", methods=["GET"])
