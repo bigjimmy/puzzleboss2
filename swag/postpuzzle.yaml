@@ -59,6 +59,16 @@ responses:
     description: Invalid request (missing fields, invalid JSON, etc.)
   404:
     description: Puzzle not found
+  404:
+    description: No puzzle with this id
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
   500:
     description: Internal server error
     schema:

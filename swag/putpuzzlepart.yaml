@@ -159,6 +159,16 @@ responses:
             part_name:
               type: string
               description: The part that was updated with its new value
+  404:
+    description: No puzzle with this id
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
   500:
     description: Error updating puzzle part
     schema:

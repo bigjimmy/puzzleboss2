@@ -69,7 +69,8 @@ pblib.configstruct.setdefault("LOGLEVEL", "0")
 from pblib import assign_solver_to_puzzle, unassign_solver_from_puzzle
 
 
-def _make_mock_conn(current_solvers_json=None, solver_history_json=None, puzzle_status="Being worked"):
+def _make_mock_conn(current_solvers_json=None, solver_history_json=None,
+                    puzzle_status="Being worked", old_puzzles=()):
     """Create a mock DB connection that simulates puzzle JSON columns.
 
     The mock cursor returns appropriate values for the SELECT queries
@@ -79,6 +80,7 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None, puzzle_
         puzzle_status: The puzzle's current status (default "Being worked").
             Used by assign_solver_to_puzzle to decide whether to transition
             "New"/"Abandoned" → "Being worked".
+        old_puzzles: ids of other puzzles solver 101 is currently on.
     """
     if current_solvers_json is None:
         current_solvers_json = json.dumps({"solvers": []})
@@ -89,35 +91,48 @@ def _make_mock_conn(current_solvers_json=None, solver_history_json=None, puzzle_
     cursor = MagicMock()
     conn.cursor.return_value = cursor
 
-    # Dispatch fetchone on the *last executed SQL* rather than a call ordinal.
-    # The assign/unassign paths issue a variable number of queries (status
-    # transitions re-enter log_activity, and log_activity does a lastact
-    # write-through re-query when Redis is enabled), so a positional counter
-    # is too brittle. We key on distinctive fragments of each SELECT instead.
+    # Dispatch fetchone/fetchall on the *last executed SQL* rather than a call
+    # ordinal. The assign/unassign paths issue a variable number of queries
+    # (status transitions re-enter log_activity, and log_activity does a
+    # lastact write-through re-query when Redis is enabled), so a positional
+    # counter is too brittle. We key on distinctive fragments of each SELECT.
     # cursor.execute stays the MagicMock (tests inspect its call_args_list);
-    # we just read the most recent call to route fetchone.
-    cursor.fetchall.return_value = []  # Not currently assigned to any puzzle
-
-    def _last_sql():
+    # we just read the most recent call to route the fetch.
+    def _last_call():
         if not cursor.execute.call_args_list:
-            return ""
-        return str(cursor.execute.call_args_list[-1][0][0])
+            return "", ()
+        args = cursor.execute.call_args_list[-1][0]
+        return str(args[0]), (args[1] if len(args) > 1 else ())
+
+    def _puzzle_row(pid):
+        if pid in old_puzzles:
+            return {"id": pid, "status": "Being worked", "solver_history": None,
+                    "current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
+        return {"id": pid, "status": puzzle_status, "solver_history": solver_history_json,
+                "current_solvers": current_solvers_json}
 
     def mock_fetchone():
-        sql = _last_sql()
+        sql, _ = _last_call()
         if "FROM solver" in sql:
-            return {"id": 101}  # solver_exists check
-        if "current_solvers" in sql and "status" in sql:
-            return {"current_solvers": current_solvers_json, "status": puzzle_status}
-        if "solver_history" in sql:
-            return {"solver_history": solver_history_json}
+            return {"id": 101}  # solver exists
+        if "current_solvers" in sql:
+            return {"current_solvers": current_solvers_json}  # unassign
         if "FROM activity" in sql or "from activity" in sql:
             # lastact write-through re-query (only runs when Redis enabled)
             return {"id": 1, "puzzle_id": 287, "solver_id": 101,
                     "source": "puzzleboss", "type": "assignment", "time": None}
         return None
 
+    def mock_fetchall():
+        sql, params = _last_call()
+        if "JSON_TABLE" in sql:
+            return [{"id": pid} for pid in old_puzzles]
+        if "FOR UPDATE" in sql and "FROM puzzle" in sql:
+            return [_puzzle_row(pid) for pid in params]
+        return []
+
     cursor.fetchone = mock_fetchone
+    cursor.fetchall = mock_fetchall
 
     return conn, cursor
 
@@ -259,88 +274,89 @@ class TestAssignUnassignsFromOldPuzzle:
 
     @patch('pblib.debug_log')
     def test_unassign_from_old_puzzle(self, mock_log):
-        """Assigning solver should unassign from old puzzle first."""
-        conn = MagicMock()
-        cursor = MagicMock()
-        conn.cursor.return_value = cursor
-
-        fetchone_count = {"n": 0}
-
-        # fetchall returns old puzzle (id=284) with solver on it
-        cursor.fetchall.return_value = [{"id": 284}]
-
-        def mock_fetchone():
-            fetchone_count["n"] += 1
-            n = fetchone_count["n"]
-            # Calls:
-            # 1. solver_exists() → SELECT id FROM solver
-            # 2. unassign_solver_from_puzzle: SELECT current_solvers for puzzle 284
-            # 3. assign: SELECT current_solvers, status for puzzle 287
-            # 4. assign: SELECT solver_history for puzzle 287
-            if n == 1:
-                return {"id": 101}  # solver_exists
-            elif n == 2:
-                return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
-            elif n == 3:
-                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
-            elif n == 4:
-                return {"solver_history": json.dumps({"solvers": []})}
-            return None
-
-        cursor.fetchone = mock_fetchone
+        """Assigning solver should remove it from its old puzzle."""
+        conn, cursor = _make_mock_conn(old_puzzles=(284,))
 
         assign_solver_to_puzzle(287, 101, conn)
 
-        # Verify the unassign UPDATE was called for puzzle 284
         unassign_calls = [
             c for c in cursor.execute.call_args_list
-            if 'SET current_solvers' in str(c) and '284' in str(c)
+            if 'SET current_solvers' in str(c) and c[0][1][1] == 284
         ]
-        assert len(unassign_calls) >= 1, "Should unassign from old puzzle 284"
-        stored_json = unassign_calls[0][0][1][0]
-        stored = json.loads(stored_json)
+        assert len(unassign_calls) == 1, "Should unassign from old puzzle 284"
+        stored = json.loads(unassign_calls[0][0][1][0])
         assert len(stored["solvers"]) == 0, "Old puzzle should have no solvers"
 
     @patch('pblib.debug_log')
     def test_unassign_from_multiple_old_puzzles(self, mock_log):
         """Solver on multiple puzzles (stale data) should be unassigned from all."""
-        conn = MagicMock()
-        cursor = MagicMock()
-        conn.cursor.return_value = cursor
-
-        fetchone_count = {"n": 0}
-
-        # fetchall returns two old puzzles
-        cursor.fetchall.return_value = [{"id": 284}, {"id": 285}]
-
-        def mock_fetchone():
-            fetchone_count["n"] += 1
-            n = fetchone_count["n"]
-            # 1. solver_exists() → SELECT id FROM solver
-            # 2-3. unassign calls for 284 and 285 (SELECT current_solvers)
-            # 4. assign: SELECT current_solvers, status for 287
-            # 5. assign: SELECT solver_history for 287
-            if n == 1:
-                return {"id": 101}  # solver_exists
-            elif n <= 3:
-                return {"current_solvers": json.dumps({"solvers": [{"solver_id": 101}]})}
-            elif n == 4:
-                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
-            elif n == 5:
-                return {"solver_history": json.dumps({"solvers": []})}
-            return None
-
-        cursor.fetchone = mock_fetchone
+        conn, cursor = _make_mock_conn(old_puzzles=(284, 285))
 
         assign_solver_to_puzzle(287, 101, conn)
 
-        # Verify unassign was called for both old puzzles
-        unassign_calls = [
-            c for c in cursor.execute.call_args_list
+        updated = [
+            c[0][1][1] for c in cursor.execute.call_args_list
             if 'SET current_solvers' in str(c)
         ]
-        # Should have: unassign 284, unassign 285, assign 287 = at least 3 UPDATE calls
-        assert len(unassign_calls) >= 3, f"Expected at least 3 current_solvers UPDATEs, got {len(unassign_calls)}"
+        assert sorted(updated) == [284, 285, 287]
+
+
+class TestAssignLocking:
+    """Assignment is one locked transaction (audit finding H7).
+
+    current_solvers/solver_history are JSON read-modify-writes; without row
+    locks two concurrent assignments can overwrite each other.
+    """
+
+    @patch('pblib.debug_log')
+    def test_locks_solver_then_puzzles_in_id_order(self, mock_log):
+        conn, cursor = _make_mock_conn(old_puzzles=(300, 284))
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        sqls = [str(c[0][0]) for c in cursor.execute.call_args_list]
+        locks = [i for i, q in enumerate(sqls) if "FOR UPDATE" in q]
+        assert len(locks) == 2
+        assert "FROM solver" in sqls[locks[0]]
+        assert "FROM puzzle" in sqls[locks[1]] and "ORDER BY id" in sqls[locks[1]]
+        assert cursor.execute.call_args_list[locks[1]][0][1] == (284, 287, 300)
+        # every read-modify-write happens after both locks
+        first_update = min(i for i, q in enumerate(sqls) if q.startswith("UPDATE puzzle"))
+        assert first_update > locks[1]
+
+    @patch('pblib.debug_log')
+    def test_commits_before_locking(self, mock_log):
+        """A fresh transaction, so the solver search reads after the lock."""
+        conn, cursor = _make_mock_conn()
+        events = []
+        conn.commit.side_effect = lambda: events.append("commit")
+        cursor.execute.side_effect = lambda sql, *a: events.append(sql)
+
+        assign_solver_to_puzzle(287, 101, conn)
+
+        first_lock = next(i for i, e in enumerate(events) if "FOR UPDATE" in e)
+        assert "commit" in events[:first_lock]
+
+    @patch('pblib.debug_log')
+    def test_rejected_assignment_leaves_old_puzzle_alone(self, mock_log):
+        conn, cursor = _make_mock_conn(puzzle_status="Solved", old_puzzles=(284,))
+
+        with pytest.raises(ValueError, match="already solved"):
+            assign_solver_to_puzzle(287, 101, conn)
+
+        assert not any(
+            'SET current_solvers' in str(c) for c in cursor.execute.call_args_list
+        )
+        conn.rollback.assert_called()
+
+    @patch('pblib.debug_log')
+    def test_unassign_locks_row(self, mock_log):
+        conn, cursor = _make_mock_conn(
+            current_solvers_json=json.dumps({"solvers": [{"solver_id": 101}]})
+        )
+        unassign_solver_from_puzzle(287, 101, conn)
+        first = str(cursor.execute.call_args_list[0][0][0])
+        assert "FOR UPDATE" in first
 
 
 class TestAssignSolverHistoryType:

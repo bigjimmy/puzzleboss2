@@ -95,6 +95,7 @@ class TestRunner:
         "Google Users Listing",
         "Config Write And Secret Flag",
         "Config Secret Redaction",
+        "Concurrent JSON Writes",
     ]
 
     def __init__(self, base_url=BASE_URL):
@@ -3088,6 +3089,91 @@ class TestRunner:
         finally:
             self.api_delete_raw(f"/deletepuzzle/TagDelete{ts}")
 
+    def test_concurrent_json_writes(self, result: TestResult):
+        """Simultaneous writes to one puzzle's JSON columns all land.
+
+        current_solvers, solver_history and tags are read-modify-write JSON
+        columns. Without row locks, concurrent requests each read the same
+        array and the last write wins, silently dropping the others (audit
+        finding H7). Also: one solver moved to two puzzles at once must end
+        up on exactly one.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        ts = int(time.time())
+        n = 8
+        rd = self.create_round(f"ConcurrentRound{ts}")
+        pa = self.create_puzzle(f"ConcurrentA{ts}", rd["id"])
+        pb = self.create_puzzle(f"ConcurrentB{ts}", rd["id"])
+        if not (pa and pb):
+            result.fail("could not create puzzles for the concurrency test")
+            return
+        names = [f"conc{ts}x{i}" for i in range(n)]
+        for name in names:
+            self.create_solver(name)
+        all_solvers = self.get_all_solvers()
+        sids = [find_by_name(all_solvers, name)["id"] for name in names]
+
+        def fire(calls):
+            with ThreadPoolExecutor(max_workers=len(calls)) as pool:
+                return list(pool.map(lambda c: c(), calls))
+
+        try:
+            # n solvers onto one puzzle at once
+            statuses = fire([
+                (lambda sid=sid: requests.post(
+                    f"{self.base_url}/solvers/{sid}/puzz", json={"puzz": pa["id"]}
+                ).status_code)
+                for sid in sids
+            ])
+            if not assert_eq(result, statuses, [200] * n, "concurrent assignments"):
+                return
+            pad = self.get_puzzle_details(pa["id"])
+            cur = set((pad.get("cursolvers") or "").split(","))
+            hist = set((pad.get("solvers") or "").split(","))
+            if not assert_true(result, set(names) <= cur,
+                               f"all {n} solvers current (missing {set(names) - cur})"):
+                return
+            if not assert_true(result, set(names) <= hist,
+                               f"all {n} solvers in history (missing {set(names) - hist})"):
+                return
+
+            # n tags onto one puzzle at once
+            tags = [f"conc{ts}t{i}" for i in range(n)]
+            statuses = fire([
+                (lambda t=t: requests.post(
+                    f"{self.base_url}/puzzles/{pa['id']}/tags", json={"tags": {"add": t}}
+                ).status_code)
+                for t in tags
+            ])
+            if not assert_eq(result, statuses, [200] * n, "concurrent tag adds"):
+                return
+            got = set((self.get_puzzle_details(pa["id"]).get("tags") or "").split(","))
+            if not assert_true(result, set(tags) <= got,
+                               f"all {n} tags present (missing {set(tags) - got})"):
+                return
+
+            # one solver moved to both puzzles at once ends up on exactly one
+            mover = names[0]
+            fire([
+                (lambda pid=pid: requests.post(
+                    f"{self.base_url}/solvers/{sids[0]}/puzz", json={"puzz": pid}
+                ).status_code)
+                for pid in (pa["id"], pb["id"]) * 3
+            ])
+            on = [p for p in (pa, pb)
+                  if mover in (self.get_puzzle_details(p["id"]).get("cursolvers") or "").split(",")]
+            if not assert_eq(result, len(on), 1, "moved solver is on exactly one puzzle"):
+                return
+            self.logger.log_operation(
+                f"  ✓ {n} concurrent assignments and tag adds all kept; racing move is consistent"
+            )
+        finally:
+            for t in [f"conc{ts}t{i}" for i in range(n)]:
+                self.api_delete_raw(f"/tags/{t}")
+            self.api_delete_raw(f"/deletepuzzle/ConcurrentA{ts}")
+            self.api_delete_raw(f"/deletepuzzle/ConcurrentB{ts}")
+
     def test_activate_all_sheets(self, result: TestResult):
         """POST /puzzles/activate_all is safe to call and reports a count.
 
@@ -3517,6 +3603,7 @@ class TestRunner:
             self.test_google_users_listing,
             self.test_config_write,
             self.test_config_secret_redaction,
+            self.test_concurrent_json_writes,
         ]
         # zip() silently truncates on length mismatch — a name/func drift
         # here once caused the last four tests to never run. Fail loudly.

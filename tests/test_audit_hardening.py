@@ -127,3 +127,77 @@ class TestGoogleHttpTimeout:
         http_cls.assert_called_once()
         timeout = http_cls.call_args.kwargs.get("timeout")
         assert timeout is not None and 0 < timeout <= 120
+
+
+class TestPuzzleUpdateNotFound:
+    @pytest.mark.parametrize("path,body", [
+        ("/puzzles/999999/xyzloc", {"xyzloc": "here"}),
+        ("/puzzles/999999", {"xyzloc": "here"}),
+    ])
+    def test_update_of_missing_puzzle_is_404(self, pbrest, client, path, body):
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        with patch.object(pbrest, "_read_cursor", lambda: (MagicMock(), cursor)):
+            resp = client.post(path, json=body)
+        assert resp.status_code == 404
+
+
+class _TagCursor:
+    """Fake cursor for the tags handler: records SQL and commits in order."""
+
+    def __init__(self, events, existing_tag_id=None, puzzle_tags=None):
+        self.events = events
+        self.existing_tag_id = existing_tag_id
+        self.puzzle_tags = puzzle_tags
+        self.lastrowid = 77
+        self._row = None
+
+    def execute(self, sql, params=()):
+        self.events.append(sql)
+        if sql.startswith("SELECT id FROM tag"):
+            self._row = {"id": self.existing_tag_id} if self.existing_tag_id else None
+        elif sql.startswith("SELECT tags FROM puzzle"):
+            self._row = {"tags": self.puzzle_tags}
+        else:
+            self._row = None
+
+    def fetchone(self):
+        return self._row
+
+
+class TestTagUpdateLocking:
+    """Tag edits are a JSON read-modify-write (audit finding H7)."""
+
+    def _add(self, pbrest, client, cursor, events):
+        conn = MagicMock()
+        conn.commit.side_effect = lambda: events.append("COMMIT")
+        with patch.object(pbrest, "_cursor", lambda: (conn, cursor)), \
+             patch.object(pbrest, "get_one_puzzle",
+                          lambda _id: {"status": "ok", "puzzle": {"id": 5, "name": "P"}}), \
+             patch.object(pbrest, "increment_botstat", lambda *a: None), \
+             patch.object(pbrest, "invalidate_cache_with_stats", lambda: None), \
+             patch.object(pbrest.pblib, "log_activity", lambda *a, **k: True):
+            resp = client.post("/puzzles/5/tags", json={"tags": {"add": "newtag"}})
+        assert resp.status_code == 200, resp.get_json()
+
+    def test_read_is_locked_and_after_tag_creation_commit(self, pbrest, client):
+        events = []
+        self._add(pbrest, client, _TagCursor(events, puzzle_tags="[3]"), events)
+
+        read = next(i for i, e in enumerate(events) if e.startswith("SELECT tags FROM puzzle"))
+        assert "FOR UPDATE" in events[read]
+        create = next(i for i, e in enumerate(events) if e.startswith("INSERT INTO tag"))
+        # the tag-creation commit comes before the lock, not between it and the write
+        assert "COMMIT" in events[create:read]
+        write = next(i for i, e in enumerate(events) if e.startswith("UPDATE puzzle SET tags"))
+        assert read < write
+        assert "COMMIT" not in events[read:write]
+        assert "COMMIT" in events[write:]
+
+    def test_noop_add_still_releases_lock(self, pbrest, client):
+        events = []
+        self._add(pbrest, client,
+                  _TagCursor(events, existing_tag_id=3, puzzle_tags="[3]"), events)
+        read = next(i for i, e in enumerate(events) if e.startswith("SELECT tags FROM puzzle"))
+        assert not any(e.startswith("UPDATE puzzle SET tags") for e in events)
+        assert "COMMIT" in events[read:]

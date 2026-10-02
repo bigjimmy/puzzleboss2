@@ -548,7 +548,8 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
         - Solver must exist
         - Auto-transitions New/Abandoned → Being worked
         - Logs "assignment" activity for the assignment
-        - Unassigns solver from any other puzzle first
+        - Unassigns solver from any other puzzle, in the same transaction
+          (a rejected assignment leaves the solver where it was)
 
     Args:
         puzzle_id: Puzzle database ID (int or string, normalized to int)
@@ -565,11 +566,25 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
     debug_log(4, f"Started with puzzle id {puzzle_id}")
     cursor = conn.cursor()
 
-    # Validate solver exists
-    if not solver_exists(solver_id, conn):
+    # Concurrency: current_solvers and solver_history are JSON read-modify-
+    # writes, so two unlocked assignments can each overwrite the other's
+    # change (one solver silently dropped), or move one solver onto two
+    # puzzles. Locks, always in the same order so they can't deadlock:
+    #   1. the solver row, serializing every assignment of this solver;
+    #   2. the affected puzzle rows, ascending id (InnoDB locks in scan order).
+    # Everything commits once, which releases both.
+    # Commit first so this is a fresh transaction: under REPEATABLE READ the
+    # plain read below must take its snapshot after the solver lock, or it
+    # can miss an assignment that committed while we waited.
+    conn.commit()
+
+    # Validate solver exists (and lock it)
+    cursor.execute("SELECT id FROM solver WHERE id = %s FOR UPDATE", (solver_id,))
+    if cursor.fetchone() is None:
+        conn.rollback()
         raise ValueError(f"Solver {solver_id} does not exist")
 
-    # Find and unassign from any other puzzle the solver is currently on.
+    # Find any other puzzle the solver is currently on.
     # JSON_TABLE with INT PATH extracts solver_ids as integers for comparison.
     cursor.execute(
         """
@@ -584,33 +599,35 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
     """,
         (solver_id,),
     )
-    current_puzzles = cursor.fetchall()
-    for current_puzzle in current_puzzles:
-        if current_puzzle["id"] != puzzle_id:
-            unassign_solver_from_puzzle(current_puzzle["id"], solver_id, conn, source)
+    puzzle_ids = sorted({row["id"] for row in cursor.fetchall()} | {puzzle_id})
+    cursor.execute(
+        "SELECT id, current_solvers, solver_history, status FROM puzzle "
+        f"WHERE id IN ({', '.join(['%s'] * len(puzzle_ids))}) ORDER BY id FOR UPDATE",
+        tuple(puzzle_ids),
+    )
+    rows = {row["id"]: row for row in cursor.fetchall()}
 
     # Fetch puzzle and validate it exists and is not solved
-    cursor.execute(
-        "SELECT current_solvers, status FROM puzzle WHERE id = %s",
-        (puzzle_id,),
-    )
-    row = cursor.fetchone()
+    row = rows.get(puzzle_id)
     if row is None:
+        conn.rollback()
         raise ValueError(f"Puzzle {puzzle_id} does not exist")
     if row["status"] == "Solved":
+        conn.rollback()
         raise ValueError(f"Cannot assign solver to puzzle {puzzle_id} - puzzle is already solved")
 
-    current_solvers_str = row["current_solvers"] or json.dumps(
-        {"solvers": []}
-    )
-    current_solvers = json.loads(current_solvers_str)
+    # Unassign from the other puzzles
+    for other_id, other in rows.items():
+        if other_id == puzzle_id:
+            continue
+        others = json.loads(other["current_solvers"] or '{"solvers": []}')
+        others["solvers"] = [s for s in others["solvers"] if s["solver_id"] != solver_id]
+        cursor.execute(
+            "UPDATE puzzle SET current_solvers = %s WHERE id = %s",
+            (json.dumps(others), other_id),
+        )
 
-    # Transition puzzle out of "New" or "Abandoned" when a solver is assigned.
-    # Use update_puzzle_field so the status-change activity logging invariant fires.
-    if row["status"] in ("New", "Abandoned"):
-        debug_log(3, f"Auto-transitioning puzzle {puzzle_id} from '{row['status']}' to 'Being worked'")
-        update_puzzle_field(puzzle_id, "status", "Being worked", conn, source)
-
+    current_solvers = json.loads(row["current_solvers"] or '{"solvers": []}')
     if not any(s["solver_id"] == solver_id for s in current_solvers["solvers"]):
         current_solvers["solvers"].append({"solver_id": solver_id})
         cursor.execute(
@@ -619,13 +636,7 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
         )
 
     # Update history
-    cursor.execute(
-        "SELECT solver_history FROM puzzle WHERE id = %s",
-        (puzzle_id,),
-    )
-    history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
-    history = json.loads(history_str)
-
+    history = json.loads(row["solver_history"] or '{"solvers": []}')
     if not any(s["solver_id"] == solver_id for s in history["solvers"]):
         history["solvers"].append({"solver_id": solver_id})
         debug_log(5, f"Storing solver_history for puzzle {puzzle_id}: {json.dumps(history)}")
@@ -635,6 +646,13 @@ def assign_solver_to_puzzle(puzzle_id, solver_id, conn, source="system"):
         )
 
     conn.commit()
+
+    # Transition puzzle out of "New" or "Abandoned" when a solver is assigned.
+    # Use update_puzzle_field so the status-change activity logging invariant
+    # fires. After the commit: it commits on its own.
+    if row["status"] in ("New", "Abandoned"):
+        debug_log(3, f"Auto-transitioning puzzle {puzzle_id} from '{row['status']}' to 'Being worked'")
+        update_puzzle_field(puzzle_id, "status", "Being worked", conn, source)
 
     # Invariant: all assignments are logged as "assignment" activity.
     log_activity(puzzle_id, "assignment", solver_id, source, conn)
@@ -656,12 +674,15 @@ def unassign_solver_from_puzzle(puzzle_id, solver_id, conn, source="system"):
     puzzle_id = int(puzzle_id)
     cursor = conn.cursor()
 
+    # Row lock until the commit below, so a concurrent assignment to this
+    # puzzle can't be overwritten by our read-modify-write.
     cursor.execute(
-        "SELECT current_solvers FROM puzzle WHERE id = %s",
+        "SELECT current_solvers FROM puzzle WHERE id = %s FOR UPDATE",
         (puzzle_id,),
     )
     row = cursor.fetchone()
     if row is None:
+        conn.rollback()
         raise ValueError(f"Puzzle {puzzle_id} does not exist")
 
     current_solvers_str = row["current_solvers"] or json.dumps(

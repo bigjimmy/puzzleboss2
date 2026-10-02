@@ -192,21 +192,19 @@ class TestUpdatePuzzleFieldIdType:
     def test_string_puzzle_id_solver_assignment(self, mock_log):
         """update_puzzle_field with field='solvers' delegates to assign_solver_to_puzzle."""
         conn, cursor = _make_conn()
-        # Mock the assign path: fetchall returns [] (no current puzzle), fetchone for solver_exists + current_solvers + history
-        cursor.fetchall.return_value = []
-        fetchone_count = {"n": 0}
+        # Mock the assign path: solver lock, solver search (no current
+        # puzzle), then the locked puzzle rows.
+        cursor.fetchone = lambda: {"id": 101}  # solver exists
+        empty = json.dumps({"solvers": []})
 
-        def mock_fetchone():
-            fetchone_count["n"] += 1
-            if fetchone_count["n"] == 1:
-                return {"id": 101}  # solver_exists check
-            elif fetchone_count["n"] == 2:
-                return {"current_solvers": json.dumps({"solvers": []}), "status": "Being worked"}
-            elif fetchone_count["n"] == 3:
-                return {"solver_history": json.dumps({"solvers": []})}
-            return None
+        def mock_fetchall():
+            sql = str(cursor.execute.call_args_list[-1][0][0])
+            if "FOR UPDATE" in sql:
+                return [{"id": 287, "status": "Being worked",
+                         "current_solvers": empty, "solver_history": empty}]
+            return []
 
-        cursor.fetchone = mock_fetchone
+        cursor.fetchall = mock_fetchall
 
         pblib.update_puzzle_field("287", "solvers", "101", conn)
 

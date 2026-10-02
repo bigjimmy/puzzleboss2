@@ -1449,7 +1449,8 @@ def delete_tag(tag):
         tag_id = tag_row["id"]
 
         # Find all puzzles that have this tag and remove it from them
-        cursor.execute("SELECT id, tags FROM puzzle WHERE tags IS NOT NULL")
+        # Locked so a concurrent tag edit can't re-add or drop a tag mid-sweep
+        cursor.execute("SELECT id, tags FROM puzzle WHERE tags IS NOT NULL FOR UPDATE")
         puzzles = cursor.fetchall()
 
         puzzles_updated = 0
@@ -2270,13 +2271,8 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
         # Tags manipulation: {"tags": {"add": "tagname"}} or {"tags": {"remove": "tagname"}} or {"tags": {"add_id": 123}} or {"tags": {"remove_id": 123}}
         conn, cursor = _cursor()
 
-        # Get current tags
-        cursor.execute("SELECT tags FROM puzzle WHERE id = %s", (id,))
-        row = cursor.fetchone()
-        current_tags = json.loads(row["tags"]) if row["tags"] else []
-
-        tag_changed = False  # Track if we actually made a change
-
+        # Resolve the tag first: auto-creating one commits, which would
+        # release the row lock taken below.
         if "add" in value:
             # Add by tag name (auto-create if doesn't exist)
             tag_name = value["add"].lower()  # Force lowercase
@@ -2297,43 +2293,21 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
                 debug_log(3, f"Auto-created tag {tag_name} (id: {tag_id})")
             else:
                 tag_id = tag_row["id"]
+            adding, label = True, f"tag {tag_name}"
 
-            if tag_id not in current_tags:
-                current_tags.append(tag_id)
-                cursor.execute(
-                    "UPDATE puzzle SET tags = %s WHERE id = %s",
-                    (json.dumps(current_tags), id),
-                )
-                conn.commit()
-                debug_log(3, f"Added tag {tag_name} to puzzle {id}")
-                tag_changed = True
-                increment_botstat("tags_assigned_total", mysql.connection)
-            else:
-                debug_log(4, f"Tag {tag_name} already on puzzle {id}")
-
-        elif "add_id" in value:
-            # Add by tag ID - validate it's an integer first
+        elif "add_id" in value or "remove_id" in value:
+            # By tag ID - validate it's an integer first
+            adding = "add_id" in value
+            opname = "add_id" if adding else "remove_id"
             try:
-                tag_id = int(value["add_id"])
+                tag_id = int(value[opname])
             except (ValueError, TypeError):
-                raise Exception("add_id must be an integer")
+                raise Exception(f"{opname} must be an integer")
 
             cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
-            tag_row = cursor.fetchone()
-            if not tag_row:
+            if not cursor.fetchone():
                 raise Exception(f"Tag id {tag_id} not found")
-            if tag_id not in current_tags:
-                current_tags.append(tag_id)
-                cursor.execute(
-                    "UPDATE puzzle SET tags = %s WHERE id = %s",
-                    (json.dumps(current_tags), id),
-                )
-                conn.commit()
-                debug_log(3, f"Added tag id {tag_id} to puzzle {id}")
-                tag_changed = True
-                increment_botstat("tags_assigned_total", mysql.connection)
-            else:
-                debug_log(4, f"Tag id {tag_id} already on puzzle {id}")
+            label = f"tag id {tag_id}"
 
         elif "remove" in value:
             # Remove by tag name
@@ -2343,45 +2317,39 @@ def _update_single_puzzle_part(id, part, value, mypuzzle, source="puzzleboss"):
             if not tag_row:
                 raise Exception(f"Tag '{tag_name}' not found")
             tag_id = tag_row["id"]
-            if tag_id in current_tags:
-                current_tags.remove(tag_id)
-                cursor.execute(
-                    "UPDATE puzzle SET tags = %s WHERE id = %s",
-                    (json.dumps(current_tags), id),
-                )
-                conn.commit()
-                debug_log(3, f"Removed tag {tag_name} from puzzle {id}")
-                tag_changed = True
-            else:
-                debug_log(4, f"Tag {tag_name} not on puzzle {id}")
-
-        elif "remove_id" in value:
-            # Remove by tag ID - validate it's an integer first
-            try:
-                tag_id = int(value["remove_id"])
-            except (ValueError, TypeError):
-                raise Exception("remove_id must be an integer")
-
-            cursor.execute("SELECT name FROM tag WHERE id = %s", (tag_id,))
-            tag_row = cursor.fetchone()
-            if not tag_row:
-                raise Exception(f"Tag id {tag_id} not found")
-            if tag_id in current_tags:
-                current_tags.remove(tag_id)
-                cursor.execute(
-                    "UPDATE puzzle SET tags = %s WHERE id = %s",
-                    (json.dumps(current_tags), id),
-                )
-                conn.commit()
-                debug_log(3, f"Removed tag id {tag_id} from puzzle {id}")
-                tag_changed = True
-            else:
-                debug_log(4, f"Tag id {tag_id} not on puzzle {id}")
+            adding, label = False, f"tag {tag_name}"
 
         else:
             raise Exception(
                 "Invalid tags operation. Use {add: 'name'}, {add_id: id}, {remove: 'name'}, or {remove_id: id}"
             )
+
+        # Read-modify-write under a row lock, so concurrent tag edits on the
+        # same puzzle serialize instead of one silently overwriting the other.
+        cursor.execute("SELECT tags FROM puzzle WHERE id = %s FOR UPDATE", (id,))
+        row = cursor.fetchone()
+        current_tags = json.loads(row["tags"]) if row["tags"] else []
+
+        tag_changed = (tag_id not in current_tags) if adding else (tag_id in current_tags)
+        if tag_changed:
+            if adding:
+                current_tags.append(tag_id)
+            else:
+                current_tags.remove(tag_id)
+            cursor.execute(
+                "UPDATE puzzle SET tags = %s WHERE id = %s",
+                (json.dumps(current_tags), id),
+            )
+        conn.commit()  # also releases the lock when nothing changed
+
+        if tag_changed:
+            if adding:
+                debug_log(3, f"Added {label} to puzzle {id}")
+                increment_botstat("tags_assigned_total", mysql.connection)
+            else:
+                debug_log(3, f"Removed {label} from puzzle {id}")
+        else:
+            debug_log(4, f"{label} already {'on' if adding else 'not on'} puzzle {id}")
 
         # Log tag change to activity table using system solver_id (100)
         # Use 'comment' type so it doesn't affect lastsheetact (which tracks 'revise' only)
@@ -2442,6 +2410,8 @@ def update_puzzle_multi(id):
     # Check if this is a legit puzzle
     mypuzzle = get_one_puzzle(id)
     debug_log(5, f"return value from get_one_puzzle {id} is {mypuzzle}")
+    if isinstance(mypuzzle, tuple):
+        return mypuzzle  # (error body, 404): no such puzzle
     if "status" not in mypuzzle or mypuzzle["status"] != "ok":
         raise Exception(f"Error looking up puzzle {id}")
 
@@ -2486,6 +2456,8 @@ def update_puzzle_part(id, part):
     # Check if this is a legit puzzle
     mypuzzle = get_one_puzzle(id)
     debug_log(5, f"return value from get_one_puzzle {id} is {mypuzzle}")
+    if isinstance(mypuzzle, tuple):
+        return mypuzzle  # (error body, 404): no such puzzle
     if "status" not in mypuzzle or mypuzzle["status"] != "ok":
         raise Exception(f"Error looking up puzzle {id}")
 
@@ -3094,7 +3066,11 @@ def _get_validated_history(puzzle_id):
         raise Exception(f"Error looking up solver {solver_id}")
 
     conn, cursor = _cursor()
-    cursor.execute("SELECT solver_history FROM puzzle WHERE id = %s", (puzzle_id,))
+    # Row lock held until the caller commits, so concurrent history edits
+    # (and assignments, which also append to solver_history) serialize.
+    cursor.execute(
+        "SELECT solver_history FROM puzzle WHERE id = %s FOR UPDATE", (puzzle_id,)
+    )
     history_str = cursor.fetchone()["solver_history"] or json.dumps({"solvers": []})
     return solver_id, json.loads(history_str), conn, cursor
 
@@ -3119,6 +3095,7 @@ def add_solver_to_history(id):
         conn.commit()
         debug_log(3, f"Added solver {solver_id} to history for puzzle {id}")
     else:
+        conn.commit()  # release the row lock
         debug_log(3, f"Solver {solver_id} already in history for puzzle {id}")
 
     return {"status": "ok"}
