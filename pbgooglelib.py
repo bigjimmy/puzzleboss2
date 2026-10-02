@@ -271,7 +271,10 @@ def initdrive():
 def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
     """
     Get editor activity from the hidden '_pb_activity' sheet.
-    Returns dict with 'editors' (list of {solvername, timestamp}) and 'sheetcount' (int or None).
+    Returns dict with 'editors' (list of {solvername, timestamp}), 'sheetcount'
+    (int or None), 'error' (bool) and 'error_transient' (bool): True when the
+    failure says nothing about this sheet (5xx, network/timeout, exhausted
+    429 retries), so callers must not treat it as a corrupt tab.
 
     This is the Apps Script API approach: a simple onEdit trigger writes editor
     email, unix timestamp, and sheet count to a pre-created hidden sheet named
@@ -293,7 +296,7 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
     max_retries = int(configstruct.get("BIGJIMMY_QUOTAFAIL_MAX_RETRIES", _DEFAULT_MAX_RETRIES))
     retry_delay = int(configstruct.get("BIGJIMMY_QUOTAFAIL_DELAY", _DEFAULT_RETRY_DELAY_SECONDS))
 
-    result = {"editors": [], "sheetcount": None, "error": False}
+    result = {"editors": [], "sheetcount": None, "error": False, "error_transient": False}
 
     if configstruct["SKIP_GOOGLE_API"] == "true":
         debug_log(3, "google API skipped by config.")
@@ -379,6 +382,7 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
             else:
                 debug_log(1, f"[{puzz_label}] Error reading _pb_activity: {e}")
                 result["error"] = True
+                result["error_transient"] = e.resp.status >= 500 or e.resp.status == 408
                 break
         except Exception as e:
             if "429" in str(e) or "RATE_LIMIT_EXCEEDED" in str(e):
@@ -389,8 +393,10 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
                 )
                 time.sleep(retry_delay * random.uniform(0.5, 1.5))
             else:
+                # Not an HTTP response at all: network, DNS, TLS or timeout
                 debug_log(1, f"[{puzz_label}] Error reading _pb_activity: {e}")
                 result["error"] = True
+                result["error_transient"] = True
                 break  # Non-rate-limit error, don't retry
     else:
         if max_retries > 0:
@@ -399,6 +405,7 @@ def get_puzzle_sheet_info_activity(myfileid, puzzlename=None):
                 f"[{puzz_label}] EXHAUSTED all {max_retries} retries reading _pb_activity - giving up",
             )
             result["error"] = True
+            result["error_transient"] = True  # quota, not the sheet
 
     return result
 

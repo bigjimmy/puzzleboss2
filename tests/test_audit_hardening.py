@@ -201,3 +201,56 @@ class TestTagUpdateLocking:
         read = next(i for i, e in enumerate(events) if e.startswith("SELECT tags FROM puzzle"))
         assert not any(e.startswith("UPDATE puzzle SET tags") for e in events)
         assert "COMMIT" in events[read:]
+
+
+class _HttpError(Exception):
+    """Stands in for googleapiclient.errors.HttpError (stubbed in unit tests)."""
+
+    def __init__(self, status, text="error"):
+        super().__init__(text)
+        self.resp = MagicMock(status=status)
+
+
+class TestActivityReadErrorClassification:
+    """_pb_activity read failures say whether the sheet itself is at fault,
+    so bigjimmybot doesn't rebuild tabs during a Google outage."""
+
+    def _read(self, pbrest, exc):
+        import pbgooglelib
+
+        values = MagicMock()
+        values.get.return_value.execute.side_effect = exc
+        sheets = MagicMock()
+        sheets.spreadsheets.return_value.values.return_value = values
+        with patch.object(pbgooglelib, "sheetsservice", sheets), \
+             patch.object(pbgooglelib.googleapiclient.errors, "HttpError", _HttpError), \
+             patch.object(pbgooglelib, "_get_thread_http", lambda: None), \
+             patch.object(pbgooglelib, "_rate_limiter", MagicMock()), \
+             patch.object(pbgooglelib, "debug_log", lambda *a: None), \
+             patch.object(pbgooglelib.time, "sleep", lambda s: None), \
+             patch.dict(pbgooglelib.configstruct, {
+                 "SKIP_GOOGLE_API": "false",
+                 "BIGJIMMY_QUOTAFAIL_MAX_RETRIES": "2",
+                 "BIGJIMMY_QUOTAFAIL_DELAY": "0",
+             }):
+            return pbgooglelib.get_puzzle_sheet_info_activity("fileid", "P")
+
+    @pytest.mark.parametrize("exc", [
+        _HttpError(500), _HttpError(503), _HttpError(408),
+        ConnectionResetError("reset"), TimeoutError("timed out"),
+        _HttpError(429, "RATE_LIMIT_EXCEEDED"),  # retries exhausted
+    ])
+    def test_transient(self, pbrest, exc):
+        result = self._read(pbrest, exc)
+        assert result["error"] is True
+        assert result["error_transient"] is True
+
+    @pytest.mark.parametrize("exc", [_HttpError(400, "bad request"), _HttpError(403), _HttpError(404)])
+    def test_sheet_specific(self, pbrest, exc):
+        result = self._read(pbrest, exc)
+        assert result["error"] is True
+        assert result["error_transient"] is False
+
+    def test_missing_tab_is_not_an_error(self, pbrest):
+        result = self._read(pbrest, _HttpError(400, "Unable to parse range: _pb_activity!A:C"))
+        assert result["error"] is False

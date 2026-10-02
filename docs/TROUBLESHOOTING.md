@@ -119,6 +119,8 @@ The bot is running but not detecting activity, or detecting it but not assigning
 
 5. **Are the sheets actually getting activity?** Open the sheet in your browser as a hunt admin and check the hidden `_pb_activity` sheet. If empty, the Apps Script add-on isn't running — see next symptom.
 
+6. **Is one sheet in failure cooldown?** When reading a sheet's `_pb_activity` tab fails 3 times in a row, the bot deletes and recreates the tab. After 6 failures it stops reading that sheet for 30 minutes, then tries again. Grep the bot log for `Attempting _pb_activity repair` and `in failure cooldown`. A Google outage or network blip (5xx, timeouts, exhausted quota retries) doesn't count toward either while no sheet is reading successfully. It logs `not counting toward repair` instead, so an outage can't wipe every sheet's tab.
+
 ### Apps Script add-on not appearing on new puzzle sheets
 
 The "Puzzle Tools" menu should appear when an admin opens a fresh puzzle sheet.

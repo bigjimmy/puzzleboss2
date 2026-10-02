@@ -63,9 +63,11 @@ from bigjimmybot import (
     _get_db_connection,
     _fetch_sheet_info,
     _sheet_failure_counts,
+    _sheet_skip_until,
     _REPAIR_AFTER_FAILURES,
     _SKIP_AFTER_FAILURES,
 )
+import bigjimmybot
 
 # Restore original sys.modules entries so the mocks don't leak.
 for _name, _orig in _saved_modules.items():
@@ -435,8 +437,11 @@ class TestFetchSheetInfoErrorHandling:
     """Test _fetch_sheet_info error tracking, repair, and skip logic."""
 
     def setup_method(self):
-        """Clear failure counts before each test."""
+        """Clear failure state before each test; Google counts as healthy
+        (a read just succeeded) unless a test says otherwise."""
         _sheet_failure_counts.clear()
+        _sheet_skip_until.clear()
+        bigjimmybot._last_activity_read_ok = bigjimmybot.time.monotonic()
 
     @patch('bigjimmybot.repair_activity_sheet', return_value=False)
     @patch('bigjimmybot.get_puzzle_sheet_info_activity')
@@ -480,10 +485,10 @@ class TestFetchSheetInfoErrorHandling:
         assert _sheet_failure_counts.get("test_drive_id", 0) == 0
 
     @patch('bigjimmybot.get_puzzle_sheet_info_activity')
-    def test_skip_after_max_failures(self, mock_get_activity):
-        """Test that puzzles are skipped entirely after exceeding failure threshold."""
-        # Pre-set failure count to the skip threshold
+    def test_skip_during_cooldown(self, mock_get_activity):
+        """A sheet in its failure cooldown is not read at all."""
         _sheet_failure_counts["test_drive_id"] = _SKIP_AFTER_FAILURES
+        _sheet_skip_until["test_drive_id"] = bigjimmybot.time.monotonic() + 600
 
         puzzle = {
             "id": 123, "name": "TestPuzzle",
@@ -523,6 +528,77 @@ class TestFetchSheetInfoErrorHandling:
         # Verify normal result returned
         assert result["error"] is False
         assert len(result["editors"]) == 1
+
+
+class TestFetchSheetInfoTransientErrors:
+    """A Google outage must not rebuild every sheet's _pb_activity tab or
+    shut tracking off for good (audit finding H4)."""
+
+    PUZZLE = {"id": 123, "name": "TestPuzzle", "drive_id": "d1", "sheetenabled": 1}
+    TRANSIENT = {"editors": [], "sheetcount": None, "error": True, "error_transient": True}
+    SHEET_ERROR = {"editors": [], "sheetcount": None, "error": True, "error_transient": False}
+    OK = {"editors": [], "sheetcount": 2, "error": False, "error_transient": False}
+
+    def setup_method(self):
+        _sheet_failure_counts.clear()
+        _sheet_skip_until.clear()
+
+    @patch('bigjimmybot.repair_activity_sheet')
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_outage_never_triggers_repair(self, mock_get, mock_repair):
+        bigjimmybot._last_activity_read_ok = 0.0  # nothing has read lately
+        mock_get.return_value = self.TRANSIENT
+        for _ in range(_SKIP_AFTER_FAILURES * 2):
+            _fetch_sheet_info(self.PUZZLE, "t")
+        mock_repair.assert_not_called()
+        assert _sheet_failure_counts.get("d1", 0) == 0
+        assert "d1" not in _sheet_skip_until
+
+    @patch('bigjimmybot.repair_activity_sheet', return_value=False)
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_transient_error_counts_while_google_is_healthy(self, mock_get, mock_repair):
+        """Other sheets reading fine means this sheet is the problem."""
+        bigjimmybot._last_activity_read_ok = bigjimmybot.time.monotonic()
+        mock_get.return_value = self.TRANSIENT
+        for _ in range(_REPAIR_AFTER_FAILURES):
+            _fetch_sheet_info(self.PUZZLE, "t")
+        mock_repair.assert_called_once()
+
+    @patch('bigjimmybot.repair_activity_sheet', return_value=False)
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_sheet_error_counts_even_without_recent_success(self, mock_get, mock_repair):
+        bigjimmybot._last_activity_read_ok = 0.0
+        mock_get.return_value = self.SHEET_ERROR
+        for _ in range(_REPAIR_AFTER_FAILURES):
+            _fetch_sheet_info(self.PUZZLE, "t")
+        mock_repair.assert_called_once()
+
+    @patch('bigjimmybot.repair_activity_sheet', return_value=False)
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_cooldown_expires_and_success_clears_it(self, mock_get, mock_repair):
+        mock_get.return_value = self.SHEET_ERROR
+        for _ in range(_SKIP_AFTER_FAILURES):
+            _fetch_sheet_info(self.PUZZLE, "t")
+        assert _sheet_skip_until["d1"] > bigjimmybot.time.monotonic()
+
+        mock_get.reset_mock()
+        _fetch_sheet_info(self.PUZZLE, "t")
+        mock_get.assert_not_called()  # cooling down
+
+        _sheet_skip_until["d1"] = bigjimmybot.time.monotonic() - 1  # cooldown over
+        mock_get.return_value = self.OK
+        result, _ = _fetch_sheet_info(self.PUZZLE, "t")
+        mock_get.assert_called_once()
+        assert result["error"] is False
+        assert "d1" not in _sheet_failure_counts
+        assert "d1" not in _sheet_skip_until
+
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_success_marks_google_healthy(self, mock_get):
+        bigjimmybot._last_activity_read_ok = 0.0
+        mock_get.return_value = self.OK
+        _fetch_sheet_info(self.PUZZLE, "t")
+        assert bigjimmybot._last_activity_read_ok > 0
 
 
 class TestFetchSheetInfoProbe:

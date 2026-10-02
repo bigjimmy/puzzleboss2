@@ -44,10 +44,17 @@ THREAD_COUNTER = 0
 THREADS = []
 LOOP_ITERATIONS_TOTAL = 0
 
-# Track consecutive _pb_activity failures per drive_id for skip/repair logic
+# Track consecutive _pb_activity failures per drive_id for skip/repair logic.
+# Only failures that point at the sheet itself count: a transient error
+# (5xx, network, quota) is counted only while other sheets are reading fine,
+# so a Google outage can't trigger a tab rebuild across the whole hunt.
 _sheet_failure_counts: Dict[str, int] = {}
+_sheet_skip_until: Dict[str, float] = {}  # drive_id -> time.monotonic() deadline
 _REPAIR_AFTER_FAILURES = 3      # Attempt repair after this many consecutive failures
-_SKIP_AFTER_FAILURES = 6        # Stop trying entirely after this many (repair failed)
+_SKIP_AFTER_FAILURES = 6        # Then back off: skip the sheet for a cooldown
+_SKIP_COOLDOWN_SECONDS = 1800   # before trying it again
+_GOOGLE_HEALTHY_WINDOW_SECONDS = 300  # "other sheets are reading fine" = a success this recent
+_last_activity_read_ok = 0.0    # time.monotonic() of the last successful _pb_activity read
 
 
 # ── Database Connection ───────────────────────────────────────────────
@@ -345,18 +352,19 @@ def _fetch_sheet_info(
     Returns:
         Tuple of (sheet_info dict, sheetenabled flag)
     """
+    global _last_activity_read_ok
     sheetenabled = puzzle.get("sheetenabled", 0)
 
     if sheetenabled == 1:
         drive_id = puzzle["drive_id"]
 
-        # Fast-skip for puzzles that have exceeded the failure threshold
-        fail_count = _sheet_failure_counts.get(drive_id, 0)
-        if fail_count >= _SKIP_AFTER_FAILURES:
+        # Fast-skip for puzzles in their failure cooldown. It expires, so a
+        # sheet that recovers is picked up again without a bot restart.
+        if time.monotonic() < _sheet_skip_until.get(drive_id, 0):
             debug_log(
-                2,
+                4,
                 f"[Thread: {threadname}] Skipping {puzzle['name']} — "
-                f"in failure cooldown ({fail_count} failures)",
+                f"in failure cooldown ({_sheet_failure_counts.get(drive_id, 0)} failures)",
             )
             return {"editors": [], "sheetcount": None, "error": True}, 1
 
@@ -368,6 +376,19 @@ def _fetch_sheet_info(
         sheet_info = get_puzzle_sheet_info_activity(puzzle["drive_id"], puzzle["name"])
 
         if sheet_info.get("error"):
+            google_healthy = (
+                time.monotonic() - _last_activity_read_ok < _GOOGLE_HEALTHY_WINDOW_SECONDS
+            )
+            if sheet_info.get("error_transient") and not google_healthy:
+                # Nothing has read successfully lately: Google (or our
+                # network) is down, not this sheet. Don't count it.
+                debug_log(
+                    3,
+                    f"[Thread: {threadname}] Transient _pb_activity error for {puzzle['name']} "
+                    f"with no recent successful reads; not counting toward repair",
+                )
+                return sheet_info, 1
+
             _sheet_failure_counts[drive_id] = _sheet_failure_counts.get(drive_id, 0) + 1
             fail_count = _sheet_failure_counts[drive_id]
 
@@ -404,9 +425,11 @@ def _fetch_sheet_info(
                     )
 
             if fail_count >= _SKIP_AFTER_FAILURES:
+                _sheet_skip_until[drive_id] = time.monotonic() + _SKIP_COOLDOWN_SECONDS
                 debug_log(
                     1,
-                    f"[Thread: {threadname}] Skipping {puzzle['name']} — "
+                    f"[Thread: {threadname}] Skipping {puzzle['name']} for "
+                    f"{_SKIP_COOLDOWN_SECONDS // 60} min — "
                     f"{fail_count} consecutive _pb_activity failures (repair did not help)",
                 )
 
@@ -414,8 +437,9 @@ def _fetch_sheet_info(
             return sheet_info, 1
         else:
             # Success — reset failure counter
-            if drive_id in _sheet_failure_counts:
-                del _sheet_failure_counts[drive_id]
+            _last_activity_read_ok = time.monotonic()
+            _sheet_failure_counts.pop(drive_id, None)
+            _sheet_skip_until.pop(drive_id, None)
             return sheet_info, 1
 
     # sheetenabled=0: Add-on may already be deployed (pbrest sets it during creation)
