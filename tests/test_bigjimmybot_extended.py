@@ -546,13 +546,26 @@ class TestFetchSheetInfoTransientErrors:
     @patch('bigjimmybot.repair_activity_sheet')
     @patch('bigjimmybot.get_puzzle_sheet_info_activity')
     def test_outage_never_triggers_repair(self, mock_get, mock_repair):
-        bigjimmybot._last_activity_read_ok = 0.0  # nothing has read lately
+        bigjimmybot._last_activity_read_ok = None  # nothing has read lately
         mock_get.return_value = self.TRANSIENT
         for _ in range(_SKIP_AFTER_FAILURES * 2):
             _fetch_sheet_info(self.PUZZLE, "t")
         mock_repair.assert_not_called()
         assert _sheet_failure_counts.get("d1", 0) == 0
         assert "d1" not in _sheet_skip_until
+
+    @patch('bigjimmybot.repair_activity_sheet')
+    @patch('bigjimmybot.get_puzzle_sheet_info_activity')
+    def test_outage_right_after_boot_is_not_counted(self, mock_get, mock_repair):
+        """monotonic() counts from boot: a task that starts into an outage
+        must not mistake "never read" for "read just now"."""
+        bigjimmybot._last_activity_read_ok = None
+        mock_get.return_value = self.TRANSIENT
+        with patch.object(bigjimmybot.time, "monotonic", return_value=10.0):
+            for _ in range(_SKIP_AFTER_FAILURES * 2):
+                _fetch_sheet_info(self.PUZZLE, "t")
+        mock_repair.assert_not_called()
+        assert _sheet_failure_counts.get("d1", 0) == 0
 
     @patch('bigjimmybot.repair_activity_sheet', return_value=False)
     @patch('bigjimmybot.get_puzzle_sheet_info_activity')
@@ -567,7 +580,7 @@ class TestFetchSheetInfoTransientErrors:
     @patch('bigjimmybot.repair_activity_sheet', return_value=False)
     @patch('bigjimmybot.get_puzzle_sheet_info_activity')
     def test_sheet_error_counts_even_without_recent_success(self, mock_get, mock_repair):
-        bigjimmybot._last_activity_read_ok = 0.0
+        bigjimmybot._last_activity_read_ok = None
         mock_get.return_value = self.SHEET_ERROR
         for _ in range(_REPAIR_AFTER_FAILURES):
             _fetch_sheet_info(self.PUZZLE, "t")
@@ -595,10 +608,10 @@ class TestFetchSheetInfoTransientErrors:
 
     @patch('bigjimmybot.get_puzzle_sheet_info_activity')
     def test_success_marks_google_healthy(self, mock_get):
-        bigjimmybot._last_activity_read_ok = 0.0
+        bigjimmybot._last_activity_read_ok = None
         mock_get.return_value = self.OK
         _fetch_sheet_info(self.PUZZLE, "t")
-        assert bigjimmybot._last_activity_read_ok > 0
+        assert bigjimmybot._last_activity_read_ok is not None
 
 
 class TestFetchSheetInfoProbe:

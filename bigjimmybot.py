@@ -54,7 +54,10 @@ _REPAIR_AFTER_FAILURES = 3      # Attempt repair after this many consecutive fai
 _SKIP_AFTER_FAILURES = 6        # Then back off: skip the sheet for a cooldown
 _SKIP_COOLDOWN_SECONDS = 1800   # before trying it again
 _GOOGLE_HEALTHY_WINDOW_SECONDS = 300  # "other sheets are reading fine" = a success this recent
-_last_activity_read_ok = 0.0    # time.monotonic() of the last successful _pb_activity read
+# time.monotonic() of the last successful _pb_activity read, None until one
+# succeeds. Not 0.0: monotonic() counts from boot, so 0.0 looks recent for the
+# first few minutes after a task starts.
+_last_activity_read_ok: Optional[float] = None
 
 
 # ── Database Connection ───────────────────────────────────────────────
@@ -377,7 +380,8 @@ def _fetch_sheet_info(
 
         if sheet_info.get("error"):
             google_healthy = (
-                time.monotonic() - _last_activity_read_ok < _GOOGLE_HEALTHY_WINDOW_SECONDS
+                _last_activity_read_ok is not None
+                and time.monotonic() - _last_activity_read_ok < _GOOGLE_HEALTHY_WINDOW_SECONDS
             )
             if sheet_info.get("error_transient") and not google_healthy:
                 # Nothing has read successfully lately: Google (or our
