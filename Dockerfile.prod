@@ -45,8 +45,13 @@ RUN pip install --no-cache-dir --prefix=/install \
 # ---------------------------------------------------------------------------
 FROM python:3.11-slim
 
+# The build reuses a registry layer cache, so the apt layer below never picks
+# up security updates on its own. Bump this date to force a fresh apt-get
+# (last: Debian DSA-6574-1, php8.4 8.4.27).
+ARG APT_REFRESH=2026-10-21
+
 # Install runtime system packages (no compilers)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN echo "apt refresh ${APT_REFRESH}" && apt-get update && apt-get install -y --no-install-recommends \
         apache2 \
         php \
         php-yaml \
