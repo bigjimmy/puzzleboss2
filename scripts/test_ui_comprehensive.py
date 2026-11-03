@@ -28,6 +28,7 @@ from test_helpers import (
     BASE_URL,
     API_URL,
     get_full_config,
+    get_signup_code,
     get_internal_token,
     REFRESH_TIMEOUT,
     DIALOG_TIMEOUT,
@@ -2232,10 +2233,11 @@ def test_account_create_delete():
                 f"Unexpected post-confirm page: {body_text[:200]}"
             print("    ✓ Email sent successfully")
 
-        # Read the hidden verification code embedded in the page (present in both cases)
-        code_el = page.locator("#verification-code")
-        assert code_el.count() > 0, "Verification code element not found in page"
-        verification_code = code_el.get_attribute("data-code")
+        # The page must not reveal the code (it would let anyone verify an
+        # email they don't control); stand in for the mailbox via the DB.
+        assert page.locator("#verification-code").count() == 0, \
+            "Verification code must not be embedded in the page"
+        verification_code = get_signup_code(test_username)
         assert verification_code and len(verification_code) == 8, \
             f"Invalid verification code: {verification_code}"
         print(f"    ✓ Captured verification code: {verification_code}")

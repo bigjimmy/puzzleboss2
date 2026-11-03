@@ -43,6 +43,6 @@ header("Location: $drive_uri");
 <title>Redirect to puzzle doc</title>
 </head>
 <body>
-Click <a href="<?php $drive_uri ?>">here</a> to doc sheet for puzzle <?= $name ?>
+Click <a href="<?= safe_href($drive_uri) ?>">here</a> to doc sheet for puzzle <?= htmlspecialchars($name) ?>
 </body>
 </html>

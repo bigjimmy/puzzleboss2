@@ -178,7 +178,7 @@ HTML;
 
 function exit_with_api_error($obj) {
   exit_with_error_message(
-    'Response from API is:<pre>'.var_export($obj, true).'</pre>'.
+    'Response from API is:<pre>'.htmlspecialchars(var_export($obj, true)).'</pre>'.
     'Contact @Puzztech on Discord for help.'
   );
 }
@@ -266,6 +266,16 @@ function getauthenticatedsolver() {
   
   $cached_solver = $result->solver;
   return $cached_solver;
+}
+
+// A stored URI, escaped for an href attribute, or '#' unless it is http(s).
+// htmlspecialchars alone still lets a javascript: URI through, and
+// drive_uri / chat_channel_link / round_uri are writable by any solver.
+function safe_href($uri) {
+  if (!is_string($uri) || !preg_match('#^https?://#i', $uri)) {
+    return '#';
+  }
+  return htmlspecialchars($uri);
 }
 
 // Mirrors pblib.py implementation

@@ -239,14 +239,16 @@ if (isset($_POST['submit'])) {
       $id = 'step' . ($i + 1);
       echo '<div class="step" id="' . $id . '">';
       echo '<span class="status">⏳</span>';
-      echo '<span class="label">' . $s['label'] . '</span>';
+      echo '<span class="label">' . htmlspecialchars($s['label']) . '</span>';
       echo '</div>';
     }
     echo '</div>';
 
     // Helper to update a step's status via inline script
     function promote_step($step_num, $status, $label = null) {
-      $label_js = $label ? ", '" . addslashes($label) . "'" : '';
+      // json_encode, not addslashes: labels carry API error text, and only
+      // JSON_HEX_TAG stops a "</script>" in it from closing this tag.
+      $label_js = $label ? ', ' . json_encode($label, JSON_HEX_TAG | JSON_HEX_AMP) : '';
       echo "<script>setStepStatus('step{$step_num}', '{$status}'{$label_js});</script>";
       flush();
     }
@@ -403,10 +405,11 @@ if (isset($_POST['submit'])) {
     }
 
     // Okay, creating a new round
+    $create_new_round_html = htmlspecialchars($create_new_round);
     print <<<HTML
 Attempting to add round.<br>
 <table class="registration">
-<tr><td>name:</td><td>$create_new_round</td></tr>
+<tr><td>name:</td><td>$create_new_round_html</td></tr>
 </table>
 HTML;
 
@@ -425,8 +428,8 @@ HTML;
         break;
       }
     }
-    echo '<div class="success">Round <tt>'.$round_name.'</tt> created!';
-    echo '<pre>'.var_export($resp, true).'</pre></div>';
+    echo '<div class="success">Round <tt>'.htmlspecialchars($round_name).'</tt> created!';
+    echo '<pre>'.htmlspecialchars(var_export($resp, true)).'</pre></div>';
     echo '<a href="javascript:window.history.back();">Go back</a>';
     echo '<br><hr>';
 
@@ -445,12 +448,15 @@ HTML;
     );
   }
 
+  $name_html = htmlspecialchars($name);
+  $round_id_html = htmlspecialchars($round_id);
+  $puzzle_uri_html = htmlspecialchars($puzzle_uri);
   print <<<HTML
   Attempting to add puzzle.<br>
   <table class="registration">
-    <tr><td>name:</td><td>$name</td></tr>
-    <tr><td>round_id:</td><td>$round_id</td></tr>
-    <tr><td>puzzle_uri:</td><td><a href="$puzzle_uri">$puzzle_uri</a></td></tr>
+    <tr><td>name:</td><td>$name_html</td></tr>
+    <tr><td>round_id:</td><td>$round_id_html</td></tr>
+    <tr><td>puzzle_uri:</td><td>$puzzle_uri_html</td></tr>
   </table>
 HTML;
 
@@ -476,8 +482,8 @@ HTML;
     $code = $responseobj->code;
 
     // Escape variables for safe embedding in JavaScript string literals
-    $code_js = addslashes($code);
-    $name_js = addslashes($name);
+    $code_js = json_encode((string)$code, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    $name_js = json_encode((string)$name, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
     echo <<<HTML
 <div id="progress-container">
@@ -524,7 +530,7 @@ HTML;
 </div>
 <script>
   // Start the step-by-step process
-  runAllSteps('$code_js', '$name_js');
+  runAllSteps($code_js, $name_js);
 </script>
 HTML;
   } catch (Exception $e) {
@@ -673,7 +679,7 @@ try {
           id="name"
           name="name"
           required
-          value="<?= $puzzname ?>"
+          value="<?= htmlspecialchars($puzzname) ?>"
           size="40"
         />
         <span id="name-optional-hint" style="display: none; font-size: 85%; font-style: italic; color: #666;">
@@ -699,10 +705,11 @@ $offer_create_new_round = !$selected_any && $round_name && $round_name !== 'unde
 <?php
 foreach ($rounds as $round) {
   $selected = ($round->name === $round_name || $round->id === $round_id) ? 'selected' : '';
-  echo "<option value=\"{$round->id}\" $selected>{$round->name}</option>\n";
+  echo '<option value="'.(int)$round->id.'" '.$selected.'>'.htmlspecialchars($round->name)."</option>\n";
 }
 if ($offer_create_new_round) {
-  echo "<option value=\"$round_name\" selected>[NEW ROUND] $round_name</option>";
+  $round_name_html = htmlspecialchars($round_name);
+  echo "<option value=\"$round_name_html\" selected>[NEW ROUND] $round_name_html</option>";
 }
 ?>
         </select>
@@ -710,7 +717,7 @@ if ($offer_create_new_round) {
 if ($offer_create_new_round) {
   echo '&nbsp;';
   echo '<label for="create_new_round">Click to confirm you want to create a new round:</label>';
-  echo '<input type="checkbox" id="create_new_round" name="create_new_round" value="'.$round_name.'" />';
+  echo '<input type="checkbox" id="create_new_round" name="create_new_round" value="'.htmlspecialchars($round_name).'" />';
 }
 ?>
       </td>
@@ -723,7 +730,7 @@ if ($offer_create_new_round) {
           id="puzzle_uri"
           name="puzzle_uri"
           required
-          value="<?= $puzzurl ?>"
+          value="<?= htmlspecialchars($puzzurl) ?>"
           size="80"
         />
       </td>

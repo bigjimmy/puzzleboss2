@@ -68,6 +68,30 @@ def get_full_config():
     return resp.json().get("config", {})
 
 
+def get_signup_code(username):
+    """The pending signup verification code for `username`, read from the DB.
+
+    The signup page deliberately never shows the code (it proves control of
+    the email address) and no API returns it, so a test standing in for the
+    user's mailbox reads the newuser row directly. Runs inside the app
+    container, where pblib and puzzleboss.yaml are available.
+    """
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import pblib
+
+    conn = pblib.create_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT code FROM newuser WHERE username=%s ORDER BY id DESC LIMIT 1",
+            (username,),
+        )
+        row = cursor.fetchone()
+    finally:
+        conn.close()
+    return row["code"] if row else None
+
+
 # ============================================================================
 # Test infrastructure
 # ============================================================================

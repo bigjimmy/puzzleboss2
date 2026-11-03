@@ -168,7 +168,7 @@ function print_rounds_table($rounds, $mypuzzle) {
     if (!empty($round->drive_uri)) {
       $round_name .= sprintf(
         ' <a href="%s" title="Round Documents" target="_blank">%s</a>',
-        htmlspecialchars($round->drive_uri),
+        safe_href($round->drive_uri),
         $use_text ? 'D' : '🗒️'
       );
     }
@@ -222,7 +222,7 @@ function print_rounds_table($rounds, $mypuzzle) {
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . urlencode($username) . '" target="_blank">';
       echo get_status_display($puzzle->status, $use_text);
       echo '</a></td>';
-      echo '<td><a href="' . htmlspecialchars($puzzle->puzzle_uri ?? '') . '" target="_blank">'. $puzzlename . '</a>';
+      echo '<td><a href="' . safe_href($puzzle->puzzle_uri) . '" target="_blank">'. $puzzlename . '</a>';
       if ($puzzle->ismeta) {
         echo ' <span title="Meta Puzzle">' . ($use_text ? '(M)' : '🎯') . '</span>';
       }
@@ -238,7 +238,7 @@ function print_rounds_table($rounds, $mypuzzle) {
         if ($channel_create_time <= $min_hint_time) {
           echo sprintf(
             '&nbsp;<a href="%s" target="_blank" title="Hints available!">%s</a>',
-            htmlspecialchars(str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? '')),
+            safe_href(str_replace('/puzzles/', '/hints/', $puzzle->puzzle_uri ?? '')),
             $use_text ? 'HINT?' : '🙉',
           );
         } else {
@@ -252,8 +252,8 @@ function print_rounds_table($rounds, $mypuzzle) {
         }
       }
       echo '</td>';
-      echo '<td><a href="' . htmlspecialchars($puzzle->drive_uri ?? '') . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
-      echo '<td><a href="' . htmlspecialchars($puzzle->chat_channel_link ?? '')  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
+      echo '<td><a href="' . safe_href($puzzle->drive_uri) . '" title="Spreadsheet" target="_blank">'. ($use_text ? 'D' : '🗒️') .'</a></td>';
+      echo '<td><a href="' . safe_href($puzzle->chat_channel_link)  . '" title="Discord" target="_blank">'. ($use_text ? 'C' : '🗣️') .'</a></td>';
       echo '<td><code><strong>' . htmlspecialchars($puzzle->answer ?? '') .'</strong></code></td>';
       echo '<td><a href="editpuzzle.php?pid=' . $puzzle->id . '&assumedid=' . urlencode($username) . '" target="_blank" title="Edit puzzle in PB">'. ($use_text ? '±' : '⚙️') . '</a></td>';
 
@@ -336,7 +336,7 @@ if (count($comparison) > 0) {
       $slug = strtolower($puzzle->name);
       $prefix = sprintf(
         'Puzzle <a href="%s">%s</a>:',
-        htmlspecialchars($puzzle->puzzle_uri ?? ''),
+        safe_href($puzzle->puzzle_uri),
         htmlspecialchars($puzzle->name),
       );
       if (!array_key_exists($slug, $comparison)) {

@@ -116,9 +116,14 @@ HTML;
 }
 
 function verify_recaptcha($token, $secret_key, $min_score = 0.5) {
-  if (empty($secret_key) || empty($token)) return true; // dev mode: skip check
+  if (empty($secret_key)) return true; // dev mode: no CAPTCHA configured
+  // A missing token fails: otherwise a client defeats the check by leaving
+  // the field out.
+  if (empty($token)) return false;
   $curl = curl_init('https://www.google.com/recaptcha/api/siteverify');
   curl_setopt($curl, CURLOPT_POST, true);
+  curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 5);
+  curl_setopt($curl, CURLOPT_TIMEOUT, 10);
   curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query([
     'secret'   => $secret_key,
     'response' => $token,
@@ -219,7 +224,7 @@ HTML;
 
 function exit_with_api_error($obj) {
   exit_with_error_message(
-    'Response from API is:<pre>'.var_export($obj, true).'</pre>'.
+    'Response from API is:<pre>'.htmlspecialchars(var_export($obj, true)).'</pre>'.
     'Contact @Puzztech on Discord for help.'
   );
 }
@@ -280,20 +285,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   // End validation
 
+  // Validation leaves the email free-form, so everything echoed below goes
+  // through these escaped copies.
+  $username_html = htmlspecialchars($username);
+  $fullname_html = htmlspecialchars($fullname);
+  $email_html    = htmlspecialchars($email);
+
   if (!array_key_exists("userok", $_POST)) {
     // no code, but user data. present the page to submit user for verification
     print <<<HTML
       <h1>Confirm account creation details</h1>
       <table>
-        <tr><td>Username:</td><td><tt>$username</tt></td></tr>
-        <tr><td>Full Name:</td><td><tt>$fullname</tt></td></tr>
-        <tr><td>Email:</td><td><tt>$email</tt></td></tr>
+        <tr><td>Username:</td><td><tt>$username_html</tt></td></tr>
+        <tr><td>Full Name:</td><td><tt>$fullname_html</tt></td></tr>
+        <tr><td>Email:</td><td><tt>$email_html</tt></td></tr>
       </table>
       <br><hr>
       <form action="." method="POST">
-        <input type="hidden" name="username" value="$username">
-        <input type="hidden" name="fullname" value="$fullname">
-        <input type="hidden" name="email" value="$email">
+        <input type="hidden" name="username" value="$username_html">
+        <input type="hidden" name="fullname" value="$fullname_html">
+        <input type="hidden" name="email" value="$email_html">
         <input type="hidden" name="userok" value="yes">
         <p>
           If the above information looks correct, click here:&nbsp;
@@ -328,7 +339,8 @@ HTML;
     throw $e;
   }
   assert_api_success($responseobj);
-  $verification_code = $responseobj['code'];
+  // The verification code is NOT echoed into this page: it proves the
+  // signer-up controls the email address, so it must reach them only by mail.
   $email_failed = array_key_exists('email_error', $responseobj);
 
   if ($email_failed) {
@@ -336,21 +348,19 @@ HTML;
     <h2 style="color: #c00;">⚠️ Account created, but email delivery failed</h2>
     <div class="error">
       <strong>Your registration was saved</strong>, but we were unable to send the
-      verification email to <tt>$email</tt>.<br><br>
+      verification email to <tt>$email_html</tt>.<br><br>
       Please contact <strong>@Puzztech</strong> on Discord for help completing
       your account setup. They can provide your verification link manually.
     </div>
-    <span id="verification-code" data-code="$verification_code" style="display:none"></span>
     </main></body></html>
 HTML;
   } else {
     print <<<HTML
     <h2>Account creation request submitted!</h2>
     <p>
-      Check your email ($email) for further instructions from $regemail.<br>
+      Check your email ($email_html) for further instructions from $regemail.<br>
       (Also check your spam folder; sometimes the email ends up there.)
     </p>
-    <span id="verification-code" data-code="$verification_code" style="display:none"></span>
     </main></body></html>
 HTML;
   }
@@ -358,7 +368,9 @@ HTML;
 }
 
 if (isset($_GET['code'])) {
-  $code = $_GET['code'];
+  // Lands inside a JS string literal below; json_encode yields a quoted,
+  // escaped literal (with < > & ' " hex-escaped so it can't close the tag).
+  $code_js = json_encode((string)$_GET['code'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
   print <<<HTML
   <h2>Creating your account...</h2>
   <div id="progress-container">
@@ -467,7 +479,7 @@ if (isset($_GET['code'])) {
   </style>
   <script>
     const proxyUrl = 'api-proxy.php';
-    const code = '$code';
+    const code = $code_js;
     
     const steps = [
       { id: 'step1', label: 'Verification code validated' },
@@ -498,7 +510,7 @@ if (isset($_GET['code'])) {
       setStepStatus(step.id, 'active');
       
       try {
-        let url = proxyUrl + '?code=' + code + '&step=' + stepNum;
+        let url = proxyUrl + '?code=' + encodeURIComponent(code) + '&step=' + stepNum;
         const response = await fetch(url);
         const data = await response.json();
         

@@ -94,14 +94,14 @@ if (isset($_GET['tag']) && !empty($_GET['tag'])) {
         <tr>
           <td><?php echo get_status_display($puzzle->status); ?></td>
           <td>
-            <a href="<?= htmlentities($puzzle->puzzle_uri ?? '#') ?>" target="_blank"><?= htmlentities($puzzle->name) ?></a>
+            <a href="<?= safe_href($puzzle->puzzle_uri) ?>" target="_blank"><?= htmlentities($puzzle->name) ?></a>
             <?php if ($puzzle->ismeta): ?><span title="Meta">🎯</span><?php endif; ?>
           </td>
           <td><code><strong><?= htmlentities($puzzle->answer ?? '') ?></strong></code></td>
           <td><?= htmlentities($puzzle->tags ?? '') ?></td>
           <td>
-            <a href="<?= htmlentities($puzzle->drive_uri ?? '#') ?>" target="_blank" title="Spreadsheet">🗒️</a>
-            <a href="<?= htmlentities($puzzle->chat_channel_link ?? '#') ?>" target="_blank" title="Discord">🗣️</a>
+            <a href="<?= safe_href($puzzle->drive_uri) ?>" target="_blank" title="Spreadsheet">🗒️</a>
+            <a href="<?= safe_href($puzzle->chat_channel_link) ?>" target="_blank" title="Discord">🗣️</a>
             <a href="editpuzzle.php?pid=<?= $puzzle->id ?>" target="_blank" title="Edit">⚙️</a>
           </td>
         </tr>

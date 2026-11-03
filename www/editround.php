@@ -88,7 +88,7 @@ foreach ($round->puzzles as $puzzle) {
                 <tr><td>Meta Puzzles</td><td><?= $num_metas ?></td></tr>
                 <tr><td>Solved Metas</td><td><?= $num_metas_solved ?></td></tr>
                 <?php if ($round->drive_uri): ?>
-                    <tr><td>Drive Folder</td><td><a href="<?= htmlspecialchars($round->drive_uri) ?>" target="_blank">Open</a></td></tr>
+                    <tr><td>Drive Folder</td><td><a href="<?= safe_href($round->drive_uri) ?>" target="_blank">Open</a></td></tr>
                 <?php endif; ?>
             </table>
         </div>
