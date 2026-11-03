@@ -57,7 +57,7 @@ Anything in *External* can be left off. Without Google you lose automatic puzzle
 
 | Option | When to choose | Pointer |
 |---|---|---|
-| AWS ECS (Fargate) | Reasonable scale, infra-as-code, multi-component, what this team runs | [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra) |
+| AWS ECS (Fargate) | Reasonable scale, infra-as-code, multi-component, what this team runs | [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra) (private; ask the maintainers for access) |
 | Single VM / EC2 | Small team, low overhead, OK with manual ops | [Standalone deployment](#standalone-deployment) below |
 | Docker on a laptop | Local development, or running a tiny private hunt | [docker/README.md](../docker/README.md) |
 
@@ -96,7 +96,7 @@ Most runtime configuration lives in the database `config` table, editable via th
 | `DOMAINNAME` | Your team's domain | `mystik-spiral.org` |
 | `BIN_URI` | Public URL of the Puzzleboss web UI | `https://pb.mystik-spiral.org` |
 | `ACCT_URI` | Public URL of the account-signup page | `https://pb.mystik-spiral.org/account` |
-| `ACCT_USERNAME` / `ACCT_PASSWORD` | HTTP-basic gate on the signup page | pick something memorable |
+| `ACCT_USERNAME` / `ACCT_PASSWORD` | Shared-credential login form in front of the signup page | pick something memorable |
 | `LOGLEVEL` | 0 = emergency only, 5 = trace. Use 3 in production | `3` |
 | `STATUS_METADATA` | JSON defining puzzle statuses, their emojis, and display order | (keep default unless you have strong opinions) |
 
@@ -187,7 +187,7 @@ The `/all` response cache and the write-through `lastact` hash use Redis. Set `R
 
 ### reCAPTCHA on signup (optional)
 
-Set `RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_KEY` in the config table to enable reCAPTCHA v3 on the account-signup page. Leave both empty to disable.
+Set `RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_KEY` in the config table to enable reCAPTCHA v3 on the account-signup page. Leave both empty to disable. Set or clear the two together: CAPTCHA is skipped only when the secret is empty, so a secret with no site key makes every signup fail CAPTCHA.
 
 ## 8. Onboard solvers
 
@@ -231,17 +231,17 @@ Run through this list a few days before the hunt:
 - [ ] `GET /huntinfo` returns expected `TEAMNAME` and tag/status metadata
 - [ ] `POST /rounds` creates a test round (there is no round-delete endpoint — clean up test rounds directly in SQL, or fold them into the hunt-reset below)
 - [ ] `POST /puzzles` creates a test puzzle, the Drive sheet gets created, the Apps Script add-on is deployed (open the sheet, look for the "Puzzle Tools" menu)
-- [ ] BigJimmy bot is running and processing puzzles (check logs — `bigjimmy_loop_iterations_total` should be incrementing in `/metrics`)
+- [ ] BigJimmy bot is running and processing puzzles (check logs — `puzzleboss_bigjimmy_loop_iterations_total` should be incrementing in `metrics.php`)
 - [ ] An edit to a test sheet shows up in the activity log within ~1 minute (visible at `/activity.php` or `GET /activity`)
 - [ ] Discord channel auto-creation works (if enabled) — solving the test puzzle posts to the solve channel
 - [ ] At least one non-admin solver has successfully signed up and logged in
-- [ ] `/metrics` exposes Prometheus metrics
+- [ ] Flask `/metrics` and `metrics.php` both return Prometheus metrics
 - [ ] You know where the logs are (see [OPERATIONS.md](OPERATIONS.md#observability))
 - [ ] You have a plan for when the system breaks during the hunt (read [TROUBLESHOOTING.md](TROUBLESHOOTING.md) ahead of time)
 
 ### Reset between hunts
 
-`scripts/reset-hunt.py` runs `mysqldump` against the production DB and wipes puzzles, rounds, and activity — preserving solver accounts and config so people don't have to re-register. It needs a host with DB reachability and `puzzleboss.yaml`. See [OPERATIONS.md → Reset for a new hunt](OPERATIONS.md#reset-for-a-new-hunt) for where to run it (this team uses the utility server, which the infra repo provisions for this purpose).
+`scripts/reset-hunt.py` runs `mysqldump` against the production DB and recreates the database, keeping only solver accounts, privileges, config and tags so people don't have to re-register. It needs a host with DB reachability and `puzzleboss.yaml`. See [OPERATIONS.md → Reset for a new hunt](OPERATIONS.md#reset-for-a-new-hunt) for where to run it (this team uses the utility server, which the infra repo provisions for this purpose).
 
 <a id="rds"></a>
 

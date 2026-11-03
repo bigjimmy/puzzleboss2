@@ -16,8 +16,10 @@ Example:
 
 ```bash
 curl http://localhost:5000/migrate
-curl -X POST http://localhost:5000/migrate/normalize_solver_ids
+curl -X POST -H "X-PB-Internal-Token: <API.INTERNAL_TOKEN>" http://localhost:5000/migrate/normalize_solver_ids
 ```
+
+`POST /migrate/<name>` is admin-token-gated: without the header it returns 403 wherever `ADMIN_TOKEN_ENFORCE` is on, as it is in production.
 
 To add one, drop a new module in [`/migrations/`](../../migrations/) following the pattern of existing files — see [`migrations/add_recaptcha_config.py`](../../migrations/add_recaptcha_config.py) as a small template.
 

@@ -123,7 +123,7 @@ This allows testing business logic without requiring:
 
 Areas not yet covered by unit tests:
 - pbgooglelib.py Google API integration (beyond the rate limiter)
-- pbllmlib.py LLM query functions
+- pbllmlib.py query functions (only the embedding-model config and wiki search scoring are covered)
 
 ## Added September 2026
 
@@ -137,3 +137,13 @@ Areas not yet covered by unit tests:
 | `test_reset_hunt_helpers.py` | `reset-hunt.py`'s pure helpers: the mysql batch-output unescaper and password redaction. |
 | `test_migrations.py` | Migration discovery and the idempotence of the newuser migrations. |
 | `test_embedding_model.py`, `test_wiki_scoring.py` | Gemini embedding-model config and wiki search scoring. |
+| `test_bigjimmybot_queue.py` | The bigjimmybot worker loop: it blocks instead of busy-waiting on an empty queue, and a puzzle that raises still calls `task_done`, so `join()` returns. |
+| `test_round_completion.py` | `check_round_completion`: a round is Solved exactly when it has metas and all are solved, and goes back to New when it stops qualifying. |
+| `test_swagger_specs.py` | The rendered OpenAPI spec is well-formed (catches a mis-indented swag YAML that flasgger would silently serve). |
+| `test_pbmail_config.py` | `pbmail_inbox.py` reads the same yaml keys as pblib, with the `INTERNAL_TOKEN` env var winning, and the token reaches the request. |
+
+## Added October 2026
+
+| File | Covers |
+|---|---|
+| `test_audit_hardening.py` | The audit's remaining high findings: secret values never logged on `POST /config`, 404 for a missing puzzle, a socket timeout on the Google HTTP client, row locking on JSON read-modify-writes, and bigjimmybot's handling of a Google outage (transient errors don't trigger tab repair or cooldown). |

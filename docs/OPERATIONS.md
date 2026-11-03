@@ -38,7 +38,7 @@ sequenceDiagram
 | Component | What it is | Where it lives | Notes |
 |---|---|---|---|
 | Web UI | Apache + PHP | inside the app container/server | What users see |
-| API | Gunicorn + Flask | same container as Apache, bound to localhost:5000 | Not exposed externally in prod — PHP mediates browser → API via `apicall.php` |
+| API | Gunicorn + Flask | same container as Apache, Gunicorn bound to `0.0.0.0:5000` | Not routed by the load balancer — PHP mediates browser → API via `apicall.php`. Reachable inside the VPC (Prometheus, the utility server). The API trusts its callers, so keep `:5000` VPC-only. |
 | BigJimmy bot | Watches every active puzzle's Google Sheet for edits, auto-assigns solvers to whichever puzzle they're working on, marks idle puzzles abandoned, and updates `sheetcount` / `lastsheetact` metadata used by the UI | `[program:bigjimmybot]` in supervisord | Enabled in production; disabled in the local dev stack (flip `autostart=true` in `docker/supervisord.conf`) |
 | MySQL | The database | RDS in prod, container locally | Schema in [`scripts/puzzleboss.sql`](../scripts/puzzleboss.sql) |
 | OIDC cache | Session storage for mod_auth_openidc | Redis (`OIDCRedisCacheServer`); see [REDIS_MIGRATION.md](../REDIS_MIGRATION.md) for migration history | Hard failure = login broken |
@@ -52,7 +52,7 @@ Edit configuration through the **Configuration Management** page (`/config.php`,
 
 **Upgrading an existing database.** Schema changes ship as idempotent migrations run through `POST /migrate/<name>` (with the internal token). After deploying a build that includes them, run any you have not yet: `add_config_secret_flag` (secret flag column), `add_newuser_id_column`, `drop_newuser_password_column` and `add_newuser_provisioned_at` (the passwordless signup flow; without these `POST /account` and `GET /finishaccount` step 2 fail on a pre-migration database), `add_activity_puzzle_time_index`, `add_activity_solver_time_index`. `GET /migrate` lists what the running build knows about.
 
-**Secrets are protected API-side.** Secret values come back as `********` from `GET /config` and `GET /huntinfo`. Which keys count as secret: any key with its **🔒 secret flag** set (the checkbox next to each key on the Configuration Management page — use it when you add a sensitive key whose name doesn't scream "secret"), plus any key whose name matches `API_KEY`/`SECRET`/`PASSWORD`/`TOKEN`/`WEBHOOK` or `SERVICE_ACCOUNT_JSON` (those are always redacted — their 🔒 shows locked). The Configuration Management page still shows real values — it authenticates to the API with the internal token from `puzzleboss.yaml` (`API.INTERNAL_TOKEN`). If the admin page shows `********` instead of a value you know is set, the token is missing — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#config-admin-page-shows--for-secret-values--signup-gate-rejects-the-right-password). Upgrading an existing database: run `POST /migrate/add_config_secret_flag` once to add and backfill the flag column.
+**Secrets are protected API-side.** Secret values come back as `********` from `GET /config` and `GET /huntinfo`. Which keys count as secret: any key with its **🔒 secret flag** set (the checkbox next to each key on the Configuration Management page — use it when you add a sensitive key whose name doesn't scream "secret"), plus any key whose name matches `API_KEY`/`SECRET`/`PASSWORD`/`TOKEN`/`WEBHOOK`/`COOKIE` or `SERVICE_ACCOUNT_JSON` (those are always redacted — their 🔒 shows locked). The Configuration Management page still shows real values — it authenticates to the API with the internal token from `puzzleboss.yaml` (`API.INTERNAL_TOKEN`). If the admin page shows `********` instead of a value you know is set, the token is missing — see [TROUBLESHOOTING.md](TROUBLESHOOTING.md#config-admin-page-shows--for-secret-values--signup-gate-rejects-the-right-password). Upgrading an existing database: run `POST /migrate/add_config_secret_flag` once to add and backfill the flag column.
 
 Below are the keys you'll actually touch, grouped:
 
@@ -90,21 +90,22 @@ Below are the keys you'll actually touch, grouped:
 
 `scripts/reset-hunt.py` uses `mysqldump` against the production DB and reads credentials from `puzzleboss.yaml`. It must run somewhere with both: a route to the database, and that yaml file present. Developer laptops don't have network access to a production RDS; ephemeral app containers don't have a sensible home for backups.
 
-**\[Prod, this team\]** The infra side provisions the utility server with both: it clones this repo to `/canadia/puzzleboss2/` and fetches `puzzleboss.yaml` from Secrets Manager on every boot. See [puzzleboss2-infra OPERATIONS.md → Reset Hunt for New Event](https://github.com/benoc617/puzzleboss2-infra/blob/main/OPERATIONS.md) for the exact invocation, IAM policy, and backup location — that's the canonical runbook.
+**\[Prod, this team\]** The infra side provisions the utility server with both: it clones this repo to `/canadia/puzzleboss2/` and fetches `puzzleboss.yaml` from Secrets Manager when the server is built. See [puzzleboss2-infra OPERATIONS.md → Reset Hunt for New Event](https://github.com/benoc617/puzzleboss2-infra/blob/main/OPERATIONS.md#reset-hunt-for-new-event) (private repo) for the exact invocation, IAM policy, and backup location — that's the canonical runbook.
 
 **\[Other teams\]** Run on whatever long-lived jump/admin host you maintain alongside production, with a `puzzleboss.yaml` containing the production DB credentials placed next to a checkout of this repo.
 
 What the script does:
 
 - Backs up the database to `scripts/backups/<timestamp>/` via `mysqldump`.
-- Wipes puzzles, rounds, and activity.
-- **Solvers, privileges, and config are preserved** — you don't need to re-onboard people year to year.
+- Drops and recreates the database, restoring only the `solver`, `privs`, `config` and `tag` tables — you don't need to re-onboard people year to year.
+- Everything else is gone: puzzles, rounds, activity, hints, botstats, and pending signups (anyone mid-signup must register again).
 
 Then in the **Configuration Management** UI (`/config.php`):
 
 - Update `HUNT_FOLDER_NAME` to the new Drive folder (e.g. `Hunt 2027`).
 - Update `hunt_domain` to the new hunt site domain.
 - Rewrite `bookmarklet_js` to match the new hunt site's DOM — see the per-hunt config table above. This almost always needs to change. Test it against the new hunt site as soon as the site is up.
+- Update the **Puzzcord Bot Settings** keys (`hunt_begins`, `hunt_ends`, `timezone`, `hq_room`, `scrape_url`, `scrape_cookie`, the `wifi_*` keys). The reset preserves them, so they otherwise carry last year's values; restart `puzzcord-bot` afterwards, since it reads them at startup.
 
 ### Add an admin
 
@@ -176,8 +177,14 @@ A typical query:
 
 ### Useful metrics
 
-`/metrics` on the app container exposes:
+Two endpoints, two sets of metrics:
 
+- **Flask `/metrics`** (`prometheus_flask_exporter`) carries only API request metrics: rates, latencies and status codes per endpoint.
+- **`metrics.php`** carries the bot, cache and puzzcord counters from the `botstats` table, each prefixed `puzzleboss_` (so `bigjimmy_loop_iterations_total` is scraped as `puzzleboss_bigjimmy_loop_iterations_total`). Dev: `http://localhost/metrics.php`. Prod: `/pb/metrics.php` on the task, scraped by Prometheus over the VPC; the load balancer blocks it from the internet.
+
+The `metrics.php` counters include:
+
+- `bigjimmy_loop_iterations_total` — increments every bot loop; flat means the bot is stuck or stopped
 - `bigjimmy_loop_time_seconds` — total time for last bot iteration
 - `bigjimmy_quota_failures` — counter for Google 429s
 - `bigjimmy_loop_puzzle_count` — puzzles processed last loop
@@ -190,6 +197,8 @@ The `botstats` table also holds historical metric data — `METRICS_METADATA` in
 
 Deployment is automated via GitHub Actions in this repo. Pushing to `master` builds new container images. The actual ECS rollout is triggered manually from the **Deploy** workflow (or via the deploy script in the infra repo). See [`.github/workflows/`](../.github/workflows/) for the workflow definitions.
 
+The prod image's apt layer comes from a registry build cache, so it does not pick up Debian security updates (PHP, Apache, OpenSSL) on its own. To ship one, bump `ARG APT_REFRESH` in `Dockerfile.prod` to today's date, push, and deploy.
+
 For local/Docker development, no deployment — just `docker-compose up`.
 
 ## Backups
@@ -200,7 +209,7 @@ For local/Docker development, no deployment — just `docker-compose up`.
 mysqldump -u puzzleboss -p puzzleboss > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
-**A dump is a credential, not just data.** The `config` table contains `SERVICE_ACCOUNT_JSON`, the Google Workspace service account key with Domain-Wide Delegation, so a copy of it is equivalent to full control of the Google domain. It also holds the Gemini API key, the reCAPTCHA secret, the Slack and Discord webhooks, `ACCT_PASSWORD` and the Sheets add-on cookies, and the `solver` table has real names and Discord ids. Keep dumps encrypted, do not put one in the repo or a shared drive, and shred local copies when you are done. The S3 bucket is configured so the utility server can write backups but never read one back, and restoring is an admin action.
+**A dump is a credential, not just data.** The `config` table contains `SERVICE_ACCOUNT_JSON`, the Google Workspace service account key with Domain-Wide Delegation, so a copy of it is equivalent to full control of the Google domain. It also holds the Gemini API key, the reCAPTCHA secret, the Slack and Discord webhooks, `ACCT_PASSWORD`, the hunt-site `scrape_cookie` and `wifi_password`, and the `solver` table has real names and Discord ids. Keep dumps encrypted, do not put one in the repo or a shared drive, and shred local copies when you are done. The S3 bucket is configured so the utility server can write backups but never read one back, and restoring is an admin action.
 
 These reset backups exist to reach back past a reset, for example recovering last year's data or a config table the reset replaced. For an unexpected loss during normal operation the first answer is an RDS snapshot or point-in-time restore, which only reaches back about three days. Restore procedure and the S3 bucket's protections are documented in the infra repo runbook under [Backup sensitivity and the restore path](https://github.com/benoc617/puzzleboss2-infra/blob/main/OPERATIONS.md#backup-sensitivity-and-the-restore-path).
 

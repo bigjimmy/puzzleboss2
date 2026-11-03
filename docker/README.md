@@ -144,7 +144,7 @@ Set `GEMINI_API_KEY` in the **Configuration Management** page. Endpoint becomes 
 
 ### Wiki RAG
 
-Set `WIKI_URL` and `WIKI_CHROMADB_PATH` in the **Configuration Management** page, then run `python scripts/wiki_indexer.py` (inside or outside the container).
+Set `WIKI_URL` and `WIKI_CHROMADB_PATH` in the **Configuration Management** page (indexing also needs `GEMINI_API_KEY` for embeddings), then run `python scripts/wiki_indexer.py` (inside or outside the container). `GEMINI_EMBEDDING_MODEL` defaults to `gemini-embedding-001`; after changing it, rebuild with `wiki_indexer.py --full` — `search_wiki` refuses an index built with a different model.
 
 ## UI testing with Playwright
 

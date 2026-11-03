@@ -41,7 +41,7 @@ The first question is always: **can I reach the API?** Hit `/apidocs` (or `GET /
 | Login / SSO broken | OIDC cache (Redis), Apache error log, IdP status |
 | Web UI 502 / 504 | Gunicorn process alive? container restart loop? |
 | API errors | Container stdout/stderr (`docker logs puzzleboss-app` / `docker-compose logs app` — supervisord routes Gunicorn there), or your aggregated log stream (this team: `service=puzzleboss` in Loki) |
-| Bot not assigning | bot logs (this team: `service=bigjimmy` in Loki), `bigjimmy_quota_failures` metric |
+| Bot not assigning | bot logs (this team: `service=bigjimmy` in Loki), `puzzleboss_bigjimmy_quota_failures` from `metrics.php` |
 | Sheets not created | `SKIP_GOOGLE_API`, service account creds, Drive quota |
 | Add-on not appearing | Apps Script API enabled? DWD scopes? See [apps-script-deployment.md](apps-script-deployment.md) |
 | Discord channels not created | puzzcord daemon up? `SKIP_PUZZCORD`? |
@@ -111,15 +111,15 @@ The bot is running but not detecting activity, or detecting it but not assigning
 
    **\[Prod\]** Shell into the app container however your infra does it, then `supervisorctl status bigjimmybot`. Enabled by default in production images.
 
-2. **Is the loop iterating?** Hit `/metrics` on the app and grep for `bigjimmy_loop_iterations_total` — should be increasing. If not, the bot is stuck — restart it via `supervisorctl restart bigjimmybot`.
+2. **Is the loop iterating?** Hit `metrics.php` (dev: `http://localhost/metrics.php`; the bot counters are not on Flask `/metrics`) and grep for `puzzleboss_bigjimmy_loop_iterations_total` — should be increasing. If not, the bot is stuck — restart it via `supervisorctl restart bigjimmybot`.
 
 3. **Is `BIGJIMMY_AUTOASSIGN=true` in the config table?** Default is `false`.
 
-4. **Is Google reachable and the service account valid?** Grep `/metrics` for `bigjimmy_quota_failures`. Steadily climbing = you're getting 429s; the bot will back off. A wall of 4xx/5xx in the logs means credentials are bad — check `SERVICE_ACCOUNT_JSON` and `SERVICE_ACCOUNT_SUBJECT` config values.
+4. **Is Google reachable and the service account valid?** Grep `metrics.php` for `puzzleboss_bigjimmy_quota_failures`. Steadily climbing = you're getting 429s; the bot will back off. A wall of 4xx/5xx in the logs means credentials are bad — check `SERVICE_ACCOUNT_JSON` and `SERVICE_ACCOUNT_SUBJECT` config values.
 
 5. **Are the sheets actually getting activity?** Open the sheet in your browser as a hunt admin and check the hidden `_pb_activity` sheet. If empty, the Apps Script add-on isn't running — see next symptom.
 
-6. **Is one sheet in failure cooldown?** When reading a sheet's `_pb_activity` tab fails 3 times in a row, the bot deletes and recreates the tab. After 6 failures it stops reading that sheet for 30 minutes, then tries again. Grep the bot log for `Attempting _pb_activity repair` and `in failure cooldown`. A Google outage or network blip (5xx, timeouts, exhausted quota retries) doesn't count toward either while no sheet is reading successfully. It logs `not counting toward repair` instead, so an outage can't wipe every sheet's tab.
+6. **Is one sheet in failure cooldown?** When reading a sheet's `_pb_activity` tab fails 3 times in a row, the bot deletes and recreates the tab. After 6 failures it stops reading that sheet for 30 minutes, then tries again. Grep the bot log for `Attempting _pb_activity repair` and `repair did not help` (the start of a cooldown; the per-loop `in failure cooldown` skip line is debug-level, invisible at `LOGLEVEL` 3). A Google outage or network blip (5xx, timeouts, exhausted quota retries) doesn't count toward either unless some sheet's `_pb_activity` read succeeded in the last 5 minutes — which also covers the first minutes after the bot starts. It logs `not counting toward repair` instead, so an outage can't wipe every sheet's tab.
 
 ### Apps Script add-on not appearing on new puzzle sheets
 
@@ -175,6 +175,10 @@ How the one-time password works: `GET /finishaccount/<code>` step 2 creates the 
 - **The verification code has expired (48 hours):** the `newuser` row is gone; they register again. If the Google account already exists from the first attempt, the new code's step 2 reissues a password on it rather than failing.
 - **The page said "we couldn't email this to you":** the browser was the only copy. Fix `MAILRELAY` (see above) and have them click the link again after the cooldown to get a reissue by email.
 
+### Signup says "Account created, but email delivery failed"
+
+The registration was saved but the verification email never went out. The code that finishes signup reaches the solver only by email: no page or API shows it, because it is what proves they own the address. Fix `MAILRELAY` (see [Signup emails not arriving](#signup-emails-not-arriving)), delete the pending registration on `accounts.php`, and have them register again. If that's impossible, a puzztech can read the code from the database (`SELECT code FROM newuser WHERE username='<u>' ORDER BY id DESC LIMIT 1`) and send `<ACCT_URI>?code=<code>` to the address the solver registered with, through some channel other than this mail relay. Never send it to a different address.
+
 ### `/all` is slow or returning stale data
 
 The cache layer is Redis. `/all` is the hot-path endpoint and caches transparently; `/allcached` is a deprecated alias that hits the same code.
@@ -192,7 +196,7 @@ The cache layer is Redis. `/all` is the hot-path endpoint and caches transparent
 The activity feed shows entries from the `activity` table. Check:
 
 1. `GET /activity` returns recent rows? If yes, it's a frontend issue.
-2. `BIGJIMMY_AUTOASSIGN=true`? If `false`, the bot won't write activity rows.
+2. Is the bot running? It writes activity rows whatever `BIGJIMMY_AUTOASSIGN` says; that flag gates only auto-assignment.
 3. Sheet `_pb_activity` populating? See [Apps Script add-on](#apps-script-add-on-not-appearing-on-new-puzzle-sheets).
 4. `ACTIVITY_SOURCES` config value matches the database ENUM on `activity.source`? Adding a source to the config without an `ALTER TABLE` will cause inserts to fail silently.
 
@@ -208,7 +212,7 @@ The API redacts config secrets unless the caller presents the internal token, an
 
 ### Random workers throwing tracebacks about integer IDs
 
-If you see `TypeError` involving an ID, or comparison silently failing between `"101"` and `101`, run the `normalize_solver_ids` migration: `POST /migrate/normalize_solver_ids`. **\[Dev\]** `curl -X POST http://localhost:5000/migrate/normalize_solver_ids`. **\[Prod\]** call the same endpoint at your internal API URL.
+If you see `TypeError` involving an ID, or comparison silently failing between `"101"` and `101`, run the `normalize_solver_ids` migration: `POST /migrate/normalize_solver_ids`. **\[Dev\]** `curl -X POST -H "X-PB-Internal-Token: <API.INTERNAL_TOKEN>" http://localhost:5000/migrate/normalize_solver_ids`. **\[Prod\]** call the same endpoint at your internal API URL with the same header — `POST /migrate/*` is token-gated, and without it production returns 403.
 
 This normalizes legacy string solver IDs in JSON columns to integers. The application code handles both, but the migration eliminates the type mismatch entirely. See [CLAUDE.md](../CLAUDE.md#integer-id-convention) for context.
 
@@ -227,12 +231,12 @@ When multiple symptoms hit simultaneously, work outside-in:
 ## When to bail and call for help
 
 - You see data loss or corruption in the DB. Stop, snapshot, ask before restoring.
-- The hunt is starting in <2 hours and the system is down. Don't try a big migration or schema change — get to a known-good state, even a degraded one (`SKIP_GOOGLE_API=true`, `SKIP_PUZZCORD=true`, OIDC disabled with `ALLOW_USERNAME_OVERRIDE=true` as a desperate fallback) and come back to the integrations.
+- The hunt is starting in <2 hours and the system is down. Don't try a big migration or schema change — get to a known-good state, even a degraded one (`SKIP_GOOGLE_API=true`, `SKIP_PUZZCORD=true`, OIDC disabled with `ALLOW_USERNAME_OVERRIDE=true` in `puzzleboss.yaml` as a desperate fallback — the config-table row is ignored) and come back to the integrations.
 - You're about to `git reset` or rewrite history because the deploy is broken. Read [CLAUDE.md's git rules](../CLAUDE.md#git-workflow) first — there's almost always a safer way.
 
 ## Where to dig deeper
 
 - **Application logs \[Prod\]:** wherever you ship container stdout. This team ships to Loki with labels `service=puzzleboss` (web/API + Apache) and `service=bigjimmy` (bot); your team may ship to CloudWatch, Datadog, ELK, or a plain disk log. Same labels/streams either way.
 - **Application logs \[Dev\]:** `docker-compose logs app` (Gunicorn goes to container stdout/stderr), or `/var/log/apache2/error.log` inside the container for Apache.
-- **Metrics:** `/metrics` endpoint on the app, scraped to Prometheus, charted in Grafana — applies to both environments if Prometheus is wired up.
+- **Metrics:** Flask `/metrics` (API requests) and `metrics.php` (bot, cache and puzzcord counters, prefixed `puzzleboss_`), scraped to Prometheus, charted in Grafana — applies to both environments if Prometheus is wired up. See [OPERATIONS.md → Useful metrics](OPERATIONS.md#useful-metrics).
 - **Infra-level issues** (orchestrator, load balancer, managed DB, security groups, DNS) are out of scope for this doc — that's your hosting layer. For *this team's* ECS-on-AWS setup specifically, the operations runbook is in [puzzleboss2-infra](https://github.com/benoc617/puzzleboss2-infra).

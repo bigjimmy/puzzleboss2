@@ -350,7 +350,7 @@ HTML;
       <strong>Your registration was saved</strong>, but we were unable to send the
       verification email to <tt>$email_html</tt>.<br><br>
       Please contact <strong>@Puzztech</strong> on Discord for help completing
-      your account setup. They can provide your verification link manually.
+      your account setup.
     </div>
     </main></body></html>
 HTML;

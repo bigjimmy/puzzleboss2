@@ -308,8 +308,7 @@ the natural fit.
 
 **Deployed and live in production.** Branch `redis-lastact-writethrough` has been
 merged. REDIS_ENABLED is true in prod; Redis is reachable at
-`redis.puzzleboss.local:6379`. The remaining infra task is decommissioning the
-now-idle memcache ECS service (nothing connects to it).
+`redis.puzzleboss.local:6379`. The memcache ECS service has since been removed.
 
 ## Testing checklist (Phases 0–3)
 - [x] `docker-compose up` works with Redis
