@@ -1,0 +1,22 @@
+# Dependabot: security fixes for the Python dependencies, routine updates for
+# the SHA-pinned GitHub Actions. The deploy gate (puzzleboss2-infra
+# scripts/image-scan.sh) is what blocks a vulnerable image; this opens the PRs
+# that fix one.
+version: 2
+updates:
+  # requirements.txt is unpinned, so routine version bumps would be no-ops.
+  # A limit of 0 turns version-update PRs off while security-update PRs (repo
+  # setting: Dependabot security updates) still open for an advisory.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

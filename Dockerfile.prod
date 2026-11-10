@@ -72,6 +72,11 @@ RUN echo "apt refresh ${APT_REFRESH}" && apt-get update \
 # Copy pre-built Python packages from builder stage
 COPY --from=builder /install /usr/local
 
+# The base image's pip and setuptools carry vendored copies of wheel and
+# jaraco.context with known CVEs; the deploy gate's image scan flags them.
+# Like the apt layer, this reruns only when APT_REFRESH changes.
+RUN pip install --no-cache-dir --upgrade pip setuptools
+
 # Download RDS CA bundle for MySQL SSL connections
 ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/certs/rds-ca-bundle.pem
 RUN chmod 644 /etc/ssl/certs/rds-ca-bundle.pem

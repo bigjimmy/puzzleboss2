@@ -195,7 +195,7 @@ The `botstats` table also holds historical metric data — `METRICS_METADATA` in
 
 ## Deployment
 
-Deployment is automated via GitHub Actions in this repo. Pushing to `master` builds new container images. The actual ECS rollout is triggered manually from the **Deploy** workflow (or via the deploy script in the infra repo). See [`.github/workflows/`](../.github/workflows/) for the workflow definitions.
+Deployment is automated via GitHub Actions in this repo. Pushing to `master` builds new container images. The actual ECS rollout is triggered manually from the **Deploy** workflow (or via the deploy script in the infra repo). Both workflows scan the image for vulnerabilities and stop on a High or Critical one that has a fix available; a Build that fails the scan leaves the running image in place. The infra repo's OPERATIONS.md ("Deploy vulnerability gate") covers fixing a finding, recording a reviewed exception, and the emergency override. See [`.github/workflows/`](../.github/workflows/) for the workflow definitions.
 
 The prod image's apt layer comes from a registry build cache, so it does not pick up Debian security updates (PHP, Apache, OpenSSL, or zlib and glibc from the Python base image) on its own. To ship one, bump `ARG APT_REFRESH` in `Dockerfile.prod` to today's date, push, and deploy; the rebuilt layer runs `apt-get upgrade` before `install`. ECR scans each pushed image; the infra repo's OPERATIONS.md ("Image scan findings") shows how to read the results.
 

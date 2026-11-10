@@ -2,6 +2,8 @@ name: Deploy
 
 # Manually triggered deployment to ECS.
 # Uses the image already in ECR (built by the Build workflow on last push).
+# deploy.sh scans it first (puzzleboss2-infra scripts/image-scan.sh) and stops
+# on a fixable High/Critical vulnerability; the allow_vulns input skips that.
 # Trigger: GitHub UI → Actions → Deploy → Run workflow
 # or: gh workflow run deploy.yml
 #
@@ -16,6 +18,10 @@ on:
         description: 'Wait for services to stabilize'
         type: boolean
         default: true
+      allow_vulns:
+        description: 'Skip the vulnerability gate (emergencies only)'
+        type: boolean
+        default: false
 
 jobs:
   deploy:
@@ -53,4 +59,5 @@ jobs:
         run: |
           ARGS="--skip-build"
           [ "${{ inputs.wait }}" = "true" ] && ARGS="$ARGS --wait"
+          [ "${{ inputs.allow_vulns }}" = "true" ] && ARGS="$ARGS --allow-vulns"
           PUZZLEBOSS_DIR=$PWD puzzleboss2-infra/scripts/deploy.sh $ARGS

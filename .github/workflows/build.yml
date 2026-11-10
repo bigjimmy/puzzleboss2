@@ -2,6 +2,9 @@ name: Build
 
 # Builds and pushes the puzzleboss image to ECR on every push to master.
 # Does NOT update ECS services — use the Deploy workflow for that.
+# The image is scanned after the push and tagged :latest only if it has no
+# fixable High/Critical vulnerability; otherwise this job fails and :latest
+# (which ECS starts new tasks from) stays on the previous image.
 #
 # NOTE: This workflow is specific to the benoc617/puzzleboss2-infra AWS/ECS
 # deployment. If you're deploying puzzleboss2 on different infrastructure,
