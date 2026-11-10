@@ -47,11 +47,15 @@ FROM python:3.11-slim
 
 # The build reuses a registry layer cache, so the apt layer below never picks
 # up security updates on its own. Bump this date to force a fresh apt-get
-# (last: Debian DSA-6574-1, php8.4 8.4.27).
-ARG APT_REFRESH=2026-10-21
+# (last: 2026-11-10, zlib and apt security updates).
+ARG APT_REFRESH=2026-11-10
 
 # Install runtime system packages (no compilers)
-RUN echo "apt refresh ${APT_REFRESH}" && apt-get update && apt-get install -y --no-install-recommends \
+# The upgrade applies fixes to packages the python base image already ships
+# (zlib, apt, glibc), which install alone would leave at the base's versions.
+RUN echo "apt refresh ${APT_REFRESH}" && apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
         apache2 \
         php \
         php-yaml \
