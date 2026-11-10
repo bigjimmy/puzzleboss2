@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Checkout app repo
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Get infra repo token from SSM
         id: get-pat
@@ -43,7 +43,7 @@ jobs:
           echo "infra_pat=$INFRA_PAT" >> $GITHUB_OUTPUT
 
       - name: Checkout infra repo
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: benoc617/puzzleboss2-infra
           path: puzzleboss2-infra
